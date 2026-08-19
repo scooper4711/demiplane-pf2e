@@ -15,7 +15,21 @@ set -euo pipefail
 #   - FOUNDRY_LICENSE_KEY env var set
 #
 # Usage:
-#   FOUNDRY_LICENSE_KEY=XXXX-XXXX-XXXX-XXXX-XXXX-XXXX ./scripts/setup-foundry.sh
+#   ./scripts/setup-foundry.sh
+#
+# Configuration is loaded from .env (gitignored) in the project root.
+# Create .env with:
+#   FOUNDRY_LICENSE_KEY=XXXX-XXXX-XXXX-XXXX-XXXX-XXXX
+#   FOUNDRY_PORT=30000
+
+# Source .env file if it exists (gitignored, contains license key and port)
+ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env"
+if [ -f "$ENV_FILE" ]; then
+  echo "Loading environment from .env..."
+  set -a
+  source "$ENV_FILE"
+  set +a
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
