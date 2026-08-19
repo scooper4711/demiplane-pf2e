@@ -97,7 +97,12 @@ export class ExportManager {
     }
 
     if (dryRun) {
-      return { success: true, preview: Array.from(changes.values()) };
+      const conflictDetected = await this.detectConflict(actor, characterId);
+      return {
+        success: true,
+        preview: Array.from(changes.values()),
+        conflictDetected,
+      };
     }
 
     if (!this.isWithinRateLimit(characterId)) {
@@ -250,6 +255,24 @@ export class ExportManager {
       return { success: true, newVersion: version.version };
     } catch {
       return { success: true };
+    }
+  }
+
+  private async detectConflict(
+    actor: Actor,
+    characterId: string,
+  ): Promise<boolean> {
+    try {
+      const storedVersion = actor.getFlag(MODULE_ID, "lastKnownVersion") as
+        | number
+        | undefined;
+      if (storedVersion === undefined) {
+        return false;
+      }
+      const remote = await this.client.fetchCharacterVersion(characterId);
+      return remote.version > storedVersion;
+    } catch {
+      return false;
     }
   }
 
