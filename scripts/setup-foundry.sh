@@ -44,19 +44,19 @@ echo "=== Foundry VTT Integration Test Setup ==="
 echo "Foundry:  $FOUNDRY_DIR"
 echo "Data:     $DATA_DIR"
 echo "Port:     $PORT"
-echo "Module:   $PROJECT_ROOT/dist -> $DATA_DIR/modules/$MODULE_ID"
+echo "Module:   $PROJECT_ROOT/dist -> $DATA_DIR/Data/modules/$MODULE_ID"
 echo ""
 
 # --- Step 1: Create Data directory structure ---
 echo "[1/5] Creating Data directory structure..."
-mkdir -p "$DATA_DIR/modules"
-mkdir -p "$DATA_DIR/systems"
-mkdir -p "$DATA_DIR/worlds"
+mkdir -p "$DATA_DIR/Data/modules"
+mkdir -p "$DATA_DIR/Data/systems"
+mkdir -p "$DATA_DIR/Data/worlds"
 mkdir -p "$DATA_DIR/Config"
 
 # --- Step 2: Symlink built module into Data/modules ---
 echo "[2/5] Symlinking module..."
-MODULE_LINK="$DATA_DIR/modules/$MODULE_ID"
+MODULE_LINK="$DATA_DIR/Data/modules/$MODULE_ID"
 
 if [ -L "$MODULE_LINK" ]; then
   echo "  Symlink already exists, updating..."
