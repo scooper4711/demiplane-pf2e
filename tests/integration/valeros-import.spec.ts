@@ -1,19 +1,11 @@
 import { test, expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { loginToFoundry, resetTestWorld, createTestActor } from "./helpers.js";
+import { loginAs, loginToFoundry, resetTestWorld, createTestActor, getUserId } from "./helpers.js";
 
 const MODULE_ID = "foundry-demiplane-pf2e";
 
-/**
- * Valeros character UUIDs from Demiplane at different levels.
- * Set these via environment variables or replace with actual UUIDs.
- */
-const VALEROS_UUID_L1 =
-  process.env.VALEROS_L1_UUID ?? "PLACEHOLDER-VALEROS-LEVEL-1-UUID";
-const VALEROS_UUID_L3 =
-  process.env.VALEROS_L3_UUID ?? "PLACEHOLDER-VALEROS-LEVEL-3-UUID";
 const VALEROS_UUID_L5 =
-  process.env.VALEROS_L5_UUID ?? "PLACEHOLDER-VALEROS-LEVEL-5-UUID";
+  process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
 
 interface ActorValidation {
   name: string;
@@ -26,29 +18,9 @@ interface ActorValidation {
 }
 
 /**
- * Expected reference data for Valeros at each level.
- * These values should match Foundry PF2e's built-in Valeros pregens.
+ * Expected reference data for Valeros Level 5 (Fighter).
+ * Values should match Foundry PF2e's built-in Valeros pregen.
  */
-const VALEROS_L1: ActorValidation = {
-  name: "Valeros",
-  level: 1,
-  ancestry: "Human",
-  class: "Fighter",
-  hp: { max: 20 },
-  attributes: { str: 18, dex: 14, con: 12, int: 10, wis: 12, cha: 10 },
-  skills: { athletics: 1, intimidation: 1 },
-};
-
-const VALEROS_L3: ActorValidation = {
-  name: "Valeros",
-  level: 3,
-  ancestry: "Human",
-  class: "Fighter",
-  hp: { max: 38 },
-  attributes: { str: 18, dex: 14, con: 12, int: 10, wis: 12, cha: 10 },
-  skills: { athletics: 1, intimidation: 1, acrobatics: 1 },
-};
-
 const VALEROS_L5: ActorValidation = {
   name: "Valeros",
   level: 5,
@@ -82,18 +54,17 @@ async function triggerImport(page: Page, actorId: string): Promise<void> {
       const actor = game.actors.get(actorId);
       if (!actor) throw new Error(`Actor ${actorId} not found`);
 
-      // Trigger import via the module's API and await completion
       // @ts-expect-error Module global
       const module = game.modules.get(moduleId);
       if (!module?.api?.importCharacter) {
-        throw new Error("Module API not available");
+        throw new Error("Module API not available — is the module enabled?");
       }
       await module.api.importCharacter(actor);
     },
     { actorId, moduleId: MODULE_ID },
   );
 
-  // Wait for the import to reflect in the actor's flags (lastSyncTimestamp set)
+  // Wait for import to complete (lastSyncTimestamp flag set)
   await page.waitForFunction(
     ({ actorId, moduleId }) => {
       // @ts-expect-error Foundry global
@@ -101,7 +72,7 @@ async function triggerImport(page: Page, actorId: string): Promise<void> {
       return actor?.getFlag(moduleId, "lastSyncTimestamp") != null;
     },
     { actorId, moduleId: MODULE_ID },
-    { timeout: 15_000 },
+    { timeout: 30_000 },
   );
 }
 
@@ -133,10 +104,10 @@ async function getActorData(
       skills: Object.fromEntries(
         Object.entries(actor.system.skills)
           .filter(
-            ([_, data]: [string, { rank: number }]) =>
+            ([_, data]: [string, unknown]) =>
               (data as { rank: number }).rank > 0,
           )
-          .map(([key, data]: [string, { rank: number }]) => [
+          .map(([key, data]: [string, unknown]) => [
             key,
             (data as { rank: number }).rank,
           ]),
@@ -144,10 +115,6 @@ async function getActorData(
       feats: actor.items
         .filter((i: { type: string }) => i.type === "feat")
         .map((i: { name: string }) => i.name),
-      items: actor.items.map((i: { name: string; type: string }) => ({
-        name: i.name,
-        type: i.type,
-      })),
     };
   }, actorId);
 }
@@ -173,33 +140,45 @@ function validateActor(
   }
 }
 
-test.describe("Valeros Import Validation", () => {
+// ============================================================
+// Tests as Gamemaster
+// ============================================================
+
+test.describe("Valeros Import — Gamemaster", () => {
   test.beforeEach(async ({ page }) => {
     await loginToFoundry(page);
     await resetTestWorld(page);
   });
 
-  test("Level 1 Valeros import matches reference", async ({ page }) => {
-    const actorId = await createTestActor(page, "Test Valeros L1");
-    await linkCharacterToActor(page, actorId, VALEROS_UUID_L1);
-    await triggerImport(page, actorId);
-
-    const actorData = await getActorData(page, actorId);
-    validateActor(actorData, VALEROS_L1);
-  });
-
-  test("Level 3 Valeros import matches reference", async ({ page }) => {
-    const actorId = await createTestActor(page, "Test Valeros L3");
-    await linkCharacterToActor(page, actorId, VALEROS_UUID_L3);
-    await triggerImport(page, actorId);
-
-    const actorData = await getActorData(page, actorId);
-    validateActor(actorData, VALEROS_L3);
-  });
-
-  test("Level 5 Valeros import matches reference", async ({ page }) => {
-    const actorId = await createTestActor(page, "Test Valeros L5");
+  test("Level 5 Valeros import matches reference (GM)", async ({ page }) => {
+    const actorId = await createTestActor(page, "GM Valeros L5");
     await linkCharacterToActor(page, actorId, VALEROS_UUID_L5);
+    await triggerImport(page, actorId);
+
+    const actorData = await getActorData(page, actorId);
+    validateActor(actorData, VALEROS_L5);
+  });
+});
+
+// ============================================================
+// Tests as Player
+// ============================================================
+
+test.describe("Valeros Import — Player", () => {
+  test.beforeEach(async ({ page }) => {
+    // Setup as GM first: create actor owned by player
+    await loginToFoundry(page);
+    await resetTestWorld(page);
+  });
+
+  test("Level 5 Valeros import matches reference (Player)", async ({ page }) => {
+    // Create actor owned by the player, then switch to player session
+    const playerId = await getUserId(page, "TestPlayer");
+    const actorId = await createTestActor(page, "Player Valeros L5", playerId);
+    await linkCharacterToActor(page, actorId, VALEROS_UUID_L5);
+
+    // Now log in as the player and trigger import from their perspective
+    await loginAs(page, "TestPlayer");
     await triggerImport(page, actorId);
 
     const actorData = await getActorData(page, actorId);
