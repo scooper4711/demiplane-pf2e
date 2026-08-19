@@ -144,6 +144,7 @@ export class ImportOrchestrator {
     const resolvedByCategory = await this.resolveAllSlugs(engines, summary);
 
     if (dryRun) {
+      this.computeReconciliationPreview(actor, summary);
       for (const items of resolvedByCategory.values()) {
         summary.itemsImported += items.length;
       }
@@ -255,6 +256,15 @@ export class ImportOrchestrator {
       const message = error instanceof Error ? error.message : String(error);
       summary.errors.push(`Failed to remove stale items: ${message}`);
     }
+  }
+
+  private computeReconciliationPreview(
+    actor: Actor,
+    _summary: ImportSummary,
+  ): void {
+    actor.items.filter(
+      (item: Item) => item.getFlag(MODULE_ID, "imported") === true,
+    );
   }
 
   private async addSequentialItems(
