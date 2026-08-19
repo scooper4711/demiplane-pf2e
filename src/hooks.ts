@@ -15,7 +15,7 @@ function onActorUpdate(
 ): void {
   if (actor.type !== "character") return;
   // TODO: Detect HP, hero points, focus points changes and queue sync
-  console.log("demiplane-pf2e | Actor updated:", actor.name, changes);
+  console.log("foundry-demiplane-pf2e | Actor updated:", actor.name, changes);
 }
 
 function onItemUpdate(
@@ -24,17 +24,17 @@ function onItemUpdate(
 ): void {
   if (item.actor?.type !== "character") return;
   // TODO: Detect consumable quantity changes and queue sync
-  console.log("demiplane-pf2e | Item updated:", item.name, changes);
+  console.log("foundry-demiplane-pf2e | Item updated:", item.name, changes);
 }
 
 function onItemCreate(item: Item): void {
   if (item.actor?.type !== "character") return;
   // TODO: Detect new inventory items for potential sync
-  console.log("demiplane-pf2e | Item created:", item.name);
+  console.log("foundry-demiplane-pf2e | Item created:", item.name);
 }
 
 function onItemDelete(item: Item): void {
   if (item.actor?.type !== "character") return;
   // TODO: Detect removed items for potential sync
-  console.log("demiplane-pf2e | Item deleted:", item.name);
+  console.log("foundry-demiplane-pf2e | Item deleted:", item.name);
 }
