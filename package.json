@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "npx playwright test"
+    "test:integration": "npx playwright test",
+    "setup:foundry": "./scripts/setup-foundry.sh"
   },
   "keywords": [
     "foundry-vtt",
@@ -26,7 +27,8 @@
   "author": "scooper4711",
   "license": "MIT",
   "dependencies": {
-    "@scooper4711/demiplane-api": "^0.1.0"
+    "@scooper4711/demiplane-api": "^0.1.0",
+    "tslib": "^2.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
