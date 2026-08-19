@@ -2,12 +2,14 @@ import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ExportManager } from "./export-manager.js";
 import { HookManager } from "./hook-manager.js";
+import { SyncTabRenderer } from "./sync-tab-renderer.js";
 
 const MODULE_ID = "foundry-demiplane-pf2e";
 
 Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Initializing Demiplane PF2e Sync`);
   registerSettings();
+  SyncTabRenderer.registerSettingsHook();
 });
 
 Hooks.once("ready", () => {
