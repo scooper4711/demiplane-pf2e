@@ -1,0 +1,46 @@
+{
+  "name": "demiplane-pf2e",
+  "version": "0.1.0",
+  "description": "Foundry VTT module for two-way character sync between Demiplane Nexus and the PF2e system",
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "build:watch": "rollup -c --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "lint:fix": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier --write \"**/*.{ts,js,json,md,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,md,yml}\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "foundry-vtt",
+    "pf2e",
+    "demiplane",
+    "character-sync",
+    "pathfinder"
+  ],
+  "author": "scooper4711",
+  "license": "MIT",
+  "dependencies": {
+    "@scooper4711/demiplane-api": "^0.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.0",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-typescript": "^12.1.0",
+    "@types/node": "^22.15.0",
+    "@vitest/coverage-v8": "^3.2.0",
+    "eslint": "^9.30.0",
+    "prettier": "^3.5.0",
+    "rollup": "^4.40.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.35.0",
+    "vitest": "^3.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
