@@ -232,6 +232,13 @@ export class ImportOrchestrator {
       if (sr.includes("select-feat-") && eng.args?.slug && eng.name.includes("/feat/")) {
         grantedFeatSlugs.add(toFoundrySlug(eng.args.slug as string));
       }
+    // All tabula/class-feature/ engines are ChoiceSet selections of parent class features
+    // (e.g. "school-of-battle-magic" selected from "Arcane School" ChoiceSet)
+    // These are granted via ChoiceSet -> GrantItem on the auto-granted parent feature
+    for (const eng of engines) {
+      if (eng.name.includes("/class-feature/") && eng.args?.slug) {
+        grantedFeatSlugs.add(toFoundrySlug(eng.args.slug as string));
+      }
     }
 
     const selectedFeats = engines

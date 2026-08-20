@@ -156,6 +156,21 @@ export class ChoiceSetHandler {
 
           return childSlug;
         }
+
+    // Strategy 2: child class-feature whose sourceRow matches the parent slug directly
+    // e.g. "school-of-battle-magic-rm" has sourceRow "arcane-school-rm" = parent slug
+    const strippedParent = parentSlug.replace(/-rm$/, "") + "-rm";
+    for (const eng of this.currentEngines) {
+      const sr = (eng.args?.sourceRow as string) || "";
+      if (sr === strippedParent && eng.args?.slug && eng.name.includes("/class-feature/")) {
+        const childSlug = toFoundrySlug(eng.args.slug as string);
+        const choices = rule.choices;
+        if (typeof choices === "object" && choices !== null && !Array.isArray(choices) && "filter" in (choices as Record<string, unknown>)) {
+          return await resolveSlugToUuid(childSlug);
+        }
+        return childSlug;
+      }
+    }
       }
     }
 
