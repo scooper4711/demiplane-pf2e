@@ -71,7 +71,7 @@ test.describe("Valeros Level 5 Import", () => {
     expect(feats.find(f => f.name === "Toughness")?.taken).toBe(3);
   });
 
-  test.fixme("grants Reactive Shield via Natural Ambition ChoiceSet", () => {
+  test("grants Reactive Shield via Natural Ambition ChoiceSet", () => {
     expect(result.feats.find(f => f.name === "Reactive Shield")).toBeDefined();
   });
 
