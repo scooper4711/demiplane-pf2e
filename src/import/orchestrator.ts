@@ -15,6 +15,7 @@ import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
+import { applySpells } from "./spell-importer.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
 
 
@@ -104,6 +105,9 @@ export class ImportOrchestrator {
       await applySkillProficiencies(actor, engines, summary);
       await applyEquipment(actor, engines, summary);
       await applyCurrency(actor, engines, summary);
+
+      // Step 7.11: Apply spells
+      await applySpells(actor, engines, summary);
 
       // Sync session state (HP, temp HP, hero points)
       const currentHpEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_hit-points_current");
