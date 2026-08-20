@@ -667,3 +667,73 @@ Requires:
 - DEMIPLANE_TOKEN in .env
 
 Validates: identity, core items, feat slots (class/ancestry/skill/general), Grant Chain auto-grants, attribute modifiers, languages.
+
+---
+
+## Session: 2026-08-20 (continued) — Skills, Overrides, Test Infrastructure
+
+### Skill Proficiency Implementation
+
+Skills are set directly on `system.skills.{skill}.rank` after the Grant Chain runs. Logic:
+
+1. Parse all `core/selection/skill/increase/index.eng` engines
+2. Skip skills whose `sourceRow` contains `select-skill-` (handled by heritage ChoiceSet)
+3. Skip skills with an active `character_{skill}_prof` override set to 0 (untrained)
+4. For remaining: `skill-increase-level-*` sourceRow → rank 2 (Expert), everything else → rank 1 (Trained)
+5. Apply explicit `character_{skill}_prof` overrides (e.g., intimidation forced to rank 2)
+
+### Demiplane Override Pattern
+
+Demiplane stores proficiency overrides as CustomDemiplaneEngine pairs:
+- `character_{skill}_prof` — the override value (0=untrained, 1=trained, 2=expert, etc.)
+- `character_{skill}_prof--overridden` — flag (value=1 means override is active)
+
+Both must be present and the `--overridden` flag must be 1 for the override to apply.
+
+### Demiplane Character Updated
+
+The user corrected the Demiplane Valeros character:
+- Skilled Human now selects **intimidation** (was bugged with acrobatics)
+- Combat Climber removed (Level 2 skill feat slot now empty)
+- Intimidation override to Expert (Demiplane bug was showing Master)
+- Survival override to untrained
+
+Note: `version` field in GraphQL doesn't increment on saves — it's the character sheet schema version, NOT a revision counter. Conflict detection will need a different approach.
+
+### Test Infrastructure Fixes
+
+- **World auto-launch**: Set `"world": "integration-test"` in `TestData/Config/options.json` — Foundry auto-launches the world on startup instead of showing /setup
+- **Dialog dismissal**: Login helper now closes all `<dialog>` elements and removes tour overlays before attempting to join
+- **Data-sharing prompt**: Shows on first access after Foundry restart; dismissed by closing the dialog element
+
+### Current Test Status
+
+```
+9 passed, 2 skipped (~30s)
+✓ no import errors
+✓ correct name and level
+✓ correct ancestry, heritage, background, class
+✓ class feats in correct slots
+✓ ancestry feats in correct slots
+✓ skill and general feats in correct slots
+✓ auto-grants class features via Grant Chain
+✓ applies correct languages
+✓ applies correct attribute modifiers
+⊘ grants Reactive Shield via Natural Ambition ChoiceSet (fixme)
+⊘ applies correct skill proficiencies (fixme — acrobatics not being set)
+```
+
+### Open Issues to Debug Next Session
+
+1. **Acrobatics not being applied**: After Demiplane character update, acrobatics has `sourceRow=skill-training-fighter-rm`. The code should apply it as rank 1. Need to re-fetch fresh data and trace through `applySkillProficiencies` to find why it's undefined.
+
+2. **Reactive Shield grant**: The pre-selection approach sets the UUID correctly on Natural Ambition's ChoiceSet, and `itemGrants` populates — but the skipped-feats deduplication check OR the GrantItem timing may prevent it from appearing in the test result. Confirmed working in MCP browser testing.
+
+3. **Combat Climber removed**: The "skill and general feats" test still passes — need to verify if the test assertions match the current character (it may just not check for Combat Climber specifically).
+
+### Foundry Ports
+
+- **Port 30000**: MCP browser interaction, manual testing, reference actor
+- **Port 30001**: Playwright integration tests (separate TestData directory)
+- Both share the same `dist/` symlink for the module code
+- TestData world: "integration-test", Data world: "Demiplane Test"
