@@ -64,3 +64,64 @@ Hooks.once("ready", async () => {
 
   console.log(`${MODULE_ID} | API registered`);
 });
+
+// Add "Import Demiplane Character" button to the Actors sidebar
+Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
+  const actionButtons = html.querySelector(".action-buttons");
+  if (!actionButtons || actionButtons.querySelector(".demiplane-import-btn")) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "demiplane-import-btn";
+  button.innerHTML = `<i class="fa-solid fa-download" inert></i><span>Import Demiplane Character</span>`;
+
+  button.addEventListener("click", async () => {
+    const input = await Dialog.prompt({
+      title: "Import Demiplane Character",
+      content: `<form><div class="form-group"><label>Demiplane Character UUID or URL</label>
+<input type="text" name="characterRef" placeholder="UUID or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..." autofocus /></div></form>`,
+      label: "Import",
+      callback: (html: HTMLElement | JQuery) => {
+        const el = html instanceof HTMLElement ? html : (html as JQuery)[0];
+        return (el.querySelector("[name=characterRef]") as HTMLInputElement)?.value ?? "";
+      },
+      rejectClose: false,
+    });
+
+    if (!input) return;
+
+    const characterId = extractCharacterId(input.trim());
+    if (!characterId) {
+      ui.notifications?.error("Invalid Demiplane character UUID or URL.");
+      return;
+    }
+
+    const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+    if (!token) {
+      ui.notifications?.error("No Demiplane token configured. Set it in module settings.");
+      return;
+    }
+
+    ui.notifications?.info("Importing character from Demiplane...");
+
+    const actor = await Actor.create({ name: "Importing...", type: "character" });
+    if (!actor) return;
+
+    await actor.setFlag(MODULE_ID, "characterId", characterId);
+    const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+
+    if (summary.errors.length > 0) {
+      ui.notifications?.error(`Import errors: ${summary.errors.join("; ")}`);
+    } else {
+      ui.notifications?.info(`Imported "${actor.name}" — ${summary.itemsImported} items.`);
+    }
+  });
+
+  actionButtons.appendChild(button);
+
+function extractCharacterId(input: string): string | null {
+  const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const match = input.match(uuidPattern);
+  return match ? match[0] : null;
+}
+}
