@@ -110,6 +110,11 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.skills.survival).toBeUndefined(); // Override to untrained (0)
   });
 
+
+  test("applies organized play ID", () => {
+    expect(result.pfs.playerNumber).toBe(123456);
+    expect(result.pfs.characterNumber).toBe(2001);
+  });
   test("applies correct attribute modifiers", () => {
     expect(result.abilities.str).toBe(4);
     expect(result.abilities.dex).toBe(2);
@@ -117,5 +122,65 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.abilities.int).toBe(1);
     expect(result.abilities.wis).toBe(1);
     expect(result.abilities.cha).toBe(1);
+  });
+
+  test("imports equipment with correct equipped state", () => {
+    const longsword = result.equipment.find(e => e.name === "Longsword");
+    expect(longsword).toBeDefined();
+    expect(longsword!.carryType).toBe("held");
+    expect(longsword!.handsHeld).toBe(1);
+
+    const shield = result.equipment.find(e => e.name === "Steel Shield");
+    expect(shield).toBeDefined();
+    expect(shield!.carryType).toBe("held");
+    expect(shield!.handsHeld).toBe(1);
+
+    const armor = result.equipment.find(e => e.name === "Half Plate");
+    expect(armor).toBeDefined();
+    expect(armor!.carryType).toBe("worn");
+    expect(armor!.invested).toBe(true);
+
+    const backpack = result.equipment.find(e => e.name === "Backpack");
+    expect(backpack).toBeDefined();
+    expect(backpack!.carryType).toBe("worn");
+
+    const rope = result.equipment.find(e => e.name === "Rope");
+    expect(rope).toBeDefined();
+    expect(rope!.carryType).toBe("stowed");
+    expect(rope!.containerId).not.toBeNull();
+
+    const arrows = result.equipment.find(e => e.name === "Arrows");
+    expect(arrows!.quantity).toBe(20);
+    const rations = result.equipment.find(e => e.name === "Rations");
+    expect(rations!.quantity).toBe(2);
+  });
+
+  test("imports invested items", () => {
+    const doublingRings = result.equipment.find(e => e.name === "Doubling Rings");
+    expect(doublingRings).toBeDefined();
+    expect(doublingRings!.carryType).toBe("worn");
+    expect(doublingRings!.invested).toBe(true);
+
+    const pendant = result.equipment.find(e => e.name === "Pendant of the Occult");
+    expect(pendant).toBeDefined();
+    expect(pendant!.carryType).toBe("worn");
+    expect(pendant!.invested).toBe(true);
+  });
+
+  test("imports currency", () => {
+    expect(result.currency.gp).toBe(32);
+    expect(result.currency.pp).toBe(1);
+    expect(result.currency.sp).toBe(2);
+    expect(result.currency.cp).toBe(3);
+  });
+
+  test("imports current and temp HP from Demiplane", () => {
+    expect(result.hp.max).toBe(78);
+    expect(result.hp.value).toBe(68);
+    expect(result.hp.temp).toBe(12);
+  });
+
+  test("imports hero points", () => {
+    expect(result.heroPoints).toBe(2);
   });
 });

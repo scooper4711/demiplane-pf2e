@@ -69,14 +69,15 @@ function getSlug(eng: DemiplaneEngineEntry): string | null {
 function parseFeatSlot(sourceRow: string): { location: string | null; taken: number | null } {
   if (!sourceRow) return { location: null, taken: null };
 
-  // Pattern: {type}-feat-level-{N}-rm or {type}-feat-level-{N}
-  const levelMatch = sourceRow.match(/^(?:fighter|class|ancestry|skill|general)-feat(?:s)?-level-(\d+)/);
+  // Pattern: {classname|ancestry|skill|general}-feat(s)-level-{N}(-rm)
+  const levelMatch = sourceRow.match(/^(\w+)-feats?-level-(\d+)/);
   if (levelMatch) {
-    const level = parseInt(levelMatch[1], 10);
+    const prefix = levelMatch[1];
+    const level = parseInt(levelMatch[2], 10);
     let type = "class";
-    if (sourceRow.startsWith("ancestry")) type = "ancestry";
-    else if (sourceRow.startsWith("skill")) type = "skill";
-    else if (sourceRow.startsWith("general")) type = "general";
+    if (prefix === "ancestry") type = "ancestry";
+    else if (prefix === "skill") type = "skill";
+    else if (prefix === "general") type = "general";
     return { location: `${type}-${level}`, taken: level };
   }
 
@@ -88,7 +89,6 @@ function parseFeatSlot(sourceRow: string): { location: string | null; taken: num
 
   return { location: null, taken: null };
 }
-
 /**
  * Categorize a Demiplane engine entry by its path.
  */
@@ -210,6 +210,26 @@ export class ImportOrchestrator {
       // Step 7.8: Apply skill proficiencies
       await this.applySkillProficiencies(actor, engines, summary);
 
+      // Step 7.9: Apply equipment from Demiplane inventory
+      await this.applyEquipment(actor, engines, summary);
+
+      // Step 7.10: Apply currency
+      await this.applyCurrency(actor, engines, summary);
+
+
+      // Step 7.11: Sync session state (HP, temp HP, hero points)
+      const currentHpEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_hit-points_current");
+      const tempHpEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_hit-points_temp");
+      const heroPointsEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_hero-points");
+      const maxHp = (actor as unknown as { system: { attributes: { hp: { max: number } } } }).system.attributes.hp.max;
+      const currentHp = currentHpEng ? Number(currentHpEng.value) : maxHp;
+      const tempHp = tempHpEng ? Number(tempHpEng.value) : 0;
+      const heroPoints = heroPointsEng ? Number(heroPointsEng.value) : 1;
+      await actor.update({
+        "system.attributes.hp.value": Math.min(currentHp, maxHp),
+        "system.attributes.hp.temp": tempHp,
+        "system.resources.heroPoints.value": Math.min(heroPoints, 3),
+      });
     } finally {
       this.disableImportMode();
     }
@@ -476,19 +496,24 @@ export class ImportOrchestrator {
     const backstory = getValue("character_campaign_other");
     if (backstory) updates["system.details.biography.backstory"] = `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
 
-    // Deity — validate against PF2e's list, report mismatch
-    const beliefs = getValue("character_personality_beliefs");
-    if (beliefs) {
-      const deities = Object.keys(
-        (CONFIG as unknown as { PF2E?: { deities?: Record<string, unknown> } }).PF2E?.deities ?? {},
-      );
-      const slugified = beliefs.toLowerCase().replace(/\s+/g, "-");
-      if (deities.length === 0 || deities.includes(slugified)) {
-        updates["system.details.deity.value"] = beliefs;
-      } else {
-        // Try case-insensitive match
-        updates["system.details.deity.value"] = beliefs;
-        summary.log.push(`! deity "${beliefs}" may not match Foundry vocabulary`);
+
+    // Deity — add as item from pf2e.deities compendium
+    const deityName = getValue("character_personality_beliefs");
+    if (deityName) {
+      const deityPack = game.packs.get("pf2e.deities");
+      if (deityPack) {
+        const index = await deityPack.getIndex();
+        const match = index.find((e: { name: string }) => e.name.toLowerCase() === deityName.toLowerCase());
+        if (match) {
+          const deityDoc = await deityPack.getDocument(match._id);
+          if (deityDoc) {
+            await actor.createEmbeddedDocuments("Item", [deityDoc.toObject()]);
+            summary.log.push(`+ deity: ${deityName}`);
+          }
+        } else {
+          updates["system.details.deity.value"] = deityName;
+          summary.log.push(`! deity "${deityName}" not found in compendium, set as text only`);
+        }
       }
     }
 
@@ -513,10 +538,20 @@ export class ImportOrchestrator {
 
     // Edicts and anathema (comma-separated in Demiplane, array in Foundry)
     const edicts = getValue("character_personality_edicts");
-    if (edicts) updates["system.details.biography.edicts"] = edicts.split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (edicts) updates["system.details.biography.edicts"] = edicts.split(/[,\n\r]+/).map((s: string) => s.trim()).filter(Boolean);
 
     const anathema = getValue("character_personality_anathema");
-    if (anathema) updates["system.details.biography.anathema"] = anathema.split(",").map((s: string) => s.trim()).filter(Boolean);
+    if (anathema) updates["system.details.biography.anathema"] = anathema.split(/[,\n\r]+/).map((s: string) => s.trim()).filter(Boolean);
+
+    // Organized Play ID — "123456-2001" → playerNumber + characterNumber
+    const orgPlayId = getValue("character_organizedplayid");
+    if (orgPlayId) {
+      const lastDash = orgPlayId.lastIndexOf("-");
+      if (lastDash > 0) {
+        updates["system.pfs.playerNumber"] = parseInt(orgPlayId.slice(0, lastDash), 10) || null;
+        updates["system.pfs.characterNumber"] = parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
+      }
+    }
 
     if (Object.keys(updates).length > 0) {
       await actor.update(updates);
@@ -626,7 +661,7 @@ export class ImportOrchestrator {
 
     // Parse comma-separated free-text languages
     const rawLanguages = (langEngine.value as string)
-      .split(",")
+      .split(/[,\n\r]+/)
       .map((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
       .filter(Boolean);
 
@@ -841,28 +876,305 @@ export class ImportOrchestrator {
 
   private async resolveCompendiumItem(demiplaneSlug: string): Promise<Record<string, unknown> | null> {
     const foundrySlug = toFoundrySlug(demiplaneSlug);
-    for (const packKey of PACKS) {
-      const pack = game.packs.get(packKey);
-      if (!pack) continue;
-      const index = await pack.getIndex({ fields: ["system.slug"] });
-      const match = index.find((i: { system?: { slug?: string } }) => i.system?.slug === foundrySlug);
-      if (match) {
-        const uuid = `Compendium.${packKey}.Item.${match._id}`;
-        const doc = await fromUuid(uuid);
-        return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
+    const candidates = this.generateSlugCandidates(foundrySlug);
+    for (const slug of candidates) {
+      for (const packKey of PACKS) {
+        const pack = game.packs.get(packKey);
+        if (!pack) continue;
+        const index = await pack.getIndex({ fields: ["system.slug"] });
+        const match = index.find((i: { system?: { slug?: string } }) => i.system?.slug === slug);
+        if (match) {
+          const uuid = `Compendium.${packKey}.Item.${match._id}`;
+          const doc = await fromUuid(uuid);
+          return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
+        }
       }
     }
     return null;
   }
 
+  private static readonly CLASS_SUFFIXES = [
+    "-sorcerer", "-wizard", "-cleric", "-druid", "-bard", "-fighter",
+    "-ranger", "-rogue", "-monk", "-champion", "-barbarian", "-alchemist",
+    "-investigator", "-oracle", "-swashbuckler", "-witch", "-magus", "-summoner",
+    "-gunslinger", "-inventor", "-psychic", "-thaumaturge", "-kineticist",
+  ];
+
+  private generateSlugCandidates(slug: string): string[] {
+    const candidates = [slug];
+    // Try stripping class-name suffixes (e.g. "cantrip-expansion-sorcerer" -> "cantrip-expansion")
+    for (const suffix of ImportOrchestrator.CLASS_SUFFIXES) {
+      if (slug.endsWith(suffix)) {
+        candidates.push(slug.slice(0, -suffix.length));
+        break;
+      }
+    }
+    // Try prefixing with "bloodline-" for bloodline class features
+    candidates.push(`bloodline-${slug}`);
+    return candidates;
+  }
+
   private async setActorIdentity(actor: Actor, engines: DemiplaneEngineEntry[]): Promise<void> {
     const nameEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_name");
     const levelEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
+    const avatarEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_avatar");
     const updates: Record<string, unknown> = {};
     if (nameEng?.value) updates.name = nameEng.value;
     if (levelEng?.value) updates["system.details.level.value"] = levelEng.value;
+    if (avatarEng?.value) {
+      updates.img = avatarEng.value;
+      updates["prototypeToken.texture.src"] = avatarEng.value;
+    }
     if (Object.keys(updates).length > 0) await actor.update(updates);
   }
 
 
+
+  private static readonly SLUG_NORMALIZATIONS: Record<string, string> = {
+    "arrow": "arrows",
+    "rations-1-week": "rations",
+    "rope-50-feet": "rope",
+    "repair-toolkit-basic": "repair-toolkit",
+  };
+
+  private normalizeEquipmentSlug(demiplaneSlug: string): string {
+    const stripped = demiplaneSlug.replace(/-rm$/, "");
+    return ImportOrchestrator.SLUG_NORMALIZATIONS[stripped] ?? stripped;
+  }
+
+  private async applyEquipment(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const itemEngines = engines.filter(
+      (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"),
+    );
+    if (itemEngines.length === 0) return;
+
+    const getCustomValue = (name: string): string | number | undefined => {
+      const eng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
+      return eng?.value ?? undefined;
+    };
+
+    // Build equipped state lookup
+    const primaryHandId = getCustomValue("character_hand_primary_equipped-id") as string | undefined;
+    const offHandId = getCustomValue("character_hand_offhand_equipped-id") as string | undefined;
+    const bothHandsId = getCustomValue("character_hand_both_equipped-id") as string | undefined;
+
+    const wornIds = new Set<string>();
+    engines
+      .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("-is-equipped") && e.value === 1)
+      .forEach((e) => {
+        const id = e.name.replace("-is-equipped", "");
+        wornIds.add(id);
+      });
+
+    // Build container lookup: demiplaneEngineId -> parent container demiplaneEngineId
+    const containerMap = new Map<string, string>();
+    engines
+      .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("-container"))
+      .forEach((e) => {
+        const childId = e.name.replace("-container", "");
+        containerMap.set(childId, String(e.value));
+      });
+
+    // Build quantity lookup
+    const quantityMap = new Map<string, number>();
+    engines
+      .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("--quantity"))
+      .forEach((e) => {
+        const id = e.name.replace("--quantity", "");
+        quantityMap.set(id, Number(e.value) || 1);
+      });
+
+    // Load the equipment compendium index with slugs
+    const equipPack = game.packs.get("pf2e.equipment-srd");
+    if (!equipPack) {
+      summary.errors.push("pf2e.equipment-srd compendium not found");
+      return;
+    }
+    const equipIndex = await equipPack.getIndex({ fields: ["system.slug"] });
+
+    // First pass: create all items and track the backpack for container assignment
+    const itemsToCreate: Array<{ data: Record<string, unknown>; demiplaneId: string }> = [];
+    const skippedItems: string[] = [];
+
+    for (const eng of itemEngines) {
+      const slug = this.normalizeEquipmentSlug(eng.args?.slug ?? eng.name.split("/").pop() ?? "");
+      const demiplaneId = eng.demiplaneEngineId;
+
+      let indexEntry = equipIndex.find(
+        (e: { system?: { slug?: string } }) => e.system?.slug === slug,
+      );
+      if (!indexEntry) {
+        // Fallback: strip tier suffixes (-basic, -lesser, -greater, -moderate, -major)
+        const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
+        if (fallbackSlug !== slug) {
+          indexEntry = equipIndex.find(
+            (e: { system?: { slug?: string } }) => e.system?.slug === fallbackSlug,
+          );
+        }
+      }
+      if (!indexEntry) {
+        skippedItems.push(slug);
+        continue;
+      }
+
+      const doc = await equipPack.getDocument(indexEntry._id);
+      if (!doc) continue;
+
+      const itemData = (doc as { toObject: () => Record<string, unknown> }).toObject();
+
+      // Set quantity
+      const qty = quantityMap.get(demiplaneId) ?? 1;
+      (itemData as { system: { quantity?: number } }).system.quantity = qty;
+
+      // Determine equipped state
+      const equipped = this.resolveEquippedState(
+        demiplaneId,
+        primaryHandId,
+        offHandId,
+        bothHandsId,
+        wornIds,
+        containerMap,
+        itemData,
+      );
+      (itemData as { system: { equipped?: unknown } }).system.equipped = equipped;
+
+      itemsToCreate.push({ data: itemData, demiplaneId });
+    }
+
+    if (itemsToCreate.length === 0) {
+      if (skippedItems.length > 0) {
+        summary.log.push(`! equipment: ${skippedItems.length} items not found in compendium`);
+      }
+      return;
+    }
+
+    // Create items in batch - backpack first so we can get its Foundry ID for containerId
+    const backpackIdx = itemsToCreate.findIndex(
+      (i) => (i.data as { type?: string }).type === "backpack",
+    );
+    let backpackFoundryId: string | null = null;
+    let backpackDemiplaneId: string | null = null;
+
+    if (backpackIdx >= 0) {
+      const backpackEntry = itemsToCreate.splice(backpackIdx, 1)[0];
+      backpackDemiplaneId = backpackEntry.demiplaneId;
+      const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data]);
+      backpackFoundryId = (created[0] as { id: string }).id;
+    }
+
+    // Set containerId on items that are stowed in the backpack
+    if (backpackFoundryId && backpackDemiplaneId) {
+      for (const item of itemsToCreate) {
+        const parentId = containerMap.get(item.demiplaneId);
+        if (parentId === backpackDemiplaneId) {
+          (item.data as { system: { containerId?: string } }).system.containerId = backpackFoundryId;
+        }
+      }
+    }
+
+    // Create remaining items
+    if (itemsToCreate.length > 0) {
+      await actor.createEmbeddedDocuments(
+        "Item",
+        itemsToCreate.map((i) => i.data),
+      );
+    }
+
+    const totalCreated = (backpackFoundryId ? 1 : 0) + itemsToCreate.length;
+    summary.log.push(`+ equipment: ${totalCreated} items`);
+    if (skippedItems.length > 0) {
+      summary.log.push(`! equipment skipped: [${skippedItems.join(", ")}]`);
+    }
+  }
+
+  private resolveEquippedState(
+    demiplaneId: string,
+    primaryHandId: string | undefined,
+    offHandId: string | undefined,
+    bothHandsId: string | undefined,
+    wornIds: Set<string>,
+    containerMap: Map<string, string>,
+    itemData: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const itemType = (itemData as { type?: string }).type;
+
+    // Held in primary hand (1H)
+    if (primaryHandId === demiplaneId) {
+      return { carryType: "held", handsHeld: 1, invested: null };
+    }
+    // Held in off-hand (1H)
+    if (offHandId === demiplaneId) {
+      return { carryType: "held", handsHeld: 1, invested: null };
+    }
+    // Held in both hands (2H)
+    if (bothHandsId === demiplaneId) {
+      return { carryType: "held", handsHeld: 2, invested: null };
+    }
+    // Stowed in a container
+    if (containerMap.has(demiplaneId)) {
+      return { carryType: "stowed", handsHeld: 0 };
+    }
+    // Worn/equipped (armor, backpack get inSlot: true)
+    if (wornIds.has(demiplaneId)) {
+      const result: Record<string, unknown> = { carryType: "worn", handsHeld: 0, invested: true };
+      if (itemType === "armor" || itemType === "backpack") {
+        result.inSlot = true;
+      }
+      return result;
+    }
+    // Default: worn (non-invested)
+    const result: Record<string, unknown> = { carryType: "worn", handsHeld: 0, invested: null };
+    if (itemType === "armor" || itemType === "backpack") {
+      result.inSlot = true;
+    }
+    return result;
+  }
+
+  private static readonly CURRENCY_MAP: Array<{ engine: string; slug: string }> = [
+    { engine: "character_currency_platinum", slug: "platinum-pieces" },
+    { engine: "character_currency_gold", slug: "gold-pieces" },
+    { engine: "character_currency_silver", slug: "silver-pieces" },
+    { engine: "character_currency_copper", slug: "copper-pieces" },
+  ];
+
+  private async applyCurrency(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const equipPack = game.packs.get("pf2e.equipment-srd");
+    if (!equipPack) return;
+    const index = await equipPack.getIndex({ fields: ["system.slug"] });
+
+    const coinItems: Record<string, unknown>[] = [];
+    for (const { engine, slug } of ImportOrchestrator.CURRENCY_MAP) {
+      const eng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === engine);
+      const amount = Number(eng?.value) || 0;
+      if (amount <= 0) continue;
+
+      const entry = index.find((e: { system?: { slug?: string } }) => e.system?.slug === slug);
+      if (!entry) continue;
+
+      const doc = await equipPack.getDocument(entry._id);
+      if (!doc) continue;
+
+      const itemData = (doc as { toObject: () => Record<string, unknown> }).toObject();
+      (itemData as { system: { quantity?: number } }).system.quantity = amount;
+      (itemData as { system: { equipped?: unknown } }).system.equipped = { carryType: "worn", handsHeld: 0 };
+      coinItems.push(itemData);
+    }
+
+    if (coinItems.length > 0) {
+      await actor.createEmbeddedDocuments("Item", coinItems);
+      const desc = coinItems.map((c) => {
+        const sys = c.system as { quantity: number };
+        return `${sys.quantity} ${(c as { name: string }).name}`;
+      }).join(", ");
+      summary.log.push(`+ currency: ${desc}`);
+    }
+  }
 }

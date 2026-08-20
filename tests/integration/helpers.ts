@@ -82,6 +82,11 @@ export interface ImportResult {
   languages: string[];
   skills: Record<string, number>;
   totalItems: number;
+  pfs: { playerNumber: number | null; characterNumber: number | null };
+  equipment: Array<{ name: string; type: string; quantity: number; carryType: string; handsHeld: number; containerId: string | null; invested: boolean | null }>;
+  currency: { pp: number; gp: number; sp: number; cp: number };
+  hp: { value: number; max: number; temp: number };
+  heroPoints: number;
 }
 
 export async function createAndImportCharacter(
@@ -121,7 +126,7 @@ export async function createAndImportCharacter(
         gender: (actor.system.details.gender?.value as string) || "",
         ethnicity: (actor.system.details.ethnicity?.value as string) || "",
         nationality: (actor.system.details.nationality?.value as string) || "",
-        deity: (actor.system.details.deity?.value as string) || "",
+        deity: actor.items.find((i: { type: string }) => i.type === "deity")?.name || (actor.system.details.deity?.value as string) || "",
         loreSkills: actor.items.filter((i: { type: string }) => i.type === "lore").map((i: { name: string }) => i.name),
         skills: Object.fromEntries(
           Object.entries(actor.system.skills).filter(([_, d]) => (d as { rank: number }).rank > 0).map(([k, d]) => [k, (d as { rank: number }).rank])
@@ -130,6 +135,11 @@ export async function createAndImportCharacter(
           Object.entries(actor.system.abilities).map(([k, d]) => [k, (d as { mod: number }).mod])
         ),
         totalItems: actor.items.size,
+        pfs: { playerNumber: actor.system.pfs?.playerNumber ?? null, characterNumber: actor.system.pfs?.characterNumber ?? null },
+        hp: { value: actor.system.attributes.hp.value, max: actor.system.attributes.hp.max, temp: actor.system.attributes.hp.temp },
+        heroPoints: actor.system.resources?.heroPoints?.value ?? 0,
+        equipment: actor.items.filter((i: { type: string }) => ["weapon", "armor", "shield", "equipment", "consumable", "backpack", "ammo"].includes(i.type)).map((i: { name: string; type: string; system: { quantity: number; equipped: { carryType: string; handsHeld: number; invested?: boolean | null }; containerId: string | null } }) => ({ name: i.name, type: i.type, quantity: i.system.quantity, carryType: i.system.equipped.carryType, handsHeld: i.system.equipped.handsHeld, containerId: i.system.containerId, invested: i.system.equipped.invested ?? null })),
+        currency: (() => { const t = actor.items.filter((i: { type: string }) => i.type === "treasure"); const find = (s: string) => t.find((i: { system: { slug: string } }) => i.system.slug === s); return { pp: find("platinum-pieces")?.system.quantity ?? 0, gp: find("gold-pieces")?.system.quantity ?? 0, sp: find("silver-pieces")?.system.quantity ?? 0, cp: find("copper-pieces")?.system.quantity ?? 0 }; })(),
       };
     },
     { actorName, characterId, token, moduleId: MODULE_ID },
