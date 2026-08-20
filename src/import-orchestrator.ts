@@ -189,6 +189,9 @@ export class ImportOrchestrator {
       // Step 7: Set name and level
       await this.setActorIdentity(actor, engines);
 
+      // Step 7.5: Apply attribute boosts
+      await this.applyAttributeBoosts(actor, engines, summary);
+
     } finally {
       // Step 8: Restore original ChoiceSet behavior
       this.disableImportMode();
@@ -197,7 +200,80 @@ export class ImportOrchestrator {
     return summary;
   }
 
-  private async fetchCharacterEngines(
+  private async applyAttributeBoosts(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const boostEngines = engines.filter(
+      (e) => e.name === "core/selection/attribute/boost.eng" && e.args?.slug,
+    );
+
+    // Map Demiplane attribute names to PF2e abbreviations
+    const attrMap: Record<string, string> = {
+      strength: "str", dexterity: "dex", constitution: "con",
+      intelligence: "int", wisdom: "wis", charisma: "cha",
+    };
+
+    // Group by sourceRow
+    const ancestryBoosts: string[] = [];
+    const backgroundBoosts: string[] = [];
+    const levelBoosts: Record<string, string[]> = {};
+
+    for (const eng of boostEngines) {
+      const slug = attrMap[eng.args.slug as string] || (eng.args.slug as string);
+      const sourceRow = (eng.args.sourceRow as string) || "";
+
+      if (sourceRow === "ancestry-boosts") {
+        ancestryBoosts.push(slug);
+      } else if (sourceRow === "background-boosts") {
+        backgroundBoosts.push(slug);
+      } else if (sourceRow === "class-key-attribute") {
+        // Handled by Grant Chain — skip
+      } else {
+        const levelMatch = sourceRow.match(/attribute-boosts-level-(\d+)/);
+        if (levelMatch) {
+          const level = levelMatch[1];
+          if (!levelBoosts[level]) levelBoosts[level] = [];
+          levelBoosts[level].push(slug);
+        }
+      }
+    }
+
+    // Apply ancestry boosts to the ancestry item
+    const ancestryItem = actor.items.find((i: { type: string }) => i.type === "ancestry");
+    if (ancestryItem && ancestryBoosts.length > 0) {
+      const updates: Record<string, string> = {};
+      ancestryBoosts.forEach((slug, i) => {
+        updates[`system.boosts.${i}.selected`] = slug;
+      });
+      await ancestryItem.update(updates);
+      summary.log.push(`+ boosts: ancestry [${ancestryBoosts.join(", ")}]`);
+    }
+
+    // Apply background boosts to the background item
+    const backgroundItem = actor.items.find((i: { type: string }) => i.type === "background");
+    if (backgroundItem && backgroundBoosts.length > 0) {
+      const updates: Record<string, string> = {};
+      backgroundBoosts.forEach((slug, i) => {
+        updates[`system.boosts.${i}.selected`] = slug;
+      });
+      await backgroundItem.update(updates);
+      summary.log.push(`+ boosts: background [${backgroundBoosts.join(", ")}]`);
+    }
+
+    // Apply level boosts to the actor
+    if (Object.keys(levelBoosts).length > 0) {
+      const updates: Record<string, string[]> = {};
+      for (const [level, boosts] of Object.entries(levelBoosts)) {
+        updates[`system.build.attributes.boosts.${level}`] = boosts;
+      }
+      await actor.update(updates);
+      summary.log.push(`+ boosts: levels [${Object.entries(levelBoosts).map(([l, b]) => `L${l}:${b.join(",")}`).join("; ")}]`);
+    }
+  }
+
+    private async fetchCharacterEngines(
     characterId: string,
     token: string | undefined,
     summary: ImportSummary,
