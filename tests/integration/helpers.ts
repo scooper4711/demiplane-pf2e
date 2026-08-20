@@ -7,7 +7,13 @@ const MODULE_ID = "foundry-demiplane-pf2e";
 
 export async function loginAsGamemaster(page: Page): Promise<void> {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000);
+
+  // Dismiss any blocking dialogs (usage data sharing, tours, etc.)
+  await page.evaluate(() => {
+    document.querySelectorAll("dialog").forEach((el: HTMLDialogElement) => el.close());
+    document.querySelectorAll(".tour-overlay, .tour-center-step, #notifications li").forEach(el => el.remove());
+  }).catch(() => {});
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const url = page.url();
