@@ -1,6 +1,6 @@
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
-import { ImportOrchestrator } from "./import-orchestrator.js";
+import { ImportOrchestrator } from "./import/index.js";
 import { ExportManager } from "./export-manager.js";
 import { ConflictResolver } from "./conflict-resolver.js";
 import { HookManager } from "./hook-manager.js";
