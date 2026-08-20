@@ -34,3 +34,4 @@ export interface DemiplaneEngineEntry {
 }
 
 export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "classfeature" | "equipment";
+

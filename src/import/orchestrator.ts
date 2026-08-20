@@ -78,11 +78,11 @@ export class ImportOrchestrator {
           const itemData = await resolveCompendiumItem(eng._slug);
           if (itemData) {
             await this.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-            if ((itemData as Record<string, unknown>).type === "feat" && eng.args?.sourceRow) {
+            if ((itemData as { type: string }).type === "feat" && eng.args?.sourceRow) {
               const { location, taken } = parseFeatSlot(eng.args.sourceRow as string);
-              const system = (itemData as Record<string, { level?: Record<string, unknown>; location?: string }>).system;
+              const system = (itemData as Record<string, unknown>).system as Record<string, unknown>;
               if (location) system.location = location;
-              if (taken !== null) system.level = { ...system.level, taken };
+              if (taken !== null) system.level = { ...(system.level as Record<string, unknown> || {}), taken };
             }
             batchItems.push(itemData);
             summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
@@ -94,7 +94,7 @@ export class ImportOrchestrator {
         }
       }
       if (batchItems.length > 0) {
-        await actor.createEmbeddedDocuments("Item", batchItems);
+        await (actor as Actor).createEmbeddedDocuments("Item", batchItems as never);
       }
 
       await this.setActorIdentity(actor, engines);
@@ -117,7 +117,7 @@ export class ImportOrchestrator {
         "system.attributes.hp.value": Math.min(currentHp, maxHp),
         "system.attributes.hp.temp": tempHp,
         "system.resources.heroPoints.value": Math.min(heroPoints, 3),
-      });
+      } as never);
     } finally {
       this.choiceSetHandler.disable();
     }
@@ -169,7 +169,7 @@ export class ImportOrchestrator {
         type: "lore" as const,
         system: { proficient: { value: 1 } },
       }));
-      await actor.createEmbeddedDocuments("Item", loreItems);
+      await actor.createEmbeddedDocuments("Item", loreItems as never);
       summary.log.push(`+ lore: [${newLores.join(", ")}]`);
     }
   }
@@ -263,7 +263,7 @@ export class ImportOrchestrator {
     const itemData = await resolveCompendiumItem(eng._slug);
     if (itemData) {
       await this.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      await actor.createEmbeddedDocuments("Item", [itemData]);
+      await actor.createEmbeddedDocuments("Item", [itemData] as never);
       summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       summary.itemsImported++;
     } else {

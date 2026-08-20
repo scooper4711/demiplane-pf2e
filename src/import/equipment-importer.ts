@@ -1,10 +1,103 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { normalizeEquipmentSlug } from "./slug-utils.js";
 
-/**
- * Imports equipment items and currency from Demiplane.
- */
-// eslint-disable-next-line complexity -- sequential equipment processing with fallback logic
+interface EquipmentState {
+  primaryHandId: string | undefined;
+  offHandId: string | undefined;
+  bothHandsId: string | undefined;
+  wornIds: Set<string>;
+  containerMap: Map<string, string>;
+  quantityMap: Map<string, number>;
+}
+
+interface EquippedResult {
+  carryType: string;
+  handsHeld: number;
+  invested?: boolean | null;
+  inSlot?: boolean;
+}
+
+interface PendingItem {
+  data: Record<string, unknown>;
+  demiplaneId: string;
+}
+
+function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
+  const findCustom = (name: string) =>
+    engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name)?.value;
+
+  const wornIds = new Set<string>();
+  const containerMap = new Map<string, string>();
+  const quantityMap = new Map<string, number>();
+
+  for (const eng of engines) {
+    if (eng.type !== "CustomDemiplaneEngine") continue;
+    if (eng.name.endsWith("-is-equipped") && eng.value === 1) {
+      wornIds.add(eng.name.replace("-is-equipped", ""));
+    } else if (eng.name.endsWith("-container")) {
+      containerMap.set(eng.name.replace("-container", ""), String(eng.value));
+    } else if (eng.name.endsWith("--quantity")) {
+      quantityMap.set(eng.name.replace("--quantity", ""), Number(eng.value) || 1);
+    }
+  }
+
+  return {
+    primaryHandId: findCustom("character_hand_primary_equipped-id") as string | undefined,
+    offHandId: findCustom("character_hand_offhand_equipped-id") as string | undefined,
+    bothHandsId: findCustom("character_hand_both_equipped-id") as string | undefined,
+    wornIds,
+    containerMap,
+    quantityMap,
+  };
+}
+
+function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemType: string): EquippedResult {
+  if (state.primaryHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
+  if (state.offHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
+  if (state.bothHandsId === demiplaneId) return { carryType: "held", handsHeld: 2, invested: null };
+  if (state.containerMap.has(demiplaneId)) return { carryType: "stowed", handsHeld: 0 };
+
+  const needsSlot = itemType === "armor" || itemType === "backpack";
+  if (state.wornIds.has(demiplaneId)) {
+    return { carryType: "worn", handsHeld: 0, invested: true, ...(needsSlot && { inSlot: true }) };
+  }
+  return { carryType: "worn", handsHeld: 0, invested: null, ...(needsSlot && { inSlot: true }) };
+}
+
+function findBySlug(
+  equipIndex: { find: (fn: (e: { system?: { slug?: string } }) => boolean) => { _id: string } | undefined },
+  slug: string,
+): { _id: string } | undefined {
+  const exact = equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === slug);
+  if (exact) return exact;
+
+  const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
+  if (fallbackSlug !== slug) {
+    return equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === fallbackSlug);
+  }
+  return undefined;
+}
+
+async function createBackpackFirst(
+  actor: Actor,
+  items: PendingItem[],
+  state: EquipmentState,
+): Promise<number> {
+  const backpackIdx = items.findIndex((i) => (i.data.type as string) === "backpack");
+  if (backpackIdx < 0) return 0;
+
+  const backpackEntry = items.splice(backpackIdx, 1)[0]!;
+  const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data] as never);
+  const backpackFoundryId = (created[0] as { id: string }).id;
+
+  for (const item of items) {
+    if (state.containerMap.get(item.demiplaneId) === backpackEntry.demiplaneId) {
+      (item.data.system as Record<string, unknown>).containerId = backpackFoundryId;
+    }
+  }
+  return 1;
+}
+
 export async function applyEquipment(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
@@ -15,152 +108,73 @@ export async function applyEquipment(
   );
   if (itemEngines.length === 0) return;
 
-  const getCustomValue = (name: string): string | number | undefined => {
-    const eng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
-    return eng?.value ?? undefined;
-  };
+  const state = buildEquipmentState(engines);
 
-  const primaryHandId = getCustomValue("character_hand_primary_equipped-id") as string | undefined;
-  const offHandId = getCustomValue("character_hand_offhand_equipped-id") as string | undefined;
-  const bothHandsId = getCustomValue("character_hand_both_equipped-id") as string | undefined;
-
-  const wornIds = new Set<string>();
-  engines
-    .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("-is-equipped") && e.value === 1)
-    .forEach((e) => { wornIds.add(e.name.replace("-is-equipped", "")); });
-
-  const containerMap = new Map<string, string>();
-  engines
-    .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("-container"))
-    .forEach((e) => { containerMap.set(e.name.replace("-container", ""), String(e.value)); });
-
-  const quantityMap = new Map<string, number>();
-  engines
-    .filter((e) => e.type === "CustomDemiplaneEngine" && e.name.endsWith("--quantity"))
-    .forEach((e) => { quantityMap.set(e.name.replace("--quantity", ""), Number(e.value) || 1); });
-
-  const equipPack = game.packs.get("pf2e.equipment-srd");
+  const equipPack = game.packs!.get("pf2e.equipment-srd");
   if (!equipPack) {
     summary.errors.push("pf2e.equipment-srd compendium not found");
     return;
   }
+  // @ts-expect-error -- PF2e extends index with system.slug
   const equipIndex = await equipPack.getIndex({ fields: ["system.slug"] });
 
-  const itemsToCreate: Array<{ data: Record<string, unknown>; demiplaneId: string }> = [];
-  const skippedItems: string[] = [];
+  const items: PendingItem[] = [];
+  const skipped: string[] = [];
 
   for (const eng of itemEngines) {
-    const slug = normalizeEquipmentSlug(eng.args?.slug ?? eng.name.split("/").pop() ?? "");
+    const slug = normalizeEquipmentSlug(eng.args?.slug as string ?? eng.name.split("/").pop() ?? "");
     const demiplaneId = eng.demiplaneEngineId as string;
+    const indexEntry = findBySlug(equipIndex as never, slug);
 
-    let indexEntry = equipIndex.find(
-      (e: { system?: { slug?: string } }) => e.system?.slug === slug,
-    );
     if (!indexEntry) {
-      const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
-      if (fallbackSlug !== slug) {
-        indexEntry = equipIndex.find(
-          (e: { system?: { slug?: string } }) => e.system?.slug === fallbackSlug,
-        );
-      }
-    }
-    if (!indexEntry) {
-      skippedItems.push(slug);
+      skipped.push(slug);
       continue;
     }
 
     const doc = await equipPack.getDocument(indexEntry._id);
     if (!doc) continue;
 
-    const itemData = (doc as { toObject: () => Record<string, unknown> }).toObject();
-    (itemData as { system: { quantity?: number } }).system.quantity = quantityMap.get(demiplaneId) ?? 1;
-    (itemData as { system: { equipped?: unknown } }).system.equipped = resolveEquippedState(
-      demiplaneId, primaryHandId, offHandId, bothHandsId, wornIds, containerMap, itemData,
-    );
+    const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
+    const system = data.system as Record<string, unknown>;
+    system.quantity = state.quantityMap.get(demiplaneId) ?? 1;
+    system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
-    itemsToCreate.push({ data: itemData, demiplaneId });
+    items.push({ data, demiplaneId });
   }
 
-  if (itemsToCreate.length === 0) {
-    if (skippedItems.length > 0) {
-      summary.log.push(`! equipment: ${skippedItems.length} items not found in compendium`);
-    }
+  if (items.length === 0) {
+    if (skipped.length > 0) summary.log.push(`! equipment: ${skipped.length} items not found`);
     return;
   }
 
-  // Create backpack first for containerId assignment
-  const backpackIdx = itemsToCreate.findIndex((i) => (i.data as { type?: string }).type === "backpack");
-  let backpackFoundryId: string | null = null;
-  let backpackDemiplaneId: string | null = null;
+  const backpackCount = await createBackpackFirst(actor, items, state);
 
-  if (backpackIdx >= 0) {
-    const backpackEntry = itemsToCreate.splice(backpackIdx, 1)[0];
-    backpackDemiplaneId = backpackEntry.demiplaneId;
-    const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data]);
-    backpackFoundryId = (created[0] as { id: string }).id;
+  if (items.length > 0) {
+    await actor.createEmbeddedDocuments("Item", items.map((i) => i.data) as never);
   }
 
-  if (backpackFoundryId && backpackDemiplaneId) {
-    for (const item of itemsToCreate) {
-      if (containerMap.get(item.demiplaneId) === backpackDemiplaneId) {
-        (item.data as { system: { containerId?: string } }).system.containerId = backpackFoundryId;
-      }
-    }
-  }
-
-  if (itemsToCreate.length > 0) {
-    await actor.createEmbeddedDocuments("Item", itemsToCreate.map((i) => i.data));
-  }
-
-  const totalCreated = (backpackFoundryId ? 1 : 0) + itemsToCreate.length;
-  summary.log.push(`+ equipment: ${totalCreated} items`);
-  if (skippedItems.length > 0) {
-    summary.log.push(`! equipment skipped: [${skippedItems.join(", ")}]`);
+  summary.log.push(`+ equipment: ${backpackCount + items.length} items`);
+  if (skipped.length > 0) {
+    summary.log.push(`! equipment skipped: [${skipped.join(", ")}]`);
   }
 }
 
-function resolveEquippedState(
-  demiplaneId: string,
-  primaryHandId: string | undefined,
-  offHandId: string | undefined,
-  bothHandsId: string | undefined,
-  wornIds: Set<string>,
-  containerMap: Map<string, string>,
-  itemData: Record<string, unknown>,
-): Record<string, unknown> {
-  const itemType = (itemData as { type?: string }).type;
-
-  if (primaryHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
-  if (offHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
-  if (bothHandsId === demiplaneId) return { carryType: "held", handsHeld: 2, invested: null };
-  if (containerMap.has(demiplaneId)) return { carryType: "stowed", handsHeld: 0 };
-
-  if (wornIds.has(demiplaneId)) {
-    const result: Record<string, unknown> = { carryType: "worn", handsHeld: 0, invested: true };
-    if (itemType === "armor" || itemType === "backpack") result.inSlot = true;
-    return result;
-  }
-
-  const result: Record<string, unknown> = { carryType: "worn", handsHeld: 0, invested: null };
-  if (itemType === "armor" || itemType === "backpack") result.inSlot = true;
-  return result;
-}
-
-const CURRENCY_MAP: Array<{ engine: string; slug: string }> = [
+const CURRENCY_MAP = [
   { engine: "character_currency_platinum", slug: "platinum-pieces" },
   { engine: "character_currency_gold", slug: "gold-pieces" },
   { engine: "character_currency_silver", slug: "silver-pieces" },
   { engine: "character_currency_copper", slug: "copper-pieces" },
-];
+] as const;
 
 export async function applyCurrency(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary,
 ): Promise<void> {
-  const equipPack = game.packs.get("pf2e.equipment-srd");
+  const equipPack = game.packs!.get("pf2e.equipment-srd");
   if (!equipPack) return;
-  const index = await equipPack.getIndex({ fields: ["system.slug"] });
+  // @ts-expect-error -- PF2e extends index with system.slug
+  const index = await equipPack.getIndex({ fields: ["system.slug"] }) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
 
   const coinItems: Record<string, unknown>[] = [];
   for (const { engine, slug } of CURRENCY_MAP) {
@@ -174,18 +188,16 @@ export async function applyCurrency(
     const doc = await equipPack.getDocument(entry._id);
     if (!doc) continue;
 
-    const itemData = (doc as { toObject: () => Record<string, unknown> }).toObject();
-    (itemData as { system: { quantity?: number } }).system.quantity = amount;
-    (itemData as { system: { equipped?: unknown } }).system.equipped = { carryType: "worn", handsHeld: 0 };
-    coinItems.push(itemData);
+    const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
+    const system = data.system as Record<string, unknown>;
+    system.quantity = amount;
+    system.equipped = { carryType: "worn", handsHeld: 0 };
+    coinItems.push(data);
   }
 
   if (coinItems.length > 0) {
-    await actor.createEmbeddedDocuments("Item", coinItems);
-    const desc = coinItems.map((c) => {
-      const sys = c.system as { quantity: number };
-      return `${sys.quantity} ${(c as { name: string }).name}`;
-    }).join(", ");
+    await actor.createEmbeddedDocuments("Item", coinItems as never);
+    const desc = coinItems.map((c) => `${(c.system as { quantity: number }).quantity} ${c.name}`).join(", ");
     summary.log.push(`+ currency: ${desc}`);
   }
 }
