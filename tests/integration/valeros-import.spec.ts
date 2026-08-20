@@ -88,12 +88,12 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.languages).toHaveLength(3);
   });
 
-  test.fixme("applies correct skill proficiencies", () => {
-    expect(result.skills.acrobatics).toBe(1);   // Fighter skill training
+  test("applies correct skill proficiencies", () => {
+    expect(result.skills.acrobatics).toBe(2);   // Heritage (Skilled Human) + override to Expert
     expect(result.skills.athletics).toBe(2);    // Skill increase at L3
     expect(result.skills.crafting).toBe(1);     // Initial proficiencies
     expect(result.skills.diplomacy).toBe(1);    // Fighter skill training
-    expect(result.skills.intimidation).toBe(2); // Heritage + override to Expert
+    expect(result.skills.intimidation).toBe(2); // Override to Expert
     expect(result.skills.occultism).toBe(1);    // Fighter skill training
     expect(result.skills.survival).toBeUndefined(); // Override to untrained (0)
   });

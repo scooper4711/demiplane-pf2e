@@ -429,8 +429,9 @@ export class ImportOrchestrator {
       const slug = eng.args.slug as string;
       const sourceRow = (eng.args.sourceRow as string) || "";
 
-      // Skip skills granted by a ChoiceSet (heritage handles these)
-      if (sourceRow.includes("select-skill-")) continue;
+      // Skip skills granted by heritage ChoiceSet (heritage handles these via GrantItem)
+      // Only skip if the sourceRow references a heritage slug pattern
+      if (sourceRow.includes("select-skill-") && sourceRow.match(/heritage|human-rm/)) continue;
 
       // Skip skills with active overrides (we'll apply those separately)
       if (slug in activeOverrides) continue;
