@@ -1,121 +1,116 @@
 import type { Page } from "@playwright/test";
 
-const PORT = process.env.FOUNDRY_PORT ?? "30000";
+const PORT = process.env.FOUNDRY_TEST_PORT ?? "30001";
 const BASE_URL = `http://localhost:${PORT}`;
 const ADMIN_PASSWORD = process.env.FOUNDRY_ADMIN_PASSWORD ?? "test-admin";
+const MODULE_ID = "foundry-demiplane-pf2e";
 
-export type UserRole = "Gamemaster" | "TestPlayer";
+export async function loginAsGamemaster(page: Page): Promise<void> {
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await page.waitForTimeout(1000);
 
-/**
- * Navigates to Foundry and logs in as the specified user.
- * Handles the /join page user selection and session join.
- */
-export async function loginAs(page: Page, user: UserRole): Promise<void> {
-  await page.goto(BASE_URL);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const url = page.url();
 
-  // If redirected to /auth (admin gate), authenticate first
-  if (page.url().includes("/auth")) {
-    await page.getByRole("textbox", { name: "Administrator Password" }).fill(ADMIN_PASSWORD);
-    await page.getByRole("button", { name: "Log In" }).click();
-  }
-
-  // Should be on /join now
-  await page.waitForURL(/\/(join|game)/, { timeout: 15_000 });
-
-  if (page.url().includes("/join")) {
-    // Select the user
-    const userOption = page.locator("[data-user-id]", { hasText: user });
-    if (await userOption.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await userOption.click();
+    if (url.includes("/game")) {
+      await page.waitForFunction(
+        () => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true,
+        { timeout: 60_000 },
+      );
+      return;
     }
 
-    // Join the game (no password for either user)
-    await page.getByRole("button", { name: "Join Game Session" }).click();
-    await page.waitForURL(/\/game/, { timeout: 60_000 });
-  }
-
-  // Wait for PF2e to finish loading
-  await page.waitForTimeout(5000);
-
-  // Dismiss any post-login dialogs
-  await page.evaluate(() => {
-    document.querySelectorAll(".tour-overlay, .tour-center-step").forEach(el => el.remove());
-    document.querySelectorAll("#notifications li").forEach(el => el.remove());
-  });
-}
-
-/**
- * Logs in as Gamemaster. Convenience wrapper.
- */
-export async function loginToFoundry(page: Page): Promise<void> {
-  await loginAs(page, "Gamemaster");
-}
-
-/**
- * Resets the test world to a clean state by deleting all actors.
- * Must be called as Gamemaster (players can't delete others' actors).
- */
-export async function resetTestWorld(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // @ts-expect-error Foundry global
-    const actors = game.actors?.contents ?? [];
-    for (const actor of actors) {
-      await actor.delete();
+    if (url.includes("/auth")) {
+      await page.getByRole("textbox", { name: "Administrator Password" }).fill(ADMIN_PASSWORD);
+      await page.getByRole("button", { name: "Log In" }).click();
+      await page.waitForTimeout(2000);
+      continue;
     }
-  });
-}
 
-/**
- * Creates a fresh PF2e character actor for testing.
- * Optionally assigns ownership to a specific user.
- */
-export async function createTestActor(
-  page: Page,
-  name: string,
-  ownerUserId?: string,
-): Promise<string> {
-  const actorId = await page.evaluate(
-    async ({ actorName, ownerId }) => {
-      const createData: Record<string, unknown> = {
-        name: actorName,
-        type: "character",
-      };
-
-      // If an owner is specified, grant them ownership
-      if (ownerId) {
-        createData.ownership = {
-          default: 0,
-          [ownerId]: 3, // OWNER permission
-        };
+    if (url.includes("/join")) {
+      // Select Gamemaster from the user dropdown/combobox
+      const userSelect = page.getByRole("textbox", { name: "Select User" });
+      if (await userSelect.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await userSelect.fill("Gamemaster");
+        // Click the Gamemaster option in the dropdown
+        await page.locator("text=Gamemaster").first().click();
+        await page.waitForTimeout(500);
       }
 
-      // @ts-expect-error Foundry global
-      const actor = await Actor.create(createData);
-      return actor?.id ?? "";
-    },
-    { actorName: name, ownerId: ownerUserId },
-  );
+      // Click Join
+      await Promise.all([
+        page.waitForURL(/\/game/, { timeout: 60_000, waitUntil: "commit" }),
+        page.getByRole("button", { name: "Join Game Session" }).click(),
+      ]);
+      await page.waitForFunction(
+        () => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true,
+        { timeout: 60_000 },
+      );
+      return;
+    }
 
-  if (!actorId) {
-    throw new Error(`Failed to create test actor: ${name}`);
+    await page.waitForTimeout(2000);
   }
 
-  return actorId;
+  throw new Error(`Failed to reach /game. Current URL: ${page.url()}`);
 }
 
-/**
- * Gets the user ID for a given user name.
- */
-export async function getUserId(page: Page, userName: string): Promise<string> {
-  const userId = await page.evaluate((name: string) => {
+export async function deleteActorByName(page: Page, name: string): Promise<void> {
+  await page.evaluate(async (actorName: string) => {
     // @ts-expect-error Foundry global
-    const user = game.users.find((u: { name: string }) => u.name === name);
-    return user?.id ?? "";
-  }, userName);
+    const actor = game.actors.getName(actorName);
+    if (actor) await actor.delete();
+  }, name);
+}
 
-  if (!userId) {
-    throw new Error(`User not found: ${userName}`);
-  }
+export interface ImportResult {
+  summary: { itemsImported: number; itemsSkipped: number; errors: string[]; log: string[] };
+  name: string;
+  level: number;
+  ancestry: string | null;
+  heritage: string | null;
+  background: string | null;
+  class: string | null;
+  feats: Array<{ name: string; category: string; location: string | null; taken: number | null }>;
+  totalItems: number;
+}
 
-  return userId;
+export async function createAndImportCharacter(
+  page: Page,
+  actorName: string,
+  characterId: string,
+  token: string,
+): Promise<ImportResult> {
+  return await page.evaluate(
+    async ({ actorName, characterId, token, moduleId }) => {
+      // @ts-expect-error Foundry global
+      const actor = await Actor.create({ name: actorName, type: "character" });
+      // @ts-expect-error Foundry global
+      await actor.setFlag(moduleId, "characterId", characterId);
+
+      // @ts-expect-error Foundry global
+      const mod = game.modules.get(moduleId);
+      const summary = await mod.api.importCharacter(actor, { token });
+
+      return {
+        summary,
+        name: actor.name,
+        level: actor.system.details.level.value,
+        ancestry: actor.items.find((i: { type: string }) => i.type === "ancestry")?.name ?? null,
+        heritage: actor.items.find((i: { type: string }) => i.type === "heritage")?.name ?? null,
+        background: actor.items.find((i: { type: string }) => i.type === "background")?.name ?? null,
+        class: actor.items.find((i: { type: string }) => i.type === "class")?.name ?? null,
+        feats: actor.items
+          .filter((i: { type: string }) => i.type === "feat")
+          .map((f: { name: string; system: { category: string; location: string | null; level: { taken: number | null } } }) => ({
+            name: f.name,
+            category: f.system.category,
+            location: f.system.location,
+            taken: f.system.level?.taken ?? null,
+          })),
+        totalItems: actor.items.size,
+      };
+    },
+    { actorName, characterId, token, moduleId: MODULE_ID },
+  );
 }
