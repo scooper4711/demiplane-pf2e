@@ -201,6 +201,9 @@ export class ImportOrchestrator {
       // Step 7.6: Apply languages (after boosts since language count depends on INT)
       await this.applyLanguages(actor, engines, summary);
 
+      // Step 7.7: Apply skill proficiencies
+      await this.applySkillProficiencies(actor, engines, summary);
+
     } finally {
       this.disableImportMode();
     }
@@ -380,6 +383,46 @@ export class ImportOrchestrator {
       if (match) return `Compendium.${packKey}.Item.${match._id}`;
     }
     return null;
+  }
+
+    private async applySkillProficiencies(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const skillEngines = engines.filter(
+      (e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug,
+    );
+
+    if (skillEngines.length === 0) return;
+
+    // Compute final rank for each skill:
+    // "skill-increase-level-*" = Expert (2), everything else = Trained (1)
+    const ranks: Record<string, number> = {};
+    for (const eng of skillEngines) {
+      const slug = eng.args.slug as string;
+      const sourceRow = (eng.args.sourceRow as string) || "";
+      const isIncrease = sourceRow.includes("skill-increase");
+      const rank = isIncrease ? 2 : 1;
+      ranks[slug] = Math.max(ranks[slug] || 0, rank);
+    }
+
+    // Apply ranks — use Math.max with existing rank (Grant Chain may have set some)
+    const updates: Record<string, number> = {};
+    const currentSkills = (actor.system as { skills: Record<string, { rank: number }> }).skills;
+
+    for (const [skill, targetRank] of Object.entries(ranks)) {
+      const currentRank = currentSkills[skill]?.rank ?? 0;
+      if (targetRank > currentRank) {
+        updates[`system.skills.${skill}.rank`] = targetRank;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await actor.update(updates);
+      const applied = Object.entries(ranks).map(([s, r]) => `${s}:${r}`).join(", ");
+      summary.log.push(`+ skills: [${applied}]`);
+    }
   }
 
     private async applyLanguages(
