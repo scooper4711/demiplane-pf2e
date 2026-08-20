@@ -155,6 +155,7 @@ export async function applySpells(
     const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
     totalAdded += slugToId.size;
 
+    // Set spell slot maximums based on class level
 
   // Innate spells from feats (Adapted Cantrip, Adaptive Adept, etc.)
   if (innate.length > 0) {
@@ -178,3 +179,8 @@ export async function applySpells(
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
+/*
+ * Note: Spell slots are not set during import. Demiplane computes them
+ * client-side from class rules and does not expose them in the API.
+ * Users should set slot max in Foundry after import.
+ */
