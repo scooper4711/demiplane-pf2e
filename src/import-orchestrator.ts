@@ -192,6 +192,9 @@ export class ImportOrchestrator {
       // Step 7.5: Apply attribute boosts
       await this.applyAttributeBoosts(actor, engines, summary);
 
+      // Step 7.6: Apply languages (after boosts since language count depends on INT)
+      await this.applyLanguages(actor, engines, summary);
+
     } finally {
       // Step 8: Restore original ChoiceSet behavior
       this.disableImportMode();
@@ -200,7 +203,53 @@ export class ImportOrchestrator {
     return summary;
   }
 
-  private async applyAttributeBoosts(
+  private async applyLanguages(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const langEngine = engines.find(
+      (e) => e.name === "character-languages-user" && e.type === "CustomDemiplaneEngine",
+    );
+    if (!langEngine || !langEngine.value || typeof langEngine.value !== "string") return;
+
+    // Parse comma-separated free-text languages
+    const rawLanguages = (langEngine.value as string)
+      .split(",")
+      .map((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
+      .filter(Boolean);
+
+    // Validate against Foundry's language list
+    const validLanguages = Object.keys(
+      (game as unknown as { pf2e: { system: { config: { PF2E: { languages: Record<string, string> } } } } }).pf2e?.system?.config?.PF2E?.languages
+      ?? (CONFIG as unknown as { PF2E: { languages: Record<string, string> } }).PF2E?.languages
+      ?? {},
+    );
+
+    const matched: string[] = [];
+    const unmatched: string[] = [];
+
+    for (const lang of rawLanguages) {
+      if (validLanguages.includes(lang)) {
+        matched.push(lang);
+      } else {
+        unmatched.push(lang);
+      }
+    }
+
+    if (matched.length > 0) {
+      const currentLangs = (actor.system as { details: { languages: { value: string[] } } }).details.languages.value;
+      const newLangs = [...new Set([...currentLangs, ...matched])];
+      await actor.update({ "system.details.languages.value": newLangs });
+      summary.log.push(`+ languages: [${matched.join(", ")}]`);
+    }
+
+    if (unmatched.length > 0) {
+      summary.log.push(`! languages not found in Foundry: [${unmatched.join(", ")}]`);
+    }
+  }
+
+    private async applyAttributeBoosts(
     actor: Actor,
     engines: DemiplaneEngineEntry[],
     summary: ImportSummary,

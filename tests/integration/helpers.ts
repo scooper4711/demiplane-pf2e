@@ -73,6 +73,7 @@ export interface ImportResult {
   class: string | null;
   feats: Array<{ name: string; category: string; location: string | null; taken: number | null }>;
   abilities: Record<string, number>;
+  languages: string[];
   totalItems: number;
 }
 
@@ -109,6 +110,7 @@ export async function createAndImportCharacter(
             location: f.system.location,
             taken: f.system.level?.taken ?? null,
           })),
+        languages: (actor.system.details.languages.value as string[]),
         abilities: Object.fromEntries(
           Object.entries(actor.system.abilities).map(([k, d]) => [k, (d as { mod: number }).mod])
         ),
