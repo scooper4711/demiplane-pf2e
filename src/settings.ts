@@ -28,6 +28,15 @@ export function registerSettings(): void {
     default: false,
   });
 
+  game.settings.register(MODULE_ID, "demiplaneToken", {
+    name: "Demiplane GraphQL Token",
+    hint: "Your Demiplane GraphQL bearer token (JWT). Obtain by logging into Demiplane and checking browser DevTools network tab for the Authorization header on graphql requests.",
+    scope: "client",
+    config: true,
+    type: String,
+    default: "",
+  });
+
   game.settings.register(MODULE_ID, "dryRun", {
     name: "Dry Run Mode",
     hint: "Preview import/export changes without writing to Foundry or Demiplane. When enabled, sync operations show what would change without applying anything.",
@@ -37,3 +46,6 @@ export function registerSettings(): void {
     default: false,
   });
 }
+
+// Additional token setting (appended after existing registerSettings function)
+// This is registered separately because it was added after the initial settings
