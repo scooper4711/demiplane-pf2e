@@ -396,12 +396,45 @@ export class ImportOrchestrator {
 
     if (skillEngines.length === 0) return;
 
+    // Build override map: skills with explicit prof overrides
+    // character_{skill}_prof = N means force that rank
+    // character_{skill}_prof--overridden = 1 means the override is active
+    const profOverrides: Record<string, number> = {};
+    const overriddenFlags = new Set<string>();
+    for (const eng of engines) {
+      if (eng.type !== "CustomDemiplaneEngine") continue;
+      const overriddenMatch = eng.name.match(/^character_(.+)_prof--overridden$/);
+      if (overriddenMatch && eng.value === 1) {
+        overriddenFlags.add(overriddenMatch[1]);
+      }
+      const profMatch = eng.name.match(/^character_(.+)_prof$/);
+      if (profMatch && typeof eng.value === "number") {
+        profOverrides[profMatch[1]] = eng.value as number;
+      }
+    }
+    // Only apply overrides that have the --overridden flag set
+    const activeOverrides: Record<string, number> = {};
+    for (const skill of overriddenFlags) {
+      if (skill in profOverrides) {
+        activeOverrides[skill] = profOverrides[skill];
+      }
+    }
+
     // Compute final rank for each skill:
     // "skill-increase-level-*" = Expert (2), everything else = Trained (1)
+    // Skip skills handled by heritage ChoiceSet (sourceRow contains "select-skill-")
+    // Skip skills overridden to untrained
     const ranks: Record<string, number> = {};
     for (const eng of skillEngines) {
       const slug = eng.args.slug as string;
       const sourceRow = (eng.args.sourceRow as string) || "";
+
+      // Skip skills granted by a ChoiceSet (heritage handles these)
+      if (sourceRow.includes("select-skill-")) continue;
+
+      // Skip skills with active overrides (we'll apply those separately)
+      if (slug in activeOverrides) continue;
+
       const isIncrease = sourceRow.includes("skill-increase");
       const rank = isIncrease ? 2 : 1;
       ranks[slug] = Math.max(ranks[slug] || 0, rank);
@@ -420,8 +453,24 @@ export class ImportOrchestrator {
 
     if (Object.keys(updates).length > 0) {
       await actor.update(updates);
-      const applied = Object.entries(ranks).map(([s, r]) => `${s}:${r}`).join(", ");
+      const applied = Object.entries(updates).map(([s, r]) => `${s.replace("system.skills.","").replace(".rank","")}:${r}`).join(", ");
       summary.log.push(`+ skills: [${applied}]`);
+    }
+
+    // Apply explicit prof overrides
+    if (Object.keys(activeOverrides).length > 0) {
+      const overrideUpdates: Record<string, number> = {};
+      for (const [skill, rank] of Object.entries(activeOverrides)) {
+        const currentRank = currentSkills[skill]?.rank ?? 0;
+        if (rank !== currentRank) {
+          overrideUpdates[`system.skills.${skill}.rank`] = rank;
+        }
+      }
+      if (Object.keys(overrideUpdates).length > 0) {
+        await actor.update(overrideUpdates);
+        const applied = Object.entries(activeOverrides).map(([s, r]) => `${s}:${r}`).join(", ");
+        summary.log.push(`+ skill overrides: [${applied}]`);
+      }
     }
   }
 
