@@ -492,6 +492,32 @@ export class ImportOrchestrator {
       }
     }
 
+    // Attitude, likes, dislikes, allies, enemies, organizations
+    const attitude = getValue("character_personality_attitude");
+    if (attitude) updates["system.details.biography.attitude"] = attitude;
+
+    const likes = getValue("character_personality_likes");
+    if (likes) updates["system.details.biography.likes"] = likes;
+
+    const dislikes = getValue("character_personality_dislikes");
+    if (dislikes) updates["system.details.biography.dislikes"] = dislikes;
+
+    const allies = getValue("character_campaign_allies");
+    if (allies) updates["system.details.biography.allies"] = allies;
+
+    const enemies = getValue("character_campaign_enemies");
+    if (enemies) updates["system.details.biography.enemies"] = enemies;
+
+    const organizations = getValue("character_campaign_organizations");
+    if (organizations) updates["system.details.biography.organizations"] = organizations;
+
+    // Edicts and anathema (comma-separated in Demiplane, array in Foundry)
+    const edicts = getValue("character_personality_edicts");
+    if (edicts) updates["system.details.biography.edicts"] = edicts.split(",").map((s: string) => s.trim()).filter(Boolean);
+
+    const anathema = getValue("character_personality_anathema");
+    if (anathema) updates["system.details.biography.anathema"] = anathema.split(",").map((s: string) => s.trim()).filter(Boolean);
+
     if (Object.keys(updates).length > 0) {
       await actor.update(updates);
       summary.log.push(`+ biography: ${Object.keys(updates).length} fields`);
