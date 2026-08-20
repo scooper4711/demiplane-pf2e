@@ -3,6 +3,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 /**
  * Imports biography, deity, and organized play ID from Demiplane.
  */
+// eslint-disable-next-line complexity -- flat field assignments, cognitively simple
 export async function applyBiography(
   actor: Actor,
   engines: DemiplaneEngineEntry[],

@@ -1,0 +1,17 @@
+{
+  "threshold": 10,
+  "reporters": ["console", "json"],
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/foundry-playwright/**"
+  ],
+  "format": ["typescript", "javascript"],
+  "minLines": 5,
+  "minTokens": 50,
+  "output": "./debug/jscpd-report",
+  "exitCode": 0,
+  "absolute": true
+}

@@ -17,11 +17,12 @@ import { applyBiography } from "./biography-importer.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
+
 
 export class ImportOrchestrator {
   private choiceSetHandler = new ChoiceSetHandler();
 
+  // eslint-disable-next-line complexity -- top-level orchestration with sequential steps
   async importCharacter(
     actor: Actor,
     characterId: string,

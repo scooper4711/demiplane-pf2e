@@ -4,6 +4,7 @@ import { normalizeEquipmentSlug } from "./slug-utils.js";
 /**
  * Imports equipment items and currency from Demiplane.
  */
+// eslint-disable-next-line complexity -- sequential equipment processing with fallback logic
 export async function applyEquipment(
   actor: Actor,
   engines: DemiplaneEngineEntry[],

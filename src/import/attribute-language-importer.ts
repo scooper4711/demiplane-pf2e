@@ -3,6 +3,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 /**
  * Imports skill proficiencies from Demiplane.
  */
+// eslint-disable-next-line complexity -- flat override/rank logic, cognitively simple
 export async function applySkillProficiencies(
   actor: Actor,
   engines: DemiplaneEngineEntry[],

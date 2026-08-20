@@ -21,6 +21,7 @@ export class ChoiceSetHandler {
     const ChoiceSetRE = (game as unknown as { pf2e: { RuleElements: { builtin: Record<string, { prototype: Record<string, unknown> }> } } }).pf2e.RuleElements.builtin.ChoiceSet;
     this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
 
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- required for monkey-patch closure
     const self = this;
     ChoiceSetRE.prototype.preCreate = async function (
       this: { choices: Array<{ value: unknown; label: string }>; selection: unknown; item: { flags: Record<string, unknown>; getRollOptions: (s: string) => string[]; name: string }; actor: { getRollOptions: () => string[] }; resolveInjectedProperties: (p: unknown) => { test: (r: Set<string>) => boolean }; predicate: unknown; inflateChoices: (r: Set<string>, t: unknown) => Promise<Array<{ value: unknown; label: string }>>; flag: string; rollOption: string },
@@ -65,6 +66,7 @@ export class ChoiceSetHandler {
     }
   }
 
+  // eslint-disable-next-line complexity -- multi-strategy matching (skill, slug, generic, feat UUID)
   private findMatchInChoices(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
     const allSlugs = this.currentEngines
       .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)

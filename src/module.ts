@@ -12,9 +12,12 @@ const MODULE_ID = "foundry-demiplane-pf2e";
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
 let exportManager: ExportManager;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for export
 let conflictResolver: ConflictResolver;
 let hookManager: HookManager;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for sync tab
 let syncTabRenderer: SyncTabRenderer;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for link dialog
 let characterLinkDialog: CharacterLinkDialog;
 
 Hooks.once("init", () => {
