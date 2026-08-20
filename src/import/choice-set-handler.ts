@@ -129,6 +129,14 @@ export class ChoiceSetHandler {
       const selection = await this.findChoiceSelection(demiplaneSlug, rule);
       if (selection !== null) {
         rule.selection = selection;
+        // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
+        const flag = (rule.flag as string) || "choice";
+        const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
+        if (!flags.pf2e) flags.pf2e = {};
+        const rulesSelections = (flags.pf2e.rulesSelections || {}) as Record<string, unknown>;
+        rulesSelections[flag] = selection;
+        flags.pf2e.rulesSelections = rulesSelections;
+        itemData.flags = flags;
       }
     }
   }

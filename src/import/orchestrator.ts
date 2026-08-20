@@ -232,14 +232,10 @@ export class ImportOrchestrator {
       if (sr.includes("select-feat-") && eng.args?.slug && eng.name.includes("/feat/")) {
         grantedFeatSlugs.add(toFoundrySlug(eng.args.slug as string));
       }
-    // All tabula/class-feature/ engines are ChoiceSet selections of parent class features
-    // (e.g. "school-of-battle-magic" selected from "Arcane School" ChoiceSet)
-    // These are granted via ChoiceSet -> GrantItem on the auto-granted parent feature
-    for (const eng of engines) {
-      if (eng.name.includes("/class-feature/") && eng.args?.slug) {
-        grantedFeatSlugs.add(toFoundrySlug(eng.args.slug as string));
-      }
-    }
+    // Class-features from tabula/class-feature/ are imported directly.
+    // They represent selections like "School of Battle Magic" from "Arcane School".
+    // We import them as standalone items — the ChoiceSet selection on the parent
+    // is still set so Foundry shows the relationship correctly.
 
     const selectedFeats = engines
       .filter((e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug)
