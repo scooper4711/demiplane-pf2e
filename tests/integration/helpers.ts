@@ -118,6 +118,7 @@ export async function createAndImportCharacter(
             taken: f.system.level?.taken ?? null,
           })),
         languages: (actor.system.details.languages.value as string[]),
+        loreSkills: actor.items.filter((i: { type: string }) => i.type === "lore").map((i: { name: string }) => i.name),
         skills: Object.fromEntries(
           Object.entries(actor.system.skills).filter(([_, d]) => (d as { rank: number }).rank > 0).map(([k, d]) => [k, (d as { rank: number }).rank])
         ),

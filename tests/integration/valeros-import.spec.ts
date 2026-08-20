@@ -88,6 +88,11 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.languages).toHaveLength(3);
   });
 
+  test("creates lore skills from background", () => {
+    expect(result.loreSkills).toContain("Farming Lore");
+    expect(result.loreSkills).toContain("Warfare Lore");
+  });
+
   test("applies correct skill proficiencies", () => {
     expect(result.skills.acrobatics).toBe(2);   // Heritage (Skilled Human) + override to Expert
     expect(result.skills.athletics).toBe(2);    // Skill increase at L3

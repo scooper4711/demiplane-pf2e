@@ -158,6 +158,9 @@ export class ImportOrchestrator {
         }
       }
 
+      // Step 5.5: Create lore items from background
+      await this.createLoreItems(actor, engines, summary);
+
       // Step 6: Batch import (feats, classfeatures, equipment) with slot assignment
       const batchItems: Record<string, unknown>[] = [];
       for (const category of ["feat", "classfeature", "equipment"] as ItemCategory[]) {
@@ -386,6 +389,44 @@ export class ImportOrchestrator {
       if (match) return `Compendium.${packKey}.Item.${match._id}`;
     }
     return null;
+  }
+
+  private async createLoreItems(actor: Actor, engines: DemiplaneEngineEntry[], summary: ImportSummary): Promise<void> {
+    const loreNames: string[] = [];
+
+    // Source 1: Background trainedSkills.lore
+    const bg = actor.items.find((i: { type: string }) => i.type === "background");
+    if (bg) {
+      const bgLores = (bg.system as { trainedSkills?: { lore?: string[] } }).trainedSkills?.lore ?? [];
+      loreNames.push(...bgLores);
+    }
+
+    // Source 2: Custom skill engines from Demiplane
+    const customSkills = engines.filter(
+      (e) => e.name === "core/selection/skill/custom-skill/index.eng" && e.args?.name,
+    );
+    for (const eng of customSkills) {
+      const name = eng.args.name as string;
+      if (!loreNames.includes(name)) loreNames.push(name);
+    }
+
+    if (loreNames.length === 0) return;
+
+    // Skip lores already on the actor
+    const existingLores = actor.items
+      .filter((i: { type: string }) => i.type === "lore")
+      .map((i: { name: string }) => i.name);
+    const newLores = loreNames.filter((n) => !existingLores.includes(n));
+
+    if (newLores.length > 0) {
+      const loreItems = newLores.map((name: string) => ({
+        name,
+        type: "lore" as const,
+        system: { proficient: { value: 1 } },
+      }));
+      await actor.createEmbeddedDocuments("Item", loreItems);
+      summary.log.push(`+ lore: [${newLores.join(", ")}]`);
+    }
   }
 
     private async applySkillProficiencies(
