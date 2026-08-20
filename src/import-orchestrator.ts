@@ -204,7 +204,10 @@ export class ImportOrchestrator {
       // Step 7.6: Apply languages (after boosts since language count depends on INT)
       await this.applyLanguages(actor, engines, summary);
 
-      // Step 7.7: Apply skill proficiencies
+      // Step 7.7: Apply biography and character details
+      await this.applyBiography(actor, engines, summary);
+
+      // Step 7.8: Apply skill proficiencies
       await this.applySkillProficiencies(actor, engines, summary);
 
     } finally {
@@ -426,6 +429,72 @@ export class ImportOrchestrator {
       }));
       await actor.createEmbeddedDocuments("Item", loreItems);
       summary.log.push(`+ lore: [${newLores.join(", ")}]`);
+    }
+  }
+
+    private async applyBiography(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary,
+  ): Promise<void> {
+    const getValue = (name: string): string | undefined => {
+      const eng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
+      return eng?.value != null ? String(eng.value) : undefined;
+    };
+
+    const updates: Record<string, unknown> = {};
+
+    // Simple field mappings
+    const gender = getValue("character_appearance_gender");
+    if (gender) updates["system.details.gender.value"] = gender;
+
+    const age = getValue("character_appearance_age");
+    if (age) updates["system.details.age.value"] = age;
+
+    const ethnicity = getValue("character_appearance_ethnicity");
+    if (ethnicity) updates["system.details.ethnicity.value"] = ethnicity;
+
+    const nationality = getValue("character_appearance_nationality");
+    if (nationality) updates["system.details.nationality.value"] = nationality;
+
+    const height = getValue("character_appearance_height");
+    if (height) updates["system.details.height.value"] = height;
+
+    const weight = getValue("character_appearance_weight");
+    if (weight) updates["system.details.weight.value"] = weight;
+
+    // Biography fields
+    const birthplace = getValue("character_appearance_birthplace");
+    if (birthplace) updates["system.details.biography.birthPlace"] = birthplace;
+
+    const appearance = getValue("character_appearance_appearance");
+    if (appearance) updates["system.details.biography.appearance"] = appearance;
+
+    const catchphrases = getValue("character_personality_catchphrases");
+    if (catchphrases) updates["system.details.biography.catchphrases"] = catchphrases;
+
+    const backstory = getValue("character_campaign_other");
+    if (backstory) updates["system.details.biography.backstory"] = `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+
+    // Deity — validate against PF2e's list, report mismatch
+    const beliefs = getValue("character_personality_beliefs");
+    if (beliefs) {
+      const deities = Object.keys(
+        (CONFIG as unknown as { PF2E?: { deities?: Record<string, unknown> } }).PF2E?.deities ?? {},
+      );
+      const slugified = beliefs.toLowerCase().replace(/\s+/g, "-");
+      if (deities.length === 0 || deities.includes(slugified)) {
+        updates["system.details.deity.value"] = beliefs;
+      } else {
+        // Try case-insensitive match
+        updates["system.details.deity.value"] = beliefs;
+        summary.log.push(`! deity "${beliefs}" may not match Foundry vocabulary`);
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await actor.update(updates);
+      summary.log.push(`+ biography: ${Object.keys(updates).length} fields`);
     }
   }
 

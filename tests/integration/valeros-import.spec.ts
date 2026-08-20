@@ -88,6 +88,13 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.languages).toHaveLength(3);
   });
 
+  test("applies biography and character details", () => {
+    expect(result.gender).toBe("He/him");
+    expect(result.ethnicity).toBe("Kellid");
+    expect(result.nationality).toBe("Andoren");
+    expect(result.deity).toBe("Cayden Cailean");
+  });
+
   test("creates lore skills from background", () => {
     expect(result.loreSkills).toContain("Farming Lore");
     expect(result.loreSkills).toContain("Warfare Lore");
