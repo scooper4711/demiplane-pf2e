@@ -115,8 +115,7 @@ export async function applyEquipment(
     summary.errors.push("pf2e.equipment-srd compendium not found");
     return;
   }
-  // @ts-expect-error -- PF2e extends index with system.slug
-  const equipIndex = await equipPack.getIndex({ fields: ["system.slug"] });
+  const equipIndex = await equipPack.getIndex({ fields: ["system.slug"] } as never) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
 
   const items: PendingItem[] = [];
   const skipped: string[] = [];
@@ -173,8 +172,7 @@ export async function applyCurrency(
 ): Promise<void> {
   const equipPack = game.packs!.get("pf2e.equipment-srd");
   if (!equipPack) return;
-  // @ts-expect-error -- PF2e extends index with system.slug
-  const index = await equipPack.getIndex({ fields: ["system.slug"] }) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
+  const index = await equipPack.getIndex({ fields: ["system.slug"] } as never) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
 
   const coinItems: Record<string, unknown>[] = [];
   for (const { engine, slug } of CURRENCY_MAP) {
