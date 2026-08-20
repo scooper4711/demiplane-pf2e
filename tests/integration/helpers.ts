@@ -72,6 +72,7 @@ export interface ImportResult {
   background: string | null;
   class: string | null;
   feats: Array<{ name: string; category: string; location: string | null; taken: number | null }>;
+  abilities: Record<string, number>;
   totalItems: number;
 }
 
@@ -108,6 +109,9 @@ export async function createAndImportCharacter(
             location: f.system.location,
             taken: f.system.level?.taken ?? null,
           })),
+        abilities: Object.fromEntries(
+          Object.entries(actor.system.abilities).map(([k, d]) => [k, (d as { mod: number }).mod])
+        ),
         totalItems: actor.items.size,
       };
     },

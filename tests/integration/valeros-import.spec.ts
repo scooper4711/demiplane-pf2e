@@ -81,4 +81,12 @@ test.describe("Valeros Level 5 Import", () => {
     expect(feats.find(f => f.name === "Bravery")).toBeDefined();
     expect(feats.find(f => f.name === "Fighter Weapon Mastery")).toBeDefined();
   });
+  test("applies correct attribute modifiers", () => {
+    expect(result.abilities.str).toBe(4);
+    expect(result.abilities.dex).toBe(2);
+    expect(result.abilities.con).toBe(3);
+    expect(result.abilities.int).toBe(1);
+    expect(result.abilities.wis).toBe(1);
+    expect(result.abilities.cha).toBe(1);
+  });
 });
