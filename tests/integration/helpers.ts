@@ -74,6 +74,7 @@ export interface ImportResult {
   feats: Array<{ name: string; category: string; location: string | null; taken: number | null }>;
   abilities: Record<string, number>;
   languages: string[];
+  skills: Record<string, number>;
   totalItems: number;
 }
 
@@ -111,6 +112,9 @@ export async function createAndImportCharacter(
             taken: f.system.level?.taken ?? null,
           })),
         languages: (actor.system.details.languages.value as string[]),
+        skills: Object.fromEntries(
+          Object.entries(actor.system.skills).filter(([_, d]) => (d as { rank: number }).rank > 0).map(([k, d]) => [k, (d as { rank: number }).rank])
+        ),
         abilities: Object.fromEntries(
           Object.entries(actor.system.abilities).map(([k, d]) => [k, (d as { mod: number }).mod])
         ),

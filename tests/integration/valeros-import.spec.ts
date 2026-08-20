@@ -88,6 +88,15 @@ test.describe("Valeros Level 5 Import", () => {
     expect(result.languages).toHaveLength(3);
   });
 
+  test("applies correct skill proficiencies", () => {
+    expect(result.skills.athletics).toBe(2);
+    expect(result.skills.crafting).toBe(1);
+    expect(result.skills.diplomacy).toBe(1);
+    expect(result.skills.intimidation).toBe(2);
+    expect(result.skills.occultism).toBe(1);
+    expect(result.skills.survival).toBe(1);
+  });
+
   test("applies correct attribute modifiers", () => {
     expect(result.abilities.str).toBe(4);
     expect(result.abilities.dex).toBe(2);
