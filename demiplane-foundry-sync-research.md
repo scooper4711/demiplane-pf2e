@@ -421,3 +421,138 @@ Playwright MCP config:
   }
 }
 ```
+
+---
+
+## Session: 2026-08-19 — Full Import Working
+
+### Authentication Flow (UPDATED)
+
+The old `/api/auth/login` endpoint **no longer exists** (returns 404 HTML). The actual auth flow is:
+
+1. `POST https://auth.demiplane.com/userstore/authorize` — form-encoded: `action=authenticate`, `redirect_uri`, `email_or_username`, `password`. Returns 302 with tokens in URL fragment.
+2. `GET https://app.demiplane.com/auth/callback-tokens?returnTo=...` — callback after auth
+3. `POST https://app.demiplane.com/api/callback-tokens` — body: `{ accessToken, refreshToken, returnTo }`. Sets session cookies.
+4. `GET https://app.demiplane.com/api/auth/token` — returns `{ accessToken, refreshToken }`
+5. `POST https://app.demiplane.com/api/generate-graphql-token` — uses session cookies, returns `{ success: true, data: { token: "eyJ..." } }`
+
+**CORS issue**: `auth.demiplane.com` and `app.demiplane.com/api/*` endpoints block CORS from browser origins. The GraphQL endpoint (`apiv4.demiplane.com/v1/graphql`) **does** allow CORS.
+
+**Solution**: Authenticate server-side (Node.js or Playwright), get the GraphQL token, then inject it into the Foundry module via `DemiplaneClient.setToken(token)`.
+
+### Verified: Valeros Level 5 (UUID: a5884413-857f-444c-a5d6-24d819632c8a)
+
+- 99 engines total
+- Version: 2
+- Ancestry: human-rm, Heritage: skilled-human-rm, Background: farmhand-rm, Class: fighter-rm
+
+### ChoiceSet Auto-Resolution (Approach #3 — Monkey-Patch)
+
+The PF2e system's `ChoiceSetRuleElement.preCreate` opens a `PickAThingPrompt` dialog when items with choices are added. During import, this blocks the automation.
+
+**Solution**: Monkey-patch `ChoiceSetRuleElement.prototype.preCreate` to auto-resolve selections from Demiplane data instead of showing the prompt.
+
+```javascript
+// Enable before import, disable after
+window.__IMPORT_MODE__ = true;
+
+const ChoiceSetRE = game.pf2e.RuleElements.builtin.ChoiceSet;
+const originalPreCreate = ChoiceSetRE.prototype.preCreate;
+
+ChoiceSetRE.prototype.preCreate = async function(params) {
+  if (!window.__IMPORT_MODE__) return originalPreCreate.call(this, params);
+  
+  // Inflate choices, match against Demiplane data, set selection
+  this.choices = await this.inflateChoices(rollOptions, params.tempItems);
+  const matched = /* find matching choice from Demiplane selections */;
+  if (matched) {
+    this.selection = params.ruleSource.selection = matched.value;
+    this.item.flags.pf2e.rulesSelections[this.flag] = matched.value;
+  }
+};
+```
+
+**Alternative (Approach #1)**: Pre-set `rule.selection` on item data before calling `createEmbeddedDocuments`. Works for simple cases (skills) but fails for item-UUID-based choices (feats) because you need the inflated choices list to match.
+
+### ChoiceSet Selection Types
+
+| ChoiceSet type | `selection` value format | Example |
+|---|---|---|
+| Skill choice | Plain slug string | `"acrobatics"` |
+| Attribute choice | Plain slug string | `"strength"` |
+| Feat/item choice (filter-based) | Compendium UUID | `"Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS"` |
+
+### Demiplane sourceRow → Foundry Feat Slot Mapping
+
+Feats need `system.location` and `system.level.taken` set correctly:
+
+| Demiplane sourceRow pattern | Foundry location | level.taken |
+|---|---|---|
+| `fighter-feat-level-1-rm` | `class-1` | 1 |
+| `fighter-feat-level-2-rm` | `class-2` | 2 |
+| `fighter-feat-level-4-rm` | `class-4` | 4 |
+| `ancestry-feats` | `ancestry-1` | 1 |
+| `ancestry-feat-level-5-rm` | `ancestry-5` | 5 |
+| `skill-feat-level-2-rm` | `skill-2` | 2 |
+| `skill-feat-level-4-rm` | `skill-4` | 4 |
+| `general-feat-level-3-rm` | `general-3` | 3 |
+
+**Regex**: `sourceRow.match(/^(?:fighter|class|ancestry|skill|general)-feat(?:s)?-level-(\d+)/)` → type + level
+
+Without setting these, feats appear in "Bonus Feats" section.
+
+### Slug Extraction from Engine Name
+
+Some engines (ancestry, class, background) have no `args.slug`. Extract from name:
+```javascript
+function getSlug(eng) {
+  if (eng.args?.slug) return eng.args.slug;
+  const match = eng.name.match(/\/([^/]+)\.eng$/);
+  return match ? match[1] : null;  // "tabula/ancestry/human-rm.eng" → "human-rm"
+}
+```
+
+### Feats Granted by ChoiceSets (Deduplication)
+
+Feats whose `sourceRow` contains `select-feat-{parent-slug}` are granted automatically by the parent feat's ChoiceSet GrantItem. Do NOT add them directly — they'd duplicate.
+
+```javascript
+const grantedFeatSlugs = new Set();
+for (const eng of engines) {
+  if ((eng.args?.sourceRow || "").includes("select-feat-") && eng.args?.slug && eng.name.includes("/feat/")) {
+    grantedFeatSlugs.add(toFoundrySlug(eng.args.slug));
+  }
+}
+// Skip these in the batch feat import
+```
+
+### Import Order (Critical)
+
+1. **Ancestry** (sequential, await)
+2. **Heritage** (sequential, await) — may trigger ChoiceSet (e.g., Skilled Human)
+3. **Background** (sequential, await)
+4. **Class** (sequential, await) — triggers massive Grant Chain (class features, proficiencies)
+5. **Feats** (batch) — with `system.location` and `system.level.taken` set
+6. **Equipment** (batch) — not yet implemented for Valeros
+7. **Set name/level** via `actor.update()`
+
+### Foundry Setup (for development/testing)
+
+- Foundry v14.367 requires **Node 24**
+- Data directory structure: `Data/Config/`, `Data/Data/modules/`, `Data/Data/systems/`, `Data/Logs/`
+- Module symlink: `Data/Data/modules/foundry-demiplane-pf2e -> /path/to/dist/`
+- Module must have `dist/module.json` with correct `id` and `esmodules`
+- Rollup needs `@rollup/plugin-commonjs` to bundle the CJS demiplane-api library
+
+### Remaining Work
+
+- [ ] Formalize import logic into `import-orchestrator.ts` (currently proven in browser evaluate)
+- [ ] Handle auth flow properly (Playwright-based token acquisition or direct token paste)
+- [ ] Attribute boosts need to be applied (from `core/selection/attribute/boost.eng` engines)
+- [ ] Skill proficiencies need to be applied (from `core/selection/skill/increase/index.eng`)
+- [ ] Equipment import
+- [ ] Session state sync (HP, currency, hero points, focus → write back to Demiplane)
+- [ ] Natural Ambition's granted feat (Reactive Shield) needs its own `system.location` set
+- [ ] Handle "Assurance" feat granted by Background (already works via Grant Chain)
+- [ ] Duplicate Shield Block issue (one from class features, one general — check if this is correct)
+- [ ] Foundry setup script needs to handle "Allow Sharing Usage Data" dialog reliably
