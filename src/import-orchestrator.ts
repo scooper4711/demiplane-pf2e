@@ -104,6 +104,7 @@ function categorizeEngine(engineName: string): ItemCategory | null {
 }
 
 export class ImportOrchestrator {
+  private currentEngines: DemiplaneEngineEntry[] = [];
   private originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private importMode = false;
 
@@ -128,6 +129,9 @@ export class ImportOrchestrator {
     const engines = await this.fetchCharacterEngines(characterId, token, summary);
     if (!engines) return summary;
 
+    // Store engines for use in choice resolution
+    this.currentEngines = engines;
+
     // Step 2: Build selection data for ChoiceSet auto-resolution
     const selectionData = this.buildSelectionData(engines);
 
@@ -143,8 +147,8 @@ export class ImportOrchestrator {
       return summary;
     }
 
-    // Step 4: Patch ChoiceSet for auto-resolution
-    this.enableImportMode(selectionData, engines);
+    // Step 4: Enable import mode (auto-resolve ChoiceSet prompts)
+    this.enableImportMode();
 
     try {
       // Step 5: Sequential import (ancestry, heritage, background, class)
@@ -166,6 +170,8 @@ export class ImportOrchestrator {
 
           const itemData = await this.resolveCompendiumItem(eng._slug);
           if (itemData) {
+            // Pre-set ChoiceSet selections
+            await this.presetChoiceSelections(itemData, eng._slug);
             // Set feat location and level.taken
             if ((itemData as Record<string, unknown>).type === "feat" && eng.args?.sourceRow) {
               const { location, taken } = parseFeatSlot(eng.args.sourceRow as string);
@@ -196,14 +202,187 @@ export class ImportOrchestrator {
       await this.applyLanguages(actor, engines, summary);
 
     } finally {
-      // Step 8: Restore original ChoiceSet behavior
       this.disableImportMode();
     }
 
     return summary;
   }
 
-  private async applyLanguages(
+  private enableImportMode(): void {
+    this.importMode = true;
+    const ChoiceSetRE = (game as unknown as { pf2e: { RuleElements: { builtin: Record<string, { prototype: Record<string, unknown> }> } } }).pf2e.RuleElements.builtin.ChoiceSet;
+    this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
+
+    const self = this;
+    ChoiceSetRE.prototype.preCreate = async function (
+      this: { choices: Array<{ value: unknown; label: string }>; selection: unknown; item: { flags: Record<string, unknown>; getRollOptions: (s: string) => string[]; name: string }; actor: { getRollOptions: () => string[] }; resolveInjectedProperties: (p: unknown) => { test: (r: Set<string>) => boolean }; predicate: unknown; inflateChoices: (r: Set<string>, t: unknown) => Promise<Array<{ value: unknown; label: string }>>; flag: string; rollOption: string },
+      params: { ruleSource: Record<string, unknown>; itemSource: { name: string } & Record<string, unknown>; tempItems: unknown },
+    ) {
+      if (!self.importMode) {
+        return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
+      }
+
+      // If selection is already pre-set from presetChoiceSelections, let original handle it
+      if (this.selection !== null) {
+        return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
+      }
+
+      // Selection wasn't pre-set — try to find a match from Demiplane data
+      const rollOptions = new Set([this.actor.getRollOptions(), this.item.getRollOptions("parent")].flat());
+      const predicate = this.resolveInjectedProperties(this.predicate);
+      if (!predicate.test(rollOptions)) return;
+
+      this.choices = await this.inflateChoices(rollOptions, params.tempItems);
+      if (!this.choices || this.choices.length === 0) return;
+
+      // Try to match against Demiplane selections
+      const matched = self.findMatchInChoices(this.choices);
+      if (matched) {
+        this.selection = params.ruleSource.selection = matched.value;
+        const pf2eFlags = (this.item.flags.pf2e || {}) as Record<string, unknown>;
+        const rulesSelections = (pf2eFlags.rulesSelections || {}) as Record<string, unknown>;
+        rulesSelections[this.flag || "choice"] = matched.value;
+        pf2eFlags.rulesSelections = rulesSelections;
+        this.item.flags.pf2e = pf2eFlags;
+      } else if (this.choices.length > 0) {
+        // Fallback: pick first choice
+        const first = this.choices[0];
+        this.selection = params.ruleSource.selection = first.value;
+      }
+    };
+  }
+
+  private disableImportMode(): void {
+    this.importMode = false;
+    if (this.originalPreCreate) {
+      const ChoiceSetRE = (game as unknown as { pf2e: { RuleElements: { builtin: Record<string, { prototype: Record<string, unknown> }> } } }).pf2e.RuleElements.builtin.ChoiceSet;
+      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
+      this.originalPreCreate = null;
+    }
+  }
+
+  private findMatchInChoices(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
+    // Collect all slugs from Demiplane engines that represent selections
+    const allSlugs = this.currentEngines
+      .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)
+      .map((e) => toFoundrySlug(e.args?.slug as string));
+
+    const allSkillSlugs = this.currentEngines
+      .filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug)
+      .map((e) => e.args?.slug as string);
+
+    // Strategy 1: Direct value match against skill slugs
+    for (const choice of choices) {
+      const val = typeof choice.value === "string" ? choice.value : "";
+      if (allSkillSlugs.includes(val)) return choice;
+    }
+
+    // Strategy 2: Direct value match against all DemiplaneEngine slugs
+    for (const choice of choices) {
+      const val = typeof choice.value === "string" ? choice.value : "";
+      if (allSlugs.includes(val)) return choice;
+    }
+
+    // Strategy 3: Partial match — choice value is contained in a Demiplane slug
+    // e.g. choice value "sword" matches Demiplane slug "weapon-master-sword"
+    for (const choice of choices) {
+      const val = typeof choice.value === "string" ? choice.value : "";
+      if (!val || val.includes("Compendium")) continue;
+      for (const slug of allSlugs) {
+        if (slug.includes(val) || val.includes(slug)) return choice;
+      }
+    }
+
+    // Strategy 4: Feat UUID match by label
+    const featSlugs = this.currentEngines
+      .filter((e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug)
+      .map((e) => toFoundrySlug(e.args?.slug as string));
+
+    for (const choice of choices) {
+      if (typeof choice.value === "string" && choice.value.includes("Compendium")) {
+        const label = choice.label.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+        for (const featSlug of featSlugs) {
+          if (label === featSlug || label.includes(featSlug)) return choice;
+        }
+      }
+    }
+
+    return null;
+  }
+
+    /**
+   * Pre-set ChoiceSet selections on item data before adding to actor.
+   * This lets the original PF2e preCreate logic handle name adjustment and grant processing.
+   */
+  private async presetChoiceSelections(
+    itemData: Record<string, unknown>,
+    demiplaneSlug: string,
+  ): Promise<void> {
+    const system = itemData.system as { rules?: Array<Record<string, unknown>> } | undefined;
+    if (!system?.rules) return;
+
+    for (const rule of system.rules) {
+      if (rule.key !== "ChoiceSet") continue;
+
+      // Find what Demiplane selected for this item's ChoiceSet
+      const selection = await this.findChoiceSelection(demiplaneSlug, rule);
+      if (selection !== null) {
+        rule.selection = selection;
+      }
+    }
+  }
+
+  /**
+   * Find the Demiplane-selected value for a ChoiceSet rule on a given item.
+   */
+  private async findChoiceSelection(
+    parentSlug: string,
+    rule: Record<string, unknown>,
+  ): Promise<string | null> {
+    // Look for engines whose sourceRow contains "select-{type}-{parentSlug}"
+    const patterns = [
+      `select-skill-${parentSlug}`,
+      `select-feat-${parentSlug}`,
+      `select-${parentSlug}`,
+    ];
+
+    for (const eng of this.currentEngines) {
+      const sr = (eng.args?.sourceRow as string) || "";
+      for (const pattern of patterns) {
+        if (sr.includes(pattern) && eng.args?.slug) {
+          const childSlug = toFoundrySlug(eng.args.slug as string);
+
+          // Determine if this ChoiceSet expects a UUID or a plain slug
+          const choices = rule.choices;
+          if (typeof choices === "object" && choices !== null && !Array.isArray(choices) && "filter" in (choices as Record<string, unknown>)) {
+            // Item-based choice — resolve to compendium UUID
+            return await this.resolveSlugToUuid(childSlug);
+          }
+
+          // Simple value choice (skill, attribute, etc.)
+          return childSlug;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Resolve a Foundry slug to its compendium UUID.
+   */
+  private async resolveSlugToUuid(foundrySlug: string): Promise<string | null> {
+    for (const packKey of PACKS) {
+      const pack = game.packs.get(packKey);
+      if (!pack) continue;
+      const index = await pack.getIndex({ fields: ["system.slug"] });
+      const match = index.find((i: { system?: { slug?: string }; _id: string }) => i.system?.slug === foundrySlug);
+      if (match) return `Compendium.${packKey}.Item.${match._id}`;
+    }
+    return null;
+  }
+
+    private async applyLanguages(
     actor: Actor,
     engines: DemiplaneEngineEntry[],
     summary: ImportSummary,
@@ -417,6 +596,8 @@ export class ImportOrchestrator {
   ): Promise<void> {
     const itemData = await this.resolveCompendiumItem(eng._slug);
     if (itemData) {
+      // Pre-set ChoiceSet selections on the item data before adding
+      await this.presetChoiceSelections(itemData, eng._slug);
       await actor.createEmbeddedDocuments("Item", [itemData]);
       summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       summary.itemsImported++;
@@ -451,87 +632,5 @@ export class ImportOrchestrator {
     if (Object.keys(updates).length > 0) await actor.update(updates);
   }
 
-  private enableImportMode(
-    selectionData: { trainedSkills: string[]; selectedFeats: string[] },
-    _engines: DemiplaneEngineEntry[],
-  ): void {
-    this.importMode = true;
 
-    const ChoiceSetRE = (game as unknown as { pf2e: { RuleElements: { builtin: Record<string, { prototype: Record<string, unknown> }> } } }).pf2e.RuleElements.builtin.ChoiceSet;
-    this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
-
-    const { trainedSkills, selectedFeats } = selectionData;
-    const usedSkills: string[] = [];
-    const usedFeats: string[] = [];
-    const self = this;
-
-    ChoiceSetRE.prototype.preCreate = async function (
-      this: { choices: Array<{ value: unknown; label: string }>; selection: unknown; item: { flags: Record<string, unknown>; getRollOptions: (s: string) => string[] }; actor: { getRollOptions: () => string[] }; resolveInjectedProperties: (p: unknown) => { test: (r: Set<string>) => boolean }; predicate: unknown; inflateChoices: (r: Set<string>, t: unknown) => Promise<Array<{ value: unknown; label: string }>>; flag: string },
-      params: { ruleSource: Record<string, unknown>; itemSource: Record<string, unknown>; tempItems: unknown },
-    ) {
-      if (!self.importMode) {
-        return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
-      }
-
-      const rollOptions = new Set([this.actor.getRollOptions(), this.item.getRollOptions("parent")].flat());
-      const predicate = this.resolveInjectedProperties(this.predicate);
-      if (!predicate.test(rollOptions)) return;
-
-      this.choices = await this.inflateChoices(rollOptions, params.tempItems);
-      if (!this.choices || this.choices.length === 0) return;
-
-      let matched: { value: unknown; label: string } | null = null;
-
-      for (const choice of this.choices) {
-        const val = typeof choice.value === "string" ? choice.value : "";
-        const label = (choice.label || "").toLowerCase();
-
-        // Skill match
-        if (trainedSkills.includes(val) && !usedSkills.includes(val)) {
-          matched = choice;
-          usedSkills.push(val);
-          break;
-        }
-
-        // Feat match (UUID-based, match by label)
-        if (val.includes("Compendium")) {
-          for (const featSlug of selectedFeats) {
-            if (!usedFeats.includes(featSlug)) {
-              const normalizedLabel = label.replace(/[^a-z0-9]/g, " ").trim();
-              const normalizedSlug = featSlug.replace(/-/g, " ");
-              if (normalizedLabel === normalizedSlug || normalizedLabel.includes(normalizedSlug)) {
-                matched = choice;
-                usedFeats.push(featSlug);
-                break;
-              }
-            }
-          }
-          if (matched) break;
-        }
-      }
-
-      // Fallback: pick first choice if nothing matched
-      if (!matched && this.choices.length > 0) {
-        matched = this.choices[0];
-      }
-
-      if (matched) {
-        this.selection = params.ruleSource.selection = matched.value;
-        const pf2eFlags = (this.item.flags.pf2e || {}) as Record<string, unknown>;
-        const rulesSelections = (pf2eFlags.rulesSelections || {}) as Record<string, unknown>;
-        rulesSelections[this.flag || "choice"] = matched.value;
-        pf2eFlags.rulesSelections = rulesSelections;
-        this.item.flags.pf2e = pf2eFlags;
-      }
-    };
-  }
-
-  private disableImportMode(): void {
-    this.importMode = false;
-    if (this.originalPreCreate) {
-      const ChoiceSetRE = (game as unknown as { pf2e: { RuleElements: { builtin: Record<string, { prototype: Record<string, unknown> }> } } }).pf2e.RuleElements.builtin.ChoiceSet;
-      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
-      this.originalPreCreate = null;
-    }
-  }
 }
