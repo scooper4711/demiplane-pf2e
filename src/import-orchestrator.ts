@@ -286,16 +286,19 @@ export class ImportOrchestrator {
       if (allSlugs.includes(val)) return choice;
     }
 
-    // Strategy 3: Partial match — choice value is contained in a Demiplane slug
-    // e.g. choice value "sword" matches Demiplane slug "weapon-master-sword"
+    // Strategy 3: Partial match against generic-feature engines only
+    // e.g. choice value "sword" matches "weapon-master-sword" from generic-feature
+    const genericFeatureSlugs = this.currentEngines
+      .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-feature/") && e.args?.slug)
+      .map((e) => toFoundrySlug(e.args?.slug as string));
+
     for (const choice of choices) {
       const val = typeof choice.value === "string" ? choice.value : "";
       if (!val || val.includes("Compendium")) continue;
-      for (const slug of allSlugs) {
-        if (slug.includes(val) || val.includes(slug)) return choice;
+      for (const slug of genericFeatureSlugs) {
+        if (slug.includes(val)) return choice;
       }
     }
-
     // Strategy 4: Feat UUID match by label
     const featSlugs = this.currentEngines
       .filter((e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug)
