@@ -556,3 +556,114 @@ for (const eng of engines) {
 - [ ] Handle "Assurance" feat granted by Background (already works via Grant Chain)
 - [ ] Duplicate Shield Block issue (one from class features, one general — check if this is correct)
 - [ ] Foundry setup script needs to handle "Allow Sharing Usage Data" dialog reliably
+
+---
+
+## Session: 2026-08-20 — ChoiceSet Resolution Breakthrough
+
+### The ChoiceSet Problem (Resolved)
+
+PF2e's `ChoiceSetRuleElement.preCreate` opens an interactive `PickAThingPrompt` when items with choices are added to an actor. This blocks automated import.
+
+### Solution: Hybrid Pre-Selection + Monkey-Patch Fallback
+
+**Two-layer approach:**
+
+1. **Pre-selection (primary)**: Before calling `createEmbeddedDocuments`, set `rule.selection` on ChoiceSet rule elements in the item data. When the selection matches a valid choice, the original `preCreate` skips the prompt and runs all downstream logic (name adjustment, GrantItem processing).
+
+2. **Monkey-patch fallback (secondary)**: Patch `ChoiceSetRuleElement.prototype.preCreate` during import. If pre-selection wasn't set (or doesn't match), the patch inflates choices, finds the best match from Demiplane data, and sets the selection. This handles cases where we can't know the exact value format ahead of time.
+
+**Why this works better than replacing preCreate entirely:**
+- The original preCreate handles name adjustment (e.g., "Skilled Human" → "Skilled Human (Acrobatics)")
+- The original preCreate processes GrantItem rules that follow the ChoiceSet (e.g., Natural Ambition grants Reactive Shield)
+- The original preCreate sets `flags.pf2e.rulesSelections` correctly
+
+### How preCreate Checks for Pre-Selection (PF2e Source)
+
+```typescript
+// In ChoiceSetRuleElement.preCreate:
+const selection =
+    this.#getPreselection(this.choices) ??  // ← Checks if this.selection matches an inflated choice
+    (await new PickAThingPrompt(...).resolveSelection());  // ← Only if no pre-selection found
+```
+
+`#getPreselection` does: `choices.find(c => R.isDeepEqual(this.selection, c.value))`
+
+So the pre-set selection must EXACTLY match a choice's `value` field. For skills, the value is a plain string (`"acrobatics"`). For feat grants, it's a compendium UUID (`"Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS"`).
+
+### findMatchInChoices Strategy (Fallback)
+
+When the monkey-patch fires, it tries to match available choices against Demiplane data using four strategies in order:
+
+1. **Direct skill match**: choice value is in the list of Demiplane skill selections
+2. **Direct slug match**: choice value matches any DemiplaneEngine slug
+3. **Partial slug match**: choice value is contained in (or contains) a Demiplane slug (e.g., `"sword"` matches `"weapon-master-sword"`)
+4. **Feat UUID label match**: for Compendium UUIDs, compare choice label against Demiplane feat slugs
+
+### presetChoiceSelections (Pre-Selection)
+
+Before adding an item, this method:
+1. Finds ChoiceSet rules on the item data
+2. Looks for Demiplane engines whose `sourceRow` contains `select-{type}-{itemSlug}`
+3. For filter-based ChoiceSets (feat grants), resolves the child slug to a compendium UUID
+4. For simple ChoiceSets (skills), uses the slug directly
+5. Sets `rule.selection = value`
+
+### Results Achieved
+
+- Heritage: "Skilled Human (Acrobatics)" — name adjusted, skill applied ✓
+- Natural Ambition: ChoiceSet selects Reactive Shield UUID, GrantItem creates it on actor ✓
+- Fighter Weapon Mastery: Partial match "sword" in "weapon-master-sword" ✓
+- Zero interactive prompts during full import ✓
+
+### What Is NOT Class-Specific
+
+The entire ChoiceSet resolution is generic:
+- Slug matching works for any class/ancestry/heritage
+- `parseFeatSlot` regex handles `{classname}-feat-level-N-rm` for any class
+- Attribute boost logic maps `ancestry-boosts`, `background-boosts`, `attribute-boosts-level-N-rm` generically
+- Language parsing is class-independent
+
+**Recommendation**: Don't introduce strategy pattern per class until a non-Fighter import reveals class-specific behavior. The most likely candidate for class-specific logic is **spellcasters** (spell slot management, prepared vs spontaneous, focus spells).
+
+### Attribute Boosts (Working)
+
+Applied via:
+- Ancestry item: `system.boosts.{n}.selected = "str"` (on the ancestry embedded item)
+- Background item: `system.boosts.{n}.selected = "con"` (on the background embedded item)
+- Level boosts: `system.build.attributes.boosts.{level} = ["str", "dex", "con", "int"]` (on the actor)
+- Class key ability: handled automatically by Grant Chain (skip)
+
+Attribute names mapped: `strength → str`, `dexterity → dex`, etc.
+
+### Languages (Working)
+
+- Parsed from `character-languages-user` engine (comma-separated free text)
+- Slugified and validated against `CONFIG.PF2E.languages`
+- Applied to `system.details.languages.value` array
+- Unrecognized languages logged in summary (not created)
+- Applied AFTER attribute boosts (language count depends on INT)
+
+### Skill Proficiencies (Partially Working)
+
+**What works via Grant Chain:**
+- Saves (fortitude, reflex, will) — from class
+- Perception — from class
+- Attack/defense proficiencies — from class
+- Heritage skill (acrobatics from Skilled Human) — via ChoiceSet resolution
+- Background skill (farming-lore from Farmhand) — via Grant Chain
+
+**What still needs work:**
+- Fighter's initial proficiency skills (crafting + 3+INT others) — class ChoiceSet is multi-select, not matching correctly
+- Skill increases at levels 3, 5 — not being applied
+- The skill rank values may need direct setting on `system.skills.{skill}.rank`
+
+### Integration Tests (9 passing, 1 skipped, ~27s)
+
+Run: `npx playwright test tests/integration/valeros-import.spec.ts`
+
+Requires:
+- Foundry on port 30001 (FOUNDRY_TEST_PORT) with PF2e + module
+- DEMIPLANE_TOKEN in .env
+
+Validates: identity, core items, feat slots (class/ancestry/skill/general), Grant Chain auto-grants, attribute modifiers, languages.
