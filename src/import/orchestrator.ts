@@ -10,6 +10,7 @@
  */
 
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary, ItemCategory } from "./types.js";
+import { stampImported } from "./types.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
@@ -85,7 +86,7 @@ export class ImportOrchestrator {
               if (location) system.location = location;
               if (taken !== null) system.level = { ...(system.level as Record<string, unknown> || {}), taken };
             }
-            batchItems.push(itemData);
+            batchItems.push(stampImported(itemData));
             summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
             summary.itemsImported++;
           } else {
@@ -173,7 +174,7 @@ export class ImportOrchestrator {
         type: "lore" as const,
         system: { proficient: { value: 1 } },
       }));
-      await actor.createEmbeddedDocuments("Item", loreItems as never);
+      await actor.createEmbeddedDocuments("Item", loreItems.map(i => stampImported(i as Record<string, unknown>)) as never);
       summary.log.push(`+ lore: [${newLores.join(", ")}]`);
     }
   }
@@ -270,7 +271,7 @@ export class ImportOrchestrator {
     const itemData = await resolveCompendiumItem(eng._slug);
     if (itemData) {
       await this.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      await actor.createEmbeddedDocuments("Item", [itemData] as never);
+      await actor.createEmbeddedDocuments("Item", [stampImported(itemData)] as never);
       summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       summary.itemsImported++;
     } else {

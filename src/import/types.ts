@@ -35,3 +35,11 @@ export interface DemiplaneEngineEntry {
 
 export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "classfeature" | "equipment";
 
+
+/** Stamp an item data object with the imported flag before creation. */
+export function stampImported(itemData: Record<string, unknown>): Record<string, unknown> {
+  const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
+  flags["foundry-demiplane-pf2e"] = { ...flags["foundry-demiplane-pf2e"], imported: true };
+  itemData.flags = flags;
+  return itemData;
+}

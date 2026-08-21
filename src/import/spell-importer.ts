@@ -1,3 +1,4 @@
+import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
 
@@ -78,7 +79,7 @@ async function createEntry(
   preparedType: string,
   ability: string,
 ): Promise<string> {
-  const created = await actor.createEmbeddedDocuments("Item", [{
+  const created = await actor.createEmbeddedDocuments("Item", [stampImported({
     name,
     type: "spellcastingEntry",
     system: {
@@ -116,7 +117,7 @@ async function addSpells(
     }
 
     (spellData as { system: Record<string, unknown> }).system.location = { value: entryId };
-    spellItems.push(spellData);
+    spellItems.push(stampImported(spellData));
   }
 
   if (spellItems.length > 0) {

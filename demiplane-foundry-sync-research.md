@@ -737,3 +737,109 @@ Note: `version` field in GraphQL doesn't increment on saves — it's the charact
 - **Port 30001**: Playwright integration tests (separate TestData directory)
 - Both share the same `dist/` symlink for the module code
 - TestData world: "integration-test", Data world: "Demiplane Test"
+
+---
+
+## Current Status (Session 3)
+
+### Import Features Complete
+- **Core identity**: Name, level, avatar (Demiplane URL), prototype token
+- **Build**: Ancestry, heritage, background, class, feats (with slot placement), class features
+- **Class features with ChoiceSet**: Arcane School → School of Battle Magic, Arcane Thesis → Spell Substitution, Bloodline → Imperial (imported as separate items with selection set on parent)
+- **Attributes**: Attribute boosts (ancestry, background, level)
+- **Skills**: Proficiency ranks with overrides, lore skills
+- **Languages**: Parsed from comma or newline-separated free text, validated against Foundry vocabulary
+- **Equipment**: Full inventory with equipped state (held 1H/2H, worn, stowed in container), quantities, tier-suffix normalization
+- **Currency**: pp/gp/sp/cp as treasure items
+- **Biography**: All text fields, deity (compendium item), organized play ID
+- **Session state**: Current HP, temp HP, hero points
+- **Spells**: Spellbook (prepared casters), repertoire (spontaneous), innate (feat-granted). Spell slots NOT set (Demiplane computes client-side, not in API)
+- **UI**: "Import Demiplane Character" button on Actors sidebar
+
+### Architecture Decisions (Updated)
+
+**Sync model:**
+- Demiplane = source of truth for CHARACTER BUILD
+- Foundry = source of truth for SESSION STATE (prepared spells, spent slots, conditions)
+- Foundry → Demiplane: push session state (HP, hero points, currency) automatically
+- Demiplane → Foundry: user-initiated "Update from Demiplane" (delete imported items + reimport)
+
+**Re-sync strategy:**
+- All items created during import get flagged: `flags["foundry-demiplane-pf2e"].imported = true`
+- "Update from Demiplane" deletes all flagged items, then reimports
+- Manually added items (homebrew, GM-granted) survive because they lack the flag
+- No retroactive linking — UUID set only at creation time
+
+**Import-only characters:**
+- Only characters created via "Import Demiplane Character" button get the UUID link
+- No ability to attach a UUID to an existing actor
+- Familiars/pets: deferred to later
+
+**ChoiceSet resolution:**
+- Hybrid approach: pre-set `rule.selection` on item data + monkey-patch `ChoiceSetRuleElement.preCreate` as fallback
+- GrantItem doesn't fire during import (PF2e timing issue), so class-feature children are imported as standalone items
+- Parent features still get their ChoiceSet selection set for display correctness
+
+**Spell slots:**
+- NOT imported — Demiplane computes them client-side from class progression rules
+- Data exists in the Demiplane UI (Prepare view shows "3/3", "2/2" etc.) but not exposed in the engine API
+- Users set slot max in Foundry after import, or we find the Demiplane endpoint later
+
+**Slug resolution:**
+- Strip `-rm` (remaster) suffix
+- Strip class suffixes (`-sorcerer`, `-wizard`, etc.) as fallback
+- Try `bloodline-` prefix for bloodline features
+- Equipment: normalize known variants + strip tier suffixes (`-basic`, `-lesser`, etc.)
+
+### Demiplane Engine Patterns (Reference)
+
+| Pattern | Meaning |
+|---------|---------|
+| `tabula/ancestry/X-rm.eng` | Ancestry selection |
+| `tabula/heritage/X-rm.eng` | Heritage selection |
+| `tabula/background/X-rm.eng` | Background selection |
+| `tabula/class/X-rm.eng` | Class selection |
+| `tabula/feat/X-rm.eng` | Feat (category from sourceRow) |
+| `tabula/class-feature/X-rm.eng` | Class feature ChoiceSet child |
+| `tabula/spell/X-rm.eng` | Spell (rank from selectionRank, source from parentSpellFeature) |
+| `tabula/item/X-rm.eng` | Equipment item |
+| `tabula/generic-feature/X.eng` | Generic selection (weapon group, etc.) |
+| `core/selection/attribute/boost.eng` | Attribute boost |
+| `core/selection/skill/increase/index.eng` | Skill proficiency |
+| `core/selection/skill/custom-skill/index.eng` | Lore skill |
+| `character_currency_X` | Currency (platinum/gold/silver/copper) |
+| `character_hit-points_current` | Current HP |
+| `character_hit-points_temp` | Temp HP |
+| `character_hero-points` | Hero points |
+| `character_avatar` | Character art URL |
+| `character_name` | Character name |
+| `character_level` | Character level |
+| `character_organizedplayid` | Org play ID (split on last dash) |
+| `character_hand_primary_equipped-id` | Primary hand equipment ID |
+| `character_hand_offhand_equipped-id` | Off-hand equipment ID |
+| `character_hand_both_equipped-id` | Two-handed equipment ID |
+| `{id}-is-equipped` | Worn/invested item |
+| `{id}-container` | Item stored in container |
+| `{id}--quantity` | Item quantity override |
+| `{id}-spell-is-signature` | Signature spell marker |
+| `character-languages-user` | Free-text additional languages |
+| `character_personality_beliefs` | Deity name |
+
+### Spell sourceRow patterns
+
+| sourceRow | Meaning |
+|-----------|---------|
+| `builder-spell-section--{spellcasting-feature}--{rank}` | Spell learned from class progression (spellbook/repertoire) |
+| `manual-sheet-drawer` | Manually added spell (wizard: copied from scroll; also used for prepared-today in some contexts) |
+| `{uuid}_select-spell-{feat-slug}-{id}` | Spell granted by a feat (Adapted Cantrip, Adaptive Adept) |
+
+### Tests: 19 passing (Valeros Level 5)
+All integration tests run on port 30001 against a separate Foundry TestData instance.
+
+### Next Steps
+1. Add `imported` flag to all items created during import
+2. Implement "Update from Demiplane" context menu on linked actors
+3. Foundry → Demiplane push (HP, hero points, currency via GraphQL mutation)
+4. Find spell slot data in Demiplane (possibly different API endpoint)
+5. Prepared spell selections for wizards
+6. Familiars/pets (deferred)

@@ -1,3 +1,4 @@
+import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { normalizeEquipmentSlug } from "./slug-utils.js";
 
@@ -138,7 +139,7 @@ export async function applyEquipment(
     system.quantity = state.quantityMap.get(demiplaneId) ?? 1;
     system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
-    items.push({ data, demiplaneId });
+    items.push({ data: stampImported(data), demiplaneId });
   }
 
   if (items.length === 0) {
@@ -190,7 +191,7 @@ export async function applyCurrency(
     const system = data.system as Record<string, unknown>;
     system.quantity = amount;
     system.equipped = { carryType: "worn", handsHeld: 0 };
-    coinItems.push(data);
+    coinItems.push(stampImported(data));
   }
 
   if (coinItems.length > 0) {

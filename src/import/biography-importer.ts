@@ -1,3 +1,4 @@
+import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 
 /**
@@ -56,7 +57,7 @@ export async function applyBiography(
       if (match) {
         const deityDoc = await deityPack.getDocument(match._id);
         if (deityDoc) {
-          await actor.createEmbeddedDocuments("Item", [deityDoc.toObject()]);
+          await actor.createEmbeddedDocuments("Item", [stampImported(deityDoc.toObject())] as never);
           summary.log.push(`+ deity: ${deityName}`);
         }
       } else {
