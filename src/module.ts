@@ -125,58 +125,8 @@ function extractCharacterId(input: string): string | null {
   const match = input.match(uuidPattern);
   return match ? match[0] : null;
 }
-
-// Add "Synchronize with Demiplane" to actor context menu (right-click)
-Hooks.on("getActorDirectoryEntryContext", (html: HTMLElement, options: Array<{ name: string; icon: string; condition: (li: HTMLElement) => boolean; callback: (li: HTMLElement) => void }>) => {
-  options.push({
-    name: "Synchronize with Demiplane",
-    icon: `<i class="fas fa-sync"></i>`,
-    condition: (li: HTMLElement) => {
-      const actorId = li.closest("[data-entry-id]")?.getAttribute("data-entry-id") ?? li.dataset?.entryId ?? li.dataset?.documentId;
-      if (!actorId) return false;
-      const actor = game.actors?.get(actorId);
-      return !!actor?.getFlag(MODULE_ID, "characterId");
-    },
-    callback: async (li: HTMLElement) => {
-      const actorId = li.closest("[data-entry-id]")?.getAttribute("data-entry-id") ?? li.dataset?.entryId ?? li.dataset?.documentId;
-      if (!actorId) return;
-      const actor = game.actors?.get(actorId);
-      if (!actor) return;
-
-      const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
-      const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
-      if (!token) {
-        ui.notifications?.error("No Demiplane token configured.");
-        return;
-      }
-
-      const confirmed = await Dialog.confirm({
-        title: "Synchronize with Demiplane",
-        content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items and Foundry-only data will be preserved.</p>`,
-      });
-      if (!confirmed) return;
-
-      ui.notifications?.info(`Synchronizing ${actor.name}...`);
-
-      // Delete items flagged as imported
-      const importedItems = actor.items.filter((i: { flags: Record<string, Record<string, unknown>> }) => i.flags?.[MODULE_ID]?.imported);
-      if (importedItems.length > 0) {
-        await actor.deleteEmbeddedDocuments("Item", importedItems.map((i: { id: string }) => i.id));
-      }
-
-      // Re-import
-      const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
-      if (summary.errors.length > 0) {
-        ui.notifications?.error(`Sync errors: ${summary.errors.join("; ")}`);
-      } else {
-        ui.notifications?.info(`Synced "${actor.name}" — ${summary.itemsImported} items.`);
-      }
-    },
-  });
-});
-
 // Add "Update from Demiplane" to actor right-click context menu
-Hooks.on("getActorDirectoryEntryContext", (
+Hooks.on("getActorContextOptions", (
   _html: HTMLElement,
   options: Array<{ name: string; icon: string; condition: (li: HTMLElement) => boolean; callback: (li: HTMLElement) => Promise<void> }>,
 ) => {
@@ -184,15 +134,11 @@ Hooks.on("getActorDirectoryEntryContext", (
     name: "Update from Demiplane",
     icon: `<i class="fas fa-sync"></i>`,
     condition: (li: HTMLElement) => {
-      const actorId = li.closest("[data-entry-id]")?.getAttribute("data-entry-id");
-      if (!actorId) return false;
-      const actor = game.actors?.get(actorId);
-      return !!actor?.getFlag(MODULE_ID, "characterId");
+      const a = game.actors?.get(li.dataset.entryId ?? "", { strict: false });
+      return !!a?.getFlag(MODULE_ID, "characterId");
     },
     callback: async (li: HTMLElement) => {
-      const actorId = li.closest("[data-entry-id]")?.getAttribute("data-entry-id");
-      if (!actorId) return;
-      const actor = game.actors?.get(actorId);
+      const actor = game.actors?.get(li.dataset.entryId ?? "");
       if (!actor) return;
 
       const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
@@ -204,24 +150,19 @@ Hooks.on("getActorDirectoryEntryContext", (
 
       const confirmed = await Dialog.confirm({
         title: "Update from Demiplane",
-        content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import the current build from Demiplane.</p><p>Manually added items will be preserved.</p>`,
+        content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items will be preserved.</p>`,
       });
       if (!confirmed) return;
 
       ui.notifications?.info(`Updating ${actor.name} from Demiplane...`);
 
-      // Delete all items flagged as imported by this module
       const importedItems = actor.items.filter(
         (i: { flags: Record<string, Record<string, unknown>> }) => i.flags?.[MODULE_ID]?.imported,
       );
       if (importedItems.length > 0) {
-        await actor.deleteEmbeddedDocuments(
-          "Item",
-          importedItems.map((i: { id: string }) => i.id),
-        );
+        await actor.deleteEmbeddedDocuments("Item", importedItems.map((i: { id: string }) => i.id));
       }
 
-      // Re-import
       const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
       if (summary.errors.length > 0) {
         ui.notifications?.error(`Update errors: ${summary.errors.join("; ")}`);
