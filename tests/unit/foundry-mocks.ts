@@ -88,9 +88,9 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
   (globalThis as unknown as Record<string, unknown>).fromUuid = vi.fn().mockImplementation(async (uuid: string) => {
     // Parse "Compendium.{packKey}.Item.{id}"
     const parts = uuid.split(".");
-    if (parts.length >= 4) {
+    if (parts.length >= 5) {
       const packKey = `${parts[1]}.${parts[2]}`;
-      const id = parts[3];
+      const id = parts[4];
       const pack = packs.get(packKey);
       if (pack) return pack.getDocument(id);
     }

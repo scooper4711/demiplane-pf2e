@@ -234,6 +234,7 @@ export class ImportOrchestrator {
         grantedFeatSlugs.add(toFoundrySlug(eng.args.slug as string));
       }
     // Class-features from tabula/class-feature/ are imported directly.
+    }
     // They represent selections like "School of Battle Magic" from "Arcane School".
     // We import them as standalone items — the ChoiceSet selection on the parent
     // is still set so Foundry shows the relationship correctly.
@@ -244,6 +245,7 @@ export class ImportOrchestrator {
 
     return { grantedFeatSlugs, selectedFeats };
   }
+
 
   private categorizeEngines(engines: DemiplaneEngineEntry[]) {
     const categorized: Record<ItemCategory, Array<DemiplaneEngineEntry & { _slug: string }>> = {
