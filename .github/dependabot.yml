@@ -1,0 +1,47 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    groups:
+      dev-minor-patch:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - "*"
+      prod-minor-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - "*"
+      dev-major:
+        dependency-type: development
+        update-types:
+          - major
+        patterns:
+          - "*"
+      prod-major:
+        dependency-type: production
+        update-types:
+          - major
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-patch:
+        update-types:
+          - minor
+          - patch
+        patterns:
+          - "*"
