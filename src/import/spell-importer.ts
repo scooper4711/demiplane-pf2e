@@ -88,7 +88,7 @@ async function createEntry(
       proficiency: { value: 1 },
       ability: { value: ability },
     },
-  }] as never);
+  })] as never);
   return (created[0] as { id: string }).id;
 }
 
@@ -156,7 +156,7 @@ export async function applySpells(
     const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
     totalAdded += slugToId.size;
 
-    // Set spell slot maximums based on class level
+  }
 
   // Innate spells from feats (Adapted Cantrip, Adaptive Adept, etc.)
   if (innate.length > 0) {

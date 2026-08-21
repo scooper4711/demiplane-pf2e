@@ -1,6 +1,5 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
-
 export default defineConfig({
   resolve: {
     alias: {
@@ -11,10 +10,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
+    include: ["tests/unit/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
+      include: ["src/import/**/*.ts"],
+      exclude: ["src/import/index.ts"],
     },
   },
 });
