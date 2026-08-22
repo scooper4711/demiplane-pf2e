@@ -25,12 +25,14 @@ const WORLD_TITLE = "Demiplane Test";
 const MODULE_ID = "foundry-demiplane-pf2e";
 const PLAYER_NAME = "TestPlayer";
 
-test("complete Foundry VTT setup with PF2e system, world, and users", async ({ page }) => {
+test("complete Foundry VTT setup with PF2e system, world, and users", async ({
+  page,
+}) => {
   test.setTimeout(600_000);
 
   if (!LICENSE_KEY) {
     throw new Error(
-      "FOUNDRY_LICENSE_KEY env var is required (format: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX)"
+      "FOUNDRY_LICENSE_KEY env var is required (format: XXXX-XXXX-XXXX-XXXX-XXXX-XXXX)",
     );
   }
 
@@ -43,7 +45,11 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
   for (let attempt = 0; attempt < 5; attempt++) {
     const url = page.url();
 
-    if (url.includes("/setup") || url.includes("/game") || url.includes("/join")) {
+    if (
+      url.includes("/setup") ||
+      url.includes("/game") ||
+      url.includes("/join")
+    ) {
       break;
     }
 
@@ -59,7 +65,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
       }
 
       // Check if EULA is showing
-      const eulaCheckbox = page.getByRole("checkbox", { name: "I agree to these terms" });
+      const eulaCheckbox = page.getByRole("checkbox", {
+        name: "I agree to these terms",
+      });
       if (await eulaCheckbox.isVisible({ timeout: 3000 }).catch(() => false)) {
         console.log("-> Accepting EULA...");
         await eulaCheckbox.click();
@@ -78,7 +86,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
 
     if (url.includes("/auth")) {
       console.log("-> Logging in as admin...");
-      await page.getByRole("textbox", { name: "Administrator Password" }).fill(ADMIN_PASSWORD);
+      await page
+        .getByRole("textbox", { name: "Administrator Password" })
+        .fill(ADMIN_PASSWORD);
       await page.getByRole("button", { name: "Log In" }).click();
       await page.waitForTimeout(3000);
       continue;
@@ -119,7 +129,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
 
       if (await installBtn.isVisible({ timeout: 5000 }).catch(() => false)) {
         await installBtn.click();
-        console.log("-> PF2e download started (this may take a few minutes)...");
+        console.log(
+          "-> PF2e download started (this may take a few minutes)...",
+        );
 
         await pf2eArticle
           .getByRole("button", { name: "Installed" })
@@ -132,7 +144,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
 
       // Close install dialog
       await page.evaluate(() => {
-        document.querySelectorAll("#notifications li").forEach(el => el.remove());
+        document
+          .querySelectorAll("#notifications li")
+          .forEach((el) => el.remove());
       });
       const closeBtn = page.locator(".window-app .header-control.fa-xmark");
       if (await closeBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
@@ -160,7 +174,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
       await page.getByLabel("Game System").selectOption("pf2e");
 
       await page
-        .locator("form.create-world button[type='submit'], form.create-world button[data-action='submit']")
+        .locator(
+          "form.create-world button[type='submit'], form.create-world button[data-action='submit']",
+        )
         .click();
       await page.waitForTimeout(3000);
       console.log("-> Test world created.");
@@ -171,7 +187,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
     // ========== PHASE 4: Launch World ==========
     console.log("-> Launching test world...");
     const worldArticle = page.locator("article", { hasText: WORLD_TITLE });
-    const launchBtn = worldArticle.locator("[data-action='worldLaunch'], button:has-text('Launch')");
+    const launchBtn = worldArticle.locator(
+      "[data-action='worldLaunch'], button:has-text('Launch')",
+    );
     await launchBtn.first().click();
 
     await page.waitForURL(/\/(join|game)/, { timeout: 60_000 });
@@ -201,7 +219,10 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
     if (!mod) return "not_found";
     if (mod.active) return "already_active";
     // @ts-expect-error Foundry global
-    const config = game.settings.get("core", "moduleConfiguration") as Record<string, boolean>;
+    const config = game.settings.get("core", "moduleConfiguration") as Record<
+      string,
+      boolean
+    >;
     config[moduleId] = true;
     // @ts-expect-error Foundry global
     await game.settings.set("core", "moduleConfiguration", config);
@@ -217,7 +238,9 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
 
     // May need to re-join
     if (page.url().includes("/join")) {
-      const gmOption = page.locator("[data-user-id]", { hasText: "Gamemaster" });
+      const gmOption = page.locator("[data-user-id]", {
+        hasText: "Gamemaster",
+      });
       if (await gmOption.isVisible({ timeout: 3000 }).catch(() => false)) {
         await gmOption.click();
       }
@@ -228,14 +251,18 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
   }
 
   if (moduleEnabled === "not_found") {
-    console.log("   WARNING: Module not found. Is it symlinked into Data/modules?");
+    console.log(
+      "   WARNING: Module not found. Is it symlinked into Data/modules?",
+    );
   }
 
   // ========== PHASE 7: Create Player User ==========
   console.log("-> Creating player user...");
   const playerResult = await page.evaluate(async (playerName) => {
     // @ts-expect-error Foundry global
-    const existing = game.users.find((u: { name: string }) => u.name === playerName);
+    const existing = game.users.find(
+      (u: { name: string }) => u.name === playerName,
+    );
     if (existing) return "exists";
     // @ts-expect-error Foundry global
     await User.create({ name: playerName, role: 1, password: "" });
@@ -249,14 +276,18 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
   console.log("=== Setup Complete ===");
   console.log("  World: " + WORLD_TITLE + " (PF2e)");
   console.log("  Module: " + MODULE_ID + " (" + moduleEnabled + ")");
-  console.log("  Users: Gamemaster (no password), " + PLAYER_NAME + " (no password)");
+  console.log(
+    "  Users: Gamemaster (no password), " + PLAYER_NAME + " (no password)",
+  );
   console.log("  URL: " + BASE_URL);
 });
 
 async function dismissOverlays(page: Page): Promise<void> {
   await page.evaluate(() => {
-    document.querySelectorAll(".tour-overlay, .tour-center-step").forEach(el => el.remove());
-    document.querySelectorAll("#notifications li").forEach(el => el.remove());
+    document
+      .querySelectorAll(".tour-overlay, .tour-center-step")
+      .forEach((el) => el.remove());
+    document.querySelectorAll("#notifications li").forEach((el) => el.remove());
   });
 
   // Dismiss "Allow Sharing Usage Data" dialog specifically
@@ -272,7 +303,9 @@ async function dismissOverlays(page: Page): Promise<void> {
       await noBtn.click();
     } else {
       // Close any dialog window that's open
-      const closeBtn = page.locator(".window-app .header-control.fa-xmark").first();
+      const closeBtn = page
+        .locator(".window-app .header-control.fa-xmark")
+        .first();
       if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
         await closeBtn.click();
       }

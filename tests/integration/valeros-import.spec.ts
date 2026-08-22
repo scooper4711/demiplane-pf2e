@@ -1,7 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { loginAsGamemaster, deleteActorByName, createAndImportCharacter, type ImportResult } from "./helpers.js";
+import {
+  loginAsGamemaster,
+  deleteActorByName,
+  createAndImportCharacter,
+  type ImportResult,
+} from "./helpers.js";
 
-const VALEROS_UUID = process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
+const VALEROS_UUID =
+  process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";
 const ACTOR_NAME = "Valeros Import Test";
 
@@ -15,7 +21,12 @@ test.describe("Valeros Level 5 Import", () => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
     await deleteActorByName(page, ACTOR_NAME);
-    result = await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
+    result = await createAndImportCharacter(
+      page,
+      ACTOR_NAME,
+      VALEROS_UUID,
+      DEMIPLANE_TOKEN,
+    );
     await page.close();
   });
 
@@ -45,41 +56,61 @@ test.describe("Valeros Level 5 Import", () => {
 
   test("class feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find(f => f.name === "Double Slice")?.location).toBe("class-1");
-    expect(feats.find(f => f.name === "Double Slice")?.taken).toBe(1);
-    expect(feats.find(f => f.name === "Aggressive Block")?.location).toBe("class-2");
-    expect(feats.find(f => f.name === "Aggressive Block")?.taken).toBe(2);
-    expect(feats.find(f => f.name === "Powerful Shove")?.location).toBe("class-4");
-    expect(feats.find(f => f.name === "Powerful Shove")?.taken).toBe(4);
+    expect(feats.find((f) => f.name === "Double Slice")?.location).toBe(
+      "class-1",
+    );
+    expect(feats.find((f) => f.name === "Double Slice")?.taken).toBe(1);
+    expect(feats.find((f) => f.name === "Aggressive Block")?.location).toBe(
+      "class-2",
+    );
+    expect(feats.find((f) => f.name === "Aggressive Block")?.taken).toBe(2);
+    expect(feats.find((f) => f.name === "Powerful Shove")?.location).toBe(
+      "class-4",
+    );
+    expect(feats.find((f) => f.name === "Powerful Shove")?.taken).toBe(4);
   });
 
   test("ancestry feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find(f => f.name === "Natural Ambition")?.location).toBe("ancestry-1");
-    expect(feats.find(f => f.name === "Natural Ambition")?.taken).toBe(1);
-    expect(feats.find(f => f.name === "Haughty Obstinacy")?.location).toBe("ancestry-5");
-    expect(feats.find(f => f.name === "Haughty Obstinacy")?.taken).toBe(5);
+    expect(feats.find((f) => f.name === "Natural Ambition")?.location).toBe(
+      "ancestry-1",
+    );
+    expect(feats.find((f) => f.name === "Natural Ambition")?.taken).toBe(1);
+    expect(feats.find((f) => f.name === "Haughty Obstinacy")?.location).toBe(
+      "ancestry-5",
+    );
+    expect(feats.find((f) => f.name === "Haughty Obstinacy")?.taken).toBe(5);
   });
 
   test("skill and general feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find(f => f.name === "Combat Climber")?.location).toBe("skill-2");
-    expect(feats.find(f => f.name === "Combat Climber")?.taken).toBe(2);
-    expect(feats.find(f => f.name === "Powerful Leap")?.location).toBe("skill-4");
-    expect(feats.find(f => f.name === "Powerful Leap")?.taken).toBe(4);
-    expect(feats.find(f => f.name === "Toughness")?.location).toBe("general-3");
-    expect(feats.find(f => f.name === "Toughness")?.taken).toBe(3);
+    expect(feats.find((f) => f.name === "Combat Climber")?.location).toBe(
+      "skill-2",
+    );
+    expect(feats.find((f) => f.name === "Combat Climber")?.taken).toBe(2);
+    expect(feats.find((f) => f.name === "Powerful Leap")?.location).toBe(
+      "skill-4",
+    );
+    expect(feats.find((f) => f.name === "Powerful Leap")?.taken).toBe(4);
+    expect(feats.find((f) => f.name === "Toughness")?.location).toBe(
+      "general-3",
+    );
+    expect(feats.find((f) => f.name === "Toughness")?.taken).toBe(3);
   });
 
   test("grants Reactive Shield via Natural Ambition ChoiceSet", () => {
-    expect(result.feats.find(f => f.name === "Reactive Shield")).toBeDefined();
+    expect(
+      result.feats.find((f) => f.name === "Reactive Shield"),
+    ).toBeDefined();
   });
 
   test("auto-grants class features via Grant Chain", () => {
     const feats = result.feats;
-    expect(feats.find(f => f.name === "Reactive Strike")).toBeDefined();
-    expect(feats.find(f => f.name === "Bravery")).toBeDefined();
-    expect(feats.find(f => f.name === "Fighter Weapon Mastery")).toBeDefined();
+    expect(feats.find((f) => f.name === "Reactive Strike")).toBeDefined();
+    expect(feats.find((f) => f.name === "Bravery")).toBeDefined();
+    expect(
+      feats.find((f) => f.name === "Fighter Weapon Mastery"),
+    ).toBeDefined();
   });
   test("applies correct languages", () => {
     expect(result.languages).toContain("common");
@@ -101,15 +132,14 @@ test.describe("Valeros Level 5 Import", () => {
   });
 
   test("applies correct skill proficiencies", () => {
-    expect(result.skills.acrobatics).toBe(2);   // Heritage (Skilled Human) + override to Expert
-    expect(result.skills.athletics).toBe(2);    // Skill increase at L3
-    expect(result.skills.crafting).toBe(1);     // Initial proficiencies
-    expect(result.skills.diplomacy).toBe(1);    // Fighter skill training
+    expect(result.skills.acrobatics).toBe(2); // Heritage (Skilled Human) + override to Expert
+    expect(result.skills.athletics).toBe(2); // Skill increase at L3
+    expect(result.skills.crafting).toBe(1); // Initial proficiencies
+    expect(result.skills.diplomacy).toBe(1); // Fighter skill training
     expect(result.skills.intimidation).toBe(2); // Override to Expert
-    expect(result.skills.occultism).toBe(1);    // Fighter skill training
+    expect(result.skills.occultism).toBe(1); // Fighter skill training
     expect(result.skills.survival).toBeUndefined(); // Override to untrained (0)
   });
-
 
   test("applies organized play ID", () => {
     expect(result.pfs.playerNumber).toBe(123456);
@@ -125,43 +155,47 @@ test.describe("Valeros Level 5 Import", () => {
   });
 
   test("imports equipment with correct equipped state", () => {
-    const longsword = result.equipment.find(e => e.name === "Longsword");
+    const longsword = result.equipment.find((e) => e.name === "Longsword");
     expect(longsword).toBeDefined();
     expect(longsword!.carryType).toBe("held");
     expect(longsword!.handsHeld).toBe(1);
 
-    const shield = result.equipment.find(e => e.name === "Steel Shield");
+    const shield = result.equipment.find((e) => e.name === "Steel Shield");
     expect(shield).toBeDefined();
     expect(shield!.carryType).toBe("held");
     expect(shield!.handsHeld).toBe(1);
 
-    const armor = result.equipment.find(e => e.name === "Half Plate");
+    const armor = result.equipment.find((e) => e.name === "Half Plate");
     expect(armor).toBeDefined();
     expect(armor!.carryType).toBe("worn");
     expect(armor!.invested).toBe(true);
 
-    const backpack = result.equipment.find(e => e.name === "Backpack");
+    const backpack = result.equipment.find((e) => e.name === "Backpack");
     expect(backpack).toBeDefined();
     expect(backpack!.carryType).toBe("worn");
 
-    const rope = result.equipment.find(e => e.name === "Rope");
+    const rope = result.equipment.find((e) => e.name === "Rope");
     expect(rope).toBeDefined();
     expect(rope!.carryType).toBe("stowed");
     expect(rope!.containerId).not.toBeNull();
 
-    const arrows = result.equipment.find(e => e.name === "Arrows");
+    const arrows = result.equipment.find((e) => e.name === "Arrows");
     expect(arrows!.quantity).toBe(20);
-    const rations = result.equipment.find(e => e.name === "Rations");
+    const rations = result.equipment.find((e) => e.name === "Rations");
     expect(rations!.quantity).toBe(2);
   });
 
   test("imports invested items", () => {
-    const doublingRings = result.equipment.find(e => e.name === "Doubling Rings");
+    const doublingRings = result.equipment.find(
+      (e) => e.name === "Doubling Rings",
+    );
     expect(doublingRings).toBeDefined();
     expect(doublingRings!.carryType).toBe("worn");
     expect(doublingRings!.invested).toBe(true);
 
-    const pendant = result.equipment.find(e => e.name === "Pendant of the Occult");
+    const pendant = result.equipment.find(
+      (e) => e.name === "Pendant of the Occult",
+    );
     expect(pendant).toBeDefined();
     expect(pendant!.carryType).toBe("worn");
     expect(pendant!.invested).toBe(true);
