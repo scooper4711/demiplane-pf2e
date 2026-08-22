@@ -8,7 +8,6 @@ import { HookManager } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 
-
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
 let exportManager: ExportManager;
@@ -28,6 +27,8 @@ Hooks.once("init", () => {
 
 Hooks.once("ready", async () => {
   console.log(`${MODULE_ID} | Ready`);
+
+  await showPreReleaseWarning();
 
   client = new DemiplaneClient();
   importOrchestrator = new ImportOrchestrator();
@@ -49,7 +50,7 @@ Hooks.once("ready", async () => {
           ui.notifications.error("No Demiplane character linked to this actor.");
           return null;
         }
-        const token = options?.token || game.settings.get(MODULE_ID, "demiplaneToken") as string;
+        const token = options?.token || (game.settings.get(MODULE_ID, "demiplaneToken") as string);
         if (!token) {
           ui.notifications.error("No Demiplane token configured. Set it in module settings.");
           return null;
@@ -120,55 +121,88 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
   actionButtons.appendChild(button);
 });
 
+function showPreReleaseWarning(): Promise<void> {
+  return new Promise((resolve) => {
+    new Dialog({
+      title: "Demiplane PF2e Sync — Pre-Release Warning",
+      content: `
+        <p><strong>This module is pre-release software and should only be used for testing.</strong></p>
+        <p>Using this module can result in data loss for the Foundry Actor, the Demiplane character, or both.</p>
+        <p>Please ensure you have backups before proceeding.</p>
+      `,
+      buttons: {
+        ok: {
+          icon: `<i class="fas fa-check"></i>`,
+          label: "I Understand",
+          callback: () => resolve(),
+        },
+      },
+      close: () => resolve(),
+      default: "ok",
+    }).render(true);
+  });
+}
+
 function extractCharacterId(input: string): string | null {
   const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
   const match = input.match(uuidPattern);
   return match ? match[0] : null;
 }
 // Add "Update from Demiplane" to actor right-click context menu
-Hooks.on("getActorContextOptions", (
-  _html: HTMLElement,
-  options: Array<{ name: string; icon: string; condition: (li: HTMLElement) => boolean; callback: (li: HTMLElement) => Promise<void> }>,
-) => {
-  options.push({
-    name: "Update from Demiplane",
-    icon: `<i class="fas fa-sync"></i>`,
-    condition: (li: HTMLElement) => {
-      const a = game.actors?.get(li.dataset.entryId ?? "", { strict: false });
-      return !!a?.getFlag(MODULE_ID, "characterId");
-    },
-    callback: async (li: HTMLElement) => {
-      const actor = game.actors?.get(li.dataset.entryId ?? "");
-      if (!actor) return;
+Hooks.on(
+  "getActorContextOptions",
+  (
+    _html: HTMLElement,
+    options: Array<{
+      name: string;
+      icon: string;
+      condition: (li: HTMLElement) => boolean;
+      callback: (li: HTMLElement) => Promise<void>;
+    }>
+  ) => {
+    options.push({
+      name: "Update from Demiplane",
+      icon: `<i class="fas fa-sync"></i>`,
+      condition: (li: HTMLElement) => {
+        const a = game.actors?.get(li.dataset.entryId ?? "", { strict: false });
+        return !!a?.getFlag(MODULE_ID, "characterId");
+      },
+      callback: async (li: HTMLElement) => {
+        const actor = game.actors?.get(li.dataset.entryId ?? "");
+        if (!actor) return;
 
-      const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
-      const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
-      if (!token) {
-        ui.notifications?.error("No Demiplane token configured.");
-        return;
-      }
+        const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
+        const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+        if (!token) {
+          ui.notifications?.error("No Demiplane token configured.");
+          return;
+        }
 
-      const confirmed = await Dialog.confirm({
-        title: "Update from Demiplane",
-        content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items will be preserved.</p>`,
-      });
-      if (!confirmed) return;
+        const confirmed = await Dialog.confirm({
+          title: "Update from Demiplane",
+          content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items will be preserved.</p>`,
+        });
+        if (!confirmed) return;
 
-      ui.notifications?.info(`Updating ${actor.name} from Demiplane...`);
+        ui.notifications?.info(`Updating ${actor.name} from Demiplane...`);
 
-      const importedItems = actor.items.filter(
-        (i: { flags: Record<string, Record<string, unknown>> }) => i.flags?.[MODULE_ID]?.imported,
-      );
-      if (importedItems.length > 0) {
-        await actor.deleteEmbeddedDocuments("Item", importedItems.map((i: { id: string }) => i.id));
-      }
+        const importedItems = actor.items.filter(
+          (i: { flags: Record<string, Record<string, unknown>> }) => i.flags?.[MODULE_ID]?.imported
+        );
+        if (importedItems.length > 0) {
+          await actor.deleteEmbeddedDocuments(
+            "Item",
+            importedItems.map((i: { id: string }) => i.id)
+          );
+        }
 
-      const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
-      if (summary.errors.length > 0) {
-        ui.notifications?.error(`Update errors: ${summary.errors.join("; ")}`);
-      } else {
-        ui.notifications?.info(`Updated "${actor.name}" — ${summary.itemsImported} items.`);
-      }
-    },
-  });
-});
+        const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+        if (summary.errors.length > 0) {
+          ui.notifications?.error(`Update errors: ${summary.errors.join("; ")}`);
+        } else {
+          ui.notifications?.info(`Updated "${actor.name}" — ${summary.itemsImported} items.`);
+        }
+      },
+    });
+  }
+);
