@@ -7,7 +7,7 @@
   "manifest": "#{MANIFEST}#",
   "download": "#{DOWNLOAD}#",
   "compatibility": {
-    "minimum": "12",
+    "minimum": "14",
     "verified": "14"
   },
   "authors": [
@@ -16,9 +16,7 @@
       "url": "https://github.com/scooper4711"
     }
   ],
-  "esmodules": [
-    "module.js"
-  ],
+  "esmodules": ["module.js"],
   "relationships": {
     "systems": [
       {
