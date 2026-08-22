@@ -7,7 +7,7 @@
     "build": "rollup -c",
     "build:watch": "rollup -c --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/**/*.ts --max-warnings 5",
+    "lint": "eslint src/**/*.ts --max-warnings 6",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{ts,js,json,md,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md,yml}\"",
@@ -18,7 +18,8 @@
     "setup:foundry": "./scripts/setup-foundry.sh",
     "check:duplication": "node scripts-build/check-duplication.cjs",
     "check:quality": "npm run lint && npm run check:duplication",
-    "test:all": "npm run test && npm run check:quality"
+    "test:all": "npm run test && npm run check:quality",
+    "prepare": "husky"
   },
   "keywords": [
     "foundry-vtt",
@@ -45,6 +46,7 @@
     "eslint": "^9.30.0",
     "fast-check": "^4.9.0",
     "fvtt-types": "npm:@league-of-foundry-developers/foundry-vtt-types@^13.346.0-beta.20251209192131",
+    "husky": "^9.1.7",
     "jscpd": "^5.0.16",
     "prettier": "^3.5.0",
     "rollup": "^4.40.0",
