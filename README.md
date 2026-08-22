@@ -1,124 +1,95 @@
 # Demiplane PF2e Sync for Foundry VTT
 
-Two-way character sync between [Demiplane Nexus](https://app.demiplane.com) and the Foundry VTT PF2e system.
+Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.com), then bring it straight into your Foundry game. No copy-pasting stats, no manual data entry, no "wait, what level did I take Fleet at?"
 
-Build your character on Demiplane, import it into Foundry for game sessions, and sync session state (HP, currency, hero points) back to Demiplane automatically.
+Level up on Demiplane, click update in Foundry, and you're good to go.
 
-## What It Does
+## Why You Want This
 
-- **Import** your Demiplane Pathfinder 2e character into an existing Foundry actor, complete with ancestry, heritage, background, class, feats, equipment, attribute boosts, and skill training.
-- **Export** session state changes (HP, temporary HP, hero points, focus points, currency) back to Demiplane as you play.
-- **Conflict detection** warns you when someone else has edited the character on Demiplane since your last sync, so nothing gets silently overwritten.
-- **Dry run mode** lets you preview what an import or export would do before committing any changes.
+**Players:** You already love Demiplane's character builder. Now you can use it _and_ play on Foundry without rebuilding your character by hand. Import once, and future updates are a single click.
 
-## Installation
+**GMs:** Your players show up with characters that just work — ancestry, feats, equipment, skills, the whole thing. No more fixing broken sheets mid-session.
 
-1. Download or clone this repository.
-2. Run `npm install && npm run build` to produce the module bundle.
-3. Copy the built module folder into your Foundry VTT modules directory:
-   - **Linux:** `~/.local/share/FoundryVTT/Data/modules/foundry-demiplane-pf2e/`
-   - **macOS:** `~/Library/Application Support/FoundryVTT/Data/modules/foundry-demiplane-pf2e/`
-   - **Windows:** `%LOCALAPPDATA%/FoundryVTT/Data/modules/foundry-demiplane-pf2e/`
-4. In Foundry, go to **Settings > Manage Modules** and enable **Demiplane PF2e Sync**.
+## What Gets Imported
 
-## Configuration
+- Ancestry, heritage, and background
+- Class, subclass, and all class features
+- Feats (ancestry, class, skill, general, bonus)
+- Equipment and weapons
+- Attribute boosts and skill proficiencies
+- Spells and focus spells
+- Languages
+- Biography and appearance
 
-### Demiplane Credentials (Optional)
+The import builds your character the same way as if you dragged and dropped each item onto the sheet yourself. It doesn't mess with internal structures or take shortcuts, which means you're far less likely to hit weird errors during play that only happen with imported characters.
 
-Open **Settings > Module Settings** and enter your Demiplane email and password. These are stored per-client (each player enters their own) and are used to access private characters and push changes back.
+## Syncing Back to Demiplane (Future Work)
 
-If you only need to import publicly shared characters, you can leave these blank.
-
-### Dry Run Mode
-
-In **Settings > Module Settings**, a GM can toggle **Dry Run Mode** on or off. When enabled:
-
-- Import and export operations run their full logic (fetching data, resolving slugs, detecting conflicts) but skip all write operations.
-- No changes are made to the Foundry actor or the Demiplane character.
-- The Sync tab shows a clear indicator that dry run mode is active, and buttons read "Preview Import" / "Preview Push" instead of the normal labels.
-
-This is useful for verifying what sync would do before applying it to a real character.
-
-## Linking a Character
-
-Before you can sync, you need to link a Foundry actor to a Demiplane character:
-
-1. Open the actor sheet for the character you want to link.
-2. Open the character link dialog (available from the actor sheet header or context menu).
-3. Enter either:
-   - A bare character UUID: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-   - A full Demiplane character URL: `https://app.demiplane.com/nexus/pathfinder2e/character-sheet/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
-4. Click **Link Character**.
-
-The module validates the UUID format and checks that the character is accessible on Demiplane before saving the link. If something is wrong, you will see an error notification explaining what to fix.
-
-To find your character UUID, open your character on Demiplane and copy the URL from your browser's address bar.
-
-## Importing a Character
-
-Once a character is linked:
-
-1. Open the actor sheet and go to the **Sync** tab.
-2. Click **Import from Demiplane** (or **Preview Import** in dry run mode).
-3. The module fetches your character data, resolves each choice to the corresponding PF2e compendium item, and populates the actor.
-
-The import adds items in the correct order (ancestry, heritage, background, class, then feats and equipment) so that the PF2e Grant Chain fires properly. Attribute boosts and skill training are applied after items, skipping any that are already granted by the chain.
-
-After import, the Sync tab shows a summary with the number of items imported, items skipped (unresolved slugs), and any errors encountered.
-
-If the actor already has items from a previous import, the module reconciles differences rather than duplicating entries.
-
-## Exporting Session State
-
-Session state changes sync from Foundry back to Demiplane in two ways:
-
-### Automatic Sync
-
-When the **Auto-sync on Actor Update** setting is enabled, the module watches for changes to:
+This isn't implemented yet, but it's on the roadmap. The plan is for the module to watch for changes during play and push them back to Demiplane so your character sheet stays current without you thinking about it. Planned sync targets:
 
 - HP and temporary HP
 - Hero points
 - Focus points
 - Currency (gold, silver, copper, platinum)
+- Inventory changes (items gained, spent, or lost during a session)
 
-Changes are batched within a 2-second window and pushed as a single API call to Demiplane. The module rate-limits to at most 30 API calls per minute per character.
+For now, the module is import-only. Syncing back is coming.
 
-### Manual Push
+## How It Works
 
-Click **Push to Demiplane** (or **Preview Push** in dry run mode) on the Sync tab to immediately send all pending changes.
+### First Import (Usually the GM)
 
-If the push fails, the module retries up to 3 times with increasing delays. If all retries fail, you will see an error notification and pending changes are retained for the next attempt.
+The first time a character is imported, the module creates a new Foundry Actor. This requires **Create Actor** permission, which most servers restrict to GMs. So the typical flow is:
 
-## Conflict Detection and Resolution
+1. **GM** clicks the "Import Demiplane Character" button in the Actors sidebar.
+2. GM pastes the character's Demiplane URL or UUID.
+3. The module creates the actor and populates everything.
+4. GM assigns ownership of the actor to the player.
 
-Before pushing changes, the module checks whether the Demiplane character has been modified since your last sync (by comparing version numbers).
+After that, the player can update their own character whenever they level up or make changes on Demiplane.
 
-If a conflict is detected, the Sync tab shows a warning with three options:
+### Updating an Existing Character (Players Can Do This)
 
-- **Re-import** — Fetches the latest character from Demiplane, applies your current session state (HP, currency, etc.) on top, and pushes the merged result.
-- **Force push** — Overwrites the Demiplane character with your local data, ignoring the remote changes.
-- **Cancel** — Aborts the push and keeps both sides unchanged. Your pending changes are retained for later.
+Once the actor exists and the player has ownership:
 
-## The Sync Tab
+1. Right-click the actor in the sidebar and choose "Update from Demiplane."
+2. Or open the actor sheet's **Sync** tab and click **Import from Demiplane**.
 
-The Sync tab on linked actor sheets shows:
+That's it. The module fetches the latest version and applies the diff.
 
-- **Status:** Linked character UUID, last sync timestamp, and version numbers.
-- **Pending Changes:** Any unsynchronized session state changes waiting to be pushed.
-- **Issues:** Unresolved slugs from the most recent import (items that could not be matched to a PF2e compendium entry).
-- **Import Summary:** Results from the last import operation.
-- **Conflict Warning:** Appears when a version mismatch is detected, with resolution controls.
-- **Action Buttons:** Import and Push (or Preview Import and Preview Push in dry run mode).
+### Linking a Character
+
+The module needs to know which Demiplane character maps to which Foundry actor. You link them by providing either:
+
+- The full Demiplane URL: `https://app.demiplane.com/nexus/pathfinder2e/character-sheet/...`
+- Or just the UUID from that URL
+
+You can find this by opening your character on Demiplane and copying the URL from the address bar.
+
+## Configuration
+
+In **Settings > Module Settings > Demiplane PF2e Sync**:
+
+- **Demiplane GraphQL Token** — The module needs a bearer token to access the Demiplane API. To get one: log into Demiplane in your browser, open DevTools (F12), go to the Network tab, look for any request to `apiv4.demiplane.com`, and copy the `Authorization` header value (without the "Bearer " prefix). Paste that into this setting. Each player enters their own token. In a future release, this will be replaced with simple email/password login.
+
+## Conflict Detection (Future Work)
+
+Once syncing back is implemented, the module will check whether the Demiplane character has been modified since your last sync before pushing. If there's a version mismatch, you'll get options to re-import, force push, or cancel. This prevents anyone's changes from getting silently overwritten.
 
 ## Troubleshooting
 
-**Authentication failed:** Double-check your email and password in module settings. Public characters are still accessible without credentials.
+**"No Demiplane token configured"** — Open module settings and paste your GraphQL token. See the Configuration section above for how to grab it from your browser.
 
-**Unresolved slugs after import:** Some Demiplane content may not have a direct match in the Foundry PF2e compendium. The import continues with available items and lists unresolved slugs on the Sync tab.
+**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them on the Sync tab so you can add them manually.
 
-**Conflict detected on every push:** This usually means another tool or browser session is modifying the character on Demiplane. Use "Re-import" to merge or coordinate with other editors.
+## Pre-Release Notice
 
-**Rate limit reached:** The module caps pushes at 30 per minute per character. Wait a moment and changes will sync on the next attempt.
+This module is pre-release software. It can result in data loss for the Foundry Actor, the Demiplane character, or both. Back up your world and your Demiplane characters before using it. You'll see a warning dialog each time the module loads as a reminder.
+
+## Compatibility
+
+- Foundry VTT v14+
+- PF2e system
 
 ## License
 
