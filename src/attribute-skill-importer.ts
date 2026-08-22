@@ -112,7 +112,7 @@ export async function applyAttributeBoosts(
   for (const boost of boosts) {
     if (!boost.slug) {
       console.warn(
-        "foundry-demiplane-pf2e | Attribute boost has empty slug, skipping",
+        "demiplane-pf2e | Attribute boost has empty slug, skipping",
       );
       skipped++;
       continue;
@@ -120,7 +120,7 @@ export async function applyAttributeBoosts(
 
     if (!isValidAttribute(boost.slug)) {
       console.warn(
-        `foundry-demiplane-pf2e | Invalid attribute slug "${boost.slug}", skipping`,
+        `demiplane-pf2e | Invalid attribute slug "${boost.slug}", skipping`,
       );
       skipped++;
       continue;
@@ -157,7 +157,7 @@ export async function applySkillIncreases(
   for (const increase of increases) {
     if (!increase.slug) {
       console.warn(
-        "foundry-demiplane-pf2e | Skill increase has empty slug, skipping",
+        "demiplane-pf2e | Skill increase has empty slug, skipping",
       );
       skipped++;
       continue;
@@ -165,7 +165,7 @@ export async function applySkillIncreases(
 
     if (!isValidSkill(increase.slug)) {
       console.warn(
-        `foundry-demiplane-pf2e | Invalid skill slug "${increase.slug}", skipping`,
+        `demiplane-pf2e | Invalid skill slug "${increase.slug}", skipping`,
       );
       skipped++;
       continue;

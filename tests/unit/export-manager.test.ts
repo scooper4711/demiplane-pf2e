@@ -182,12 +182,12 @@ describe("ExportManager", () => {
       await manager.flush(actor as never);
 
       expect(actor.setFlag).toHaveBeenCalledWith(
-        "foundry-demiplane-pf2e",
+        "demiplane-pf2e",
         "lastKnownVersion",
         5,
       );
       expect(actor.setFlag).toHaveBeenCalledWith(
-        "foundry-demiplane-pf2e",
+        "demiplane-pf2e",
         "lastSyncTimestamp",
         expect.any(Number),
       );

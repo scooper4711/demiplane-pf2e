@@ -16,7 +16,7 @@ vi.stubGlobal("Hooks", {
 
 import { HookManager } from "../../src/hook-manager.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
+const MODULE_ID = "demiplane-pf2e";
 
 function createMockExportManager() {
   return {

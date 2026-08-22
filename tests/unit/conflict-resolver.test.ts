@@ -9,7 +9,7 @@ vi.mock("@scooper4711/demiplane-api", () => ({
 import { updateCustomEngineValue } from "@scooper4711/demiplane-api";
 import { ConflictResolver } from "../../src/conflict-resolver.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
+const MODULE_ID = "demiplane-pf2e";
 
 function createMockClient(overrides = {}) {
   return {

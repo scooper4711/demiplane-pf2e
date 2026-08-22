@@ -73,7 +73,7 @@ describe("SyncTabRenderer", () => {
       (ui as { windows: Record<string, unknown> }).windows = { "1": sheet };
 
       SyncTabRenderer.registerSettingsHook();
-      triggerHook("updateSetting", { key: "foundry-demiplane-pf2e.dryRun" });
+      triggerHook("updateSetting", { key: "demiplane-pf2e.dryRun" });
 
       expect(sheet.rendered).toBe(true);
     });
@@ -83,7 +83,7 @@ describe("SyncTabRenderer", () => {
       (ui as { windows: Record<string, unknown> }).windows = { "1": sheet };
 
       SyncTabRenderer.registerSettingsHook();
-      triggerHook("updateSetting", { key: "foundry-demiplane-pf2e.autoSync" });
+      triggerHook("updateSetting", { key: "demiplane-pf2e.autoSync" });
 
       expect(sheet.rendered).toBe(false);
     });
@@ -95,7 +95,7 @@ describe("SyncTabRenderer", () => {
       };
 
       SyncTabRenderer.registerSettingsHook();
-      triggerHook("updateSetting", { key: "foundry-demiplane-pf2e.dryRun" });
+      triggerHook("updateSetting", { key: "demiplane-pf2e.dryRun" });
 
       expect(otherWindow.render).not.toHaveBeenCalled();
     });
@@ -109,7 +109,7 @@ describe("SyncTabRenderer", () => {
       };
 
       SyncTabRenderer.registerSettingsHook();
-      triggerHook("updateSetting", { key: "foundry-demiplane-pf2e.dryRun" });
+      triggerHook("updateSetting", { key: "demiplane-pf2e.dryRun" });
 
       expect(sheet1.rendered).toBe(true);
       expect(sheet2.rendered).toBe(true);

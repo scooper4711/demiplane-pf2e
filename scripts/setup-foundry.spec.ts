@@ -22,7 +22,7 @@ const BASE_URL = `http://localhost:${PORT}`;
 const LICENSE_KEY = process.env.FOUNDRY_LICENSE_KEY ?? "";
 const ADMIN_PASSWORD = process.env.FOUNDRY_ADMIN_PASSWORD ?? "test-admin";
 const WORLD_TITLE = "Demiplane Test";
-const MODULE_ID = "foundry-demiplane-pf2e";
+const MODULE_ID = "demiplane-pf2e";
 const PLAYER_NAME = "TestPlayer";
 
 test("complete Foundry VTT setup with PF2e system, world, and users", async ({

@@ -60,7 +60,7 @@ export class SlugMapper {
           firstMatch = { uuid, packKey, slug: foundrySlug };
         } else {
           console.info(
-            `foundry-demiplane-pf2e | Duplicate slug "${foundrySlug}" found in pack "${packKey}"; using first match from "${firstMatch.packKey}"`,
+            `demiplane-pf2e | Duplicate slug "${foundrySlug}" found in pack "${packKey}"; using first match from "${firstMatch.packKey}"`,
           );
         }
       }
@@ -71,7 +71,7 @@ export class SlugMapper {
     }
 
     console.warn(
-      `foundry-demiplane-pf2e | Slug mapping failed: Demiplane slug "${demiplaneSlug}" → derived Foundry slug "${foundrySlug}" not found in packs: [${this.packSearchOrder.join(", ")}]`,
+      `demiplane-pf2e | Slug mapping failed: Demiplane slug "${demiplaneSlug}" → derived Foundry slug "${foundrySlug}" not found in packs: [${this.packSearchOrder.join(", ")}]`,
     );
 
     return undefined;

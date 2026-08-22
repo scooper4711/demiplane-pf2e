@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 const PORT = process.env.FOUNDRY_TEST_PORT ?? "30001";
 const BASE_URL = `http://localhost:${PORT}`;
 const ADMIN_PASSWORD = process.env.FOUNDRY_ADMIN_PASSWORD ?? "test-admin";
-const MODULE_ID = "foundry-demiplane-pf2e";
+const MODULE_ID = "demiplane-pf2e";
 
 export async function loginAsGamemaster(page: Page): Promise<void> {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });

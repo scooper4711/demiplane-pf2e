@@ -6,7 +6,7 @@ describe("stampImported", () => {
     const item = { name: "Test", type: "feat", system: {} };
     const result = stampImported(item);
     expect(result.flags).toEqual({
-      "foundry-demiplane-pf2e": { imported: true },
+      "demiplane-pf2e": { imported: true },
     });
   });
 
@@ -23,7 +23,7 @@ describe("stampImported", () => {
     });
     expect(
       (result.flags as Record<string, Record<string, unknown>>)[
-        "foundry-demiplane-pf2e"
+        "demiplane-pf2e"
       ].imported,
     ).toBe(true);
   });
@@ -33,12 +33,12 @@ describe("stampImported", () => {
       name: "Test",
       type: "feat",
       system: {},
-      flags: { "foundry-demiplane-pf2e": { other: "value" } },
+      flags: { "demiplane-pf2e": { other: "value" } },
     };
     const result = stampImported(item);
     const moduleFlags = (
       result.flags as Record<string, Record<string, unknown>>
-    )["foundry-demiplane-pf2e"];
+    )["demiplane-pf2e"];
     expect(moduleFlags.imported).toBe(true);
     expect(moduleFlags.other).toBe("value");
   });
