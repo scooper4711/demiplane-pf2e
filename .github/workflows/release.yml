@@ -1,0 +1,104 @@
+name: Create Module Files For GitHub Release
+
+env:
+  project_url: "https://github.com/${{github.repository}}"
+  latest_manifest_url: "https://github.com/${{github.repository}}/releases/latest/download/module.json"
+  beta_manifest_url: "https://github.com/${{github.repository}}/releases/download/${{github.event.release.tag_name}}/module.json"
+  release_module_url: "https://github.com/${{github.repository}}/releases/download/${{github.event.release.tag_name}}/module.zip"
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Extract Version From Tag
+        id: get_version
+        uses: battila7/get-version-action@v2
+
+      - name: Modify Module Manifest With Release-Specific Values
+        uses: cschleiden/replace-tokens@v1
+        with:
+          files: "module.json"
+        env:
+          VERSION: ${{steps.get_version.outputs.version-without-v}}
+          URL: ${{ env.project_url }}
+          MANIFEST: ${{ github.event.release.prerelease && env.beta_manifest_url || env.latest_manifest_url }}
+          DOWNLOAD: ${{ env.release_module_url }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Create Module Archive
+        run: |
+          zip --recurse-paths ./module.zip \
+            module.json \
+            dist/ \
+            README.md
+
+      - name: Update Release With Files
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          name: ${{ github.event.release.name }}
+          draft: ${{ github.event.release.unpublished }}
+          prerelease: ${{ github.event.release.prerelease }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "./module.json, ./module.zip"
+          tag: ${{ github.event.release.tag_name }}
+          body: ${{ github.event.release.body }}
+
+      - name: Notify Foundry VTT
+        if: ${{ !github.event.release.prerelease }}
+        run: |
+          MINIMUM=$(jq -r '.compatibility.minimum' module.json)
+          VERIFIED=$(jq -r '.compatibility.verified' module.json)
+          MAXIMUM=$(jq -r '.compatibility.maximum // ""' module.json)
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: ${{ secrets.FOUNDRY_RELEASE_TOKEN }}" \
+            "https://foundryvtt.com/_api/packages/release_version/" \
+            -d "{
+              \"id\": \"demiplane-pf2e\",
+              \"release\": {
+                \"version\": \"${{ steps.get_version.outputs.version-without-v }}\",
+                \"manifest\": \"${{ env.latest_manifest_url }}\",
+                \"notes\": \"https://github.com/${{ github.repository }}/releases/tag/${{ github.event.release.tag_name }}\",
+                \"compatibility\": {
+                  \"minimum\": \"${MINIMUM}\",
+                  \"verified\": \"${VERIFIED}\",
+                  \"maximum\": \"${MAXIMUM}\"
+                }
+              }
+            }")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Foundry API response (HTTP ${HTTP_CODE}): ${BODY}"
+
+          if [ "$HTTP_CODE" -ne 200 ]; then
+            echo "::warning::Foundry VTT release notification failed (HTTP ${HTTP_CODE}). The GitHub release was still created successfully."
+          fi

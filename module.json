@@ -1,0 +1,30 @@
+{
+  "id": "demiplane-pf2e",
+  "title": "Demiplane PF2e Sync",
+  "description": "Two-way character sync between Demiplane Nexus and the Foundry VTT PF2e system",
+  "version": "#{VERSION}#",
+  "url": "#{URL}#",
+  "manifest": "#{MANIFEST}#",
+  "download": "#{DOWNLOAD}#",
+  "compatibility": {
+    "minimum": "12",
+    "verified": "14"
+  },
+  "authors": [
+    {
+      "name": "scooper4711",
+      "url": "https://github.com/scooper4711"
+    }
+  ],
+  "esmodules": [
+    "module.js"
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system"
+      }
+    ]
+  }
+}
