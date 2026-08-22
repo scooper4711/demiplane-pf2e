@@ -15,6 +15,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "npx playwright test",
+    "start:foundry": "source .env && node \"${FOUNDRY_PATH:-./foundry-playwright/FoundryVTT-Node-14.367}/main.mjs\" --dataPath=\"${FOUNDRY_DATA_PATH:-./foundry-playwright/Data}\" --port=\"${FOUNDRY_PORT:-30000}\" --adminPassword=\"${FOUNDRY_ADMIN_PASSWORD:-test-admin}\" --noupdate",
+    "dev": "npm run build && npm run start:foundry",
     "setup:foundry": "./scripts/setup-foundry.sh",
     "check:duplication": "node scripts-build/check-duplication.cjs",
     "check:quality": "npm run lint && npm run check:duplication",
