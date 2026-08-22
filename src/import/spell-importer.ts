@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
+import { findSpellEngines } from "./spell-engines.js";
 
 interface SpellcastingConfig {
   tradition: string;
@@ -9,32 +10,71 @@ interface SpellcastingConfig {
 }
 
 const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
-  "sorcerer-spellcasting-rm": { tradition: "arcane", preparedType: "spontaneous", ability: "cha" },
-  "wizard-spellcasting-rm": { tradition: "arcane", preparedType: "prepared", ability: "int" },
-  "bard-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
-  "cleric-spellcasting-rm": { tradition: "divine", preparedType: "prepared", ability: "wis" },
-  "druid-spellcasting-rm": { tradition: "primal", preparedType: "prepared", ability: "wis" },
-  "oracle-spellcasting-rm": { tradition: "divine", preparedType: "spontaneous", ability: "cha" },
-  "witch-spellcasting-rm": { tradition: "occult", preparedType: "prepared", ability: "int" },
-  "psychic-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
+  "sorcerer-spellcasting-rm": {
+    tradition: "arcane",
+    preparedType: "spontaneous",
+    ability: "cha",
+  },
+  "wizard-spellcasting-rm": {
+    tradition: "arcane",
+    preparedType: "prepared",
+    ability: "int",
+  },
+  "bard-spellcasting-rm": {
+    tradition: "occult",
+    preparedType: "spontaneous",
+    ability: "cha",
+  },
+  "cleric-spellcasting-rm": {
+    tradition: "divine",
+    preparedType: "prepared",
+    ability: "wis",
+  },
+  "druid-spellcasting-rm": {
+    tradition: "primal",
+    preparedType: "prepared",
+    ability: "wis",
+  },
+  "oracle-spellcasting-rm": {
+    tradition: "divine",
+    preparedType: "spontaneous",
+    ability: "cha",
+  },
+  "witch-spellcasting-rm": {
+    tradition: "occult",
+    preparedType: "prepared",
+    ability: "int",
+  },
+  "psychic-spellcasting-rm": {
+    tradition: "occult",
+    preparedType: "spontaneous",
+    ability: "cha",
+  },
 };
 
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
 function getPacks(): NonNullable<typeof game.packs> {
-  if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
+  if (!game.packs)
+    throw new Error("game.packs unavailable — import called before ready");
   return game.packs;
 }
 
-async function resolveSpell(slug: string): Promise<Record<string, unknown> | null> {
+async function resolveSpell(
+  slug: string,
+): Promise<Record<string, unknown> | null> {
   const pack = getPacks().get("pf2e.spells-srd");
   if (!pack) return null;
-  const index = await pack.getIndex({ fields: ["system.slug"] } as never) as unknown as PackIndex;
+  const index = (await pack.getIndex({
+    fields: ["system.slug"],
+  } as never)) as unknown as PackIndex;
   const foundrySlug = toFoundrySlug(slug);
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
-  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
+  return doc
+    ? (doc as { toObject: () => Record<string, unknown> }).toObject()
+    : null;
 }
 
 interface SpellGroup {
@@ -43,8 +83,11 @@ interface SpellGroup {
   spellbook: DemiplaneEngineEntry[];
 }
 
-function groupSpells(engines: DemiplaneEngineEntry[]): { main: SpellGroup[]; innate: DemiplaneEngineEntry[] } {
-  const spellEngines = engines.filter((e) => e.name.startsWith("tabula/spell/"));
+function groupSpells(engines: DemiplaneEngineEntry[]): {
+  main: SpellGroup[];
+  innate: DemiplaneEngineEntry[];
+} {
+  const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
 
@@ -79,16 +122,18 @@ async function createEntry(
   preparedType: string,
   ability: string,
 ): Promise<string> {
-  const created = await actor.createEmbeddedDocuments("Item", [stampImported({
-    name,
-    type: "spellcastingEntry",
-    system: {
-      prepared: { value: preparedType },
-      tradition: { value: tradition },
-      proficiency: { value: 1 },
-      ability: { value: ability },
-    },
-  })] as never);
+  const created = await actor.createEmbeddedDocuments("Item", [
+    stampImported({
+      name,
+      type: "spellcastingEntry",
+      system: {
+        prepared: { value: preparedType },
+        tradition: { value: tradition },
+        proficiency: { value: 1 },
+        ability: { value: ability },
+      },
+    }),
+  ] as never);
   return (created[0] as { id: string }).id;
 }
 
@@ -116,20 +161,27 @@ async function addSpells(
       continue;
     }
 
-    (spellData as { system: Record<string, unknown> }).system.location = { value: entryId };
+    (spellData as { system: Record<string, unknown> }).system.location = {
+      value: entryId,
+    };
     spellItems.push(stampImported(spellData));
   }
 
   if (spellItems.length > 0) {
-    const created = await actor.createEmbeddedDocuments("Item", spellItems as never);
-    for (const item of created as Array<{ id: string; system: { slug: string } }>) {
+    const created = await actor.createEmbeddedDocuments(
+      "Item",
+      spellItems as never,
+    );
+    for (const item of created as Array<{
+      id: string;
+      system: { slug: string };
+    }>) {
       slugToId.set(item.system.slug, item.id);
     }
   }
 
   return slugToId;
 }
-
 
 export async function applySpells(
   actor: Actor,
@@ -143,19 +195,26 @@ export async function applySpells(
 
   for (const group of main) {
     if (!group.config) {
-      summary.log.push(`! spells: unknown source "${group.source}", skipping ${group.spellbook.length} spells`);
+      summary.log.push(
+        `! spells: unknown source "${group.source}", skipping ${group.spellbook.length} spells`,
+      );
       continue;
     }
 
     const { tradition, preparedType, ability } = group.config;
     const entryName = `${capitalize(tradition)} ${capitalize(preparedType)} Spells`;
-    const entryId = await createEntry(actor, entryName, tradition, preparedType, ability);
+    const entryId = await createEntry(
+      actor,
+      entryName,
+      tradition,
+      preparedType,
+      ability,
+    );
 
     // For prepared casters: add entire spellbook, then set prepared slots
     // For spontaneous casters: spellbook = known repertoire (just add all)
     const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
     totalAdded += slugToId.size;
-
   }
 
   // Innate spells from feats (Adapted Cantrip, Adaptive Adept, etc.)
@@ -173,7 +232,9 @@ export async function applySpells(
   }
 
   if (totalAdded > 0) {
-    summary.log.push(`+ spells: ${totalAdded} spells across ${main.length + (innate.length > 0 ? 1 : 0)} entries`);
+    summary.log.push(
+      `+ spells: ${totalAdded} spells across ${main.length + (innate.length > 0 ? 1 : 0)} entries`,
+    );
   }
 }
 

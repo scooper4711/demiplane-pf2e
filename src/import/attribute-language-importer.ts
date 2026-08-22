@@ -3,7 +3,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 /**
  * Imports skill proficiencies from Demiplane.
  */
-// eslint-disable-next-line complexity -- flat override/rank logic, cognitively simple
+// eslint-disable-next-line max-lines-per-function, complexity -- flat override/rank logic, cognitively simple
 export async function applySkillProficiencies(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
@@ -130,6 +130,7 @@ export async function applyLanguages(
 /**
  * Imports attribute boosts from Demiplane and applies them.
  */
+// eslint-disable-next-line max-lines-per-function -- sequential boost application by category
 export async function applyAttributeBoosts(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
