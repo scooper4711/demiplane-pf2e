@@ -1,6 +1,6 @@
+import { MODULE_ID } from "./import/types.js";
 import type { ExportManager } from "./export-manager.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.

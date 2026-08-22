@@ -1,10 +1,10 @@
+import { MODULE_ID } from "./import/types.js";
 import type {
   DemiplaneClient,
   CharacterEngine,
 } from "@scooper4711/demiplane-api";
 import { updateCustomEngineValue } from "@scooper4711/demiplane-api";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
 
 export type ConflictStatus =
   | { conflicted: false }

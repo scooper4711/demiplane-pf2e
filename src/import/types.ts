@@ -1,4 +1,4 @@
-export const MODULE_ID = "foundry-demiplane-pf2e";
+export const MODULE_ID = "demiplane-pf2e";
 
 export const PACKS = [
   "pf2e.classes",
@@ -39,7 +39,7 @@ export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "f
 /** Stamp an item data object with the imported flag before creation. */
 export function stampImported(itemData: Record<string, unknown>): Record<string, unknown> {
   const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
-  flags["foundry-demiplane-pf2e"] = { ...flags["foundry-demiplane-pf2e"], imported: true };
+  flags["demiplane-pf2e"] = { ...flags["demiplane-pf2e"], imported: true };
   itemData.flags = flags;
   return itemData;
 }

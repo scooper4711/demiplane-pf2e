@@ -1,3 +1,4 @@
+import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
@@ -7,7 +8,6 @@ import { HookManager } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;

@@ -1,4 +1,4 @@
-const MODULE_ID = "foundry-demiplane-pf2e";
+import { MODULE_ID } from "./import/types.js";
 
 export function registerSettings(): void {
   game.settings.register(MODULE_ID, "demiplaneEmail", {

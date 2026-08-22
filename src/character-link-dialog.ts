@@ -1,7 +1,7 @@
+import { MODULE_ID } from "./import/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
 
-const MODULE_ID = "foundry-demiplane-pf2e";
 
 /**
  * Renders and manages the per-actor dialog for linking a Demiplane character.
