@@ -4,14 +4,25 @@ import type {
 } from "@scooper4711/demiplane-api";
 import { isDemiplaneEngine } from "@scooper4711/demiplane-api";
 
-const VALID_ATTRIBUTES = [
-  "str", "dex", "con", "int", "wis", "cha",
-] as const;
+const VALID_ATTRIBUTES = ["str", "dex", "con", "int", "wis", "cha"] as const;
 
 const VALID_SKILLS = [
-  "acrobatics", "arcana", "athletics", "crafting", "deception",
-  "diplomacy", "intimidation", "medicine", "nature", "occultism",
-  "performance", "religion", "society", "stealth", "survival", "thievery",
+  "acrobatics",
+  "arcana",
+  "athletics",
+  "crafting",
+  "deception",
+  "diplomacy",
+  "intimidation",
+  "medicine",
+  "nature",
+  "occultism",
+  "performance",
+  "religion",
+  "society",
+  "stealth",
+  "survival",
+  "thievery",
 ] as const;
 
 type AttributeSlug = (typeof VALID_ATTRIBUTES)[number];
@@ -34,10 +45,14 @@ export interface SkillIncreaseEntry {
  * Identifies entries whose name equals "core/selection/attribute/boost.eng"
  * and extracts the attribute slug from args.slug.
  */
-export function extractAttributeBoosts(engines: CharacterEngine[]): AttributeBoostEntry[] {
+export function extractAttributeBoosts(
+  engines: CharacterEngine[],
+): AttributeBoostEntry[] {
   return engines
-    .filter((engine): engine is DemiplaneEngine =>
-      isDemiplaneEngine(engine) && engine.name === "core/selection/attribute/boost.eng",
+    .filter(
+      (engine): engine is DemiplaneEngine =>
+        isDemiplaneEngine(engine) &&
+        engine.name === "core/selection/attribute/boost.eng",
     )
     .map((engine) => ({
       slug: engine.args.slug ?? "",
@@ -52,10 +67,14 @@ export function extractAttributeBoosts(engines: CharacterEngine[]): AttributeBoo
  * Identifies entries whose name equals "core/selection/skill/increase/index.eng"
  * and extracts the skill slug from args.slug.
  */
-export function extractSkillIncreases(engines: CharacterEngine[]): SkillIncreaseEntry[] {
+export function extractSkillIncreases(
+  engines: CharacterEngine[],
+): SkillIncreaseEntry[] {
   return engines
-    .filter((engine): engine is DemiplaneEngine =>
-      isDemiplaneEngine(engine) && engine.name === "core/selection/skill/increase/index.eng",
+    .filter(
+      (engine): engine is DemiplaneEngine =>
+        isDemiplaneEngine(engine) &&
+        engine.name === "core/selection/skill/increase/index.eng",
     )
     .map((engine) => ({
       slug: engine.args.slug ?? "",

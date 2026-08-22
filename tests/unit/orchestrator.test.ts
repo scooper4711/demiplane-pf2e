@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
+import {
+  installFoundryMocks,
+  createMockActor,
+  createMockPack,
+} from "./foundry-mocks.js";
 import { ImportOrchestrator } from "../../src/import/orchestrator.js";
 
 describe("ImportOrchestrator", () => {
@@ -12,7 +16,11 @@ describe("ImportOrchestrator", () => {
         { _id: "a1", name: "Human", system: { slug: "human" } },
       ]),
       "pf2e.heritages": createMockPack([
-        { _id: "h1", name: "Versatile Human", system: { slug: "versatile-human" } },
+        {
+          _id: "h1",
+          name: "Versatile Human",
+          system: { slug: "versatile-human" },
+        },
       ]),
       "pf2e.backgrounds": createMockPack([
         { _id: "b1", name: "Farmhand", system: { slug: "farmhand" } },
@@ -26,32 +34,80 @@ describe("ImportOrchestrator", () => {
     });
 
     // Mock fetch for GraphQL
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({
-        data: {
-          demiplane_user_character: [{
-            data: {
-              engines: [
-                { id: "1", name: "tabula/ancestry/human-rm.eng", type: "DemiplaneEngine", args: { slug: "human-rm", sourceRow: "" } },
-                { id: "2", name: "tabula/heritage/versatile-human-rm.eng", type: "DemiplaneEngine", args: { slug: "versatile-human-rm", sourceRow: "" } },
-                { id: "3", name: "tabula/background/farmhand-rm.eng", type: "DemiplaneEngine", args: { slug: "farmhand-rm", sourceRow: "" } },
-                { id: "4", name: "tabula/class/fighter-rm.eng", type: "DemiplaneEngine", args: { slug: "fighter-rm", sourceRow: "" } },
-                { id: "5", name: "tabula/feat/power-attack-rm.eng", type: "DemiplaneEngine", args: { slug: "power-attack-rm", sourceRow: "fighter-feat-level-2-rm" } },
-                { id: "6", name: "character_name", type: "CustomDemiplaneEngine", args: {}, value: "Test Fighter" },
-                { id: "7", name: "character_level", type: "CustomDemiplaneEngine", args: {}, value: 2 },
-              ],
-            },
-            version: 1,
-          }],
-        },
-      }),
-    });
+    (globalThis as unknown as Record<string, unknown>).fetch = vi
+      .fn()
+      .mockResolvedValue({
+        json: async () => ({
+          data: {
+            demiplane_user_character: [
+              {
+                data: {
+                  engines: [
+                    {
+                      id: "1",
+                      name: "tabula/ancestry/human-rm.eng",
+                      type: "DemiplaneEngine",
+                      args: { slug: "human-rm", sourceRow: "" },
+                    },
+                    {
+                      id: "2",
+                      name: "tabula/heritage/versatile-human-rm.eng",
+                      type: "DemiplaneEngine",
+                      args: { slug: "versatile-human-rm", sourceRow: "" },
+                    },
+                    {
+                      id: "3",
+                      name: "tabula/background/farmhand-rm.eng",
+                      type: "DemiplaneEngine",
+                      args: { slug: "farmhand-rm", sourceRow: "" },
+                    },
+                    {
+                      id: "4",
+                      name: "tabula/class/fighter-rm.eng",
+                      type: "DemiplaneEngine",
+                      args: { slug: "fighter-rm", sourceRow: "" },
+                    },
+                    {
+                      id: "5",
+                      name: "tabula/feat/power-attack-rm.eng",
+                      type: "DemiplaneEngine",
+                      args: {
+                        slug: "power-attack-rm",
+                        sourceRow: "fighter-feat-level-2-rm",
+                      },
+                    },
+                    {
+                      id: "6",
+                      name: "character_name",
+                      type: "CustomDemiplaneEngine",
+                      args: {},
+                      value: "Test Fighter",
+                    },
+                    {
+                      id: "7",
+                      name: "character_level",
+                      type: "CustomDemiplaneEngine",
+                      args: {},
+                      value: 2,
+                    },
+                  ],
+                },
+                version: 1,
+              },
+            ],
+          },
+        }),
+      });
   });
 
   it("returns error when no token provided", async () => {
     const orchestrator = new ImportOrchestrator();
     const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", {});
+    const summary = await orchestrator.importCharacter(
+      actor as never,
+      "test-uuid",
+      {},
+    );
     expect(summary.errors).toContain("No authentication token provided");
   });
 
@@ -62,10 +118,18 @@ describe("ImportOrchestrator", () => {
     // Mock the ChoiceSet monkey-patch target
     (globalThis as unknown as Record<string, unknown>).game = {
       ...(globalThis as unknown as { game: Record<string, unknown> }).game,
-      pf2e: { RuleElements: { builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } } } },
+      pf2e: {
+        RuleElements: {
+          builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } },
+        },
+      },
     };
 
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+    const summary = await orchestrator.importCharacter(
+      actor as never,
+      "test-uuid",
+      { token: "fake-token" },
+    );
 
     expect(summary.errors).toHaveLength(0);
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
@@ -73,25 +137,37 @@ describe("ImportOrchestrator", () => {
   });
 
   it("handles GraphQL errors", async () => {
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({ errors: [{ message: "Unauthorized" }] }),
-    });
+    (globalThis as unknown as Record<string, unknown>).fetch = vi
+      .fn()
+      .mockResolvedValue({
+        json: async () => ({ errors: [{ message: "Unauthorized" }] }),
+      });
 
     const orchestrator = new ImportOrchestrator();
     const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "bad-token" });
+    const summary = await orchestrator.importCharacter(
+      actor as never,
+      "test-uuid",
+      { token: "bad-token" },
+    );
 
     expect(summary.errors[0]).toContain("GraphQL");
   });
 
   it("handles missing character", async () => {
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({ data: { demiplane_user_character: [] } }),
-    });
+    (globalThis as unknown as Record<string, unknown>).fetch = vi
+      .fn()
+      .mockResolvedValue({
+        json: async () => ({ data: { demiplane_user_character: [] } }),
+      });
 
     const orchestrator = new ImportOrchestrator();
     const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
+    const summary = await orchestrator.importCharacter(
+      actor as never,
+      "test-uuid",
+      { token: "token" },
+    );
 
     expect(summary.errors[0]).toContain("Character not found");
   });

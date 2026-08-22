@@ -7,10 +7,7 @@ vi.mock("@scooper4711/demiplane-api", () => ({
       engines: { name: string; value?: unknown }[],
       storeName: string,
       value: unknown,
-    ) =>
-      engines.map((e) =>
-        e.name === storeName ? { ...e, value } : e,
-      ),
+    ) => engines.map((e) => (e.name === storeName ? { ...e, value } : e)),
   ),
 }));
 
@@ -170,33 +167,30 @@ describe("Feature: demiplane-foundry-sync, Property 10: Rate limiter never excee
 
   it("for any number of flush operations within 60 seconds, no more than 30 API calls succeed", async () => {
     await fc.assert(
-      fc.asyncProperty(
-        fc.integer({ min: 31, max: 50 }),
-        async (flushCount) => {
-          vi.clearAllMocks();
+      fc.asyncProperty(fc.integer({ min: 31, max: 50 }), async (flushCount) => {
+        vi.clearAllMocks();
 
-          const client = createMockClient();
-          const manager = new ExportManager(client as never);
-          const actor = createMockActor();
+        const client = createMockClient();
+        const manager = new ExportManager(client as never);
+        const actor = createMockActor();
 
-          let successfulCalls = 0;
+        let successfulCalls = 0;
 
-          for (let i = 0; i < flushCount; i++) {
-            manager.queueChange(
-              actor as never,
-              "character_hit-points_current",
-              i,
-            );
-            const result = await manager.flush(actor as never);
-            if (result.success && !result.preview) {
-              successfulCalls++;
-            }
+        for (let i = 0; i < flushCount; i++) {
+          manager.queueChange(
+            actor as never,
+            "character_hit-points_current",
+            i,
+          );
+          const result = await manager.flush(actor as never);
+          if (result.success && !result.preview) {
+            successfulCalls++;
           }
+        }
 
-          // Rate limiter should cap at 30 successful API calls
-          expect(successfulCalls).toBeLessThanOrEqual(30);
-        },
-      ),
+        // Rate limiter should cap at 30 successful API calls
+        expect(successfulCalls).toBeLessThanOrEqual(30);
+      }),
       { numRuns: 100 },
     );
   });

@@ -20,7 +20,10 @@ export function getSlug(eng: DemiplaneEngineEntry): string | null {
 /**
  * Parse Demiplane sourceRow to determine Foundry feat location and level.taken.
  */
-export function parseFeatSlot(sourceRow: string): { location: string | null; taken: number | null } {
+export function parseFeatSlot(sourceRow: string): {
+  location: string | null;
+  taken: number | null;
+} {
   if (!sourceRow) return { location: null, taken: null };
 
   const levelMatch = sourceRow.match(/^(\w+)-feats?-level-(\d+)/);
@@ -34,8 +37,10 @@ export function parseFeatSlot(sourceRow: string): { location: string | null; tak
     return { location: `${type}-${level}`, taken: level };
   }
 
-  if (sourceRow === "ancestry-feats") return { location: "ancestry-1", taken: 1 };
-  if (sourceRow.includes("select-feat-")) return { location: null, taken: null };
+  if (sourceRow === "ancestry-feats")
+    return { location: "ancestry-1", taken: 1 };
+  if (sourceRow.includes("select-feat-"))
+    return { location: null, taken: null };
 
   return { location: null, taken: null };
 }
@@ -44,21 +49,50 @@ export function parseFeatSlot(sourceRow: string): { location: string | null; tak
  * Categorize a Demiplane engine entry by its path.
  */
 export function categorizeEngine(engineName: string): ItemCategory | null {
-  if (engineName.includes("/classfeature/") || engineName.includes("/class-feature/")) return "classfeature";
+  if (
+    engineName.includes("/classfeature/") ||
+    engineName.includes("/class-feature/")
+  )
+    return "classfeature";
   if (engineName.includes("/ancestry/")) return "ancestry";
   if (engineName.includes("/heritage/")) return "heritage";
   if (engineName.includes("/background/")) return "background";
-  if (engineName.includes("/class/") && !engineName.includes("/classfeature/")) return "class";
+  if (engineName.includes("/class/") && !engineName.includes("/classfeature/"))
+    return "class";
   if (engineName.includes("/feat/")) return "feat";
-  if (engineName.includes("/equipment/") || engineName.includes("/armor/") || engineName.includes("/weapon/")) return "equipment";
+  if (
+    engineName.includes("/equipment/") ||
+    engineName.includes("/armor/") ||
+    engineName.includes("/weapon/")
+  )
+    return "equipment";
   return null;
 }
 
 const CLASS_SUFFIXES = [
-  "-sorcerer", "-wizard", "-cleric", "-druid", "-bard", "-fighter",
-  "-ranger", "-rogue", "-monk", "-champion", "-barbarian", "-alchemist",
-  "-investigator", "-oracle", "-swashbuckler", "-witch", "-magus", "-summoner",
-  "-gunslinger", "-inventor", "-psychic", "-thaumaturge", "-kineticist",
+  "-sorcerer",
+  "-wizard",
+  "-cleric",
+  "-druid",
+  "-bard",
+  "-fighter",
+  "-ranger",
+  "-rogue",
+  "-monk",
+  "-champion",
+  "-barbarian",
+  "-alchemist",
+  "-investigator",
+  "-oracle",
+  "-swashbuckler",
+  "-witch",
+  "-magus",
+  "-summoner",
+  "-gunslinger",
+  "-inventor",
+  "-psychic",
+  "-thaumaturge",
+  "-kineticist",
 ];
 
 /**
@@ -78,7 +112,7 @@ export function generateSlugCandidates(slug: string): string[] {
 }
 
 const EQUIPMENT_SLUG_NORMALIZATIONS: Record<string, string> = {
-  "arrow": "arrows",
+  arrow: "arrows",
   "rations-1-week": "rations",
   "rope-50-feet": "rope",
   "repair-toolkit-basic": "repair-toolkit",

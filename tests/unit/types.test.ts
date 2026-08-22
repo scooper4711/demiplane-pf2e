@@ -5,20 +5,40 @@ describe("stampImported", () => {
   it("adds imported flag to empty item", () => {
     const item = { name: "Test", type: "feat", system: {} };
     const result = stampImported(item);
-    expect(result.flags).toEqual({ "foundry-demiplane-pf2e": { imported: true } });
+    expect(result.flags).toEqual({
+      "foundry-demiplane-pf2e": { imported: true },
+    });
   });
 
   it("preserves existing flags", () => {
-    const item = { name: "Test", type: "feat", system: {}, flags: { pf2e: { rulesSelections: {} } } };
+    const item = {
+      name: "Test",
+      type: "feat",
+      system: {},
+      flags: { pf2e: { rulesSelections: {} } },
+    };
     const result = stampImported(item);
-    expect((result.flags as Record<string, unknown>).pf2e).toEqual({ rulesSelections: {} });
-    expect((result.flags as Record<string, Record<string, unknown>>)["foundry-demiplane-pf2e"].imported).toBe(true);
+    expect((result.flags as Record<string, unknown>).pf2e).toEqual({
+      rulesSelections: {},
+    });
+    expect(
+      (result.flags as Record<string, Record<string, unknown>>)[
+        "foundry-demiplane-pf2e"
+      ].imported,
+    ).toBe(true);
   });
 
   it("preserves existing module flags", () => {
-    const item = { name: "Test", type: "feat", system: {}, flags: { "foundry-demiplane-pf2e": { other: "value" } } };
+    const item = {
+      name: "Test",
+      type: "feat",
+      system: {},
+      flags: { "foundry-demiplane-pf2e": { other: "value" } },
+    };
     const result = stampImported(item);
-    const moduleFlags = (result.flags as Record<string, Record<string, unknown>>)["foundry-demiplane-pf2e"];
+    const moduleFlags = (
+      result.flags as Record<string, Record<string, unknown>>
+    )["foundry-demiplane-pf2e"];
     expect(moduleFlags.imported).toBe(true);
     expect(moduleFlags.other).toBe("value");
   });

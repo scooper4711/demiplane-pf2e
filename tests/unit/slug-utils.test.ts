@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { toFoundrySlug, getSlug, parseFeatSlot, categorizeEngine, generateSlugCandidates, normalizeEquipmentSlug } from "../../src/import/slug-utils.js";
+import {
+  toFoundrySlug,
+  getSlug,
+  parseFeatSlot,
+  categorizeEngine,
+  generateSlugCandidates,
+  normalizeEquipmentSlug,
+} from "../../src/import/slug-utils.js";
 
 describe("toFoundrySlug", () => {
   it("strips -rm suffix", () => {
@@ -19,48 +26,84 @@ describe("toFoundrySlug", () => {
 
 describe("getSlug", () => {
   it("returns args.slug when present", () => {
-    const eng = { id: "1", name: "tabula/feat/test.eng", type: "DemiplaneEngine" as const, args: { slug: "my-feat-rm" } };
+    const eng = {
+      id: "1",
+      name: "tabula/feat/test.eng",
+      type: "DemiplaneEngine" as const,
+      args: { slug: "my-feat-rm" },
+    };
     expect(getSlug(eng)).toBe("my-feat-rm");
   });
 
   it("extracts slug from engine name when args.slug is missing", () => {
-    const eng = { id: "1", name: "tabula/ancestry/human-rm.eng", type: "DemiplaneEngine" as const, args: {} };
+    const eng = {
+      id: "1",
+      name: "tabula/ancestry/human-rm.eng",
+      type: "DemiplaneEngine" as const,
+      args: {},
+    };
     expect(getSlug(eng)).toBe("human-rm");
   });
 
   it("returns null for non-matching names", () => {
-    const eng = { id: "1", name: "core/character.eng", type: "DemiplaneEngine" as const, args: {} };
+    const eng = {
+      id: "1",
+      name: "core/character.eng",
+      type: "DemiplaneEngine" as const,
+      args: {},
+    };
     expect(getSlug(eng)).toBe("character");
   });
 });
 
 describe("parseFeatSlot", () => {
   it("parses fighter class feat", () => {
-    expect(parseFeatSlot("fighter-feat-level-2-rm")).toEqual({ location: "class-2", taken: 2 });
+    expect(parseFeatSlot("fighter-feat-level-2-rm")).toEqual({
+      location: "class-2",
+      taken: 2,
+    });
   });
 
   it("parses sorcerer class feat", () => {
-    expect(parseFeatSlot("sorcerer-feat-level-4-rm")).toEqual({ location: "class-4", taken: 4 });
+    expect(parseFeatSlot("sorcerer-feat-level-4-rm")).toEqual({
+      location: "class-4",
+      taken: 4,
+    });
   });
 
   it("parses ancestry feat", () => {
-    expect(parseFeatSlot("ancestry-feat-level-5-rm")).toEqual({ location: "ancestry-5", taken: 5 });
+    expect(parseFeatSlot("ancestry-feat-level-5-rm")).toEqual({
+      location: "ancestry-5",
+      taken: 5,
+    });
   });
 
   it("parses skill feat", () => {
-    expect(parseFeatSlot("skill-feat-level-2-rm")).toEqual({ location: "skill-2", taken: 2 });
+    expect(parseFeatSlot("skill-feat-level-2-rm")).toEqual({
+      location: "skill-2",
+      taken: 2,
+    });
   });
 
   it("parses general feat", () => {
-    expect(parseFeatSlot("general-feat-level-3-rm")).toEqual({ location: "general-3", taken: 3 });
+    expect(parseFeatSlot("general-feat-level-3-rm")).toEqual({
+      location: "general-3",
+      taken: 3,
+    });
   });
 
   it("parses ancestry-feats as level 1", () => {
-    expect(parseFeatSlot("ancestry-feats")).toEqual({ location: "ancestry-1", taken: 1 });
+    expect(parseFeatSlot("ancestry-feats")).toEqual({
+      location: "ancestry-1",
+      taken: 1,
+    });
   });
 
   it("returns null for select-feat patterns", () => {
-    expect(parseFeatSlot("select-feat-natural-ambition")).toEqual({ location: null, taken: null });
+    expect(parseFeatSlot("select-feat-natural-ambition")).toEqual({
+      location: null,
+      taken: null,
+    });
   });
 
   it("returns null for empty string", () => {
@@ -68,7 +111,10 @@ describe("parseFeatSlot", () => {
   });
 
   it("returns null for unknown patterns", () => {
-    expect(parseFeatSlot("bloodline-rm")).toEqual({ location: null, taken: null });
+    expect(parseFeatSlot("bloodline-rm")).toEqual({
+      location: null,
+      taken: null,
+    });
   });
 });
 
@@ -78,7 +124,9 @@ describe("categorizeEngine", () => {
   });
 
   it("categorizes heritage", () => {
-    expect(categorizeEngine("tabula/heritage/skilled-human-rm.eng")).toBe("heritage");
+    expect(categorizeEngine("tabula/heritage/skilled-human-rm.eng")).toBe(
+      "heritage",
+    );
   });
 
   it("categorizes class", () => {
@@ -90,7 +138,9 @@ describe("categorizeEngine", () => {
   });
 
   it("categorizes class-feature", () => {
-    expect(categorizeEngine("tabula/class-feature/imperial-rm.eng")).toBe("classfeature");
+    expect(categorizeEngine("tabula/class-feature/imperial-rm.eng")).toBe(
+      "classfeature",
+    );
   });
 
   it("returns null for spells", () => {
@@ -142,7 +192,9 @@ describe("normalizeEquipmentSlug", () => {
   });
 
   it("normalizes repair-toolkit-basic", () => {
-    expect(normalizeEquipmentSlug("repair-toolkit-basic-rm")).toBe("repair-toolkit");
+    expect(normalizeEquipmentSlug("repair-toolkit-basic-rm")).toBe(
+      "repair-toolkit",
+    );
   });
 
   it("passes through unknown slugs", () => {

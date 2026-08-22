@@ -25,7 +25,9 @@ vi.stubGlobal("ui", { windows: {} as Record<string, unknown> });
 import { SyncTabRenderer } from "../../src/sync-tab-renderer.js";
 import type { SyncTabData } from "../../src/sync-tab-renderer.js";
 
-function createBaseSyncTabData(overrides: Partial<SyncTabData> = {}): SyncTabData {
+function createBaseSyncTabData(
+  overrides: Partial<SyncTabData> = {},
+): SyncTabData {
   return {
     characterId: "abc-123",
     lastSyncTimestamp: undefined,
@@ -88,7 +90,9 @@ describe("SyncTabRenderer", () => {
 
     it("does not re-render non-ActorSheet windows", () => {
       const otherWindow = { render: vi.fn() };
-      (ui as { windows: Record<string, unknown> }).windows = { "1": otherWindow };
+      (ui as { windows: Record<string, unknown> }).windows = {
+        "1": otherWindow,
+      };
 
       SyncTabRenderer.registerSettingsHook();
       triggerHook("updateSetting", { key: "foundry-demiplane-pf2e.dryRun" });
@@ -123,7 +127,9 @@ describe("SyncTabRenderer", () => {
       const content = html.bodyContent;
       expect(content).toContain("dry-run-indicator");
       expect(content).toContain("Dry Run Mode Active");
-      expect(content).toContain("No changes will be written to Foundry or Demiplane");
+      expect(content).toContain(
+        "No changes will be written to Foundry or Demiplane",
+      );
     });
 
     it("does not render dry run banner when dryRunEnabled is false", () => {
@@ -218,17 +224,25 @@ function createMockHtml() {
   let bodyContent = "";
 
   const html = {
-    get tabsContent() { return tabsContent; },
-    get bodyContent() { return bodyContent; },
+    get tabsContent() {
+      return tabsContent;
+    },
+    get bodyContent() {
+      return bodyContent;
+    },
     find(selector: string) {
       if (selector === ".sheet-tabs") {
         return {
-          append(content: string) { tabsContent += content; },
+          append(content: string) {
+            tabsContent += content;
+          },
         };
       }
       if (selector === ".sheet-body") {
         return {
-          append(content: string) { bodyContent += content; },
+          append(content: string) {
+            bodyContent += content;
+          },
         };
       }
       return {
@@ -238,7 +252,10 @@ function createMockHtml() {
     },
   };
 
-  return html as unknown as JQuery & { tabsContent: string; bodyContent: string };
+  return html as unknown as JQuery & {
+    tabsContent: string;
+    bodyContent: string;
+  };
 }
 
 function createMockSheet() {

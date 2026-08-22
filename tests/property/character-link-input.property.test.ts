@@ -7,10 +7,25 @@ import { parseCharacterLinkInput } from "../../src/character-link-input.js";
  */
 function hexSegment(length: number): fc.Arbitrary<string> {
   const hexChar = fc.constantFrom(
-    "0", "1", "2", "3", "4", "5", "6", "7",
-    "8", "9", "a", "b", "c", "d", "e", "f",
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
   );
-  return fc.array(hexChar, { minLength: length, maxLength: length })
+  return fc
+    .array(hexChar, { minLength: length, maxLength: length })
     .map((chars) => chars.join(""));
 }
 
@@ -109,9 +124,7 @@ describe("Feature: demiplane-foundry-sync, Property 13: Character link input rej
       if (!trimmed) return false;
       if (UUID_REGEX.test(trimmed)) return false;
       if (
-        trimmed
-          .toLowerCase()
-          .startsWith(DEMIPLANE_URL_PREFIX.toLowerCase())
+        trimmed.toLowerCase().startsWith(DEMIPLANE_URL_PREFIX.toLowerCase())
       ) {
         const candidate = trimmed.slice(DEMIPLANE_URL_PREFIX.length);
         if (UUID_REGEX.test(candidate)) return false;
@@ -129,16 +142,7 @@ describe("Feature: demiplane-foundry-sync, Property 13: Character link input rej
   });
 
   it("rejects UUIDs with non-hex characters", () => {
-    const nonHexChar = fc.constantFrom(
-      "g",
-      "h",
-      "z",
-      "G",
-      "Z",
-      "!",
-      "@",
-      " ",
-    );
+    const nonHexChar = fc.constantFrom("g", "h", "z", "G", "Z", "!", "@", " ");
     const corruptedUuidArbitrary = fc
       .tuple(uuidArbitrary, fc.nat({ max: 35 }), nonHexChar)
       .map(([uuid, pos, char]) => {

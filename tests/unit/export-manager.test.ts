@@ -6,10 +6,7 @@ vi.mock("@scooper4711/demiplane-api", () => ({
       engines: { name: string; value?: unknown }[],
       storeName: string,
       value: unknown,
-    ) =>
-      engines.map((e) =>
-        e.name === storeName ? { ...e, value } : e,
-      ),
+    ) => engines.map((e) => (e.name === storeName ? { ...e, value } : e)),
   ),
 }));
 
@@ -73,8 +70,12 @@ describe("ExportManager", () => {
 
       const pending = manager.getPendingChanges("char-123");
       expect(pending).toHaveLength(2);
-      expect(pending.find((c) => c.field === "character_hit-points_current")?.value).toBe(25);
-      expect(pending.find((c) => c.field === "character_hero-points")?.value).toBe(2);
+      expect(
+        pending.find((c) => c.field === "character_hit-points_current")?.value,
+      ).toBe(25);
+      expect(
+        pending.find((c) => c.field === "character_hero-points")?.value,
+      ).toBe(2);
     });
 
     it("overwrites previous value for the same field", () => {
@@ -136,7 +137,10 @@ describe("ExportManager", () => {
 
       expect(result.success).toBe(true);
       expect(result.preview).toHaveLength(2);
-      expect(result.preview?.find((c) => c.field === "character_hit-points_current")?.value).toBe(25);
+      expect(
+        result.preview?.find((c) => c.field === "character_hit-points_current")
+          ?.value,
+      ).toBe(25);
       expect(client.updateCharacter).not.toHaveBeenCalled();
     });
 
