@@ -16,7 +16,7 @@
       "url": "https://github.com/scooper4711"
     }
   ],
-  "esmodules": ["module.js"],
+  "esmodules": ["dist/module.js"],
   "relationships": {
     "systems": [
       {

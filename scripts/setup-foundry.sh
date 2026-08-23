@@ -38,13 +38,13 @@ FOUNDRY_DIR="${FOUNDRY_PATH:-$PROJECT_ROOT/foundry-playwright/FoundryVTT-Node-14
 DATA_DIR="${FOUNDRY_DATA_PATH:-$PROJECT_ROOT/foundry-playwright/Data}"
 PORT="${FOUNDRY_PORT:-30000}"
 ADMIN_PASSWORD="${FOUNDRY_ADMIN_PASSWORD:-test-admin}"
-MODULE_ID="foundry-demiplane-pf2e"
+MODULE_ID="demiplane-pf2e"
 
 echo "=== Foundry VTT Integration Test Setup ==="
 echo "Foundry:  $FOUNDRY_DIR"
 echo "Data:     $DATA_DIR"
 echo "Port:     $PORT"
-echo "Module:   $PROJECT_ROOT/dist -> $DATA_DIR/Data/modules/$MODULE_ID"
+echo "Module:   $PROJECT_ROOT -> $DATA_DIR/Data/modules/$MODULE_ID"
 echo ""
 
 # --- Step 1: Create Data directory structure ---
@@ -71,13 +71,8 @@ if [ ! -d "$PROJECT_ROOT/dist" ]; then
   exit 1
 fi
 
-if [ ! -f "$PROJECT_ROOT/dist/module.json" ]; then
-  echo "  ERROR: dist/module.json not found. Ensure the build produces a module.json."
-  exit 1
-fi
-
-ln -s "$PROJECT_ROOT/dist" "$MODULE_LINK"
-echo "  Linked: $MODULE_LINK -> $PROJECT_ROOT/dist"
+ln -s "$PROJECT_ROOT" "$MODULE_LINK"
+echo "  Linked: $MODULE_LINK -> $PROJECT_ROOT"
 
 # --- Step 3: Verify Node version ---
 echo "[3/5] Checking Node version..."
@@ -126,19 +121,25 @@ if ! grep -q "Server started and listening" /tmp/foundry-setup.log 2>/dev/null; 
   exit 1
 fi
 
-# --- Step 5: Run Playwright setup script ---
-echo "[5/5] Running Playwright setup (license, EULA, PF2e install, world creation)..."
-echo ""
+# --- Step 5: Run Playwright setup script (if needed) ---
+WORLD_DIR="$DATA_DIR/Data/worlds/demiplane-test"
 
-FOUNDRY_PORT="$PORT" \
-FOUNDRY_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-npx playwright test scripts/setup-foundry.spec.ts --config=scripts/playwright-setup.config.ts || {
+if [ -d "$WORLD_DIR" ]; then
+  echo "[5/5] World already exists at $WORLD_DIR — skipping Playwright setup."
+else
+  echo "[5/5] Running Playwright setup (license, EULA, PF2e install, world creation)..."
   echo ""
-  echo "Setup script failed. Foundry is still running (PID: $FOUNDRY_PID)."
-  echo "You can complete setup manually at http://localhost:$PORT"
-  echo "Kill Foundry with: kill $FOUNDRY_PID"
-  exit 1
-}
+
+  FOUNDRY_PORT="$PORT" \
+  FOUNDRY_ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+  npx playwright test scripts/setup-foundry.spec.ts --config=scripts/playwright-setup.config.ts || {
+    echo ""
+    echo "Setup script failed. Foundry is still running (PID: $FOUNDRY_PID)."
+    echo "You can complete setup manually at http://localhost:$PORT"
+    echo "Kill Foundry with: kill $FOUNDRY_PID"
+    exit 1
+  }
+fi
 
 echo ""
 echo "=== Setup Complete ==="
