@@ -33,8 +33,7 @@ export interface DemiplaneEngineEntry {
   [key: string]: unknown;
 }
 
-export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "classfeature" | "equipment";
-
+export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "equipment";
 
 /** Stamp an item data object with the imported flag before creation. */
 export function stampImported(itemData: Record<string, unknown>): Record<string, unknown> {

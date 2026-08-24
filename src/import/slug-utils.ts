@@ -37,10 +37,8 @@ export function parseFeatSlot(sourceRow: string): {
     return { location: `${type}-${level}`, taken: level };
   }
 
-  if (sourceRow === "ancestry-feats")
-    return { location: "ancestry-1", taken: 1 };
-  if (sourceRow.includes("select-feat-"))
-    return { location: null, taken: null };
+  if (sourceRow === "ancestry-feats") return { location: "ancestry-1", taken: 1 };
+  if (sourceRow.includes("select-feat-")) return { location: null, taken: null };
 
   return { location: null, taken: null };
 }
@@ -49,22 +47,13 @@ export function parseFeatSlot(sourceRow: string): {
  * Categorize a Demiplane engine entry by its path.
  */
 export function categorizeEngine(engineName: string): ItemCategory | null {
-  if (
-    engineName.includes("/classfeature/") ||
-    engineName.includes("/class-feature/")
-  )
-    return "classfeature";
+  if (engineName.includes("/classfeature/") || engineName.includes("/class-feature/")) return null;
   if (engineName.includes("/ancestry/")) return "ancestry";
   if (engineName.includes("/heritage/")) return "heritage";
   if (engineName.includes("/background/")) return "background";
-  if (engineName.includes("/class/") && !engineName.includes("/classfeature/"))
-    return "class";
+  if (engineName.includes("/class/") && !engineName.includes("/classfeature/")) return "class";
   if (engineName.includes("/feat/")) return "feat";
-  if (
-    engineName.includes("/equipment/") ||
-    engineName.includes("/armor/") ||
-    engineName.includes("/weapon/")
-  )
+  if (engineName.includes("/equipment/") || engineName.includes("/armor/") || engineName.includes("/weapon/"))
     return "equipment";
   return null;
 }

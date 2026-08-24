@@ -1,9 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
-import {
-  resolveCompendiumItem,
-  resolveSlugToUuid,
-} from "../../src/import/compendium-resolver.js";
+import { resolveCompendiumItem, resolveSlugToUuid } from "../../src/import/compendium-resolver.js";
 
 describe("resolveCompendiumItem", () => {
   beforeEach(() => {
@@ -22,7 +19,7 @@ describe("resolveCompendiumItem", () => {
       ]),
       "pf2e.classfeatures": createMockPack([
         {
-          _id: "cf1",
+          _id: "bloodline1",
           name: "Bloodline: Imperial",
           system: { slug: "bloodline-imperial" },
         },
@@ -45,9 +42,7 @@ describe("resolveCompendiumItem", () => {
   it("resolves by adding bloodline prefix", async () => {
     const result = await resolveCompendiumItem("imperial-rm");
     expect(result).not.toBeNull();
-    expect((result as Record<string, unknown>).name).toBe(
-      "Bloodline: Imperial",
-    );
+    expect((result as Record<string, unknown>).name).toBe("Bloodline: Imperial");
   });
 
   it("returns null for unknown slug", async () => {
@@ -66,6 +61,13 @@ describe("resolveSlugToUuid", () => {
           system: { slug: "power-attack" },
         },
       ]),
+      "pf2e.classfeatures": createMockPack([
+        {
+          _id: "bloodline1",
+          name: "Bloodline: Imperial",
+          system: { slug: "bloodline-imperial" },
+        },
+      ]),
     });
   });
 
@@ -77,5 +79,10 @@ describe("resolveSlugToUuid", () => {
   it("returns null for unknown slug", async () => {
     const uuid = await resolveSlugToUuid("nonexistent");
     expect(uuid).toBeNull();
+  });
+
+  it("resolves a bloodline choice slug to its compendium UUID", async () => {
+    const uuid = await resolveSlugToUuid("imperial");
+    expect(uuid).toBe("Compendium.pf2e.classfeatures.Item.bloodline1");
   });
 });

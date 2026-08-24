@@ -20,7 +20,7 @@ export async function resolveCompendiumItem(demiplaneSlug: string): Promise<Reco
     for (const packKey of PACKS) {
       const pack = packs.get(packKey);
       if (!pack) continue;
-      const index = await pack.getIndex({ fields: ["system.slug"] } as never) as unknown as PackIndex;
+      const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
       const match = index.find((i) => i.system?.slug === slug);
       if (match) {
         const doc = await fromUuid(`Compendium.${packKey}.Item.${match._id}`);
@@ -37,12 +37,14 @@ export async function resolveCompendiumItem(demiplaneSlug: string): Promise<Reco
 export async function resolveSlugToUuid(foundrySlug: string): Promise<string | null> {
   const packs = getPacks();
 
-  for (const packKey of PACKS) {
-    const pack = packs.get(packKey);
-    if (!pack) continue;
-    const index = await pack.getIndex({ fields: ["system.slug"] } as never) as unknown as PackIndex;
-    const match = index.find((i) => i.system?.slug === foundrySlug);
-    if (match) return `Compendium.${packKey}.Item.${match._id}`;
+  for (const slug of generateSlugCandidates(foundrySlug)) {
+    for (const packKey of PACKS) {
+      const pack = packs.get(packKey);
+      if (!pack) continue;
+      const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
+      const match = index.find((i) => i.system?.slug === slug);
+      if (match) return `Compendium.${packKey}.Item.${match._id}`;
+    }
   }
   return null;
 }

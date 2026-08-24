@@ -124,9 +124,7 @@ describe("categorizeEngine", () => {
   });
 
   it("categorizes heritage", () => {
-    expect(categorizeEngine("tabula/heritage/skilled-human-rm.eng")).toBe(
-      "heritage",
-    );
+    expect(categorizeEngine("tabula/heritage/skilled-human-rm.eng")).toBe("heritage");
   });
 
   it("categorizes class", () => {
@@ -137,10 +135,8 @@ describe("categorizeEngine", () => {
     expect(categorizeEngine("tabula/feat/power-attack-rm.eng")).toBe("feat");
   });
 
-  it("categorizes class-feature", () => {
-    expect(categorizeEngine("tabula/class-feature/imperial-rm.eng")).toBe(
-      "classfeature",
-    );
+  it("skips class-feature engines", () => {
+    expect(categorizeEngine("tabula/class-feature/imperial-rm.eng")).toBeNull();
   });
 
   it("returns null for spells", () => {
@@ -192,9 +188,7 @@ describe("normalizeEquipmentSlug", () => {
   });
 
   it("normalizes repair-toolkit-basic", () => {
-    expect(normalizeEquipmentSlug("repair-toolkit-basic-rm")).toBe(
-      "repair-toolkit",
-    );
+    expect(normalizeEquipmentSlug("repair-toolkit-basic-rm")).toBe("repair-toolkit");
   });
 
   it("passes through unknown slugs", () => {
