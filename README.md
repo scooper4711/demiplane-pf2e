@@ -70,7 +70,18 @@ You can find this by opening your character on Demiplane and copying the URL fro
 
 In **Settings > Module Settings > Demiplane PF2e Sync**:
 
-- **Demiplane GraphQL Token** — The module needs a bearer token to access the Demiplane API. To get one: log into Demiplane in your browser, open DevTools (F12), go to the Network tab, look for any request to `apiv4.demiplane.com`, and copy the `Authorization` header value (without the "Bearer " prefix). Paste that into this setting. Each player enters their own token. In a future release, this will be replaced with simple email/password login.
+- **Demiplane GraphQL Token** — The GM must provide the shared bearer token used to access the Demiplane API. Players can use the token for imports and sync operations, but the token setting is hidden from them.
+
+### Getting the Demiplane Token
+
+1. Log in to [Demiplane Nexus](https://app.demiplane.com) in a desktop browser.
+2. Open the browser developer tools (usually **F12** or **Cmd+Option+I**) and select the **Network** tab.
+3. Open a Demiplane character sheet or refresh one that is already open.
+4. Find a request to `https://apiv4.demiplane.com/v1/graphql`.
+5. Open the request headers and copy the value of the `Authorization` header, without the `Bearer ` prefix.
+6. In Foundry, open **Settings > Module Settings > Demiplane PF2e Sync**, paste the token into **Demiplane GraphQL Token**, and save the settings.
+
+The token is stored as a world setting so players can import characters they own without seeing or entering the token. Demiplane tokens expire, so the GM must repeat these steps when imports begin reporting authentication errors. Treat the token like a password and do not share it outside the Foundry world.
 
 ## Conflict Detection (Future Work)
 
@@ -78,7 +89,7 @@ Once syncing back is implemented, the module will check whether the Demiplane ch
 
 ## Troubleshooting
 
-**"No Demiplane token configured"** — Open module settings and paste your GraphQL token. See the Configuration section above for how to grab it from your browser.
+**"No Demiplane token configured"** — Ask the GM to configure the shared GraphQL token. See the Configuration section above for how to grab it from the browser.
 
 **Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them on the Sync tab so you can add them manually.
 

@@ -1,7 +1,6 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ExportManager } from "./export-manager.js";
 
-
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
  *
@@ -40,7 +39,7 @@ export class HookManager {
       Hooks.on("updateActor", this.onActorUpdate.bind(this)),
       Hooks.on("updateItem", this.onItemUpdate.bind(this)),
       Hooks.on("createItem", this.onItemCreate.bind(this)),
-      Hooks.on("deleteItem", this.onItemDelete.bind(this)),
+      Hooks.on("deleteItem", this.onItemDelete.bind(this))
     );
   }
 
@@ -68,16 +67,32 @@ export class HookManager {
 
     const quantity = this.getNestedValue(changes, "system.quantity");
     if (quantity !== undefined && typeof quantity === "number") {
-      console.log(
-        `${MODULE_ID} | Consumable quantity changed: ${item.name} → ${String(quantity)}`,
-      );
+      console.log(`${MODULE_ID} | Consumable quantity changed: ${item.name} → ${String(quantity)}`);
     }
   }
 
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    console.log(`${MODULE_ID} | Item created on linked actor: ${item.name}`);
+    console.log(
+      `${MODULE_ID} | Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`
+    );
+  }
+
+  private getGrantedChoiceLog(item: Item): string {
+    const rules = (item.system as unknown as { rules?: unknown[] })?.rules ?? [];
+    const selections = rules
+      .filter((rule): rule is { key: string; flag?: string; selection?: unknown } => {
+        return typeof rule === "object" && rule !== null && (rule as { key?: unknown }).key === "ChoiceSet";
+      })
+      .map((rule) => {
+        const flag = rule.flag || "choice";
+        const flags = (item.flags?.pf2e as { rulesSelections?: Record<string, unknown> } | undefined)?.rulesSelections;
+        const selection = flags && Object.hasOwn(flags, flag) ? flags[flag] : rule.selection;
+        return `${flag}=${selection ?? "none"}`;
+      });
+
+    return selections.length > 0 ? selections.join(", ") : "none";
   }
 
   private onItemDelete(item: Item): void {
@@ -92,18 +107,11 @@ export class HookManager {
     return characterId !== undefined && characterId !== null;
   }
 
-  private getNestedValue(
-    obj: Record<string, unknown>,
-    path: string,
-  ): unknown {
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
     const parts = path.split(".");
     let current: unknown = obj;
     for (const part of parts) {
-      if (
-        current === null ||
-        current === undefined ||
-        typeof current !== "object"
-      ) {
+      if (current === null || current === undefined || typeof current !== "object") {
         return undefined;
       }
       current = (current as Record<string, unknown>)[part];

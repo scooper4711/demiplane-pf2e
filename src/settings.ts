@@ -33,6 +33,15 @@ export function registerSettings(): void {
     default: false,
   });
 
+  game.settings.register(MODULE_ID, "debugImport", {
+    name: "Debug Import Logging",
+    hint: "Log detailed import lifecycle information to the browser console. Useful for troubleshooting import issues.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
+  });
+
   Hooks.on("renderSettingsConfig", (_app: unknown, html: SettingsHtml) => {
     hideTokenSettingFromPlayers(html);
     addTokenValidationButton(html);

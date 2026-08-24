@@ -9,3 +9,6 @@ test-results/
 debug/
 tmp/
 .vscode/
+.github/instructions/
+.github/copilot-instructions.md
+.playwright-mcp/

@@ -33,7 +33,7 @@
   "author": "scooper4711",
   "license": "MIT",
   "dependencies": {
-    "@scooper4711/demiplane-api": "^0.1.0",
+    "@scooper4711/demiplane-api": "file:../demiplane-api",
     "tslib": "^2.8.1"
   },
   "devDependencies": {

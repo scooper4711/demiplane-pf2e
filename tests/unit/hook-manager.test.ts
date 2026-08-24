@@ -24,10 +24,7 @@ function createMockExportManager() {
   };
 }
 
-function createMockActor(
-  type: string = "character",
-  characterId: string | null = "char-uuid-1234",
-) {
+function createMockActor(type: string = "character", characterId: string | null = "char-uuid-1234") {
   return {
     type,
     name: "Test Actor",
@@ -41,10 +38,12 @@ function createMockActor(
 function createMockItem(
   actor: ReturnType<typeof createMockActor> | null,
   name = "Healing Potion",
+  data: Record<string, unknown> = {}
 ) {
   return {
     name,
     actor,
+    ...data,
   };
 }
 
@@ -79,6 +78,41 @@ describe("HookManager", () => {
     });
   });
 
+  describe("createItem hook", () => {
+    it("logs pre-selected granted choices", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const item = createMockItem(createMockActor(), "Bloodline", {
+        system: { rules: [{ key: "ChoiceSet", flag: "bloodline", selection: null }] },
+        flags: { pf2e: { rulesSelections: { bloodline: "imperial" } } },
+      });
+
+      triggerHook("createItem", item);
+
+      expect(logSpy).toHaveBeenCalledWith(
+        `${MODULE_ID} | Item created on linked actor: Bloodline; granted choices: bloodline=imperial`
+      );
+      logSpy.mockRestore();
+    });
+
+    it("logs none when no granted choices were selected", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const item = createMockItem(createMockActor(), "Class Feature", {
+        system: { rules: [{ key: "ChoiceSet", flag: "choice", selection: null }] },
+      });
+
+      triggerHook("createItem", item);
+
+      expect(logSpy).toHaveBeenCalledWith(
+        `${MODULE_ID} | Item created on linked actor: Class Feature; granted choices: choice=none`
+      );
+      logSpy.mockRestore();
+    });
+  });
+
   describe("updateActor hook — HP changes", () => {
     it("calls queueChange with character_hit-points_current when HP changes", () => {
       const manager = new HookManager(exportManager as never);
@@ -89,11 +123,7 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hit-points_current",
-        25,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 25);
     });
 
     it("calls queueChange with character_hit-points_temp when temp HP changes", () => {
@@ -105,11 +135,7 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hit-points_temp",
-        10,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 10);
     });
   });
 
@@ -123,11 +149,7 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hero-points",
-        3,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 3);
     });
 
     it("calls queueChange with character_focus_current when focus points change", () => {
@@ -139,11 +161,7 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_focus_current",
-        2,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_focus_current", 2);
     });
   });
 
@@ -161,26 +179,10 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_currency_gold",
-        50,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_currency_silver",
-        20,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_currency_copper",
-        100,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_currency_platinum",
-        5,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 50);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_silver", 20);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_copper", 100);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_platinum", 5);
     });
   });
 
@@ -228,26 +230,10 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hit-points_current",
-        20,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hit-points_temp",
-        5,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_hero-points",
-        1,
-      );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_currency_gold",
-        100,
-      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 20);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 5);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 1);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 100);
       expect(exportManager.queueChange).toHaveBeenCalledTimes(4);
     });
   });
