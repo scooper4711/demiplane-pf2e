@@ -11,13 +11,7 @@ import { CharacterLinkDialog } from "./character-link-dialog.js";
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
 let exportManager: ExportManager;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for export
-let conflictResolver: ConflictResolver;
 let hookManager: HookManager;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for sync tab
-let syncTabRenderer: SyncTabRenderer;
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- scaffolding for link dialog
-let characterLinkDialog: CharacterLinkDialog;
 
 Hooks.once("init", () => {
   console.log(`${MODULE_ID} | Initializing Demiplane PF2e Sync`);
@@ -33,10 +27,11 @@ Hooks.once("ready", async () => {
   client = new DemiplaneClient();
   importOrchestrator = new ImportOrchestrator();
   exportManager = new ExportManager(client);
-  conflictResolver = new ConflictResolver(client);
+  // Scaffolding — will be wired into module API when features are complete
+  void new ConflictResolver(client);
   hookManager = new HookManager(exportManager);
-  syncTabRenderer = new SyncTabRenderer();
-  characterLinkDialog = new CharacterLinkDialog(client);
+  void new SyncTabRenderer();
+  void new CharacterLinkDialog(client);
 
   hookManager.register();
 

@@ -112,15 +112,17 @@ export class ChoiceSetHandler {
   }
 
   private getChoiceSetPrototype(): { prototype: Record<string, unknown> } {
-    return (
+    const builtin = (
       game as unknown as {
         pf2e: {
           RuleElements: {
-            builtin: Record<string, { prototype: Record<string, unknown> }>;
+            builtin: Record<string, { prototype: Record<string, unknown> } | undefined>;
           };
         };
       }
     ).pf2e.RuleElements.builtin.ChoiceSet;
+    if (!builtin) throw new Error("ChoiceSet RuleElement not found in game.pf2e.RuleElements.builtin");
+    return builtin;
   }
 
   // eslint-disable-next-line complexity -- multi-strategy matching (skill, slug, generic, feat UUID)
@@ -292,7 +294,7 @@ export class ChoiceSetHandler {
     return null;
   }
 
-  private async resolveChildSlug(rawSlug: string, rule: Record<string, unknown>): Promise<string> {
+  private async resolveChildSlug(rawSlug: string, rule: Record<string, unknown>): Promise<string | null> {
     const childSlug = toFoundrySlug(rawSlug);
     if (this.isCompendiumChoiceSet(rule.choices)) {
       return await resolveSlugToUuid(childSlug);

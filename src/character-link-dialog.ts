@@ -2,7 +2,6 @@ import { MODULE_ID } from "./import/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
 
-
 /**
  * Renders and manages the per-actor dialog for linking a Demiplane character.
  * Accepts either a bare UUID or a full Demiplane character URL.
@@ -18,61 +17,62 @@ export class CharacterLinkDialog {
    * Opens a dialog for the user to link a Demiplane character to the given actor.
    */
   async open(actor: Actor): Promise<void> {
-    const currentId = actor.getFlag(MODULE_ID, "characterId") as
-      | string
-      | undefined;
+    const currentId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
     const content = `
-      <form class="demiplane-link-form">
-        <div class="form-group">
-          <label for="demiplane-character-input">Character UUID or Demiplane URL</label>
-          <input
-            type="text"
-            id="demiplane-character-input"
-            name="characterInput"
-            value="${currentId ?? ""}"
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..."
-          />
-          <p class="notes">Enter a Demiplane character UUID or paste the full character sheet URL.</p>
-        </div>
-      </form>
+      <div class="form-group">
+        <label for="demiplane-character-input">Character UUID or Demiplane URL</label>
+        <input
+          type="text"
+          id="demiplane-character-input"
+          name="characterInput"
+          value="${currentId ?? ""}"
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..."
+        />
+        <p class="notes">Enter a Demiplane character UUID or paste the full character sheet URL.</p>
+      </div>
     `;
 
-    new Dialog({
-      title: "Link Demiplane Character",
+    const result = await foundry.applications.api.DialogV2.wait({
+      window: { title: "Link Demiplane Character" },
       content,
-      buttons: {
-        link: {
-          icon: '<i class="fas fa-link"></i>',
+      buttons: [
+        {
+          action: "link",
           label: "Link Character",
-          callback: async (html: JQuery) => {
-            const input = html
-              .find("#demiplane-character-input")
-              .val() as string;
-            await this.handleLinkSubmission(actor, input);
+          icon: "fas fa-link",
+          default: true,
+          callback: (_event, _button, dialog) => {
+            const input = dialog.element.querySelector<HTMLInputElement>("#demiplane-character-input");
+            return input?.value ?? "";
           },
         },
-        unlink: {
-          icon: '<i class="fas fa-unlink"></i>',
+        {
+          action: "unlink",
           label: "Unlink",
+          icon: "fas fa-unlink",
           callback: async () => {
             await actor.unsetFlag(MODULE_ID, "characterId");
             ui.notifications.info("Character unlinked.");
+            return "unlinked";
           },
         },
-        cancel: {
-          icon: '<i class="fas fa-times"></i>',
+        {
+          action: "cancel",
           label: "Cancel",
+          icon: "fas fa-times",
         },
-      },
-      default: "link",
-    }).render(true);
+      ],
+    });
+
+    if (result === "cancel" || result === null) return;
+    if (result === "unlinked" || result === "unlink") return;
+
+    // The "link" callback returns the input value as a string
+    await this.handleLinkSubmission(actor, String(result));
   }
 
-  private async handleLinkSubmission(
-    actor: Actor,
-    rawInput: string,
-  ): Promise<void> {
+  private async handleLinkSubmission(actor: Actor, rawInput: string): Promise<void> {
     const parseResult = parseCharacterLinkInput(rawInput);
 
     if (!parseResult.valid) {
@@ -86,9 +86,7 @@ export class CharacterLinkDialog {
       await this.client.fetchCharacterVersion(uuid);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      ui.notifications.error(
-        `Could not access Demiplane character: ${message}`,
-      );
+      ui.notifications.error(`Could not access Demiplane character: ${message}`);
       return;
     }
 

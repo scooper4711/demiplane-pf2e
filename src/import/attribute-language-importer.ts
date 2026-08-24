@@ -7,11 +7,9 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 export async function applySkillProficiencies(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<void> {
-  const skillEngines = engines.filter(
-    (e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug,
-  );
+  const skillEngines = engines.filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug);
   if (skillEngines.length === 0) return;
 
   const profOverrides: Record<string, number> = {};
@@ -19,19 +17,20 @@ export async function applySkillProficiencies(
   for (const eng of engines) {
     if (eng.type !== "CustomDemiplaneEngine") continue;
     const overriddenMatch = eng.name.match(/^character_(.+)_prof--overridden$/);
-    if (overriddenMatch && eng.value === 1) {
+    if (overriddenMatch?.[1] && eng.value === 1) {
       overriddenFlags.add(overriddenMatch[1]);
     }
     const profMatch = eng.name.match(/^character_(.+)_prof$/);
-    if (profMatch && typeof eng.value === "number") {
+    if (profMatch?.[1] && typeof eng.value === "number") {
       profOverrides[profMatch[1]] = eng.value as number;
     }
   }
 
   const activeOverrides: Record<string, number> = {};
   for (const skill of overriddenFlags) {
-    if (skill in profOverrides) {
-      activeOverrides[skill] = profOverrides[skill];
+    const override = profOverrides[skill];
+    if (override !== undefined) {
+      activeOverrides[skill] = override;
     }
   }
 
@@ -60,7 +59,9 @@ export async function applySkillProficiencies(
 
   if (Object.keys(updates).length > 0) {
     await actor.update(updates);
-    const applied = Object.entries(updates).map(([s, r]) => `${s.replace("system.skills.","").replace(".rank","")}:${r}`).join(", ");
+    const applied = Object.entries(updates)
+      .map(([s, r]) => `${s.replace("system.skills.", "").replace(".rank", "")}:${r}`)
+      .join(", ");
     summary.log.push(`+ skills: [${applied}]`);
   }
 
@@ -74,7 +75,9 @@ export async function applySkillProficiencies(
     }
     if (Object.keys(overrideUpdates).length > 0) {
       await actor.update(overrideUpdates);
-      const applied = Object.entries(activeOverrides).map(([s, r]) => `${s}:${r}`).join(", ");
+      const applied = Object.entries(activeOverrides)
+        .map(([s, r]) => `${s}:${r}`)
+        .join(", ");
       summary.log.push(`+ skill overrides: [${applied}]`);
     }
   }
@@ -86,11 +89,9 @@ export async function applySkillProficiencies(
 export async function applyLanguages(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<void> {
-  const langEngine = engines.find(
-    (e) => e.name === "character-languages-user" && e.type === "CustomDemiplaneEngine",
-  );
+  const langEngine = engines.find((e) => e.name === "character-languages-user" && e.type === "CustomDemiplaneEngine");
   if (!langEngine || !langEngine.value || typeof langEngine.value !== "string") return;
 
   const rawLanguages = (langEngine.value as string)
@@ -99,9 +100,10 @@ export async function applyLanguages(
     .filter(Boolean);
 
   const validLanguages = Object.keys(
-    (game as unknown as { pf2e: { system: { config: { PF2E: { languages: Record<string, string> } } } } }).pf2e?.system?.config?.PF2E?.languages
-    ?? (CONFIG as unknown as { PF2E: { languages: Record<string, string> } }).PF2E?.languages
-    ?? {},
+    (game as unknown as { pf2e: { system: { config: { PF2E: { languages: Record<string, string> } } } } }).pf2e?.system
+      ?.config?.PF2E?.languages ??
+      (CONFIG as unknown as { PF2E: { languages: Record<string, string> } }).PF2E?.languages ??
+      {}
   );
 
   const matched: string[] = [];
@@ -118,7 +120,8 @@ export async function applyLanguages(
   if (matched.length > 0) {
     const currentLangs = (actor.system as { details: { languages: { value: string[] } } }).details.languages.value;
     const newLangs = [...new Set([...currentLangs, ...matched])];
-    await actor.update({ "system.details.languages.value": newLangs });
+    const langUpdate: Record<string, unknown> = { "system.details.languages.value": newLangs };
+    await actor.update(langUpdate);
     summary.log.push(`+ languages: [${matched.join(", ")}]`);
   }
 
@@ -130,19 +133,21 @@ export async function applyLanguages(
 /**
  * Imports attribute boosts from Demiplane and applies them.
  */
-// eslint-disable-next-line max-lines-per-function -- sequential boost application by category
+// eslint-disable-next-line max-lines-per-function, complexity -- sequential boost application by category, flat control flow
 export async function applyAttributeBoosts(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<void> {
-  const boostEngines = engines.filter(
-    (e) => e.name === "core/selection/attribute/boost.eng" && e.args?.slug,
-  );
+  const boostEngines = engines.filter((e) => e.name === "core/selection/attribute/boost.eng" && e.args?.slug);
 
   const attrMap: Record<string, string> = {
-    strength: "str", dexterity: "dex", constitution: "con",
-    intelligence: "int", wisdom: "wis", charisma: "cha",
+    strength: "str",
+    dexterity: "dex",
+    constitution: "con",
+    intelligence: "int",
+    wisdom: "wis",
+    charisma: "cha",
   };
 
   const ancestryBoosts: string[] = [];
@@ -162,9 +167,9 @@ export async function applyAttributeBoosts(
     } else {
       const levelMatch = sourceRow.match(/attribute-boosts-level-(\d+)/);
       if (levelMatch) {
-        const level = levelMatch[1];
+        const level = levelMatch[1] ?? "";
         if (!levelBoosts[level]) levelBoosts[level] = [];
-        levelBoosts[level].push(slug);
+        levelBoosts[level]?.push(slug);
       }
     }
   }
@@ -172,7 +177,9 @@ export async function applyAttributeBoosts(
   const ancestryItem = actor.items.find((i: { type: string }) => i.type === "ancestry");
   if (ancestryItem && ancestryBoosts.length > 0) {
     const updates: Record<string, string> = {};
-    ancestryBoosts.forEach((slug, i) => { updates[`system.boosts.${i}.selected`] = slug; });
+    ancestryBoosts.forEach((slug, i) => {
+      updates[`system.boosts.${i}.selected`] = slug;
+    });
     await ancestryItem.update(updates);
     summary.log.push(`+ boosts: ancestry [${ancestryBoosts.join(", ")}]`);
   }
@@ -180,7 +187,9 @@ export async function applyAttributeBoosts(
   const backgroundItem = actor.items.find((i: { type: string }) => i.type === "background");
   if (backgroundItem && backgroundBoosts.length > 0) {
     const updates: Record<string, string> = {};
-    backgroundBoosts.forEach((slug, i) => { updates[`system.boosts.${i}.selected`] = slug; });
+    backgroundBoosts.forEach((slug, i) => {
+      updates[`system.boosts.${i}.selected`] = slug;
+    });
     await backgroundItem.update(updates);
     summary.log.push(`+ boosts: background [${backgroundBoosts.join(", ")}]`);
   }
@@ -191,6 +200,10 @@ export async function applyAttributeBoosts(
       updates[`system.build.attributes.boosts.${level}`] = boosts;
     }
     await actor.update(updates);
-    summary.log.push(`+ boosts: levels [${Object.entries(levelBoosts).map(([l, b]) => `L${l}:${b.join(",")}`).join("; ")}]`);
+    summary.log.push(
+      `+ boosts: levels [${Object.entries(levelBoosts)
+        .map(([l, b]) => `L${l}:${b.join(",")}`)
+        .join("; ")}]`
+    );
   }
 }

@@ -8,7 +8,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 export async function applyBiography(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<void> {
   const getValue = (name: string): string | undefined => {
     const eng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
@@ -45,7 +45,9 @@ export async function applyBiography(
   if (catchphrases) updates["system.details.biography.catchphrases"] = catchphrases;
 
   const backstory = getValue("character_campaign_other");
-  if (backstory) updates["system.details.biography.backstory"] = `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+  if (backstory)
+    updates["system.details.biography.backstory"] =
+      `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
 
   // Deity — add as item from pf2e.deities compendium
   const deityName = getValue("character_personality_beliefs");
@@ -53,7 +55,7 @@ export async function applyBiography(
     const deityPack = game.packs.get("pf2e.deities");
     if (deityPack) {
       const index = await deityPack.getIndex();
-      const match = index.find((e: { name: string }) => e.name.toLowerCase() === deityName.toLowerCase());
+      const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());
       if (match) {
         const deityDoc = await deityPack.getDocument(match._id);
         if (deityDoc) {
@@ -86,10 +88,18 @@ export async function applyBiography(
   if (organizations) updates["system.details.biography.organizations"] = organizations;
 
   const edicts = getValue("character_personality_edicts");
-  if (edicts) updates["system.details.biography.edicts"] = edicts.split(/[,\n\r]+/).map((s: string) => s.trim()).filter(Boolean);
+  if (edicts)
+    updates["system.details.biography.edicts"] = edicts
+      .split(/[,\n\r]+/)
+      .map((s: string) => s.trim())
+      .filter(Boolean);
 
   const anathema = getValue("character_personality_anathema");
-  if (anathema) updates["system.details.biography.anathema"] = anathema.split(/[,\n\r]+/).map((s: string) => s.trim()).filter(Boolean);
+  if (anathema)
+    updates["system.details.biography.anathema"] = anathema
+      .split(/[,\n\r]+/)
+      .map((s: string) => s.trim())
+      .filter(Boolean);
 
   const orgPlayId = getValue("character_organizedplayid");
   if (orgPlayId) {
