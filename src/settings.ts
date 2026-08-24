@@ -97,9 +97,9 @@ async function validateDemiplaneToken(): Promise<void> {
 }
 
 async function showTokenValidationDialog(title: string, message: string): Promise<void> {
-  await Dialog.prompt({
-    title,
+  await foundry.applications.api.DialogV2.prompt({
+    window: { title },
     content: `<p>${message}</p>`,
-    label: "Close",
+    ok: { label: "Close" },
   });
 }

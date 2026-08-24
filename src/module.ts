@@ -77,21 +77,20 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
   button.innerHTML = `<i class="fa-solid fa-download" inert></i><span>Import Demiplane Character</span>`;
 
   button.addEventListener("click", async () => {
-    const input = await Dialog.prompt({
-      title: "Import Demiplane Character",
-      content: `<form><div class="form-group"><label>Demiplane Character UUID or URL</label>
-<input type="text" name="characterRef" placeholder="UUID or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..." autofocus /></div></form>`,
-      label: "Import",
-      callback: (html: HTMLElement | JQuery) => {
-        const el = html instanceof HTMLElement ? html : (html as JQuery)[0];
-        return (el.querySelector("[name=characterRef]") as HTMLInputElement)?.value ?? "";
-      },
-      rejectClose: false,
+    // DialogV2 wraps `content` in its own <form>, so only the fields are supplied
+    // here and the submitted values come back already parsed.
+    const result = await foundry.applications.api.DialogV2.input({
+      window: { title: "Import Demiplane Character" },
+      content: `<div class="form-group"><label>Demiplane Character UUID or URL</label>
+<input type="text" name="characterRef" placeholder="UUID or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..." autofocus /></div>` as foundry.applications.api.DialogV2.Content<{
+        characterRef: string;
+      }>,
+      ok: { label: "Import" },
     });
 
-    if (!input) return;
+    if (!result) return;
 
-    const characterId = extractCharacterId(input.trim());
+    const characterId = extractCharacterId(result.characterRef.trim());
     if (!characterId) {
       ui.notifications?.error("Invalid Demiplane character UUID or URL.");
       return;
@@ -149,60 +148,50 @@ function extractCharacterId(input: string): string | null {
   return match ? match[0] : null;
 }
 // Add "Update from Demiplane" to actor right-click context menu
-Hooks.on(
-  "getActorContextOptions",
-  (
-    _html: HTMLElement,
-    options: Array<{
-      name: string;
-      icon: string;
-      condition: (li: HTMLElement) => boolean;
-      callback: (li: HTMLElement) => Promise<void>;
-    }>
-  ) => {
-    options.push({
-      name: "Update from Demiplane",
-      icon: `<i class="fas fa-sync"></i>`,
-      condition: (li: HTMLElement) => {
-        const a = game.actors?.get(li.dataset.entryId ?? "", { strict: false });
-        return !!a?.getFlag(MODULE_ID, "characterId");
-      },
-      callback: async (li: HTMLElement) => {
-        const actor = game.actors?.get(li.dataset.entryId ?? "");
-        if (!actor) return;
+// Parameter types are inferred from the hook registry: v14 passes the directory
+// application (not its markup) plus the mutable context menu entries.
+Hooks.on("getActorContextOptions", (_directory, menuItems) => {
+  menuItems.push({
+    label: "Update from Demiplane",
+    icon: `<i class="fas fa-sync"></i>`,
+    visible: (li) => {
+      const actor = game.actors.get(li.dataset.entryId ?? "", { strict: false });
+      return !!actor?.getFlag(MODULE_ID, "characterId");
+    },
+    // `onClick` receives (event, target) — the reverse of the deprecated `callback`.
+    onClick: async (_event, li) => {
+      const actor = game.actors.get(li.dataset.entryId ?? "");
+      const characterId = actor?.getFlag(MODULE_ID, "characterId");
+      if (!actor || !characterId) return;
 
-        const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
-        const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
-        if (!token) {
-          ui.notifications?.error("No Demiplane token configured.");
-          return;
-        }
+      const token = game.settings.get(MODULE_ID, "demiplaneToken");
+      if (!token) {
+        ui.notifications.error("No Demiplane token configured.");
+        return;
+      }
 
-        const confirmed = await Dialog.confirm({
-          title: "Update from Demiplane",
-          content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items will be preserved.</p>`,
-        });
-        if (!confirmed) return;
+      const confirmed = await foundry.applications.api.DialogV2.confirm({
+        window: { title: "Update from Demiplane" },
+        content: `<p>This will delete all imported items on <strong>${actor.name}</strong> and re-import from Demiplane.</p><p>Manually added items will be preserved.</p>`,
+      });
+      if (!confirmed) return;
 
-        ui.notifications?.info(`Updating ${actor.name} from Demiplane...`);
+      ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-        const importedItems = actor.items.filter(
-          (i: { flags: Record<string, Record<string, unknown>> }) => i.flags?.[MODULE_ID]?.imported
+      const importedItems = actor.items.filter((item) => item.getFlag(MODULE_ID, "imported") === true);
+      if (importedItems.length > 0) {
+        await actor.deleteEmbeddedDocuments(
+          "Item",
+          importedItems.map((item) => item.id)
         );
-        if (importedItems.length > 0) {
-          await actor.deleteEmbeddedDocuments(
-            "Item",
-            importedItems.map((i: { id: string }) => i.id)
-          );
-        }
+      }
 
-        const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
-        if (summary.errors.length > 0) {
-          ui.notifications?.error(`Update errors: ${summary.errors.join("; ")}`);
-        } else {
-          ui.notifications?.info(`Updated "${actor.name}" — ${summary.itemsImported} items.`);
-        }
-      },
-    });
-  }
-);
+      const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+      if (summary.errors.length > 0) {
+        ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
+      } else {
+        ui.notifications.info(`Updated "${actor.name}" — ${summary.itemsImported} items.`);
+      }
+    },
+  });
+});
