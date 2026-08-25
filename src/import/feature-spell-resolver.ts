@@ -222,7 +222,7 @@ export async function applyFeatureGrantedSpells(
   }
 
   if (focus.length > 0) {
-    await addFeatureFocusSpells(actor, focus, summary);
+    await addFeatureFocusSpells(actor, focus, engines, summary);
   }
 
   if (focusPoints > 0) {
@@ -238,11 +238,41 @@ async function addFeatureInnateSpells(actor: Actor, spells: GrantedSpell[], summ
   await addGrantedSpellsToEntry(actor, entryId, spells, summary, "innate");
 }
 
-async function addFeatureFocusSpells(actor: Actor, spells: GrantedSpell[], summary: ImportSummary): Promise<void> {
+async function addFeatureFocusSpells(
+  actor: Actor,
+  spells: GrantedSpell[],
+  engines: DemiplaneEngineEntry[],
+  summary: ImportSummary
+): Promise<void> {
   const tradition = spells[0]?.tradition ?? "arcane";
-  const entryId = await createFeatureEntry(actor, "Focus Spells", tradition, "focus");
+  const entryName = deriveFocusEntryName(engines);
+  const entryId = await createFeatureEntry(actor, entryName, tradition, "focus");
 
   await addGrantedSpellsToEntry(actor, entryId, spells, summary, "focus");
+}
+
+function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
+  // Look for a school class feature (wizard) or patron (witch) that grants focus spells
+  const schoolEngine = engines.find(
+    (e) =>
+      e.type === "DemiplaneEngine" &&
+      (e.name?.startsWith("tabula/class-feature/school-of-") || e.name?.startsWith("tabula/class-feature/school-"))
+  );
+  if (schoolEngine?.args?.name) {
+    const schoolName = (schoolEngine.args.name as string).replace(/^School of /i, "");
+    return `${schoolName} Focus Spells`;
+  }
+
+  // Witch patron
+  const patronEngine = engines.find(
+    (e) =>
+      e.type === "DemiplaneEngine" && e.name?.startsWith("tabula/class-feature/") && e.args?.sourceRow === "patron-rm"
+  );
+  if (patronEngine?.args?.name) {
+    return `${patronEngine.args.name as string} Focus Spells`;
+  }
+
+  return "Focus Spells";
 }
 
 async function createFeatureEntry(
