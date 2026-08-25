@@ -120,6 +120,7 @@ async function createEntry(
         tradition: { value: tradition },
         proficiency: { value: 1 },
         ability: { value: ability },
+        showSlotlessLevels: { value: false },
       },
     }),
   ] as never);
@@ -288,7 +289,7 @@ export async function applySpells(
   }
 
   if (innate.length > 0) {
-    totalAdded += await importInnateSpells(actor, innate, main, summary);
+    totalAdded += await importInnateSpells(actor, innate, main, engines, summary);
   }
 
   if (totalAdded > 0) {
@@ -359,18 +360,37 @@ async function importInnateSpells(
   actor: Actor,
   innate: DemiplaneEngineEntry[],
   main: SpellGroup[],
+  engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<number> {
   const classConfig = main[0]?.config;
+  const entryName = deriveInnateEntryName(innate, engines);
   const entryId = await createEntry(
     actor,
-    "Innate Spells",
+    entryName,
     classConfig?.tradition ?? "arcane",
     "innate",
     classConfig?.ability ?? "cha"
   );
   const slugToId = await addSpells(actor, entryId, innate, summary);
   return slugToId.size;
+}
+
+function deriveInnateEntryName(innate: DemiplaneEngineEntry[], engines: DemiplaneEngineEntry[]): string {
+  // Try to find the feat that granted these innate spells
+  // sourceRow contains the parent engine ID followed by the feat slug
+  const sourceRow = innate[0]?.args?.sourceRow as string | undefined;
+  if (!sourceRow) return "Innate Spells";
+
+  // Extract the parent engine ID (first UUID in the sourceRow)
+  const parentId = sourceRow.split("_")[0];
+  if (!parentId) return "Innate Spells";
+
+  // Find the feat engine that matches
+  const feat = engines.find((e) => e.type === "DemiplaneEngine" && e.demiplaneEngineId === parentId && e.args?.name);
+
+  if (feat?.args?.name) return `${feat.args.name as string} (Innate)`;
+  return "Innate Spells";
 }
 
 // ─── Slot Maximums ───────────────────────────────────────────────────────────
@@ -383,19 +403,20 @@ async function applySlotMaximums(
   slotSlug: string,
   summary: ImportSummary
 ): Promise<void> {
-  const classEngine = engines.find((e) => e.name?.startsWith("tabula/class/"));
-  if (!classEngine) {
-    console.warn(`${MODULE_ID} | [spell-slots] No class engine found, skipping slot setup`);
+  const engineId = findEngineIdForSlots(engines, slotSlug);
+  if (!engineId) {
+    console.warn(`${MODULE_ID} | [spell-slots] No engine found for slot resolution, skipping`);
     return;
   }
 
-  const classEngineId = classEngine.id as string;
   const label = slotSlug ? `curriculum (${slotSlug})` : "regular";
-  console.warn(`${MODULE_ID} | [spell-slots] Resolving ${label} slots for feature="${parentSpellFeature}"`);
+  console.warn(
+    `${MODULE_ID} | [spell-slots] Resolving ${label} slots for feature="${parentSpellFeature}", engineId="${engineId}"`
+  );
 
   try {
     const progression = await resolveSpellSlots({
-      classEngineId,
+      classEngineId: engineId,
       characterLevel: getCharacterLevel(engines),
       engines,
       parentSpellFeature,
@@ -428,6 +449,25 @@ async function applySlotMaximums(
 function getCharacterLevel(engines: DemiplaneEngineEntry[]): number {
   const levelEngine = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
   return Number(levelEngine?.value) || 1;
+}
+
+/**
+ * Finds the correct engine ID for slot resolution.
+ * For regular slots: use the class engine.
+ * For curriculum slots: use the school class-feature engine.
+ */
+function findEngineIdForSlots(engines: DemiplaneEngineEntry[], slotSlug: string): string | null {
+  if (slotSlug) {
+    // Curriculum: find the school class-feature engine
+    const schoolEngine = engines.find(
+      (e) => e.type === "DemiplaneEngine" && e.name?.startsWith("tabula/class-feature/school-")
+    );
+    return (schoolEngine?.id as string) ?? null;
+  }
+
+  // Regular: use the class engine
+  const classEngine = engines.find((e) => e.name?.startsWith("tabula/class/"));
+  return (classEngine?.id as string) ?? null;
 }
 
 function buildSlotsUpdate(progression: {

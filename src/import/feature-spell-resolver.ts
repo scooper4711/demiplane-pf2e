@@ -259,6 +259,7 @@ async function createFeatureEntry(
         prepared: { value: preparedType },
         tradition: { value: tradition },
         proficiency: { value: 1 },
+        showSlotlessLevels: { value: false },
       },
     }),
   ] as never);
