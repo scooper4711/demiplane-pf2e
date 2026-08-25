@@ -20,6 +20,7 @@ import { applyBiography } from "./biography-importer.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
 import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
+import { applyItemSpells } from "./item-spell-resolver.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
 
 export class ImportOrchestrator {
@@ -78,6 +79,7 @@ export class ImportOrchestrator {
       await applyCurrency(actor, engines, summary);
       await applySpells(actor, engines, summary);
       await applyFeatureGrantedSpells(actor, engines, summary);
+      await applyItemSpells(actor, engines, summary);
       await this.syncSessionState(actor, engines);
     } finally {
       this.choiceSetHandler.disable();
