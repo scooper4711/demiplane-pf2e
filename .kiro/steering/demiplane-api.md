@@ -152,9 +152,12 @@ console.log(JSON.stringify(json.data.demiplane_user_character[0].data, null, 2))
 
 ## Test Characters
 
-| Character         | UUID                                   | Class    | Notes                          |
-| ----------------- | -------------------------------------- | -------- | ------------------------------ |
-| Valeros (Level 5) | `a5884413-857f-444c-a5d6-24d819632c8a` | Fighter  | Integration test reference     |
-| Seoni (player)    | `ef0d28f5-9488-48fd-8798-ecbeb9c636d2` | Sorcerer | Spontaneous caster             |
-| Ezren (player)    | `200a5cf1-3fe9-4302-94a0-6988d2a73e99` | Wizard   | Prepared caster with spellbook |
-| Bard (player)     | `56635d93-fd96-43ab-a1da-0e20060d189a` | Bard     | Occult spontaneous             |
+| Character         | UUID                                   | Class    | Notes                                             |
+| ----------------- | -------------------------------------- | -------- | ------------------------------------------------- |
+| Valeros (Level 5) | `a5884413-857f-444c-a5d6-24d819632c8a` | Fighter  | Integration test reference                        |
+| Seoni (player)    | `ef0d28f5-9488-48fd-8798-ecbeb9c636d2` | Sorcerer | Spontaneous caster                                |
+| Ezren (player)    | `200a5cf1-3fe9-4302-94a0-6988d2a73e99` | Wizard   | Prepared caster with spellbook                    |
+| Bard (player)     | `56635d93-fd96-43ab-a1da-0e20060d189a` | Bard     | Occult spontaneous                                |
+| FVTT-Wizard       | `67536b78-49c6-44a3-a456-4852410f8604` | Wizard   | Spell Blending + Ars Grammatica, curriculum slots |
+| FVTT Witch        | `4674eb29-ba46-4bd8-9bae-da98c6c7568b` | Witch    | Mosquito Witch patron, primal tradition           |
+| FVTT Bard         | `e3aced0a-2614-47ba-bbeb-82b871a7b9b4` | Bard     | Seer Elf heritage (innate Detect Magic)           |
