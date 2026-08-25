@@ -333,7 +333,7 @@ export class ImportOrchestrator {
 
     for (const item of allItems) {
       const rules = this.extractSourceRules(item);
-      const grantRules = rules.filter((r) => r.key === "GrantItem" && typeof r.uuid === "string");
+      const grantRules = rules.filter((r) => r.key === "GrantItem" && typeof r.uuid === "string" && !r.predicate);
       if (grantRules.length === 0) continue;
 
       const pf2eFlags = (item.flags?.pf2e || {}) as { rulesSelections?: Record<string, unknown> };

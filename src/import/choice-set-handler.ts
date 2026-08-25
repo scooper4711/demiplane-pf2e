@@ -75,7 +75,7 @@ export class ChoiceSetHandler {
 
       debugLog(`ChoiceSet presented choices: ${self.describeChoices(this.choices)}`);
 
-      const matched = self.findMatchInChoices(this.choices);
+      const matched = self.findMatchInChoices(this.choices, this.item.name);
       const selected = matched ?? this.choices[0];
       if (selected) {
         debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${self.describeChoice(selected)}`);
@@ -127,7 +127,8 @@ export class ChoiceSetHandler {
 
   // eslint-disable-next-line complexity -- multi-strategy matching (skill, slug, generic, feat UUID)
   private findMatchInChoices(
-    choices: Array<{ value: unknown; label: string }>
+    choices: Array<{ value: unknown; label: string }>,
+    itemName?: string
   ): { value: unknown; label: string } | null {
     const allSlugs = this.currentEngines
       .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)
@@ -202,6 +203,61 @@ export class ChoiceSetHandler {
       }
     }
 
+    // Strategy 6: generic-choice engines (e.g. "canny-acumen-save-option-will")
+    // Extract the trailing keyword from the slug and match against choice values/labels
+    const genericChoiceEngines = this.currentEngines.filter(
+      (e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-choice/") && e.args?.slug
+    );
+
+    if (genericChoiceEngines.length > 0) {
+      const keywords = genericChoiceEngines.map((e) => {
+        const slug = toFoundrySlug(e.args?.slug as string);
+        const lastSegment = slug.split("-").pop() || "";
+        return lastSegment;
+      });
+
+      debugLog(`[ChoiceSet match] Strategy 6 - generic choice keywords: [${keywords.join(", ")}]`);
+
+      for (const choice of choices) {
+        const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
+        const label = choice.label.toLowerCase();
+        for (const keyword of keywords) {
+          if (keyword && (val.includes(keyword) || label === keyword)) return choice;
+        }
+      }
+    }
+
+    // Strategy 6: generic-choice engines scoped to current item
+    // e.g. "canny-acumen-save-option-will" → keyword "will" matches choice "system.saves.will.rank"
+    if (itemName) {
+      const itemSlug = this.toChoiceSlug(itemName);
+      const scopedGenericEngines = this.currentEngines.filter(
+        (e) =>
+          e.type === "DemiplaneEngine" &&
+          e.name.includes("/generic-choice/") &&
+          e.args?.slug &&
+          toFoundrySlug(e.args.slug as string).startsWith(itemSlug)
+      );
+
+      if (scopedGenericEngines.length > 0) {
+        const keywords = scopedGenericEngines.map((e) => {
+          const slug = toFoundrySlug(e.args?.slug as string);
+          const lastSegment = slug.split("-").pop() || "";
+          return lastSegment;
+        });
+
+        debugLog(`[ChoiceSet match] Strategy 6 - generic choice for "${itemName}": keywords=[${keywords.join(", ")}]`);
+
+        for (const choice of choices) {
+          const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
+          const label = choice.label.toLowerCase();
+          for (const keyword of keywords) {
+            if (keyword && (val.includes(keyword) || label === keyword)) return choice;
+          }
+        }
+      }
+    }
+
     debugLog("[ChoiceSet match] No match found across all strategies");
     return null;
   }
@@ -271,13 +327,18 @@ export class ChoiceSetHandler {
   }
 
   private async findChoiceSelection(parentSlug: string, rule: Record<string, unknown>): Promise<string | null> {
-    const patterns = [`select-skill-${parentSlug}`, `select-feat-${parentSlug}`, `select-${parentSlug}`];
+    const patterns = [
+      `select-skill-${parentSlug}`,
+      `select-feat-${parentSlug}`,
+      `select-generic-feature-${parentSlug}`,
+      `select-${parentSlug}`,
+    ];
 
     for (const eng of this.currentEngines) {
       const sr = (eng.args?.sourceRow as string) || "";
       for (const pattern of patterns) {
         if (sr.includes(pattern) && eng.args?.slug) {
-          return this.resolveChildSlug(eng.args.slug as string, rule);
+          return this.resolveChildSlug(eng.args.slug as string, rule, eng);
         }
       }
     }
@@ -294,10 +355,19 @@ export class ChoiceSetHandler {
     return null;
   }
 
-  private async resolveChildSlug(rawSlug: string, rule: Record<string, unknown>): Promise<string | null> {
+  private async resolveChildSlug(
+    rawSlug: string,
+    rule: Record<string, unknown>,
+    eng?: DemiplaneEngineEntry
+  ): Promise<string | null> {
     const childSlug = toFoundrySlug(rawSlug);
     if (this.isCompendiumChoiceSet(rule.choices)) {
       return await resolveSlugToUuid(childSlug);
+    }
+    // For generic-feature engines, the slug is compound (e.g. "martial-disciple-rm-athletics-rm").
+    // Use the engine's args.name lowercased as the choice value (e.g. "athletics").
+    if (eng?.name.includes("/generic-feature/") && eng.args?.name) {
+      return (eng.args.name as string).toLowerCase().replace(/\s+/g, "-");
     }
     return childSlug;
   }
