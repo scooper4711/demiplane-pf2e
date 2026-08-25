@@ -6,6 +6,7 @@
  * - ChoiceSet prompts are suppressed by monkey-patching preCreate during import
  * - Feats get system.location and system.level.taken set from Demiplane sourceRow
  * - Feats granted by other feats' ChoiceSets are skipped (deduplication)
+ * - Feats granted by GrantItem rules (e.g. background → Assurance) are detected and skipped
  * - Class features are created by PF2e's native Granted rules, not imported directly
  * - Import order: ancestry → heritage → background → class (sequential), then feats (batch)
  */
@@ -53,22 +54,19 @@ export class ImportOrchestrator {
     this.choiceSetHandler.enable();
 
     try {
-      // Sequential import (ancestry, heritage, background, class)
       for (const category of ["ancestry", "heritage", "background", "class"] as ItemCategory[]) {
         for (const eng of categorized[category]) {
-          console.warn(`${MODULE_ID} | [orchestrator] Adding ${category}: slug=${eng._slug}, engine=${eng.name}`);
           await this.addItemToActor(actor, eng, category, summary);
-          console.warn(
-            `${MODULE_ID} | [orchestrator] Finished adding ${category}: slug=${eng._slug}, actor items count=${actor.items.size}`
-          );
         }
       }
 
-      // Resolve pending grants from ChoiceSet selections (e.g. Bloodline → Bloodline: Imperial)
-      await this.resolvePendingGrants(actor, summary);
+      // Resolve pending grants and exclude their slugs from the batch import
+      const grantResolvedSlugs = await this.resolvePendingGrants(actor, summary);
+      for (const slug of grantResolvedSlugs) {
+        selectionData.grantedFeatSlugs.add(slug);
+      }
 
       await this.createLoreItems(actor, engines, summary);
-
       await this.importBatchItems(actor, categorized, selectionData, summary);
 
       await this.setActorIdentity(actor, engines);
@@ -99,7 +97,7 @@ export class ImportOrchestrator {
       for (const eng of categorized[category]) {
         const slug = toFoundrySlug(eng._slug);
         if (selectionData.grantedFeatSlugs.has(slug)) {
-          summary.log.push(`~ ${category}: ${slug} (granted by ChoiceSet)`);
+          summary.log.push(`~ ${category}: ${slug} (already granted)`);
           continue;
         }
 
@@ -299,27 +297,8 @@ export class ImportOrchestrator {
   ): Promise<void> {
     const itemData = await resolveCompendiumItem(eng._slug);
     if (itemData) {
-      console.warn(
-        `${MODULE_ID} | [orchestrator] Resolved item: name=${(itemData as { name: string }).name}, type=${(itemData as { type: string }).type}, slug=${eng._slug}`
-      );
       await this.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      const presetFlags = (
-        (itemData.flags as Record<string, Record<string, unknown>>)?.pf2e as {
-          rulesSelections?: Record<string, unknown>;
-        }
-      )?.rulesSelections;
-      if (presetFlags && Object.keys(presetFlags).length > 0) {
-        console.warn(
-          `${MODULE_ID} | [orchestrator] Preset selections on ${(itemData as { name: string }).name}: ${JSON.stringify(presetFlags)}`
-        );
-      }
-      console.warn(
-        `${MODULE_ID} | [orchestrator] Calling createEmbeddedDocuments for: ${(itemData as { name: string }).name}`
-      );
       await actor.createEmbeddedDocuments("Item", [stampImported(itemData)] as never);
-      console.warn(
-        `${MODULE_ID} | [orchestrator] createEmbeddedDocuments returned for: ${(itemData as { name: string }).name}`
-      );
       summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       summary.itemsImported++;
     } else {
@@ -332,12 +311,16 @@ export class ImportOrchestrator {
    * After sequential items are added, check for items with GrantItem rules whose
    * UUID-based grants were not created (e.g. Bloodline → Bloodline: Imperial).
    *
-   * PF2e's GrantItem only resolves one level of nesting during a single
-   * createEmbeddedDocuments call. When a class (Sorcerer) grants an item (Bloodline)
-   * that itself has a GrantItem referencing a ChoiceSet selection, the nested grant
-   * doesn't fire. This method detects that case and manually adds the missing items.
+   * PF2e's GrantItem resolves grants natively during createEmbeddedDocuments in most
+   * cases. However, nested grants (a class grants an item that itself has a GrantItem
+   * referencing a ChoiceSet selection) may not fire. This method detects unfulfilled
+   * grants and manually adds the missing items.
+   *
+   * Returns the slugs of any items it created, so callers can exclude them from
+   * subsequent batch imports.
    */
-  private async resolvePendingGrants(actor: Actor, summary: ImportSummary): Promise<void> {
+  private async resolvePendingGrants(actor: Actor, summary: ImportSummary): Promise<Set<string>> {
+    const grantedSlugs = new Set<string>();
     const allItems = Array.from(actor.items) as Array<{
       name: string;
       id: string;
@@ -346,24 +329,21 @@ export class ImportOrchestrator {
       flags: Record<string, unknown>;
     }>;
 
-    console.warn(
-      `${MODULE_ID} | [orchestrator] resolvePendingGrants: scanning ${String(allItems.length)} total items on actor`
-    );
-
     for (const item of allItems) {
       const rules = this.extractSourceRules(item);
       const grantRules = rules.filter((r) => r.key === "GrantItem" && typeof r.uuid === "string");
-
-      this.logGrantRulesForItem(item, rules, grantRules);
       if (grantRules.length === 0) continue;
 
       const pf2eFlags = (item.flags?.pf2e || {}) as { rulesSelections?: Record<string, unknown> };
       const selections = pf2eFlags.rulesSelections || {};
 
       for (const rule of grantRules) {
-        await this.processGrantRule(rule, selections, item.name, actor, summary);
+        const slug = await this.processGrantRule(rule, selections, item.name, actor, summary);
+        if (slug) grantedSlugs.add(slug);
       }
     }
+
+    return grantedSlugs;
   }
 
   private extractSourceRules(item: {
@@ -374,62 +354,31 @@ export class ImportOrchestrator {
     return sourceSystem?.rules ?? item.system?.rules ?? [];
   }
 
-  private logGrantRulesForItem(
-    item: { name: string; type: string; flags: Record<string, unknown> },
-    rules: Array<Record<string, unknown>>,
-    grantRules: Array<Record<string, unknown>>
-  ): void {
-    if (grantRules.length > 0) {
-      console.warn(
-        `${MODULE_ID} | [orchestrator] resolvePendingGrants: ${item.name} (type=${item.type}) has ${String(grantRules.length)} GrantItem rules: ${grantRules.map((r) => String(r.uuid)).join(", ")}`
-      );
-    }
-
-    if (item.name === "Bloodline" || item.name.includes("Bloodline")) {
-      const pf2eFlags = (item.flags?.pf2e || {}) as Record<string, unknown>;
-      console.warn(
-        `${MODULE_ID} | [orchestrator] resolvePendingGrants DEBUG: item=${item.name}, type=${item.type}, rules count=${String(rules.length)}, GrantItem rules=${String(grantRules.length)}, flags.pf2e=${JSON.stringify(pf2eFlags)}`
-      );
-      if (rules.length > 0) {
-        console.warn(
-          `${MODULE_ID} | [orchestrator] resolvePendingGrants DEBUG: ${item.name} rule keys: ${rules.map((r) => `${String(r.key)}${r.uuid ? `(uuid=${String(r.uuid)})` : ""}`).join(", ")}`
-        );
-      }
-    }
-  }
-
   private async processGrantRule(
     rule: Record<string, unknown>,
     selections: Record<string, unknown>,
     itemName: string,
     actor: Actor,
     summary: ImportSummary
-  ): Promise<void> {
+  ): Promise<string | null> {
     const uuid = this.resolveGrantUuid(rule, selections, itemName);
-    if (!uuid) return;
+    if (!uuid) return null;
 
-    if (this.isGrantAlreadyFulfilled(actor, uuid, itemName)) return;
-
-    console.warn(`${MODULE_ID} | [orchestrator] Pending grant detected: item=${itemName}, uuid=${uuid}`);
+    if (this.isGrantAlreadyFulfilled(actor, uuid)) return null;
 
     try {
       const doc = await fromUuid(uuid);
-      if (!doc) {
-        console.warn(`${MODULE_ID} | [orchestrator] Could not resolve UUID: ${uuid}`);
-        return;
-      }
+      if (!doc) return null;
 
       const grantData = (doc as { toObject: () => Record<string, unknown> }).toObject();
-      console.warn(
-        `${MODULE_ID} | [orchestrator] Resolving pending grant: ${(grantData as { name: string }).name} from ${itemName}`
-      );
       await actor.createEmbeddedDocuments("Item", [stampImported(grantData)] as never);
       summary.log.push(`+ granted: ${(grantData as { name: string }).name} (from ${itemName})`);
       summary.itemsImported++;
-    } catch (error) {
-      console.warn(
-        `${MODULE_ID} | [orchestrator] Failed to resolve grant ${uuid}: ${error instanceof Error ? error.message : String(error)}`
-      );
+
+      const system = grantData.system as { slug?: string } | undefined;
+      return system?.slug ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -446,9 +395,6 @@ export class ImportOrchestrator {
       const resolved = selections[flag];
       if (typeof resolved === "string" && resolved.startsWith("Compendium.")) {
         uuid = resolved;
-        console.warn(
-          `${MODULE_ID} | [orchestrator] Resolved GrantItem template: {item|flags.pf2e.rulesSelections.${flag}} → ${uuid}`
-        );
       } else {
         console.warn(
           `${MODULE_ID} | [orchestrator] Cannot resolve GrantItem template on ${itemName}: flag=${flag}, value=${String(resolved)}`
@@ -460,16 +406,25 @@ export class ImportOrchestrator {
     return uuid.startsWith("Compendium.") ? uuid : null;
   }
 
-  private isGrantAlreadyFulfilled(actor: Actor, uuid: string, itemName: string): boolean {
-    const alreadyGranted = actor.items.some((existing: { flags?: Record<string, unknown> }) => {
+  /**
+   * Checks whether a grant has already been fulfilled by PF2e's native GrantItem
+   * processing during createEmbeddedDocuments. Matches against sourceId,
+   * flags.core.sourceId, and _stats.compendiumSource.
+   */
+  private isGrantAlreadyFulfilled(actor: Actor, uuid: string): boolean {
+    return actor.items.some((existing: { flags?: Record<string, unknown>; sourceId?: string }) => {
       const core = existing.flags?.core as { sourceId?: string } | undefined;
-      return core?.sourceId === uuid;
+      if (core?.sourceId === uuid) return true;
+
+      if ((existing as unknown as { sourceId?: string }).sourceId === uuid) return true;
+
+      const pf2eFlags = existing.flags?.pf2e as { grantedBy?: { id?: string } } | undefined;
+      if (pf2eFlags?.grantedBy) {
+        const src = (existing as unknown as { _stats?: { compendiumSource?: string } })._stats?.compendiumSource;
+        if (src === uuid) return true;
+      }
+
+      return false;
     });
-
-    if (alreadyGranted) {
-      console.warn(`${MODULE_ID} | [orchestrator] Grant already fulfilled: ${uuid} (from ${itemName})`);
-    }
-
-    return alreadyGranted;
   }
 }
