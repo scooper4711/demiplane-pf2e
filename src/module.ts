@@ -179,6 +179,17 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
           "Item",
           importedItems.map((item) => item.id)
         );
+        console.warn(`${MODULE_ID} | [update] Deleted ${importedItems.length} previously imported items`);
+      }
+
+      const remainingItems = actor.items.filter(() => true);
+      if (remainingItems.length > 0) {
+        console.warn(
+          `${MODULE_ID} | [update] ${remainingItems.length} items remain on actor after delete:`,
+          remainingItems.map((item) => `${item.name} (type=${item.type}, id=${item.id})`).join(", ")
+        );
+      } else {
+        console.warn(`${MODULE_ID} | [update] Actor is clean — all items deleted`);
       }
 
       const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
