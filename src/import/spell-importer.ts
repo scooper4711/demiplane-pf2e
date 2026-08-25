@@ -288,18 +288,18 @@ function getCharacterLevel(engines: DemiplaneEngineEntry[]): number {
 function buildSlotsUpdate(progression: {
   cantrips: number;
   slots: Record<number, number>;
-}): Record<string, { max: number }> {
-  const update: Record<string, { max: number }> = {};
-  update.slot0 = { max: progression.cantrips };
+}): Record<string, { max: number; value: number }> {
+  const update: Record<string, { max: number; value: number }> = {};
+  update.slot0 = { max: progression.cantrips, value: progression.cantrips };
 
   for (const [rank, count] of Object.entries(progression.slots)) {
-    update[`slot${rank}`] = { max: count };
+    update[`slot${rank}`] = { max: count, value: count };
   }
 
   return update;
 }
 /*
- * Note: Spell slots are not set during import. Demiplane computes them
- * client-side from class rules and does not expose them in the API.
- * Users should set slot max in Foundry after import.
+ * Note: On import, spell slot value is set to max (all slots available).
+ * Demiplane tracks remaining slots as session state — import of that value
+ * and export back to Demiplane is a future enhancement.
  */
