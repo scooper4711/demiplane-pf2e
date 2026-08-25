@@ -1,7 +1,8 @@
-import { stampImported } from "./types.js";
+import { stampImported, MODULE_ID } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { findSpellEngines } from "./spell-engines.js";
+import { resolveSpellSlots } from "./spell-slot-resolver.js";
 
 interface SpellcastingConfig {
   tradition: string;
@@ -55,14 +56,11 @@ const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
 function getPacks(): NonNullable<typeof game.packs> {
-  if (!game.packs)
-    throw new Error("game.packs unavailable — import called before ready");
+  if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
   return game.packs;
 }
 
-async function resolveSpell(
-  slug: string,
-): Promise<Record<string, unknown> | null> {
+async function resolveSpell(slug: string): Promise<Record<string, unknown> | null> {
   const pack = getPacks().get("pf2e.spells-srd");
   if (!pack) return null;
   const index = (await pack.getIndex({
@@ -72,9 +70,7 @@ async function resolveSpell(
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
-  return doc
-    ? (doc as { toObject: () => Record<string, unknown> }).toObject()
-    : null;
+  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
 }
 
 interface SpellGroup {
@@ -120,7 +116,7 @@ async function createEntry(
   name: string,
   tradition: string,
   preparedType: string,
-  ability: string,
+  ability: string
 ): Promise<string> {
   const created = await actor.createEmbeddedDocuments("Item", [
     stampImported({
@@ -141,7 +137,7 @@ async function addSpells(
   actor: Actor,
   entryId: string,
   spellEngines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<Map<string, string>> {
   const slugToId = new Map<string, string>();
   const spellItems: Record<string, unknown>[] = [];
@@ -168,10 +164,7 @@ async function addSpells(
   }
 
   if (spellItems.length > 0) {
-    const created = await actor.createEmbeddedDocuments(
-      "Item",
-      spellItems as never,
-    );
+    const created = await actor.createEmbeddedDocuments("Item", spellItems as never);
     for (const item of created as Array<{
       id: string;
       system: { slug: string };
@@ -186,7 +179,7 @@ async function addSpells(
 export async function applySpells(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary,
+  summary: ImportSummary
 ): Promise<void> {
   const { main, innate } = groupSpells(engines);
   if (main.length === 0 && innate.length === 0) return;
@@ -195,26 +188,21 @@ export async function applySpells(
 
   for (const group of main) {
     if (!group.config) {
-      summary.log.push(
-        `! spells: unknown source "${group.source}", skipping ${group.spellbook.length} spells`,
-      );
+      summary.log.push(`! spells: unknown source "${group.source}", skipping ${group.spellbook.length} spells`);
       continue;
     }
 
     const { tradition, preparedType, ability } = group.config;
     const entryName = `${capitalize(tradition)} ${capitalize(preparedType)} Spells`;
-    const entryId = await createEntry(
-      actor,
-      entryName,
-      tradition,
-      preparedType,
-      ability,
-    );
+    const entryId = await createEntry(actor, entryName, tradition, preparedType, ability);
 
     // For prepared casters: add entire spellbook, then set prepared slots
     // For spontaneous casters: spellbook = known repertoire (just add all)
     const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
     totalAdded += slugToId.size;
+
+    // Resolve and apply spell slot maximums
+    await applySlotMaximums(actor, entryId, engines, group.source, summary);
   }
 
   // Innate spells from feats (Adapted Cantrip, Adaptive Adept, etc.)
@@ -225,21 +213,90 @@ export async function applySpells(
       "Innate Spells",
       classConfig?.tradition ?? "arcane",
       "innate",
-      classConfig?.ability ?? "cha",
+      classConfig?.ability ?? "cha"
     );
     const slugToId = await addSpells(actor, entryId, innate, summary);
     totalAdded += slugToId.size;
   }
 
   if (totalAdded > 0) {
-    summary.log.push(
-      `+ spells: ${totalAdded} spells across ${main.length + (innate.length > 0 ? 1 : 0)} entries`,
-    );
+    summary.log.push(`+ spells: ${totalAdded} spells across ${main.length + (innate.length > 0 ? 1 : 0)} entries`);
   }
 }
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+async function applySlotMaximums(
+  actor: Actor,
+  entryId: string,
+  engines: DemiplaneEngineEntry[],
+  parentSpellFeature: string,
+  summary: ImportSummary
+): Promise<void> {
+  const classEngine = engines.find((e) => e.name?.startsWith("tabula/class/"));
+  if (!classEngine) {
+    console.warn(`${MODULE_ID} | [spell-slots] No class engine found, skipping slot setup`);
+    return;
+  }
+
+  const classEngineId = classEngine.id as string;
+  console.warn(
+    `${MODULE_ID} | [spell-slots] Resolving slots for feature="${parentSpellFeature}", classEngineId="${classEngineId}"`
+  );
+
+  try {
+    const progression = await resolveSpellSlots({
+      classEngineId,
+      characterLevel: getCharacterLevel(engines),
+      engines,
+      parentSpellFeature,
+      slotSlug: "",
+    });
+
+    console.warn(
+      `${MODULE_ID} | [spell-slots] Resolved: cantrips=${String(progression.cantrips)}, slots=${JSON.stringify(progression.slots)}`
+    );
+
+    const slotsUpdate = buildSlotsUpdate(progression);
+    console.warn(`${MODULE_ID} | [spell-slots] Applying to entry ${entryId}: ${JSON.stringify(slotsUpdate)}`);
+
+    const entry = actor.items.get(entryId);
+    if (entry) {
+      await entry.update({ system: { slots: slotsUpdate } } as never);
+      summary.log.push(
+        `+ spell-slots: cantrips=${String(progression.cantrips)}, ${Object.entries(progression.slots)
+          .map(([r, c]) => `rank${r}=${String(c)}`)
+          .join(", ")}`
+      );
+    } else {
+      console.warn(`${MODULE_ID} | [spell-slots] Entry ${entryId} not found on actor`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`${MODULE_ID} | [spell-slots] Failed to resolve slots: ${message}`);
+    summary.log.push(`! spell-slots: failed to resolve (${message})`);
+  }
+}
+
+function getCharacterLevel(engines: DemiplaneEngineEntry[]): number {
+  const levelEngine = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
+  return Number(levelEngine?.value) || 1;
+}
+
+function buildSlotsUpdate(progression: {
+  cantrips: number;
+  slots: Record<number, number>;
+}): Record<string, { max: number }> {
+  const update: Record<string, { max: number }> = {};
+  update.slot0 = { max: progression.cantrips };
+
+  for (const [rank, count] of Object.entries(progression.slots)) {
+    update[`slot${rank}`] = { max: count };
+  }
+
+  return update;
 }
 /*
  * Note: Spell slots are not set during import. Demiplane computes them
