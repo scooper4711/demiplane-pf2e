@@ -8,6 +8,8 @@ Level up on Demiplane, click update in Foundry, and you're good to go.
 
 **Players:** You already love Demiplane's character builder. Now you can use it _and_ play on Foundry without rebuilding your character by hand. Import once, and future updates are a single click.
 
+**Pathfinder Society players:** Demiplane already integrates with Roll20. With this module, you can use the same character on both Roll20 and Foundry, always kept in sync through Demiplane. Play with different GMs on different VTTs without maintaining separate character sheets.
+
 **GMs:** Your players show up with characters that just work — ancestry, feats, equipment, skills, the whole thing. No more fixing broken sheets mid-session.
 
 ## What Gets Imported
