@@ -1,0 +1,63 @@
+name: Bug Report
+description: Report a bug that is not related to character import
+labels: ["bug"]
+body:
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: A clear sequence of steps to reproduce the issue.
+      placeholder: |
+        1. Open the module settings...
+        2. Click on...
+        3. Observe that...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What actually happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Screenshots, console errors, or any other relevant details.
+    validations:
+      required: false
+
+  - type: input
+    id: foundry-version
+    attributes:
+      label: Foundry VTT version
+      placeholder: "e.g. 14.367"
+    validations:
+      required: true
+
+  - type: input
+    id: pf2e-version
+    attributes:
+      label: PF2e system version
+      placeholder: "e.g. 8.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: module-version
+    attributes:
+      label: Demiplane PF2e module version
+      placeholder: "e.g. 0.2.0-beta.3"
+    validations:
+      required: true

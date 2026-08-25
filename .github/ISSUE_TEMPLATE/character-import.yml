@@ -1,0 +1,74 @@
+name: Character Import Issue
+description: Report a problem importing a character from Demiplane Nexus
+labels: ["bug", "import"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting an import issue. Please fill out the details below so we can reproduce the problem.
+
+        **Before submitting**, please confirm:
+        - All other Foundry VTT modules are **disabled** (only the PF2e system and this module should be active).
+        - Your Demiplane character sheet sharing is set to **"Anyone with the link can view"** so we can access it.
+
+  - type: input
+    id: character-url
+    attributes:
+      label: Demiplane Character URL or UUID
+      description: The full URL to your character on Demiplane Nexus, or just the character UUID.
+      placeholder: "https://app.demiplane.com/nexus/pathfinder2e/character-sheet/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What went wrong?
+      description: Describe what you expected to happen and what actually happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actor-export
+    attributes:
+      label: Foundry Actor JSON export
+      description: |
+        After importing, right-click the actor in the Actors sidebar, select "Export Data", and attach the downloaded JSON file here.
+        This helps us see exactly what Foundry created from the import.
+      placeholder: Drag and drop the exported .json file here, or paste its contents.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: All other modules are disabled (only PF2e system + this module active)
+          required: true
+        - label: Character sheet sharing is set to "Anyone with the link can view"
+          required: true
+
+  - type: input
+    id: foundry-version
+    attributes:
+      label: Foundry VTT version
+      placeholder: "e.g. 14.367"
+    validations:
+      required: true
+
+  - type: input
+    id: pf2e-version
+    attributes:
+      label: PF2e system version
+      placeholder: "e.g. 8.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: module-version
+    attributes:
+      label: Demiplane PF2e module version
+      placeholder: "e.g. 0.2.0-beta.3"
+    validations:
+      required: true
