@@ -36,7 +36,8 @@ async function showDemiplaneInfoDialog(
   const lastExportDisplay = lastExport ? new Date(lastExport).toLocaleString() : "Never";
 
   const manualItems = actor.items.filter((item) => {
-    return item.getFlag(MODULE_ID, "imported") !== true;
+    const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
+    return moduleFlags === undefined;
   });
   const manualItemsSection = buildManualItemsSection(manualItems);
 
@@ -94,7 +95,10 @@ async function performUpdate(actor: Actor, characterId: string, importOrchestrat
 
   ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-  const importedItems = actor.items.filter((item) => item.getFlag(MODULE_ID, "imported") === true);
+  const importedItems = actor.items.filter((item) => {
+    const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
+    return moduleFlags !== undefined;
+  });
   if (importedItems.length > 0) {
     await actor.deleteEmbeddedDocuments(
       "Item",

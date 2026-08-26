@@ -172,7 +172,10 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
 
       ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-      const importedItems = actor.items.filter((item) => item.getFlag(MODULE_ID, "imported") === true);
+      const importedItems = actor.items.filter((item) => {
+        const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
+        return moduleFlags !== undefined;
+      });
       if (importedItems.length > 0) {
         await actor.deleteEmbeddedDocuments(
           "Item",
