@@ -8,7 +8,7 @@ interface SettingsHtml extends HTMLElement {
 export function registerSettings(): void {
   game.settings.register(MODULE_ID, "autoSync", {
     name: "Auto-sync on Actor Update",
-    hint: "Automatically push HP, currency, and consumable changes back to Demiplane",
+    hint: "Automatically push current HP, temporary HP, and hero points back to Demiplane",
     scope: "world",
     config: true,
     type: Boolean,

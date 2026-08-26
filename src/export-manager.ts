@@ -1,6 +1,6 @@
 import { MODULE_ID } from "./import/types.js";
-import type { DemiplaneClient, CharacterEngine } from "@scooper4711/demiplane-api";
-import { updateCustomEngineValue } from "@scooper4711/demiplane-api";
+import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
+import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 
 const DEBOUNCE_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -24,6 +24,19 @@ export interface ExportResult {
   preview?: PendingChange[];
 }
 
+interface CharacterMetadata {
+  name?: string | undefined;
+  level?: number | undefined;
+  avatarUrl?: string | undefined;
+  viewPermission?: number | undefined;
+  editPermission?: number | undefined;
+}
+
+interface FetchedCharacter {
+  data: CharacterData;
+  meta: CharacterMetadata;
+}
+
 /**
  * Handles debounced session state export from Foundry to Demiplane.
  *
@@ -37,12 +50,29 @@ export class ExportManager {
   private readonly pendingChanges: Map<string, Map<string, PendingChange>> = new Map();
   private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly apiCallTimestamps: Map<string, number[]> = new Map();
+  private suspended = false;
 
   constructor(client: DemiplaneClient) {
     this.client = client;
   }
 
+  /**
+   * Drops pending exports while import rewrites actor session state, so those
+   * Foundry updates are not pushed back to Demiplane mid-import.
+   */
+  suspend(): void {
+    this.suspended = true;
+    this.clearDebounceTimers();
+    this.pendingChanges.clear();
+  }
+
+  resume(): void {
+    this.suspended = false;
+  }
+
   queueChange(actor: Actor, field: string, value: number): void {
+    if (this.suspended) return;
+
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
 
@@ -70,12 +100,14 @@ export class ExportManager {
   }
 
   async flush(actor: Actor, options: ExportOptions = {}): Promise<ExportResult> {
-    const { dryRun = false } = options;
+    const dryRun = this.resolveDryRun(options);
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
     }
+
+    this.clearDebounceTimer(characterId);
 
     const changes = this.pendingChanges.get(characterId);
     if (!changes || changes.size === 0) {
@@ -96,12 +128,18 @@ export class ExportManager {
       };
     }
 
-    const updatedEngines = await this.buildUpdatedEngines(characterId, changes);
-    if (!updatedEngines) {
-      return { success: false, error: this.lastFetchError };
+    if (!this.client.isAuthenticated()) {
+      const error = "No Demiplane token configured. Ask your GM to set it in module settings.";
+      this.notifyFailure(error);
+      return { success: false, error };
     }
 
-    const result = await this.pushWithRetry(characterId, updatedEngines);
+    const fetched = await this.buildUpdatedCharacterData(characterId, changes);
+    if (!fetched) {
+      return { success: false, error: "Failed to fetch character data" };
+    }
+
+    const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
     return result;
   }
@@ -116,27 +154,58 @@ export class ExportManager {
     return changes !== undefined && changes.size > 0;
   }
 
-  private lastFetchError = "";
+  private resolveDryRun(options: ExportOptions): boolean {
+    if (options.dryRun !== undefined) return options.dryRun;
+    if (typeof game === "undefined") return false;
+    return game.settings.get(MODULE_ID, "dryRun");
+  }
 
-  private async buildUpdatedEngines(
+  private clearDebounceTimer(characterId: string): void {
+    const timer = this.debounceTimers.get(characterId);
+    if (!timer) return;
+    clearTimeout(timer);
+    this.debounceTimers.delete(characterId);
+  }
+
+  private clearDebounceTimers(): void {
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.debounceTimers.clear();
+  }
+
+  private async buildUpdatedCharacterData(
     characterId: string,
     changes: Map<string, PendingChange>
-  ): Promise<CharacterEngine[] | null> {
-    let engines: CharacterEngine[];
+  ): Promise<FetchedCharacter | null> {
+    let fetched: CharacterData;
     try {
-      const data = await this.client.fetchCharacterData(characterId);
-      engines = data.engines;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.lastFetchError = `Failed to fetch character data: ${message}`;
+      fetched = await this.client.fetchCharacterData(characterId);
+    } catch {
       return null;
     }
 
-    let updatedEngines = engines;
+    let updatedEngines: CustomEngine[] = fetched.engines as CustomEngine[];
     for (const change of changes.values()) {
-      updatedEngines = updateCustomEngineValue(updatedEngines, change.field, change.value);
+      const existing = findCustomEngineByName(fetched.engines, change.field);
+      if (existing) {
+        updatedEngines = updatedEngines.map((e) => (e === existing ? { ...e, value: change.value } : e));
+      }
     }
-    return updatedEngines;
+
+    return {
+      data: {
+        engines: updatedEngines,
+        engineCacheIdsBySource: fetched.engineCacheIdsBySource ?? {},
+      },
+      meta: {
+        name: fetched.name,
+        level: fetched.level,
+        avatarUrl: fetched.avatarUrl,
+        viewPermission: fetched.viewPermission,
+        editPermission: fetched.editPermission,
+      },
+    };
   }
 
   private async handlePushResult(result: ExportResult, characterId: string, actor: Actor): Promise<void> {
@@ -179,7 +248,7 @@ export class ExportManager {
     this.apiCallTimestamps.set(characterId, timestamps);
   }
 
-  private async pushWithRetry(characterId: string, updatedEngines: CharacterEngine[]): Promise<ExportResult> {
+  private async pushWithRetry(characterId: string, fetched: FetchedCharacter): Promise<ExportResult> {
     let lastError: string | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -189,21 +258,20 @@ export class ExportManager {
       }
 
       try {
-        const success = await this.client.updateCharacter({
+        const response = await this.client.updateCharacter({
           id: characterId,
-          data: {
-            engines: updatedEngines,
-            engineCacheIdsBySource: {},
-          },
+          data: fetched.data,
+          ...fetched.meta,
         });
 
-        if (success) {
+        if (response.success) {
           return { success: true };
         }
 
-        lastError = "Mutation returned success: false";
+        lastError = response.message ?? "Mutation returned success: false";
       } catch (error: unknown) {
         lastError = error instanceof Error ? error.message : String(error);
+        console.error(`${MODULE_ID} | Push attempt ${attempt + 1} threw:`, lastError);
       }
     }
 

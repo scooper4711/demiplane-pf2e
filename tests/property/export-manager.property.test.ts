@@ -40,6 +40,7 @@ function createMockClient(overrides = {}) {
       ],
     }),
     updateCharacter: vi.fn().mockResolvedValue(true),
+    isAuthenticated: vi.fn().mockReturnValue(true),
     ...overrides,
   };
 }

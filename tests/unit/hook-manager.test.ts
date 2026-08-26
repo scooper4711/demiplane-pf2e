@@ -14,9 +14,19 @@ vi.stubGlobal("Hooks", {
   off: vi.fn(),
 });
 
-import { HookManager } from "../../src/hook-manager.js";
+vi.stubGlobal("game", {
+  settings: {
+    get: (_moduleId: string, key: string) => {
+      if (key === "autoSync") return autoSyncEnabled;
+      return undefined;
+    },
+  },
+});
+
+import { HookManager, queueCombatResourceChanges } from "../../src/hook-manager.js";
 
 const MODULE_ID = "demiplane-pf2e";
+let autoSyncEnabled = true;
 
 function createMockExportManager() {
   return {
@@ -59,6 +69,7 @@ describe("HookManager", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    autoSyncEnabled = true;
     for (const key of Object.keys(hookRegistry)) {
       delete hookRegistry[key];
     }
@@ -136,6 +147,18 @@ describe("HookManager", () => {
       triggerHook("updateActor", actor, changes);
 
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 10);
+    });
+
+    it("reads dotted-path HP updates from Foundry change payloads", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = { "system.attributes.hp.value": 18 };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 18);
     });
   });
 
@@ -257,6 +280,44 @@ describe("HookManager", () => {
     });
   });
 
+  describe("updateActor hook — autoSync disabled", () => {
+    it("does not queue changes when autoSync is off", () => {
+      autoSyncEnabled = false;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = {
+        system: {
+          attributes: { hp: { value: 20, temp: 5 } },
+          resources: { heroPoints: { value: 1 } },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("queueCombatResourceChanges", () => {
+    it("queues current HP, temp HP, and hero points from the actor", () => {
+      const actor = {
+        ...createMockActor(),
+        system: {
+          attributes: { hp: { value: 22, temp: 4 } },
+          resources: { heroPoints: { value: 2 } },
+        },
+      };
+
+      queueCombatResourceChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 22);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 4);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 2);
+    });
+  });
+
   describe("unregister removes hooks", () => {
     it("calls Hooks.off for all registered hook IDs", () => {
       const manager = new HookManager(exportManager as never);
@@ -264,6 +325,10 @@ describe("HookManager", () => {
       manager.unregister();
 
       expect(Hooks.off).toHaveBeenCalledTimes(4);
+      expect(Hooks.off).toHaveBeenCalledWith("updateActor", expect.any(Number));
+      expect(Hooks.off).toHaveBeenCalledWith("updateItem", expect.any(Number));
+      expect(Hooks.off).toHaveBeenCalledWith("createItem", expect.any(Number));
+      expect(Hooks.off).toHaveBeenCalledWith("deleteItem", expect.any(Number));
     });
   });
 });

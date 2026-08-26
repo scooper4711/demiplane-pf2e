@@ -20,6 +20,31 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
 };
 
 /**
+ * Queues current HP, temporary HP, and hero points from a linked actor
+ * so they can be flushed immediately (manual push / exportNow).
+ */
+export function queueCombatResourceChanges(exportManager: ExportManager, actor: Actor): void {
+  const hitPoints = actor.system.attributes?.hp;
+  if (typeof hitPoints?.value === "number") {
+    exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
+  }
+  if (typeof hitPoints?.temp === "number") {
+    exportManager.queueChange(actor, "character_hit-points_temp", hitPoints.temp);
+  }
+  const heroPoints = actor.system.resources?.heroPoints?.value;
+  if (typeof heroPoints === "number") {
+    exportManager.queueChange(actor, "character_hero-points", heroPoints);
+  }
+}
+
+type ActorSyncHook = "updateActor" | "updateItem" | "createItem" | "deleteItem";
+
+interface RegisteredHook {
+  event: ActorSyncHook;
+  id: number;
+}
+
+/**
  * Manages Foundry hooks for detecting session state changes on linked actors
  * and queueing them for export to Demiplane.
  *
@@ -28,33 +53,34 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
  */
 export class HookManager {
   private readonly exportManager: ExportManager;
-  private hookIds: number[] = [];
+  private hooks: RegisteredHook[] = [];
 
   constructor(exportManager: ExportManager) {
     this.exportManager = exportManager;
   }
 
   register(): void {
-    this.hookIds.push(
-      Hooks.on("updateActor", this.onActorUpdate.bind(this)),
-      Hooks.on("updateItem", this.onItemUpdate.bind(this)),
-      Hooks.on("createItem", this.onItemCreate.bind(this)),
-      Hooks.on("deleteItem", this.onItemDelete.bind(this))
+    this.hooks.push(
+      { event: "updateActor", id: Hooks.on("updateActor", this.onActorUpdate.bind(this)) },
+      { event: "updateItem", id: Hooks.on("updateItem", this.onItemUpdate.bind(this)) },
+      { event: "createItem", id: Hooks.on("createItem", this.onItemCreate.bind(this)) },
+      { event: "deleteItem", id: Hooks.on("deleteItem", this.onItemDelete.bind(this)) }
     );
   }
 
   unregister(): void {
-    for (const id of this.hookIds) {
-      Hooks.off("updateActor", id);
+    for (const hook of this.hooks) {
+      Hooks.off(hook.event, hook.id);
     }
-    this.hookIds = [];
+    this.hooks = [];
   }
 
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {
     if (!this.isLinkedCharacterActor(actor)) return;
+    if (!game.settings.get(MODULE_ID, "autoSync")) return;
 
     for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
-      const value = this.getNestedValue(changes, actorPath);
+      const value = this.getChangeValue(changes, actorPath);
       if (value !== undefined && typeof value === "number") {
         this.exportManager.queueChange(actor, storeName, value);
       }
@@ -105,6 +131,12 @@ export class HookManager {
     if (actor.type !== "character") return false;
     const characterId = actor.getFlag(MODULE_ID, "characterId");
     return characterId !== undefined && characterId !== null;
+  }
+
+  private getChangeValue(changes: Record<string, unknown>, path: string): unknown {
+    const nested = this.getNestedValue(changes, path);
+    if (nested !== undefined) return nested;
+    return changes[path];
   }
 
   private getNestedValue(obj: Record<string, unknown>, path: string): unknown {

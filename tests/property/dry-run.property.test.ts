@@ -40,6 +40,7 @@ function createMockClient() {
     }),
     fetchCharacterVersion: vi.fn().mockResolvedValue({ version: 5 }),
     updateCharacter: vi.fn().mockResolvedValue(true),
+    isAuthenticated: vi.fn().mockReturnValue(true),
   };
 }
 

@@ -3,7 +3,7 @@ import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { ExportManager } from "./export-manager.js";
-import { HookManager } from "./hook-manager.js";
+import { HookManager, queueCombatResourceChanges } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
@@ -25,6 +25,11 @@ Hooks.once("ready", async () => {
   await showPreReleaseWarning();
 
   client = new DemiplaneClient();
+  const storedToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+  if (storedToken) {
+    client.setToken(storedToken);
+  }
+
   importOrchestrator = new ImportOrchestrator();
   exportManager = new ExportManager(client);
   hookManager = new HookManager(exportManager);
@@ -32,7 +37,17 @@ Hooks.once("ready", async () => {
   void new CharacterLinkDialog(client);
 
   hookManager.register();
-  registerDemiplaneInfoButton(importOrchestrator);
+  registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
+
+  // Keep the client token in sync when the setting changes
+  Hooks.on("updateSetting", (setting: { key: string }) => {
+    if (setting.key === `${MODULE_ID}.demiplaneToken`) {
+      const newToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+      if (newToken) {
+        client.setToken(newToken);
+      }
+    }
+  });
 
   // Expose module API for external access and testing
   const module = game.modules.get(MODULE_ID);
@@ -49,9 +64,9 @@ Hooks.once("ready", async () => {
           ui.notifications.error("No Demiplane token configured. Set it in module settings.");
           return null;
         }
-        const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
-        return summary;
+        return importLinkedCharacter(actor, characterId, token);
       },
+      exportNow: (actor: Actor) => exportLinkedCharacter(actor),
       getOrchestrator: () => importOrchestrator,
       getClient: () => client,
     };
@@ -102,7 +117,7 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
     if (!actor) return;
 
     await actor.setFlag(MODULE_ID, "characterId", characterId);
-    const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+    const summary = await importLinkedCharacter(actor, characterId, token);
 
     if (summary.errors.length > 0) {
       ui.notifications?.error(`Import errors: ${summary.errors.join("; ")}`);
@@ -140,6 +155,30 @@ function extractCharacterId(input: string): string | null {
   const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
   const match = input.match(uuidPattern);
   return match ? match[0] : null;
+}
+
+async function importLinkedCharacter(actor: Actor, characterId: string, token: string) {
+  exportManager.suspend();
+  try {
+    return await importOrchestrator.importCharacter(actor, characterId, { token });
+  } finally {
+    exportManager.resume();
+  }
+}
+
+async function exportLinkedCharacter(actor: Actor) {
+  queueCombatResourceChanges(exportManager, actor);
+  const dryRun = game.settings.get(MODULE_ID, "dryRun");
+  const result = await exportManager.flush(actor, { dryRun });
+  if (dryRun) {
+    const count = result.preview?.length ?? 0;
+    ui.notifications.info(`Dry run: would push ${String(count)} field(s) to Demiplane.`);
+    return result;
+  }
+  if (result.success) {
+    ui.notifications.info(`Pushed HP and hero points for "${actor.name}" to Demiplane.`);
+  }
+  return result;
 }
 // Add "Update from Demiplane" to actor right-click context menu
 // Parameter types are inferred from the hook registry: v14 passes the directory
@@ -194,7 +233,7 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
         console.warn(`${MODULE_ID} | [update] Actor is clean — all items deleted`);
       }
 
-      const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+      const summary = await importLinkedCharacter(actor, characterId, token);
       if (summary.errors.length > 0) {
         ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
       } else {

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@scooper4711/demiplane-api", () => ({
-  updateCustomEngineValue: vi.fn((engines: { name: string; value?: unknown }[], storeName: string, value: unknown) =>
-    engines.map((e) => (e.name === storeName ? { ...e, value } : e))
+  findCustomEngineByName: vi.fn(
+    (engines: { name: string; type: string; value?: unknown; id?: string }[], storeName: string) =>
+      engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === storeName)
   ),
 }));
 
@@ -27,18 +28,35 @@ function createMockClient(overrides = {}) {
     fetchCharacterData: vi.fn().mockResolvedValue({
       engines: [
         {
-          id: "eng-1",
+          id: "eng-hp",
           name: "character_hit-points_current",
           value: 30,
           type: "CustomDemiplaneEngine",
           saveType: "CharacterSheet",
           storeType: "override",
-          demiplaneEngineId: "de-1",
+          demiplaneEngineId: "de-hp",
+          args: { id: null },
+        },
+        {
+          id: "eng-hero",
+          name: "character_hero-points",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hero",
           args: { id: null },
         },
       ],
+      engineCacheIdsBySource: { "pathfinder2e-v2": ["eng-hp", "eng-hero"] },
+      name: "Test Character",
+      level: 5,
+      avatarUrl: "https://example.com/avatar.png",
+      viewPermission: 0,
+      editPermission: 0,
     }),
-    updateCharacter: vi.fn().mockResolvedValue(true),
+    updateCharacter: vi.fn().mockResolvedValue({ success: true, message: null, result: null }),
+    isAuthenticated: vi.fn().mockReturnValue(true),
     ...overrides,
   };
 }
@@ -104,13 +122,13 @@ describe("ExportManager", () => {
 
       // Only 3000ms total, but timer was reset at 1500ms.
       // At this point only 1500ms since last change — no flush yet.
-      expect(client.fetchCharacterData).not.toHaveBeenCalled();
+      expect(client.updateCharacter).not.toHaveBeenCalled();
 
       vi.advanceTimersByTime(600);
       await vi.runAllTimersAsync();
 
       // After the debounce fires, flush is called
-      expect(client.fetchCharacterData).toHaveBeenCalled();
+      expect(client.updateCharacter).toHaveBeenCalled();
     });
   });
 
@@ -161,7 +179,7 @@ describe("ExportManager", () => {
   describe("flush retains pending changes on failure", () => {
     it("keeps pending changes when all retries fail", async () => {
       const client = createMockClient({
-        updateCharacter: vi.fn().mockResolvedValue(false),
+        updateCharacter: vi.fn().mockResolvedValue({ success: false, message: "test error", result: null }),
       });
       const manager = new ExportManager(client as never);
       const actor = createMockActor();
@@ -181,7 +199,7 @@ describe("ExportManager", () => {
 
     it("displays ui.notifications.error on failure", async () => {
       const client = createMockClient({
-        updateCharacter: vi.fn().mockResolvedValue(false),
+        updateCharacter: vi.fn().mockResolvedValue({ success: false, message: "test error", result: null }),
       });
       const manager = new ExportManager(client as never);
       const actor = createMockActor();
@@ -226,7 +244,7 @@ describe("ExportManager", () => {
       let callCount = 0;
       const updateMock = vi.fn().mockImplementation(() => {
         callCount++;
-        return Promise.resolve(callCount >= 4);
+        return Promise.resolve({ success: callCount >= 4, message: null, result: null });
       });
 
       const client = createMockClient({
@@ -252,7 +270,7 @@ describe("ExportManager", () => {
 
     it("fails after all retry attempts are exhausted", async () => {
       const client = createMockClient({
-        updateCharacter: vi.fn().mockResolvedValue(false),
+        updateCharacter: vi.fn().mockResolvedValue({ success: false, message: "test error", result: null }),
       });
       const manager = new ExportManager(client as never);
       const actor = createMockActor();
@@ -283,6 +301,70 @@ describe("ExportManager", () => {
       expect(result.success).toBe(true);
       expect(client.updateCharacter).toHaveBeenCalledTimes(1);
     });
+
+    it("sends all engines with updated values for changed fields", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      await manager.flush(actor as never);
+
+      expect(client.fetchCharacterData).toHaveBeenCalledWith("char-123");
+      expect(client.updateCharacter).toHaveBeenCalledWith({
+        id: "char-123",
+        data: {
+          engineCacheIdsBySource: { "pathfinder2e-v2": ["eng-hp", "eng-hero"] },
+          engines: [
+            {
+              id: "eng-hp",
+              name: "character_hit-points_current",
+              value: 25,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-hp",
+              args: { id: null },
+            },
+            {
+              id: "eng-hero",
+              name: "character_hero-points",
+              value: 1,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-hero",
+              args: { id: null },
+            },
+          ],
+        },
+        name: "Test Character",
+        level: 5,
+        avatarUrl: "https://example.com/avatar.png",
+        viewPermission: 0,
+        editPermission: 0,
+      });
+    });
+
+    it("batches multiple changed fields into a single payload", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      manager.queueChange(actor as never, "character_hero-points", 2);
+      await manager.flush(actor as never);
+
+      expect(client.updateCharacter).toHaveBeenCalledTimes(1);
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(payload.data.engines).toHaveLength(2);
+      expect(payload.data.engines.map((e: { name: string }) => e.name)).toEqual(
+        expect.arrayContaining(["character_hit-points_current", "character_hero-points"])
+      );
+      expect(payload.data.engines.map((e: { id: string }) => e.id)).toEqual(
+        expect.arrayContaining(["eng-hp", "eng-hero"])
+      );
+    });
   });
 
   describe("flush with no pending changes", () => {
@@ -311,6 +393,45 @@ describe("ExportManager", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("no linked character ID");
+    });
+  });
+
+  describe("flush without authentication", () => {
+    it("returns an error and notifies the user when no token is configured", async () => {
+      const client = createMockClient({
+        isAuthenticated: vi.fn().mockReturnValue(false),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("No Demiplane token");
+      expect(client.updateCharacter).not.toHaveBeenCalled();
+      expect(ui.notifications.error).toHaveBeenCalledWith(expect.stringContaining("Demiplane sync failed"));
+    });
+  });
+
+  describe("suspend during import", () => {
+    it("ignores queued changes and drops pending state while suspended", () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      expect(manager.hasPendingChanges("char-123")).toBe(true);
+
+      manager.suspend();
+      expect(manager.hasPendingChanges("char-123")).toBe(false);
+
+      manager.queueChange(actor as never, "character_hero-points", 2);
+      expect(manager.hasPendingChanges("char-123")).toBe(false);
+
+      manager.resume();
+      manager.queueChange(actor as never, "character_hero-points", 3);
+      expect(manager.hasPendingChanges("char-123")).toBe(true);
     });
   });
 });

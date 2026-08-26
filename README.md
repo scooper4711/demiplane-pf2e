@@ -25,17 +25,23 @@ Level up on Demiplane, click update in Foundry, and you're good to go.
 
 The import builds your character the same way as if you dragged and dropped each item onto the sheet yourself. It doesn't mess with internal structures or take shortcuts, which means you're far less likely to hit weird errors during play that only happen with imported characters.
 
-## Syncing Back to Demiplane (Future Work)
+## Syncing Back to Demiplane
 
-This isn't implemented yet, but it's on the roadmap. The plan is for the module to watch for changes during play and push them back to Demiplane so your character sheet stays current without you thinking about it. Planned sync targets:
+The module can push session state from Foundry back to the linked Demiplane sheet:
 
-- HP and temporary HP
+- Current hit points
+- Temporary hit points
 - Hero points
+
+Turn on **Auto-sync on Actor Update** in module settings to push those fields automatically (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push HP to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
+
+Dry run mode previews a push without writing to Demiplane.
+
+Still on the roadmap:
+
 - Focus points
 - Currency (gold, silver, copper, platinum)
 - Inventory changes (items gained, spent, or lost during a session)
-
-For now, the module is import-only. Syncing back is coming.
 
 ## How It Works
 

@@ -1,5 +1,8 @@
 import { MODULE_ID } from "./import/types.js";
-import type { ImportOrchestrator } from "./import/index.js";
+import type { ImportSummary } from "./import/types.js";
+
+type ImportCharacterFn = (actor: Actor, characterId: string, token: string) => Promise<ImportSummary>;
+type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
 
 const DEMIPLANE_SHEET_BASE = "https://app.demiplane.com/nexus/pathfinder2e/character-sheet";
 const KOFI_URL = "https://ko-fi.com/coop207627";
@@ -8,7 +11,10 @@ const KOFI_URL = "https://ko-fi.com/coop207627";
  * Registers a header button on linked actor sheets that opens
  * a Demiplane info dialog with sync actions and useful links.
  */
-export function registerDemiplaneInfoButton(importOrchestrator: ImportOrchestrator): void {
+export function registerDemiplaneInfoButton(
+  importCharacter: ImportCharacterFn,
+  exportCharacter: ExportCharacterFn
+): void {
   Hooks.on("getActorSheetHeaderButtons", (sheet: ActorSheet, buttons: Application.HeaderButton[]) => {
     const actor = sheet.actor;
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
@@ -19,7 +25,7 @@ export function registerDemiplaneInfoButton(importOrchestrator: ImportOrchestrat
       class: "demiplane-info-btn",
       icon: "fa-solid fa-link",
       tooltip: "Linked to Demiplane",
-      onclick: () => showDemiplaneInfoDialog(actor, characterId, importOrchestrator),
+      onclick: () => showDemiplaneInfoDialog(actor, characterId, importCharacter, exportCharacter),
     });
   });
 }
@@ -27,7 +33,8 @@ export function registerDemiplaneInfoButton(importOrchestrator: ImportOrchestrat
 async function showDemiplaneInfoDialog(
   actor: Actor,
   characterId: string,
-  importOrchestrator: ImportOrchestrator
+  importCharacter: ImportCharacterFn,
+  exportCharacter: ExportCharacterFn
 ): Promise<void> {
   const sheetUrl = `${DEMIPLANE_SHEET_BASE}/${characterId}`;
   const lastImport = actor.getFlag(MODULE_ID, "lastImportTimestamp") as number | undefined;
@@ -60,15 +67,28 @@ async function showDemiplaneInfoDialog(
       </section>
     </div>`;
 
-  await foundry.applications.api.DialogV2.confirm({
+  await foundry.applications.api.DialogV2.wait({
     window: { title: `Demiplane — ${actor.name}` },
     content,
-    yes: {
-      label: "Update from Demiplane",
-      icon: "fa-solid fa-sync",
-      callback: () => performUpdate(actor, characterId, importOrchestrator),
-    },
-    no: { label: "Close" },
+    buttons: [
+      {
+        action: "update",
+        label: "Update from Demiplane",
+        icon: "fa-solid fa-sync",
+        callback: () => performUpdate(actor, characterId, importCharacter),
+      },
+      {
+        action: "push",
+        label: "Push HP to Demiplane",
+        icon: "fa-solid fa-upload",
+        callback: () => exportCharacter(actor),
+      },
+      {
+        action: "close",
+        label: "Close",
+        default: true,
+      },
+    ],
   });
 }
 
@@ -86,7 +106,7 @@ function buildManualItemsSection(items: Item[]): string {
       </section>`;
 }
 
-async function performUpdate(actor: Actor, characterId: string, importOrchestrator: ImportOrchestrator): Promise<void> {
+async function performUpdate(actor: Actor, characterId: string, importCharacter: ImportCharacterFn): Promise<void> {
   const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
   if (!token) {
     ui.notifications.error("No Demiplane token configured. Ask your GM to set it in module settings.");
@@ -106,7 +126,7 @@ async function performUpdate(actor: Actor, characterId: string, importOrchestrat
     );
   }
 
-  const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+  const summary = await importCharacter(actor, characterId, token);
   if (summary.errors.length > 0) {
     ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
   } else {
