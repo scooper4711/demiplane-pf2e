@@ -6,6 +6,7 @@ import { ExportManager } from "./export-manager.js";
 import { HookManager } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
+import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -31,6 +32,7 @@ Hooks.once("ready", async () => {
   void new CharacterLinkDialog(client);
 
   hookManager.register();
+  registerDemiplaneInfoButton(importOrchestrator);
 
   // Expose module API for external access and testing
   const module = game.modules.get(MODULE_ID);

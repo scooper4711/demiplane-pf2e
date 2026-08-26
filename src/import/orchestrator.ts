@@ -54,6 +54,13 @@ export class ImportOrchestrator {
 
     this.choiceSetHandler.enable();
 
+    const importHookId = Hooks.on("preCreateItem", ((item: Item) => {
+      if (item.parent?.id !== actor.id) return;
+      (item as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
+        [`flags.${MODULE_ID}.imported`]: true,
+      });
+    }) as never);
+
     try {
       for (const category of ["ancestry", "heritage", "background", "class"] as ItemCategory[]) {
         for (const eng of categorized[category]) {
@@ -82,9 +89,11 @@ export class ImportOrchestrator {
       await applyItemSpells(actor, engines, summary);
       await this.syncSessionState(actor, engines);
     } finally {
+      Hooks.off("preCreateItem", importHookId);
       this.choiceSetHandler.disable();
     }
 
+    await actor.setFlag(MODULE_ID, "lastImportTimestamp", Date.now());
     return summary;
   }
 

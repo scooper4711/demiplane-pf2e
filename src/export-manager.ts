@@ -152,7 +152,7 @@ export class ExportManager {
 
   private async updateSyncTimestamp(actor: Actor): Promise<void> {
     try {
-      await actor.setFlag(MODULE_ID, "lastSyncTimestamp", Date.now());
+      await actor.setFlag(MODULE_ID, "lastExportTimestamp", Date.now());
     } catch {
       // Non-critical: timestamp tracking failure doesn't invalidate the push
     }

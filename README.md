@@ -120,3 +120,9 @@ This module is pre-release software. It can result in data loss for the Foundry 
 ## License
 
 MIT
+
+## Support
+
+If this module saves you time at the table, consider supporting development:
+
+[Support on Ko-fi](https://ko-fi.com/coop207627)

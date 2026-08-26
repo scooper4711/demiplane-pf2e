@@ -9,7 +9,8 @@ export interface UnresolvedSlug {
 
 export interface SyncTabData {
   characterId: string;
-  lastSyncTimestamp: number | undefined;
+  lastImportTimestamp: number | undefined;
+  lastExportTimestamp: number | undefined;
   pendingChanges: PendingChange[];
   unresolvedSlugs: UnresolvedSlug[];
   lastImportSummary: ImportSummary | undefined;
@@ -89,15 +90,18 @@ export class SyncTabRenderer {
   }
 
   private buildStatusSection(data: SyncTabData): string {
-    const timestamp = data.lastSyncTimestamp ? new Date(data.lastSyncTimestamp).toLocaleString() : "Never";
+    const importTimestamp = data.lastImportTimestamp ? new Date(data.lastImportTimestamp).toLocaleString() : "Never";
+    const exportTimestamp = data.lastExportTimestamp ? new Date(data.lastExportTimestamp).toLocaleString() : "Never";
 
     return `<section class="sync-status">
       <h3>Sync Status</h3>
       <dl>
         <dt>Character UUID</dt>
         <dd class="character-uuid">${data.characterId}</dd>
-        <dt>Last Sync</dt>
-        <dd>${timestamp}</dd>
+        <dt>Last Import</dt>
+        <dd>${importTimestamp}</dd>
+        <dt>Last Push</dt>
+        <dd>${exportTimestamp}</dd>
       </dl>
     </section>`;
   }

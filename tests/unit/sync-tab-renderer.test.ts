@@ -28,7 +28,8 @@ import type { SyncTabData } from "../../src/sync-tab-renderer.js";
 function createBaseSyncTabData(overrides: Partial<SyncTabData> = {}): SyncTabData {
   return {
     characterId: "abc-123",
-    lastSyncTimestamp: undefined,
+    lastImportTimestamp: undefined,
+    lastExportTimestamp: undefined,
     pendingChanges: [],
     unresolvedSlugs: [],
     lastImportSummary: undefined,

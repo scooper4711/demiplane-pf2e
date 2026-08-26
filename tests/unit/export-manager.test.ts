@@ -154,7 +154,7 @@ describe("ExportManager", () => {
       manager.queueChange(actor as never, "character_hit-points_current", 25);
       await manager.flush(actor as never);
 
-      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastSyncTimestamp", expect.any(Number));
+      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
     });
   });
 
