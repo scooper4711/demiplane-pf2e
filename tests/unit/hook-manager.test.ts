@@ -31,6 +31,7 @@ let autoSyncEnabled = true;
 function createMockExportManager() {
   return {
     queueChange: vi.fn(),
+    queueItemChange: vi.fn(),
   };
 }
 
@@ -333,7 +334,7 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_copper", 40);
     });
 
-    it("does not queue for non-currency treasure items", () => {
+    it("queues non-currency items via queueItemChange", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -346,6 +347,38 @@ describe("HookManager", () => {
       triggerHook("updateItem", item, changes);
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "gold-bar", "quantity", 1);
+    });
+
+    it("queues equipped state changes for equipment items", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Longsword", {
+        system: { slug: "longsword", equipped: { carryType: "worn" } },
+      });
+      const changes = { system: { equipped: { carryType: "worn" } } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "equipped", "worn");
+    });
+
+    it("queues both quantity and equipped when both change", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Longsword", {
+        system: { slug: "longsword" },
+      });
+      const changes = { system: { quantity: 2, equipped: { carryType: "held" } } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "quantity", 2);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "equipped", "held");
     });
 
     it("does not queue when autoSync is disabled", () => {

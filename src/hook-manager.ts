@@ -94,12 +94,20 @@ export class HookManager {
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (!game.settings.get(MODULE_ID, "autoSync")) return;
 
-    const quantity = this.getNestedValue(changes, "system.quantity");
-    if (quantity === undefined || typeof quantity !== "number") return;
-
     const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
-    if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
-      this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
+
+    const quantity = this.getNestedValue(changes, "system.quantity");
+    if (typeof quantity === "number") {
+      if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
+        this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
+      } else if (typeof slug === "string") {
+        this.exportManager.queueItemChange(actor, slug, "quantity", quantity);
+      }
+    }
+
+    const carryType = this.getNestedValue(changes, "system.equipped.carryType");
+    if (typeof carryType === "string" && typeof slug === "string") {
+      this.exportManager.queueItemChange(actor, slug, "equipped", carryType);
     }
   }
 

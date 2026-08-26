@@ -18,6 +18,15 @@ export interface PendingChange {
   timestamp: number;
 }
 
+export type ItemChangeType = "quantity" | "equipped";
+
+export interface PendingItemChange {
+  itemSlug: string;
+  changeType: ItemChangeType;
+  value: number | string;
+  timestamp: number;
+}
+
 export interface ExportResult {
   success: boolean;
   error?: string;
@@ -48,6 +57,7 @@ interface FetchedCharacter {
 export class ExportManager {
   private readonly client: DemiplaneClient;
   private readonly pendingChanges: Map<string, Map<string, PendingChange>> = new Map();
+  private readonly pendingItemChanges: Map<string, Map<string, PendingItemChange>> = new Map();
   private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly apiCallTimestamps: Map<string, number[]> = new Map();
   private suspended = false;
@@ -64,6 +74,7 @@ export class ExportManager {
     this.suspended = true;
     this.clearDebounceTimers();
     this.pendingChanges.clear();
+    this.pendingItemChanges.clear();
   }
 
   resume(): void {
@@ -99,6 +110,37 @@ export class ExportManager {
     this.debounceTimers.set(characterId, timer);
   }
 
+  queueItemChange(actor: Actor, itemSlug: string, changeType: ItemChangeType, value: number | string): void {
+    if (this.suspended) return;
+
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+    if (!characterId) return;
+
+    const key = `${itemSlug}:${changeType}`;
+    if (!this.pendingItemChanges.has(characterId)) {
+      this.pendingItemChanges.set(characterId, new Map());
+    }
+
+    this.pendingItemChanges.get(characterId)!.set(key, {
+      itemSlug,
+      changeType,
+      value,
+      timestamp: Date.now(),
+    });
+
+    const existingTimer = this.debounceTimers.get(characterId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    const timer = setTimeout(() => {
+      this.debounceTimers.delete(characterId);
+      void this.flush(actor);
+    }, DEBOUNCE_MS);
+
+    this.debounceTimers.set(characterId, timer);
+  }
+
   async flush(actor: Actor, options: ExportOptions = {}): Promise<ExportResult> {
     const dryRun = this.resolveDryRun(options);
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
@@ -110,14 +152,15 @@ export class ExportManager {
     this.clearDebounceTimer(characterId);
 
     const changes = this.pendingChanges.get(characterId);
-    if (!changes || changes.size === 0) {
+    const itemChanges = this.pendingItemChanges.get(characterId);
+    if ((!changes || changes.size === 0) && (!itemChanges || itemChanges.size === 0)) {
       return { success: true };
     }
 
     if (dryRun) {
       return {
         success: true,
-        preview: Array.from(changes.values()),
+        preview: changes ? Array.from(changes.values()) : [],
       };
     }
 
@@ -134,7 +177,7 @@ export class ExportManager {
       return { success: false, error };
     }
 
-    const fetched = await this.buildUpdatedCharacterData(characterId, changes);
+    const fetched = await this.buildUpdatedCharacterData(characterId, changes ?? new Map(), itemChanges ?? new Map());
     if (!fetched) {
       return { success: false, error: "Failed to fetch character data" };
     }
@@ -176,7 +219,8 @@ export class ExportManager {
 
   private async buildUpdatedCharacterData(
     characterId: string,
-    changes: Map<string, PendingChange>
+    changes: Map<string, PendingChange>,
+    itemChanges: Map<string, PendingItemChange>
   ): Promise<FetchedCharacter | null> {
     let fetched: CharacterData;
     try {
@@ -186,10 +230,42 @@ export class ExportManager {
     }
 
     let updatedEngines: CustomEngine[] = fetched.engines as CustomEngine[];
+
     for (const change of changes.values()) {
       const existing = findCustomEngineByName(fetched.engines, change.field);
       if (existing) {
         updatedEngines = updatedEngines.map((e) => (e === existing ? { ...e, value: change.value } : e));
+      }
+    }
+
+    for (const itemChange of itemChanges.values()) {
+      const itemEngine = fetched.engines.find(
+        (e) =>
+          e.type === "DemiplaneEngine" &&
+          e.name.startsWith("tabula/item/") &&
+          (e.args?.slug as string) === itemChange.itemSlug
+      );
+      if (!itemEngine) continue;
+
+      const demiplaneId = itemEngine.demiplaneEngineId;
+      if (itemChange.changeType === "quantity") {
+        const qtyName = `${demiplaneId}--quantity`;
+        const existing = findCustomEngineByName(updatedEngines, qtyName);
+        if (existing) {
+          updatedEngines = updatedEngines.map((e) => (e === existing ? { ...e, value: itemChange.value } : e));
+        }
+      } else if (itemChange.changeType === "equipped") {
+        const equipped = itemChange.value as string;
+        const equippedName = `${demiplaneId}-is-equipped`;
+        const existingEquipped = findCustomEngineByName(updatedEngines, equippedName);
+
+        if (equipped === "worn" || equipped === "held") {
+          if (existingEquipped) {
+            updatedEngines = updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: 1 } : e));
+          }
+        } else if (existingEquipped) {
+          updatedEngines = updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: 0 } : e));
+        }
       }
     }
 
@@ -211,6 +287,7 @@ export class ExportManager {
   private async handlePushResult(result: ExportResult, characterId: string, actor: Actor): Promise<void> {
     if (result.success) {
       this.pendingChanges.delete(characterId);
+      this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);
       await this.updateSyncTimestamp(actor);
       return;
