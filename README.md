@@ -72,26 +72,39 @@ You can find this by opening your character on Demiplane and copying the URL fro
 
 In **Settings > Module Settings > Demiplane PF2e Sync**:
 
-- **Demiplane GraphQL Token** — The GM must provide the shared bearer token used to access the Demiplane API. Players can use the token for imports and sync operations, but the token setting is hidden from them.
+- **Demiplane Authorization Token** — The GM must provide the token used to access the Demiplane API. Players can use the token for imports and sync operations, but the token setting is hidden from them.
 
 ### Getting the Demiplane Token
 
+The easiest way to get your token is with a Chrome browser extension that captures authorization headers automatically:
+
+1. Install one of these Chrome extensions:
+   - [Access Token Grabber](https://chromewebstore.google.com/detail/access-token-grabber/dmdogmnoogmaabbeemfjolaohpimiiif) (Featured)
+   - [Bearer Token Grabber](https://chromewebstore.google.com/detail/bearer-token-grabber/hmaeemkadgnleglmmgkklojkcfbcamgj)
+   - [Get Authorization Token](https://chromewebstore.google.com/detail/kipgkanokhilagghiahpbmhkhdacejen)
+2. Log in to [Demiplane Nexus](https://app.demiplane.com) in Chrome.
+3. Open any character sheet on Demiplane.
+4. Click the extension icon — it will show the captured token.
+5. Copy the token. If the value starts with `Bearer `, remove that prefix — you only need the long string after it.
+6. In Foundry, open **Settings > Module Settings > Demiplane PF2e Sync**, paste the token into **Demiplane Authorization Token**, and save.
+
+<details>
+<summary>Alternative: using browser DevTools (for technical users)</summary>
+
 1. Log in to [Demiplane Nexus](https://app.demiplane.com) in a desktop browser.
-2. Open the browser developer tools (usually **F12** or **Cmd+Option+I**) and select the **Network** tab.
-3. Open a Demiplane character sheet or refresh one that is already open.
+2. Open developer tools (**F12** or **Cmd+Option+I**) and select the **Network** tab.
+3. Open a character sheet or refresh one that is already open.
 4. Find a request to `https://apiv4.demiplane.com/v1/graphql`.
 5. Open the request headers and copy the value of the `Authorization` header, without the `Bearer ` prefix.
-6. In Foundry, open **Settings > Module Settings > Demiplane PF2e Sync**, paste the token into **Demiplane GraphQL Token**, and save the settings.
+6. Paste into the module settings as above.
+
+</details>
 
 The token is stored as a world setting so players can import characters they own without seeing or entering the token. Demiplane tokens expire, so the GM must repeat these steps when imports begin reporting authentication errors. Treat the token like a password and do not share it outside the Foundry world.
 
-## Conflict Detection (Future Work)
-
-Once syncing back is implemented, the module will check whether the Demiplane character has been modified since your last sync before pushing. If there's a version mismatch, you'll get options to re-import, force push, or cancel. This prevents anyone's changes from getting silently overwritten.
-
 ## Troubleshooting
 
-**"No Demiplane token configured"** — Ask the GM to configure the shared GraphQL token. See the Configuration section above for how to grab it from the browser.
+**"No Demiplane token configured"** — Ask the GM to configure the authorization token. See the [Getting the Demiplane Token](#getting-the-demiplane-token) section above.
 
 **Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them on the Sync tab so you can add them manually.
 

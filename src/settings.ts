@@ -16,8 +16,8 @@ export function registerSettings(): void {
   });
 
   game.settings.register(MODULE_ID, "demiplaneToken", {
-    name: "Demiplane GraphQL Token",
-    hint: "Bearer token used for Demiplane API requests. Only the GM should enter or change this value.",
+    name: "Demiplane Authorization Token",
+    hint: "Token used for Demiplane API requests. See the module README for how to obtain it. Only the GM can enter or change this value.",
     scope: "world",
     config: true,
     type: String,
@@ -64,7 +64,7 @@ function addTokenValidationButton(html: SettingsHtml): void {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "demiplane-token-validation";
-  button.innerHTML = '<i class="fas fa-check-circle" inert></i> Validate Demiplane token';
+  button.innerHTML = '<i class="fas fa-check-circle" inert></i> Validate token';
   button.addEventListener("click", () => {
     void validateDemiplaneToken();
   });
@@ -84,14 +84,14 @@ async function validateDemiplaneToken(): Promise<void> {
   try {
     await client.validateToken();
     await showTokenValidationDialog(
-      "Demiplane token validated",
-      "The Demiplane token is valid and was accepted by the API."
+      "Token validated",
+      "The Demiplane authorization token is valid and was accepted by the API."
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "The API rejected the token.";
     await showTokenValidationDialog(
-      "Demiplane token rejected",
-      `The Demiplane token could not be validated: ${message}<br><br><strong>If you changed the token, save the settings before clicking Validate Demiplane token.</strong>`
+      "Token rejected",
+      `The token could not be validated: ${message}<br><br><strong>If you changed the token, save the settings before clicking Validate token.</strong>`
     );
   }
 }
