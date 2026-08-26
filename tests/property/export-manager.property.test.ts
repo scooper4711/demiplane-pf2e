@@ -2,12 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fc from "fast-check";
 
 vi.mock("@scooper4711/demiplane-api", () => ({
-  updateCustomEngineValue: vi.fn(
-    (
-      engines: { name: string; value?: unknown }[],
-      storeName: string,
-      value: unknown,
-    ) => engines.map((e) => (e.name === storeName ? { ...e, value } : e)),
+  updateCustomEngineValue: vi.fn((engines: { name: string; value?: unknown }[], storeName: string, value: unknown) =>
+    engines.map((e) => (e.name === storeName ? { ...e, value } : e))
   ),
 }));
 
@@ -17,11 +13,10 @@ vi.stubGlobal("ui", {
 
 import { ExportManager } from "../../src/export-manager.js";
 
-function createMockActor(characterId = "char-123", storedVersion?: number) {
+function createMockActor(characterId = "char-123") {
   return {
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId;
-      if (key === "lastKnownVersion") return storedVersion;
       return undefined;
     },
     setFlag: vi.fn().mockResolvedValue(undefined),
@@ -44,7 +39,6 @@ function createMockClient(overrides = {}) {
         },
       ],
     }),
-    fetchCharacterVersion: vi.fn().mockResolvedValue({ version: 1 }),
     updateCharacter: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
@@ -73,11 +67,11 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
               "character_hit-points_temp",
               "character_hero-points",
               "character_focus_current",
-              "character_currency_gold",
+              "character_currency_gold"
             ),
             value: fc.integer({ min: 0, max: 999 }),
           }),
-          { minLength: 1, maxLength: 20 },
+          { minLength: 1, maxLength: 20 }
         ),
         (changes) => {
           vi.clearAllMocks();
@@ -102,16 +96,14 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
           expect(pending).toHaveLength(expectedLastValues.size);
 
           for (const pendingChange of pending) {
-            expect(pendingChange.value).toBe(
-              expectedLastValues.get(pendingChange.field),
-            );
+            expect(pendingChange.value).toBe(expectedLastValues.get(pendingChange.field));
           }
 
           // Verify the debounce has NOT yet fired (still within window)
           expect(client.fetchCharacterData).not.toHaveBeenCalled();
-        },
+        }
       ),
-      { numRuns: 100 },
+      { numRuns: 100 }
     );
   });
 
@@ -120,14 +112,10 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
       fc.property(
         fc.array(
           fc.record({
-            field: fc.constantFrom(
-              "character_hit-points_current",
-              "character_hero-points",
-              "character_focus_current",
-            ),
+            field: fc.constantFrom("character_hit-points_current", "character_hero-points", "character_focus_current"),
             value: fc.integer({ min: 0, max: 100 }),
           }),
-          { minLength: 1, maxLength: 10 },
+          { minLength: 1, maxLength: 10 }
         ),
         (changes) => {
           vi.clearAllMocks();
@@ -145,9 +133,9 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
 
           // Exactly one fetch (part of flush) should have been triggered
           expect(client.fetchCharacterData).toHaveBeenCalledTimes(1);
-        },
+        }
       ),
-      { numRuns: 100 },
+      { numRuns: 100 }
     );
   });
 });
@@ -177,11 +165,7 @@ describe("Feature: demiplane-foundry-sync, Property 10: Rate limiter never excee
         let successfulCalls = 0;
 
         for (let i = 0; i < flushCount; i++) {
-          manager.queueChange(
-            actor as never,
-            "character_hit-points_current",
-            i,
-          );
+          manager.queueChange(actor as never, "character_hit-points_current", i);
           const result = await manager.flush(actor as never);
           if (result.success && !result.preview) {
             successfulCalls++;
@@ -191,7 +175,7 @@ describe("Feature: demiplane-foundry-sync, Property 10: Rate limiter never excee
         // Rate limiter should cap at 30 successful API calls
         expect(successfulCalls).toBeLessThanOrEqual(30);
       }),
-      { numRuns: 100 },
+      { numRuns: 100 }
     );
   });
 

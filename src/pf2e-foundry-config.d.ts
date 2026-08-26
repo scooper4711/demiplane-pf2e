@@ -147,7 +147,6 @@ interface Pf2eItemSystemData {
 
 interface DemiplaneActorFlags {
   characterId?: string;
-  lastKnownVersion?: number;
   lastSyncTimestamp?: number;
 }
 

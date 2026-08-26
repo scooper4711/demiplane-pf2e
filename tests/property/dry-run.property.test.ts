@@ -3,13 +3,8 @@ import * as fc from "fast-check";
 
 vi.mock("@scooper4711/demiplane-api", () => ({
   isDemiplaneEngine: (e: { type: string }) => e.type === "DemiplaneEngine",
-  findCustomEngineByName: (
-    engines: { name: string; type: string; value?: unknown }[],
-    storeName: string,
-  ) =>
-    engines.find(
-      (e) => e.type === "CustomDemiplaneEngine" && e.name === storeName,
-    ),
+  findCustomEngineByName: (engines: { name: string; type: string; value?: unknown }[], storeName: string) =>
+    engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === storeName),
   updateCustomEngineValue: (engines: unknown[]) => engines,
 }));
 
@@ -70,7 +65,6 @@ function createMockActor(characterId = "char-123") {
     setFlag: vi.fn(),
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId;
-      if (key === "lastKnownVersion") return 3;
       return undefined;
     },
   };
@@ -116,10 +110,7 @@ describe("Feature: demiplane-foundry-sync, Property 14: Dry run mode is purely o
 
         const slugMapper = createMockSlugMapper();
         const actor = createMockActor();
-        const orchestrator = new ImportOrchestrator(
-          client as never,
-          slugMapper as never,
-        );
+        const orchestrator = new ImportOrchestrator(client as never, slugMapper as never);
 
         await orchestrator.importCharacter(actor as never, "char-123", {
           dryRun: true,
@@ -133,7 +124,7 @@ describe("Feature: demiplane-foundry-sync, Property 14: Dry run mode is purely o
         // No mutations sent to Demiplane
         expect(client.updateCharacter).not.toHaveBeenCalled();
       }),
-      { numRuns: 100 },
+      { numRuns: 100 }
     );
   });
 
@@ -147,11 +138,11 @@ describe("Feature: demiplane-foundry-sync, Property 14: Dry run mode is purely o
               "character_hit-points_temp",
               "character_hero-points",
               "character_focus_current",
-              "character_currency_gold",
+              "character_currency_gold"
             ),
             value: fc.integer({ min: 0, max: 999 }),
           }),
-          { minLength: 1, maxLength: 10 },
+          { minLength: 1, maxLength: 10 }
         ),
         async (changes) => {
           vi.clearAllMocks();
@@ -172,9 +163,9 @@ describe("Feature: demiplane-foundry-sync, Property 14: Dry run mode is purely o
           expect(client.updateCharacter).not.toHaveBeenCalled();
           // Actor flags not modified
           expect(actor.setFlag).not.toHaveBeenCalled();
-        },
+        }
       ),
-      { numRuns: 100 },
+      { numRuns: 100 }
     );
   });
 });

@@ -1,12 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 vi.mock("@scooper4711/demiplane-api", () => ({
-  updateCustomEngineValue: vi.fn(
-    (
-      engines: { name: string; value?: unknown }[],
-      storeName: string,
-      value: unknown,
-    ) => engines.map((e) => (e.name === storeName ? { ...e, value } : e)),
+  updateCustomEngineValue: vi.fn((engines: { name: string; value?: unknown }[], storeName: string, value: unknown) =>
+    engines.map((e) => (e.name === storeName ? { ...e, value } : e))
   ),
 }));
 
@@ -16,11 +12,10 @@ vi.stubGlobal("ui", {
 
 import { ExportManager } from "../../src/export-manager.js";
 
-function createMockActor(characterId = "char-123", storedVersion?: number) {
+function createMockActor(characterId = "char-123") {
   return {
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId;
-      if (key === "lastKnownVersion") return storedVersion;
       return undefined;
     },
     setFlag: vi.fn().mockResolvedValue(undefined),
@@ -43,7 +38,6 @@ function createMockClient(overrides = {}) {
         },
       ],
     }),
-    fetchCharacterVersion: vi.fn().mockResolvedValue({ version: 5 }),
     updateCharacter: vi.fn().mockResolvedValue(true),
     ...overrides,
   };
@@ -70,12 +64,8 @@ describe("ExportManager", () => {
 
       const pending = manager.getPendingChanges("char-123");
       expect(pending).toHaveLength(2);
-      expect(
-        pending.find((c) => c.field === "character_hit-points_current")?.value,
-      ).toBe(25);
-      expect(
-        pending.find((c) => c.field === "character_hero-points")?.value,
-      ).toBe(2);
+      expect(pending.find((c) => c.field === "character_hit-points_current")?.value).toBe(25);
+      expect(pending.find((c) => c.field === "character_hero-points")?.value).toBe(2);
     });
 
     it("overwrites previous value for the same field", () => {
@@ -137,25 +127,8 @@ describe("ExportManager", () => {
 
       expect(result.success).toBe(true);
       expect(result.preview).toHaveLength(2);
-      expect(
-        result.preview?.find((c) => c.field === "character_hit-points_current")
-          ?.value,
-      ).toBe(25);
+      expect(result.preview?.find((c) => c.field === "character_hit-points_current")?.value).toBe(25);
       expect(client.updateCharacter).not.toHaveBeenCalled();
-    });
-
-    it("performs conflict detection in dry run mode", async () => {
-      const client = createMockClient();
-      const manager = new ExportManager(client as never);
-      const actor = createMockActor("char-123", 3);
-
-      manager.queueChange(actor as never, "character_hit-points_current", 25);
-
-      const result = await manager.flush(actor as never, { dryRun: true });
-
-      expect(result.success).toBe(true);
-      expect(result.conflictDetected).toBe(true);
-      expect(client.fetchCharacterVersion).toHaveBeenCalled();
     });
   });
 
@@ -173,7 +146,7 @@ describe("ExportManager", () => {
       expect(manager.hasPendingChanges("char-123")).toBe(false);
     });
 
-    it("updates version flags after successful push", async () => {
+    it("updates sync timestamp after successful push", async () => {
       const client = createMockClient();
       const manager = new ExportManager(client as never);
       const actor = createMockActor();
@@ -181,16 +154,7 @@ describe("ExportManager", () => {
       manager.queueChange(actor as never, "character_hit-points_current", 25);
       await manager.flush(actor as never);
 
-      expect(actor.setFlag).toHaveBeenCalledWith(
-        "demiplane-pf2e",
-        "lastKnownVersion",
-        5,
-      );
-      expect(actor.setFlag).toHaveBeenCalledWith(
-        "demiplane-pf2e",
-        "lastSyncTimestamp",
-        expect.any(Number),
-      );
+      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastSyncTimestamp", expect.any(Number));
     });
   });
 
@@ -232,9 +196,7 @@ describe("ExportManager", () => {
       await vi.advanceTimersByTimeAsync(2000);
       await vi.advanceTimersByTimeAsync(4000);
 
-      expect(ui.notifications.error).toHaveBeenCalledWith(
-        expect.stringContaining("Demiplane sync failed"),
-      );
+      expect(ui.notifications.error).toHaveBeenCalledWith(expect.stringContaining("Demiplane sync failed"));
     });
   });
 
@@ -307,9 +269,7 @@ describe("ExportManager", () => {
 
       // Pending changes should still be there since all attempts failed
       expect(manager.hasPendingChanges("char-123")).toBe(true);
-      expect(ui.notifications.error).toHaveBeenCalledWith(
-        expect.stringContaining("Demiplane sync failed"),
-      );
+      expect(ui.notifications.error).toHaveBeenCalledWith(expect.stringContaining("Demiplane sync failed"));
     });
 
     it("succeeds immediately without backoff when first attempt works", async () => {

@@ -1,8 +1,5 @@
 import { MODULE_ID } from "./import/types.js";
-import type {
-  DemiplaneClient,
-  CharacterEngine,
-} from "@scooper4711/demiplane-api";
+import type { DemiplaneClient, CharacterEngine } from "@scooper4711/demiplane-api";
 import { updateCustomEngineValue } from "@scooper4711/demiplane-api";
 
 const DEBOUNCE_MS = 2000;
@@ -23,9 +20,7 @@ export interface PendingChange {
 
 export interface ExportResult {
   success: boolean;
-  newVersion?: number;
   error?: string;
-  conflictDetected?: boolean;
   preview?: PendingChange[];
 }
 
@@ -39,10 +34,8 @@ export interface ExportResult {
  */
 export class ExportManager {
   private readonly client: DemiplaneClient;
-  private readonly pendingChanges: Map<string, Map<string, PendingChange>> =
-    new Map();
-  private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> =
-    new Map();
+  private readonly pendingChanges: Map<string, Map<string, PendingChange>> = new Map();
+  private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly apiCallTimestamps: Map<string, number[]> = new Map();
 
   constructor(client: DemiplaneClient) {
@@ -50,9 +43,7 @@ export class ExportManager {
   }
 
   queueChange(actor: Actor, field: string, value: number): void {
-    const characterId = actor.getFlag(MODULE_ID, "characterId") as
-      | string
-      | undefined;
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
 
     if (!this.pendingChanges.has(characterId)) {
@@ -78,14 +69,9 @@ export class ExportManager {
     this.debounceTimers.set(characterId, timer);
   }
 
-  async flush(
-    actor: Actor,
-    options: ExportOptions = {},
-  ): Promise<ExportResult> {
+  async flush(actor: Actor, options: ExportOptions = {}): Promise<ExportResult> {
     const { dryRun = false } = options;
-    const characterId = actor.getFlag(MODULE_ID, "characterId") as
-      | string
-      | undefined;
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
@@ -97,11 +83,9 @@ export class ExportManager {
     }
 
     if (dryRun) {
-      const conflictDetected = await this.detectConflict(actor, characterId);
       return {
         success: true,
         preview: Array.from(changes.values()),
-        conflictDetected,
       };
     }
 
@@ -136,7 +120,7 @@ export class ExportManager {
 
   private async buildUpdatedEngines(
     characterId: string,
-    changes: Map<string, PendingChange>,
+    changes: Map<string, PendingChange>
   ): Promise<CharacterEngine[] | null> {
     let engines: CharacterEngine[];
     try {
@@ -150,48 +134,33 @@ export class ExportManager {
 
     let updatedEngines = engines;
     for (const change of changes.values()) {
-      updatedEngines = updateCustomEngineValue(
-        updatedEngines,
-        change.field,
-        change.value,
-      );
+      updatedEngines = updateCustomEngineValue(updatedEngines, change.field, change.value);
     }
     return updatedEngines;
   }
 
-  private async handlePushResult(
-    result: ExportResult,
-    characterId: string,
-    actor: Actor,
-  ): Promise<void> {
+  private async handlePushResult(result: ExportResult, characterId: string, actor: Actor): Promise<void> {
     if (result.success) {
       this.pendingChanges.delete(characterId);
       this.recordApiCall(characterId);
-      await this.updateVersionFlags(actor, result.newVersion);
+      await this.updateSyncTimestamp(actor);
       return;
     }
 
     this.notifyFailure(result.error);
   }
 
-  private async updateVersionFlags(
-    actor: Actor,
-    newVersion: number | undefined,
-  ): Promise<void> {
-    if (newVersion === undefined) return;
+  private async updateSyncTimestamp(actor: Actor): Promise<void> {
     try {
-      await actor.setFlag(MODULE_ID, "lastKnownVersion", newVersion);
       await actor.setFlag(MODULE_ID, "lastSyncTimestamp", Date.now());
     } catch {
-      // Non-critical: version tracking failure doesn't invalidate the push
+      // Non-critical: timestamp tracking failure doesn't invalidate the push
     }
   }
 
   private notifyFailure(error: string | undefined): void {
     if (typeof ui !== "undefined" && ui.notifications) {
-      ui.notifications.error(
-        `Demiplane sync failed: ${error ?? "Unknown error"}`,
-      );
+      ui.notifications.error(`Demiplane sync failed: ${error ?? "Unknown error"}`);
     }
   }
 
@@ -210,10 +179,7 @@ export class ExportManager {
     this.apiCallTimestamps.set(characterId, timestamps);
   }
 
-  private async pushWithRetry(
-    characterId: string,
-    updatedEngines: CharacterEngine[],
-  ): Promise<ExportResult> {
+  private async pushWithRetry(characterId: string, updatedEngines: CharacterEngine[]): Promise<ExportResult> {
     let lastError: string | undefined;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -232,7 +198,7 @@ export class ExportManager {
         });
 
         if (success) {
-          return this.fetchVersionAfterPush(characterId);
+          return { success: true };
         }
 
         lastError = "Mutation returned success: false";
@@ -245,35 +211,6 @@ export class ExportManager {
       success: false,
       error: `All ${String(MAX_RETRIES + 1)} attempts failed. Last error: ${lastError}`,
     };
-  }
-
-  private async fetchVersionAfterPush(
-    characterId: string,
-  ): Promise<ExportResult> {
-    try {
-      const version = await this.client.fetchCharacterVersion(characterId);
-      return { success: true, newVersion: version.version };
-    } catch {
-      return { success: true };
-    }
-  }
-
-  private async detectConflict(
-    actor: Actor,
-    characterId: string,
-  ): Promise<boolean> {
-    try {
-      const storedVersion = actor.getFlag(MODULE_ID, "lastKnownVersion") as
-        | number
-        | undefined;
-      if (storedVersion === undefined) {
-        return false;
-      }
-      const remote = await this.client.fetchCharacterVersion(characterId);
-      return remote.version > storedVersion;
-    } catch {
-      return false;
-    }
   }
 
   private sleep(ms: number): Promise<void> {

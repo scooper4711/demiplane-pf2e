@@ -25,20 +25,13 @@ vi.stubGlobal("ui", { windows: {} as Record<string, unknown> });
 import { SyncTabRenderer } from "../../src/sync-tab-renderer.js";
 import type { SyncTabData } from "../../src/sync-tab-renderer.js";
 
-function createBaseSyncTabData(
-  overrides: Partial<SyncTabData> = {},
-): SyncTabData {
+function createBaseSyncTabData(overrides: Partial<SyncTabData> = {}): SyncTabData {
   return {
     characterId: "abc-123",
     lastSyncTimestamp: undefined,
-    lastKnownVersion: undefined,
-    remoteVersion: undefined,
     pendingChanges: [],
     unresolvedSlugs: [],
     lastImportSummary: undefined,
-    conflictDetected: false,
-    localVersion: undefined,
-    remoteConflictVersion: undefined,
     dryRunEnabled: false,
     operationInProgress: false,
     ...overrides,
@@ -127,9 +120,7 @@ describe("SyncTabRenderer", () => {
       const content = html.bodyContent;
       expect(content).toContain("dry-run-indicator");
       expect(content).toContain("Dry Run Mode Active");
-      expect(content).toContain(
-        "No changes will be written to Foundry or Demiplane",
-      );
+      expect(content).toContain("No changes will be written to Foundry or Demiplane");
     });
 
     it("does not render dry run banner when dryRunEnabled is false", () => {

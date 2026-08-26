@@ -2,7 +2,6 @@ import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import type { PendingChange } from "./export-manager.js";
 
-
 export interface UnresolvedSlug {
   demiplaneSlug: string;
   derivedFoundrySlug: string;
@@ -11,14 +10,9 @@ export interface UnresolvedSlug {
 export interface SyncTabData {
   characterId: string;
   lastSyncTimestamp: number | undefined;
-  lastKnownVersion: number | undefined;
-  remoteVersion: number | undefined;
   pendingChanges: PendingChange[];
   unresolvedSlugs: UnresolvedSlug[];
   lastImportSummary: ImportSummary | undefined;
-  conflictDetected: boolean;
-  localVersion: number | undefined;
-  remoteConflictVersion: number | undefined;
   dryRunEnabled: boolean;
   operationInProgress: boolean;
 }
@@ -81,7 +75,6 @@ export class SyncTabRenderer {
     const sections = [
       this.buildStatusSection(data),
       this.buildDryRunIndicator(data),
-      this.buildConflictWarning(data),
       this.buildPendingChangesSection(data),
       this.buildUnresolvedSlugsSection(data),
       this.buildImportSummarySection(data),
@@ -96,9 +89,7 @@ export class SyncTabRenderer {
   }
 
   private buildStatusSection(data: SyncTabData): string {
-    const timestamp = data.lastSyncTimestamp
-      ? new Date(data.lastSyncTimestamp).toLocaleString()
-      : "Never";
+    const timestamp = data.lastSyncTimestamp ? new Date(data.lastSyncTimestamp).toLocaleString() : "Never";
 
     return `<section class="sync-status">
       <h3>Sync Status</h3>
@@ -107,10 +98,6 @@ export class SyncTabRenderer {
         <dd class="character-uuid">${data.characterId}</dd>
         <dt>Last Sync</dt>
         <dd>${timestamp}</dd>
-        <dt>Local Version</dt>
-        <dd>${data.lastKnownVersion ?? "Unknown"}</dd>
-        <dt>Remote Version</dt>
-        <dd>${data.remoteVersion ?? "Unknown"}</dd>
       </dl>
     </section>`;
   }
@@ -123,28 +110,11 @@ export class SyncTabRenderer {
     </div>`;
   }
 
-  private buildConflictWarning(data: SyncTabData): string {
-    if (!data.conflictDetected) return "";
-    return `<div class="conflict-warning notification error">
-      <i class="fas fa-exclamation-triangle"></i>
-      <strong>Version Conflict Detected</strong>
-      <p>Local version: ${String(data.localVersion)} — Remote version: ${String(data.remoteConflictVersion)}</p>
-      <div class="conflict-actions">
-        <button class="conflict-reimport" type="button">Re-import</button>
-        <button class="conflict-force-push" type="button">Force Push</button>
-        <button class="conflict-cancel" type="button">Cancel</button>
-      </div>
-    </div>`;
-  }
-
   private buildPendingChangesSection(data: SyncTabData): string {
     if (data.pendingChanges.length === 0) return "";
 
     const rows = data.pendingChanges
-      .map(
-        (change) =>
-          `<tr><td>${change.field}</td><td>${String(change.value)}</td></tr>`,
-      )
+      .map((change) => `<tr><td>${change.field}</td><td>${String(change.value)}</td></tr>`)
       .join("\n");
 
     return `<section class="pending-changes">
@@ -160,10 +130,7 @@ export class SyncTabRenderer {
     if (data.unresolvedSlugs.length === 0) return "";
 
     const rows = data.unresolvedSlugs
-      .map(
-        (slug) =>
-          `<tr><td>${slug.demiplaneSlug}</td><td>${slug.derivedFoundrySlug}</td></tr>`,
-      )
+      .map((slug) => `<tr><td>${slug.demiplaneSlug}</td><td>${slug.derivedFoundrySlug}</td></tr>`)
       .join("\n");
 
     return `<section class="unresolved-slugs">
@@ -202,16 +169,10 @@ export class SyncTabRenderer {
   }
 
   private buildActionButtons(data: SyncTabData): string {
-    const importLabel = data.dryRunEnabled
-      ? "Preview Import"
-      : "Import from Demiplane";
-    const pushLabel = data.dryRunEnabled
-      ? "Preview Push"
-      : "Push to Demiplane";
+    const importLabel = data.dryRunEnabled ? "Preview Import" : "Import from Demiplane";
+    const pushLabel = data.dryRunEnabled ? "Preview Push" : "Push to Demiplane";
     const disabled = data.operationInProgress ? "disabled" : "";
-    const spinner = data.operationInProgress
-      ? `<i class="fas fa-spinner fa-spin"></i> `
-      : "";
+    const spinner = data.operationInProgress ? `<i class="fas fa-spinner fa-spin"></i> ` : "";
 
     return `<section class="sync-actions">
       <button class="sync-import" type="button" ${disabled}>
@@ -232,18 +193,6 @@ export class SyncTabRenderer {
     html.find(".sync-push").on("click", () => {
       if (this.operationInProgress) return;
       sheet.element.trigger("demiplane-push");
-    });
-
-    html.find(".conflict-reimport").on("click", () => {
-      sheet.element.trigger("demiplane-conflict-resolve", ["reimport"]);
-    });
-
-    html.find(".conflict-force-push").on("click", () => {
-      sheet.element.trigger("demiplane-conflict-resolve", ["force-push"]);
-    });
-
-    html.find(".conflict-cancel").on("click", () => {
-      sheet.element.trigger("demiplane-conflict-resolve", ["cancel"]);
     });
   }
 }

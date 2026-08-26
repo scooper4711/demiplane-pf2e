@@ -3,7 +3,6 @@ import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { ExportManager } from "./export-manager.js";
-import { ConflictResolver } from "./conflict-resolver.js";
 import { HookManager } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
@@ -27,8 +26,6 @@ Hooks.once("ready", async () => {
   client = new DemiplaneClient();
   importOrchestrator = new ImportOrchestrator();
   exportManager = new ExportManager(client);
-  // Scaffolding — will be wired into module API when features are complete
-  void new ConflictResolver(client);
   hookManager = new HookManager(exportManager);
   void new SyncTabRenderer();
   void new CharacterLinkDialog(client);
