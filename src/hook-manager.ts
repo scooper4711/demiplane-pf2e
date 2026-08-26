@@ -12,7 +12,6 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
   "system.attributes.hp.temp": "character_hit-points_temp",
   "system.resources.heroPoints.value": "character_hero-points",
-  "system.resources.focus.value": "character_focus_current",
 };
 
 const TREASURE_ITEM_MAP: Record<string, string> = {

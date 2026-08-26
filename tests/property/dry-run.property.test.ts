@@ -138,7 +138,6 @@ describe("Feature: demiplane-foundry-sync, Property 14: Dry run mode is purely o
               "character_hit-points_current",
               "character_hit-points_temp",
               "character_hero-points",
-              "character_focus_current",
               "character_currency_gold"
             ),
             value: fc.integer({ min: 0, max: 999 }),

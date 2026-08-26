@@ -67,7 +67,6 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
               "character_hit-points_current",
               "character_hit-points_temp",
               "character_hero-points",
-              "character_focus_current",
               "character_currency_gold"
             ),
             value: fc.integer({ min: 0, max: 999 }),
@@ -113,7 +112,7 @@ describe("Feature: demiplane-foundry-sync, Property 9: Debounce batching collaps
       fc.property(
         fc.array(
           fc.record({
-            field: fc.constantFrom("character_hit-points_current", "character_hero-points", "character_focus_current"),
+            field: fc.constantFrom("character_hit-points_current", "character_hero-points"),
             value: fc.integer({ min: 0, max: 100 }),
           }),
           { minLength: 1, maxLength: 10 }

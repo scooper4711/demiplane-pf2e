@@ -162,7 +162,7 @@ describe("HookManager", () => {
     });
   });
 
-  describe("updateActor hook — hero points and focus points", () => {
+  describe("updateActor hook — hero points", () => {
     it("calls queueChange with character_hero-points when hero points change", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
@@ -173,18 +173,6 @@ describe("HookManager", () => {
       triggerHook("updateActor", actor, changes);
 
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 3);
-    });
-
-    it("calls queueChange with character_focus_current when focus points change", () => {
-      const manager = new HookManager(exportManager as never);
-      manager.register();
-
-      const actor = createMockActor();
-      const changes = { system: { resources: { focus: { value: 2 } } } };
-
-      triggerHook("updateActor", actor, changes);
-
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_focus_current", 2);
     });
   });
 
