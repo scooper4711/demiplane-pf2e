@@ -13,10 +13,13 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.temp": "character_hit-points_temp",
   "system.resources.heroPoints.value": "character_hero-points",
   "system.resources.focus.value": "character_focus_current",
-  "system.currency.gp": "character_currency_gold",
-  "system.currency.sp": "character_currency_silver",
-  "system.currency.cp": "character_currency_copper",
-  "system.currency.pp": "character_currency_platinum",
+};
+
+const TREASURE_ITEM_MAP: Record<string, string> = {
+  "platinum-pieces": "character_currency_platinum",
+  "gold-pieces": "character_currency_gold",
+  "silver-pieces": "character_currency_silver",
+  "copper-pieces": "character_currency_copper",
 };
 
 /**
@@ -90,10 +93,14 @@ export class HookManager {
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (!game.settings.get(MODULE_ID, "autoSync")) return;
 
     const quantity = this.getNestedValue(changes, "system.quantity");
-    if (quantity !== undefined && typeof quantity === "number") {
-      console.log(`${MODULE_ID} | Consumable quantity changed: ${item.name} → ${String(quantity)}`);
+    if (quantity === undefined || typeof quantity !== "number") return;
+
+    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
+    if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
+      this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
     }
   }
 

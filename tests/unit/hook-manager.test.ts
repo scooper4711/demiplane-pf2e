@@ -189,7 +189,7 @@ describe("HookManager", () => {
   });
 
   describe("updateActor hook — currency changes", () => {
-    it("calls queueChange with correct store names for currency changes", () => {
+    it("does not queue currency changes via updateActor (currency uses updateItem)", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -202,10 +202,7 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 50);
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_silver", 20);
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_copper", 100);
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_platinum", 5);
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
   });
 
@@ -247,7 +244,6 @@ describe("HookManager", () => {
         system: {
           attributes: { hp: { value: 20, temp: 5 } },
           resources: { heroPoints: { value: 1 } },
-          currency: { gp: 100 },
         },
       };
 
@@ -256,8 +252,7 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 20);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 5);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 1);
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 100);
-      expect(exportManager.queueChange).toHaveBeenCalledTimes(4);
+      expect(exportManager.queueChange).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -270,7 +265,6 @@ describe("HookManager", () => {
       const changes = {
         system: {
           attributes: { hp: { value: "not-a-number" } },
-          currency: { gp: null },
         },
       };
 
@@ -295,6 +289,104 @@ describe("HookManager", () => {
       };
 
       triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateItem hook — currency via treasure items", () => {
+    it("queues gold when a gold-pieces item quantity changes", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Gold Pieces", {
+        system: { slug: "gold-pieces", quantity: 25 },
+      });
+      const changes = { system: { quantity: 25 } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 25);
+    });
+
+    it("queues platinum when a platinum-pieces item quantity changes", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Platinum Pieces", {
+        system: { slug: "platinum-pieces", quantity: 10 },
+      });
+      const changes = { system: { quantity: 10 } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_platinum", 10);
+    });
+
+    it("queues silver and copper from item updates", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+
+      const silverItem = createMockItem(actor, "Silver Pieces", {
+        system: { slug: "silver-pieces", quantity: 30 },
+      });
+      triggerHook("updateItem", silverItem, { system: { quantity: 30 } });
+
+      const copperItem = createMockItem(actor, "Copper Pieces", {
+        system: { slug: "copper-pieces", quantity: 40 },
+      });
+      triggerHook("updateItem", copperItem, { system: { quantity: 40 } });
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_silver", 30);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_copper", 40);
+    });
+
+    it("does not queue for non-currency treasure items", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Gold Bar", {
+        system: { slug: "gold-bar", quantity: 1 },
+      });
+      const changes = { system: { quantity: 1 } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("does not queue when autoSync is disabled", () => {
+      autoSyncEnabled = false;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Gold Pieces", {
+        system: { slug: "gold-pieces", quantity: 15 },
+      });
+      const changes = { system: { quantity: 15 } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("does not queue for unlinked actors", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor("character", null);
+      const item = createMockItem(actor, "Gold Pieces", {
+        system: { slug: "gold-pieces", quantity: 15 },
+      });
+      const changes = { system: { quantity: 15 } };
+
+      triggerHook("updateItem", item, changes);
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
