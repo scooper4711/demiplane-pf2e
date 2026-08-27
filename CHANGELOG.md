@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.4] - 2026-08-27
+
+### Added
+
+- add red sync-issue indicator to linked actor sheets
+- Sync hand slots and armor in-slot state to Demiplane
+- Sync item quantity and equipped state to Demiplane
+- Push session state changes to Demiplane via updateCharacterV2
+- Add Demiplane info button to actor sheet header
+
+### Fixed
+
+- Detect currency changes via treasure items instead of system.currency
+- Delete items with empty module flag namespace on re-import
+
+### Changed
+
+- Split push payload builder into focused helpers
+- Split long import functions and drop max-lines/complexity overrides
+- Remove dry run feature entirely
+- Gate detail logging behind debug setting; add per-op pull/push logs
+- Remove focus points sync due to Demiplane tracking bug
+- updates docs to reflect more user-friendly way to get auth token
+- removed dead code for conflict resolution
+- Updated architecture and design docs based on latest changes
+- Add GitHub issue templates for bug reports, imports, and features
+
+[0.2.0-beta.4]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.4
+
 ## [0.2.0-beta.3] - 2026-08-25
 
 ### Changed
