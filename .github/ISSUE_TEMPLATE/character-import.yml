@@ -10,6 +10,7 @@ body:
         **Before submitting**, please confirm:
         - All other Foundry VTT modules are **disabled** (only the PF2e system and this module should be active).
         - Your Demiplane character sheet sharing is set to **"Anyone with the link can view"** so we can access it.
+        - If possible, you have an export of a Foundry actor showing what the character *should* look like (see below) to help us pinpoint what was imported incorrectly.
 
   - type: input
     id: character-url
@@ -31,10 +32,21 @@ body:
   - type: textarea
     id: actor-export
     attributes:
-      label: Foundry Actor JSON export
+      label: Foundry Actor JSON export (what the import produced)
       description: |
         After importing, right-click the actor in the Actors sidebar, select "Export Data", and attach the downloaded JSON file here.
         This helps us see exactly what Foundry created from the import.
+      placeholder: Drag and drop the exported .json file here, or paste its contents.
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected-actor-export
+    attributes:
+      label: Foundry Actor JSON export (what it should look like)
+      description: |
+        If you can, attach the export of a Foundry actor that shows what the character *should* look like — e.g. one you built or corrected manually that contains the elements that were imported incorrectly from Demiplane.
+        This doesn't need to be a complete character build — just include the parts that came out wrong.
       placeholder: Drag and drop the exported .json file here, or paste its contents.
     validations:
       required: false
