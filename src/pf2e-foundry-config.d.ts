@@ -215,7 +215,6 @@ declare module "fvtt-types/configuration" {
   interface SettingConfig {
     "demiplane-pf2e.autoSync": boolean;
     "demiplane-pf2e.demiplaneToken": string;
-    "demiplane-pf2e.dryRun": boolean;
     "demiplane-pf2e.debugImport": boolean;
   }
 

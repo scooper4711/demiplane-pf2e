@@ -19,9 +19,8 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Attribute Boost Placement](#11-attribute-boost-placement-on-source-items)
 - [Slug Candidate Generation](#12-slug-candidate-generation)
 - [Game-System-Agnostic Library](#13-game-system-agnostic-npm-library)
-- [World-Scoped Dry Run Setting](#14-world-scoped-dry-run-setting)
-- [Exponential Backoff Retry](#15-exponential-backoff-retry-strategy)
-- [Imported Item Flag Tracking](#16-imported-item-flag-tracking)
+- [Exponential Backoff Retry](#14-exponential-backoff-retry-strategy)
+- [Imported Item Flag Tracking](#15-imported-item-flag-tracking)
 
 ---
 
@@ -305,17 +304,7 @@ The library can be tested in plain Node without Foundry mocks. The module tests 
 
 ---
 
-## 14. World-Scoped Dry Run Setting
-
-**Decision:** The `dryRun` module setting uses `scope: "world"` rather than `scope: "client"`.
-
-**Rationale:** Dry run mode is a safety mechanism: when enabled, no mutations are sent to Demiplane and no actor state is modified. This is a GM-controlled safeguard. If it were client-scoped, individual players could accidentally disable it and push changes during a session where the GM intended preview-only operation.
-
-In practice, dry run mode is used during initial setup (verifying the import looks correct before committing) or when demonstrating the module to a new group. World-wide enforcement is the desired behavior in both cases.
-
----
-
-## 15. Exponential Backoff Retry Strategy
+## 14. Exponential Backoff Retry Strategy
 
 **Decision:** Failed exports retry up to 3 times with exponential backoff (1s, 2s, 4s delays).
 
@@ -332,7 +321,7 @@ After 4 total attempts (initial + 3 retries), the module notifies the user via `
 
 ---
 
-## 16. Imported Item Flag Tracking
+## 15. Imported Item Flag Tracking
 
 **Decision:** Every item created during import is stamped with `flags.demiplane-pf2e.imported = true`.
 

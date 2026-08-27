@@ -27,13 +27,12 @@ export class ImportOrchestrator {
   private choiceSetHandler = new ChoiceSetHandler();
 
   async importCharacter(actor: Actor, characterId: string, options: ImportOptions = {}): Promise<ImportSummary> {
-    const { dryRun = false, token } = options;
+    const { token } = options;
     const summary: ImportSummary = {
       itemsImported: 0,
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: dryRun,
     };
 
     const engines = await this.fetchCharacterEngines(characterId, token, summary);
@@ -46,14 +45,6 @@ export class ImportOrchestrator {
 
     const selectionData = this.buildSelectionData(engines);
     const categorized = this.categorizeEngines(engines);
-
-    if (dryRun) {
-      for (const items of Object.values(categorized)) {
-        summary.itemsImported += items.length;
-      }
-      summary.itemsImported -= selectionData.grantedFeatSlugs.size;
-      return summary;
-    }
 
     this.choiceSetHandler.enable();
 

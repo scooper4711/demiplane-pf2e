@@ -14,7 +14,6 @@ export interface SyncTabData {
   pendingChanges: PendingChange[];
   unresolvedSlugs: UnresolvedSlug[];
   lastImportSummary: ImportSummary | undefined;
-  dryRunEnabled: boolean;
   operationInProgress: boolean;
 }
 
@@ -25,24 +24,6 @@ export interface SyncTabData {
  */
 export class SyncTabRenderer {
   private operationInProgress = false;
-
-  /**
-   * Registers a Foundry settings change hook that re-renders any open actor
-   * sheets when the dryRun setting changes.
-   * This ensures button labels and the dry run indicator update immediately
-   * without requiring a page reload.
-   */
-  static registerSettingsHook(): void {
-    Hooks.on("updateSetting", (setting: { key: string }) => {
-      if (setting.key === `${MODULE_ID}.dryRun`) {
-        for (const window of Object.values(ui.windows)) {
-          if (window instanceof ActorSheet) {
-            window.render(false);
-          }
-        }
-      }
-    });
-  }
 
   renderTab(sheet: ActorSheet, html: JQuery, data: SyncTabData): void {
     const characterId = data.characterId;
@@ -75,7 +56,6 @@ export class SyncTabRenderer {
   private buildTabContent(data: SyncTabData): string {
     const sections = [
       this.buildStatusSection(data),
-      this.buildDryRunIndicator(data),
       this.buildPendingChangesSection(data),
       this.buildUnresolvedSlugsSection(data),
       this.buildImportSummarySection(data),
@@ -104,14 +84,6 @@ export class SyncTabRenderer {
         <dd>${exportTimestamp}</dd>
       </dl>
     </section>`;
-  }
-
-  private buildDryRunIndicator(data: SyncTabData): string {
-    if (!data.dryRunEnabled) return "";
-    return `<div class="dry-run-indicator notification warning">
-      <i class="fas fa-eye"></i>
-      <strong>Dry Run Mode Active</strong> — No changes will be written to Foundry or Demiplane.
-    </div>`;
   }
 
   private buildPendingChangesSection(data: SyncTabData): string {
@@ -150,7 +122,6 @@ export class SyncTabRenderer {
     if (!data.lastImportSummary) return "";
 
     const summary = data.lastImportSummary;
-    const previewLabel = summary.preview ? " (Preview)" : "";
 
     let errorsHtml = "";
     if (summary.errors.length > 0) {
@@ -159,7 +130,7 @@ export class SyncTabRenderer {
     }
 
     return `<section class="import-summary">
-      <h3>Last Import${previewLabel}</h3>
+      <h3>Last Import</h3>
       <dl>
         <dt>Items Imported</dt>
         <dd>${String(summary.itemsImported)}</dd>
@@ -173,17 +144,15 @@ export class SyncTabRenderer {
   }
 
   private buildActionButtons(data: SyncTabData): string {
-    const importLabel = data.dryRunEnabled ? "Preview Import" : "Import from Demiplane";
-    const pushLabel = data.dryRunEnabled ? "Preview Push" : "Push to Demiplane";
     const disabled = data.operationInProgress ? "disabled" : "";
     const spinner = data.operationInProgress ? `<i class="fas fa-spinner fa-spin"></i> ` : "";
 
     return `<section class="sync-actions">
       <button class="sync-import" type="button" ${disabled}>
-        ${spinner}<i class="fas fa-download"></i> ${importLabel}
+        ${spinner}<i class="fas fa-download"></i> Import from Demiplane
       </button>
       <button class="sync-push" type="button" ${disabled}>
-        ${spinner}<i class="fas fa-upload"></i> ${pushLabel}
+        ${spinner}<i class="fas fa-upload"></i> Push to Demiplane
       </button>
     </section>`;
   }

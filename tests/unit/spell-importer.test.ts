@@ -1,14 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  installFoundryMocks,
-  createMockActor,
-  createMockPack,
-} from "./foundry-mocks.js";
+import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applySpells } from "../../src/import/spell-importer.js";
-import type {
-  DemiplaneEngineEntry,
-  ImportSummary,
-} from "../../src/import/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
 describe("applySpells", () => {
   beforeEach(() => {
@@ -43,15 +36,10 @@ describe("applySpells", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 
-  function makeSpellEngine(
-    slug: string,
-    rank: number,
-    source: string,
-  ): DemiplaneEngineEntry {
+  function makeSpellEngine(slug: string, rank: number, source: string): DemiplaneEngineEntry {
     return {
       id: slug,
       name: `tabula/spell/${slug}.eng`,
@@ -78,9 +66,7 @@ describe("applySpells", () => {
     // Should create a spellcastingEntry + spells
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
     const firstCall = actor.createEmbeddedDocuments.mock.calls[0];
-    expect((firstCall[1][0] as Record<string, unknown>).type).toBe(
-      "spellcastingEntry",
-    );
+    expect((firstCall[1][0] as Record<string, unknown>).type).toBe("spellcastingEntry");
     expect(summary.log.some((l) => l.includes("spells"))).toBe(true);
   });
 
@@ -102,16 +88,11 @@ describe("applySpells", () => {
     await applySpells(actor as never, engines, summary);
 
     const entries = actor.createEmbeddedDocuments.mock.calls.filter(
-      (c: unknown[]) =>
-        (c[1] as Array<Record<string, unknown>>)[0].type ===
-        "spellcastingEntry",
+      (c: unknown[]) => (c[1] as Array<Record<string, unknown>>)[0].type === "spellcastingEntry"
     );
     expect(entries.length).toBe(1);
     const entryData = (entries[0][1] as Array<Record<string, unknown>>)[0];
-    expect(
-      (entryData.system as Record<string, Record<string, unknown>>).prepared
-        .value,
-    ).toBe("innate");
+    expect((entryData.system as Record<string, Record<string, unknown>>).prepared.value).toBe("innate");
   });
 
   it("skips scroll-sourced spells", async () => {
@@ -144,16 +125,14 @@ describe("applySpells", () => {
     await applySpells(actor as never, engines, summary);
 
     // Count spell items created (exclude spellcastingEntry)
-    const spellCalls = actor.createEmbeddedDocuments.mock.calls.filter(
-      (c: unknown[]) => {
-        const items = c[1] as Array<Record<string, unknown>>;
-        return items.some((i) => i.type !== "spellcastingEntry");
-      },
-    );
+    const spellCalls = actor.createEmbeddedDocuments.mock.calls.filter((c: unknown[]) => {
+      const items = c[1] as Array<Record<string, unknown>>;
+      return items.some((i) => i.type !== "spellcastingEntry");
+    });
     if (spellCalls.length > 0) {
-      const spellItems = (
-        spellCalls[0][1] as Array<Record<string, unknown>>
-      ).filter((i) => i.type !== "spellcastingEntry");
+      const spellItems = (spellCalls[0][1] as Array<Record<string, unknown>>).filter(
+        (i) => i.type !== "spellcastingEntry"
+      );
       expect(spellItems.length).toBe(1); // Only one electric arc
     }
   });

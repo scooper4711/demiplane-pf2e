@@ -167,7 +167,7 @@ describe("Feature: demiplane-foundry-sync, Property 10: Rate limiter never excee
         for (let i = 0; i < flushCount; i++) {
           manager.queueChange(actor as never, "character_hit-points_current", i);
           const result = await manager.flush(actor as never);
-          if (result.success && !result.preview) {
+          if (result.success) {
             successfulCalls++;
           }
         }

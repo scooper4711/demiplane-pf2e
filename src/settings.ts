@@ -24,15 +24,6 @@ export function registerSettings(): void {
     default: "",
   });
 
-  game.settings.register(MODULE_ID, "dryRun", {
-    name: "Dry Run Mode",
-    hint: "Preview import/export changes without writing to Foundry or Demiplane. When enabled, sync operations show what would change without applying anything.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
-  });
-
   game.settings.register(MODULE_ID, "debugImport", {
     name: "Debug Import Logging",
     hint: "Log detailed import lifecycle information to the browser console. Useful for troubleshooting import issues.",

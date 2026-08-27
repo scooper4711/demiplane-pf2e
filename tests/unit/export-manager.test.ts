@@ -132,24 +132,6 @@ describe("ExportManager", () => {
     });
   });
 
-  describe("flush returns pending changes as preview in dry run mode", () => {
-    it("returns preview array without sending API call", async () => {
-      const client = createMockClient();
-      const manager = new ExportManager(client as never);
-      const actor = createMockActor();
-
-      manager.queueChange(actor as never, "character_hit-points_current", 25);
-      manager.queueChange(actor as never, "character_hero-points", 1);
-
-      const result = await manager.flush(actor as never, { dryRun: true });
-
-      expect(result.success).toBe(true);
-      expect(result.preview).toHaveLength(2);
-      expect(result.preview?.find((c) => c.field === "character_hit-points_current")?.value).toBe(25);
-      expect(client.updateCharacter).not.toHaveBeenCalled();
-    });
-  });
-
   describe("flush clears pending changes on success", () => {
     it("removes pending changes after successful push", async () => {
       const client = createMockClient();

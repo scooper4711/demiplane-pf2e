@@ -19,7 +19,7 @@ describe("applySpells - curriculum separation", () => {
   });
 
   function makeSummary(): ImportSummary {
-    return { itemsImported: 0, itemsSkipped: 0, errors: [], log: [], preview: false };
+    return { itemsImported: 0, itemsSkipped: 0, errors: [], log: [] };
   }
 
   function makeWizardSpellbookEngine(slug: string, rank: number, isCurriculum: boolean): DemiplaneEngineEntry {
@@ -209,7 +209,7 @@ describe("applySpells - signature spells", () => {
   });
 
   function makeSummary(): ImportSummary {
-    return { itemsImported: 0, itemsSkipped: 0, errors: [], log: [], preview: false };
+    return { itemsImported: 0, itemsSkipped: 0, errors: [], log: [] };
   }
 
   it("marks signature spells for spontaneous casters", async () => {

@@ -12,7 +12,6 @@ export const PACKS = [
 ] as const;
 
 export interface ImportOptions {
-  dryRun?: boolean;
   token?: string;
 }
 
@@ -21,7 +20,6 @@ export interface ImportSummary {
   itemsSkipped: number;
   errors: string[];
   log: string[];
-  preview: boolean;
 }
 
 export interface DemiplaneEngineEntry {

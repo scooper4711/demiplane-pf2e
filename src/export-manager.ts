@@ -10,10 +10,6 @@ const RATE_LIMIT_MAX_CALLS = 30;
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
-export interface ExportOptions {
-  dryRun?: boolean;
-}
-
 export interface PendingChange {
   field: string;
   value: number;
@@ -40,7 +36,6 @@ export interface PendingItemChange {
 export interface ExportResult {
   success: boolean;
   error?: string;
-  preview?: PendingChange[];
 }
 
 interface CharacterMetadata {
@@ -160,8 +155,7 @@ export class ExportManager {
     this.debounceTimers.set(characterId, timer);
   }
 
-  async flush(actor: Actor, options: ExportOptions = {}): Promise<ExportResult> {
-    const dryRun = this.resolveDryRun(options);
+  async flush(actor: Actor): Promise<ExportResult> {
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
     if (!characterId) {
@@ -174,13 +168,6 @@ export class ExportManager {
     const itemChanges = this.pendingItemChanges.get(characterId);
     if ((!changes || changes.size === 0) && (!itemChanges || itemChanges.size === 0)) {
       return { success: true };
-    }
-
-    if (dryRun) {
-      return {
-        success: true,
-        preview: changes ? Array.from(changes.values()) : [],
-      };
     }
 
     if (!this.isWithinRateLimit(characterId)) {
@@ -214,12 +201,6 @@ export class ExportManager {
   hasPendingChanges(characterId: string): boolean {
     const changes = this.pendingChanges.get(characterId);
     return changes !== undefined && changes.size > 0;
-  }
-
-  private resolveDryRun(options: ExportOptions): boolean {
-    if (options.dryRun !== undefined) return options.dryRun;
-    if (typeof game === "undefined") return false;
-    return game.settings.get(MODULE_ID, "dryRun");
   }
 
   private clearDebounceTimer(characterId: string): void {

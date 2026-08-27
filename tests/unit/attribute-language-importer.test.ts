@@ -5,10 +5,7 @@ import {
   applyLanguages,
   applyAttributeBoosts,
 } from "../../src/import/attribute-language-importer.js";
-import type {
-  DemiplaneEngineEntry,
-  ImportSummary,
-} from "../../src/import/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
 describe("applySkillProficiencies", () => {
   beforeEach(() => {
@@ -21,7 +18,6 @@ describe("applySkillProficiencies", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 
@@ -49,7 +45,7 @@ describe("applySkillProficiencies", () => {
       expect.objectContaining({
         "system.skills.athletics.rank": 1,
         "system.skills.crafting.rank": 1,
-      }),
+      })
     );
   });
 
@@ -70,7 +66,7 @@ describe("applySkillProficiencies", () => {
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
         "system.skills.athletics.rank": 2,
-      }),
+      })
     );
   });
 
@@ -138,7 +134,6 @@ describe("applyLanguages", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 
@@ -175,9 +170,7 @@ describe("applyLanguages", () => {
     const summary = makeSummary();
     await applyLanguages(actor as never, engines, summary);
 
-    expect(
-      summary.log.some((l) => l.includes("not found") && l.includes("klingon")),
-    ).toBe(true);
+    expect(summary.log.some((l) => l.includes("not found") && l.includes("klingon"))).toBe(true);
   });
 
   it("splits on newlines", async () => {
@@ -211,7 +204,6 @@ describe("applyAttributeBoosts", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 
@@ -219,15 +211,11 @@ describe("applyAttributeBoosts", () => {
     const actor = createMockActor();
     // Add a mock ancestry item
     actor.items.filter = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [
-        { type: "ancestry", id: "anc1", system: {}, update: actor.update },
-      ];
+      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
       return items.filter(fn);
     }) as never;
     actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [
-        { type: "ancestry", id: "anc1", system: {}, update: actor.update },
-      ];
+      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
       return items.find(fn);
     }) as never;
 
@@ -277,7 +265,7 @@ describe("applyAttributeBoosts", () => {
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
         "system.build.attributes.boosts.1": ["str", "con"],
-      }),
+      })
     );
   });
 });

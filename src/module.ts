@@ -17,7 +17,6 @@ let hookManager: HookManager;
 Hooks.once("init", () => {
   debugLog(`Initializing Demiplane PF2e Sync`);
   registerSettings();
-  SyncTabRenderer.registerSettingsHook();
 });
 
 Hooks.once("ready", async () => {
@@ -170,13 +169,7 @@ async function importLinkedCharacter(actor: Actor, characterId: string, token: s
 async function exportLinkedCharacter(actor: Actor) {
   queueCombatResourceChanges(exportManager, actor);
   queueAllItemChanges(exportManager, actor);
-  const dryRun = game.settings.get(MODULE_ID, "dryRun");
-  const result = await exportManager.flush(actor, { dryRun });
-  if (dryRun) {
-    const count = result.preview?.length ?? 0;
-    ui.notifications.info(`Dry run: would push ${String(count)} field(s) to Demiplane.`);
-    return result;
-  }
+  const result = await exportManager.flush(actor);
   if (result.success) {
     ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
   }

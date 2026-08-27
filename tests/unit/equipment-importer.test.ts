@@ -1,17 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  installFoundryMocks,
-  createMockActor,
-  createMockPack,
-} from "./foundry-mocks.js";
-import {
-  applyEquipment,
-  applyCurrency,
-} from "../../src/import/equipment-importer.js";
-import type {
-  DemiplaneEngineEntry,
-  ImportSummary,
-} from "../../src/import/types.js";
+import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
+import { applyEquipment, applyCurrency } from "../../src/import/equipment-importer.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
 describe("applyEquipment", () => {
   beforeEach(() => {
@@ -45,7 +35,6 @@ describe("applyEquipment", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 
@@ -64,9 +53,7 @@ describe("applyEquipment", () => {
     await applyEquipment(actor as never, engines, summary);
 
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
-    expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(
-      true,
-    );
+    expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
   });
 
   it("skips items not found in compendium", async () => {
@@ -176,7 +163,6 @@ describe("applyCurrency", () => {
       itemsSkipped: 0,
       errors: [],
       log: [],
-      preview: false,
     };
   }
 

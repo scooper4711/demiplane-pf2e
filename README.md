@@ -39,8 +39,6 @@ Turn on **Auto-sync on Actor Update** in module settings to push those fields au
 
 > **Known limitation — quantity on already-owned items.** Demiplane only stores a quantity override for an item once it has _more than one_ of that item on the Demiplane side; a single item has no quantity engine. As a result, editing quantity in Foundry works for items Demiplane already tracks as duplicates, but bumping a single imported item (initially quantity 1) to 2 or more is not pushed. See `demiplane-foundry-sync-research.md` for details.
 
-Dry run mode previews a push without writing to Demiplane.
-
 Still on the roadmap:
 
 - Focus points
