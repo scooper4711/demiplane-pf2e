@@ -33,11 +33,9 @@ The module can push session state from Foundry back to the linked Demiplane shee
 - Temporary hit points
 - Hero points
 - Item equipped state (including 1H/2H hand assignment and armor worn-in-slot)
-- Item quantity, when Demiplane already tracks the item as a duplicate
+- Item quantity
 
 Turn on **Auto-sync on Actor Update** in module settings to push those fields automatically (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
-
-> **Known limitation — quantity on already-owned items.** Demiplane only stores a quantity override for an item once it has _more than one_ of that item on the Demiplane side; a single item has no quantity engine. As a result, editing quantity in Foundry works for items Demiplane already tracks as duplicates, but bumping a single imported item (initially quantity 1) to 2 or more is not pushed. See `demiplane-foundry-sync-research.md` for details.
 
 Still on the roadmap:
 

@@ -102,6 +102,7 @@ export function generateSlugCandidates(slug: string): string[] {
 
 const EQUIPMENT_SLUG_NORMALIZATIONS: Record<string, string> = {
   arrow: "arrows",
+  bolt: "bolts",
   "rations-1-week": "rations",
   "rope-50-feet": "rope",
   "repair-toolkit-basic": "repair-toolkit",

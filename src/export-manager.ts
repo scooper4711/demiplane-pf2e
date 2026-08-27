@@ -318,7 +318,7 @@ export class ExportManager {
   private applyItemChangeEngines(
     updatedEngines: CustomEngine[],
     resolved: ResolvedItemChange[],
-    actor: Actor
+    _actor: Actor
   ): CustomEngine[] {
     let engines = updatedEngines;
     for (const { change: itemChange, demiplaneId } of resolved) {
@@ -327,11 +327,21 @@ export class ExportManager {
         const existing = findCustomEngineByName(engines, qtyName);
         if (existing) {
           engines = engines.map((e) => (e === existing ? { ...e, value: itemChange.value as number } : e));
-        } else if (itemChange.edited) {
-          addExportIssue(
-            actor,
-            `Quantity for "${itemChange.itemSlug}" could not be pushed: Demiplane does not track it`
-          );
+        } else {
+          const newEngine: CustomEngine = {
+            id: `custom_${qtyName}`,
+            name: qtyName,
+            value: itemChange.value as number,
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: crypto.randomUUID(),
+            args: { id: null, parentEngine: demiplaneId },
+          };
+          engines = [...engines, newEngine];
+          if (itemChange.edited) {
+            debugLog(`[push] created new quantity engine ${qtyName} with value ${String(itemChange.value)}`);
+          }
         }
       } else if (itemChange.changeType === "equipped") {
         engines = this.applyEquippedEngine(engines, itemChange, demiplaneId);

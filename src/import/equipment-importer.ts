@@ -84,6 +84,10 @@ function findBySlug(
   const exact = equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === slug);
   if (exact) return exact;
 
+  const plural = `${slug}s`;
+  const pluralMatch = equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === plural);
+  if (pluralMatch) return pluralMatch;
+
   const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
   if (fallbackSlug !== slug) {
     return equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === fallbackSlug);
@@ -145,7 +149,7 @@ export async function applyEquipment(
 
     const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
     const system = data.system as Record<string, unknown>;
-    system.quantity = state.quantityMap.get(demiplaneId) ?? 1;
+    system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
     system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
     items.push({ data: stampImported(data, slug), demiplaneId });
