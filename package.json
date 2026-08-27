@@ -7,7 +7,7 @@
     "build": "rollup -c",
     "build:watch": "rollup -c --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src/**/*.ts --max-warnings 6",
+    "lint": "eslint src/**/*.ts --max-warnings 5",
     "lint:fix": "eslint \"src/**/*.ts\" --fix",
     "format": "prettier --write \"**/*.{ts,js,json,md,yml}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md,yml}\"",

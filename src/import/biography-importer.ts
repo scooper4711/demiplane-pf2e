@@ -2,9 +2,29 @@ import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 
 /**
+ * Maps a Demiplane engine name to the Foundry actor path it populates.
+ */
+const BIO_FIELD_MAP: ReadonlyArray<readonly [string, string]> = [
+  ["character_appearance_gender", "system.details.gender.value"],
+  ["character_appearance_age", "system.details.age.value"],
+  ["character_appearance_ethnicity", "system.details.ethnicity.value"],
+  ["character_appearance_nationality", "system.details.nationality.value"],
+  ["character_appearance_height", "system.details.height.value"],
+  ["character_appearance_weight", "system.details.weight.value"],
+  ["character_appearance_birthplace", "system.details.biography.birthPlace"],
+  ["character_appearance_appearance", "system.details.biography.appearance"],
+  ["character_personality_catchphrases", "system.details.biography.catchphrases"],
+  ["character_personality_attitude", "system.details.biography.attitude"],
+  ["character_personality_likes", "system.details.biography.likes"],
+  ["character_personality_dislikes", "system.details.biography.dislikes"],
+  ["character_campaign_allies", "system.details.biography.allies"],
+  ["character_campaign_enemies", "system.details.biography.enemies"],
+  ["character_campaign_organizations", "system.details.biography.organizations"],
+];
+
+/**
  * Imports biography, deity, and organized play ID from Demiplane.
  */
-// eslint-disable-next-line max-lines-per-function, complexity -- flat field-to-update mapping, splitting would obscure intent
 export async function applyBiography(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
@@ -17,101 +37,66 @@ export async function applyBiography(
 
   const updates: Record<string, unknown> = {};
 
-  const gender = getValue("character_appearance_gender");
-  if (gender) updates["system.details.gender.value"] = gender;
-
-  const age = getValue("character_appearance_age");
-  if (age) updates["system.details.age.value"] = age;
-
-  const ethnicity = getValue("character_appearance_ethnicity");
-  if (ethnicity) updates["system.details.ethnicity.value"] = ethnicity;
-
-  const nationality = getValue("character_appearance_nationality");
-  if (nationality) updates["system.details.nationality.value"] = nationality;
-
-  const height = getValue("character_appearance_height");
-  if (height) updates["system.details.height.value"] = height;
-
-  const weight = getValue("character_appearance_weight");
-  if (weight) updates["system.details.weight.value"] = weight;
-
-  const birthplace = getValue("character_appearance_birthplace");
-  if (birthplace) updates["system.details.biography.birthPlace"] = birthplace;
-
-  const appearance = getValue("character_appearance_appearance");
-  if (appearance) updates["system.details.biography.appearance"] = appearance;
-
-  const catchphrases = getValue("character_personality_catchphrases");
-  if (catchphrases) updates["system.details.biography.catchphrases"] = catchphrases;
-
-  const backstory = getValue("character_campaign_other");
-  if (backstory)
-    updates["system.details.biography.backstory"] =
-      `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
-
-  // Deity — add as item from pf2e.deities compendium
-  const deityName = getValue("character_personality_beliefs");
-  if (deityName) {
-    const deityPack = game.packs.get("pf2e.deities");
-    if (deityPack) {
-      const index = await deityPack.getIndex();
-      const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());
-      if (match) {
-        const deityDoc = await deityPack.getDocument(match._id);
-        if (deityDoc) {
-          await actor.createEmbeddedDocuments("Item", [stampImported(deityDoc.toObject())] as never);
-          summary.log.push(`+ deity: ${deityName}`);
-        }
-      } else {
-        updates["system.details.deity.value"] = deityName;
-        summary.log.push(`! deity "${deityName}" not found in compendium, set as text only`);
-      }
-    }
+  for (const [engineName, path] of BIO_FIELD_MAP) {
+    const value = getValue(engineName);
+    if (value) updates[path] = value;
   }
 
-  const attitude = getValue("character_personality_attitude");
-  if (attitude) updates["system.details.biography.attitude"] = attitude;
-
-  const likes = getValue("character_personality_likes");
-  if (likes) updates["system.details.biography.likes"] = likes;
-
-  const dislikes = getValue("character_personality_dislikes");
-  if (dislikes) updates["system.details.biography.dislikes"] = dislikes;
-
-  const allies = getValue("character_campaign_allies");
-  if (allies) updates["system.details.biography.allies"] = allies;
-
-  const enemies = getValue("character_campaign_enemies");
-  if (enemies) updates["system.details.biography.enemies"] = enemies;
-
-  const organizations = getValue("character_campaign_organizations");
-  if (organizations) updates["system.details.biography.organizations"] = organizations;
-
-  const edicts = getValue("character_personality_edicts");
-  if (edicts)
-    updates["system.details.biography.edicts"] = edicts
-      .split(/[,\n\r]+/)
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-
-  const anathema = getValue("character_personality_anathema");
-  if (anathema)
-    updates["system.details.biography.anathema"] = anathema
-      .split(/[,\n\r]+/)
-      .map((s: string) => s.trim())
-      .filter(Boolean);
-
-  const orgPlayId = getValue("character_organizedplayid");
-  if (orgPlayId) {
-    const lastDash = orgPlayId.lastIndexOf("-");
-    if (lastDash > 0) {
-      updates["system.pfs.playerNumber"] = parseInt(orgPlayId.slice(0, lastDash), 10) || null;
-      updates["system.pfs.characterNumber"] = parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
-    }
-  }
+  applyBackstory(updates, getValue("character_campaign_other"));
+  applyListField(updates, getValue("character_personality_edicts"), "system.details.biography.edicts");
+  applyListField(updates, getValue("character_personality_anathema"), "system.details.biography.anathema");
+  applyOrganizedPlayId(updates, getValue("character_organizedplayid"));
+  await applyDeity(actor, getValue("character_personality_beliefs"), updates, summary);
 
   if (Object.keys(updates).length > 0) {
     await actor.update(updates);
     summary.log.push(`+ biography: ${Object.keys(updates).length} fields`);
+  }
+}
+
+function applyBackstory(updates: Record<string, unknown>, backstory: string | undefined): void {
+  if (backstory)
+    updates["system.details.biography.backstory"] =
+      `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+}
+
+function applyListField(updates: Record<string, unknown>, value: string | undefined, path: string): void {
+  if (!value) return;
+  updates[path] = value
+    .split(/[,\n\r]+/)
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+}
+
+function applyOrganizedPlayId(updates: Record<string, unknown>, orgPlayId: string | undefined): void {
+  if (!orgPlayId) return;
+  const lastDash = orgPlayId.lastIndexOf("-");
+  if (lastDash > 0) {
+    updates["system.pfs.playerNumber"] = parseInt(orgPlayId.slice(0, lastDash), 10) || null;
+    updates["system.pfs.characterNumber"] = parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
+  }
+}
+
+async function applyDeity(
+  actor: Actor,
+  deityName: string | undefined,
+  updates: Record<string, unknown>,
+  summary: ImportSummary
+): Promise<void> {
+  // Deity — add as item from pf2e.deities compendium
+  if (!deityName) return;
+  const deityPack = game.packs.get("pf2e.deities");
+  if (!deityPack) return;
+  const index = await deityPack.getIndex();
+  const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());
+  if (!match) {
+    updates["system.details.deity.value"] = deityName;
+    summary.log.push(`! deity "${deityName}" not found in compendium, set as text only`);
+    return;
+  }
+  const deityDoc = await deityPack.getDocument(match._id);
+  if (deityDoc) {
+    await actor.createEmbeddedDocuments("Item", [stampImported(deityDoc.toObject())] as never);
+    summary.log.push(`+ deity: ${deityName}`);
   }
 }

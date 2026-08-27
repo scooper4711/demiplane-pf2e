@@ -71,17 +71,7 @@ export class ImportOrchestrator {
       await this.createLoreItems(actor, engines, summary);
       await this.importBatchItems(actor, categorized, selectionData, summary);
 
-      await this.setActorIdentity(actor, engines);
-      await applyAttributeBoosts(actor, engines, summary);
-      await applyLanguages(actor, engines, summary);
-      await applyBiography(actor, engines, summary);
-      await applySkillProficiencies(actor, engines, summary);
-      await applyEquipment(actor, engines, summary);
-      await applyCurrency(actor, engines, summary);
-      await applySpells(actor, engines, summary);
-      await applyFeatureGrantedSpells(actor, engines, summary);
-      await applyItemSpells(actor, engines, summary);
-      await this.syncSessionState(actor, engines);
+      await this.applyPostProcessing(actor, engines, summary);
     } finally {
       Hooks.off("preCreateItem", importHookId);
       this.choiceSetHandler.disable();
@@ -89,6 +79,24 @@ export class ImportOrchestrator {
 
     await actor.setFlag(MODULE_ID, "lastImportTimestamp", Date.now());
     return summary;
+  }
+
+  private async applyPostProcessing(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    summary: ImportSummary
+  ): Promise<void> {
+    await this.setActorIdentity(actor, engines);
+    await applyAttributeBoosts(actor, engines, summary);
+    await applyLanguages(actor, engines, summary);
+    await applyBiography(actor, engines, summary);
+    await applySkillProficiencies(actor, engines, summary);
+    await applyEquipment(actor, engines, summary);
+    await applyCurrency(actor, engines, summary);
+    await applySpells(actor, engines, summary);
+    await applyFeatureGrantedSpells(actor, engines, summary);
+    await applyItemSpells(actor, engines, summary);
+    await this.syncSessionState(actor, engines);
   }
 
   private async importBatchItems(

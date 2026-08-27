@@ -1,9 +1,13 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 
+interface ProfKnowledge {
+  profOverrides: Record<string, number>;
+  overriddenFlags: Set<string>;
+}
+
 /**
  * Imports skill proficiencies from Demiplane.
  */
-// eslint-disable-next-line max-lines-per-function, complexity -- flat override/rank logic, cognitively simple
 export async function applySkillProficiencies(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
@@ -12,6 +16,26 @@ export async function applySkillProficiencies(
   const skillEngines = engines.filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug);
   if (skillEngines.length === 0) return;
 
+  const { profOverrides, overriddenFlags } = collectProfKnowledge(engines);
+  const activeOverrides = computeActiveOverrides(overriddenFlags, profOverrides);
+  const ranks = computeSkillRanks(skillEngines, activeOverrides);
+
+  const currentSkills = (actor.system as { skills: Record<string, { rank: number }> }).skills;
+
+  const updates = buildSkillUpdates(currentSkills, ranks);
+  if (Object.keys(updates).length > 0) {
+    await actor.update(updates);
+    summary.log.push(`+ skills: [${formatSkillUpdates(updates)}]`);
+  }
+
+  const overrideUpdates = buildOverrideUpdates(currentSkills, activeOverrides);
+  if (Object.keys(overrideUpdates).length > 0) {
+    await actor.update(overrideUpdates);
+    summary.log.push(`+ skill overrides: [${formatOverrides(activeOverrides)}]`);
+  }
+}
+
+function collectProfKnowledge(engines: DemiplaneEngineEntry[]): ProfKnowledge {
   const profOverrides: Record<string, number> = {};
   const overriddenFlags = new Set<string>();
   for (const eng of engines) {
@@ -25,7 +49,13 @@ export async function applySkillProficiencies(
       profOverrides[profMatch[1]] = eng.value as number;
     }
   }
+  return { profOverrides, overriddenFlags };
+}
 
+function computeActiveOverrides(
+  overriddenFlags: Set<string>,
+  profOverrides: Record<string, number>
+): Record<string, number> {
   const activeOverrides: Record<string, number> = {};
   for (const skill of overriddenFlags) {
     const override = profOverrides[skill];
@@ -33,7 +63,13 @@ export async function applySkillProficiencies(
       activeOverrides[skill] = override;
     }
   }
+  return activeOverrides;
+}
 
+function computeSkillRanks(
+  skillEngines: DemiplaneEngineEntry[],
+  activeOverrides: Record<string, number>
+): Record<string, number> {
   const ranks: Record<string, number> = {};
   for (const eng of skillEngines) {
     const slug = eng.args.slug as string;
@@ -46,41 +82,47 @@ export async function applySkillProficiencies(
     const rank = isIncrease ? 2 : 1;
     ranks[slug] = Math.max(ranks[slug] || 0, rank);
   }
+  return ranks;
+}
 
+function buildSkillUpdates(
+  currentSkills: Record<string, { rank: number }>,
+  ranks: Record<string, number>
+): Record<string, number> {
   const updates: Record<string, number> = {};
-  const currentSkills = (actor.system as { skills: Record<string, { rank: number }> }).skills;
-
   for (const [skill, targetRank] of Object.entries(ranks)) {
     const currentRank = currentSkills[skill]?.rank ?? 0;
     if (targetRank > currentRank) {
       updates[`system.skills.${skill}.rank`] = targetRank;
     }
   }
+  return updates;
+}
 
-  if (Object.keys(updates).length > 0) {
-    await actor.update(updates);
-    const applied = Object.entries(updates)
-      .map(([s, r]) => `${s.replace("system.skills.", "").replace(".rank", "")}:${r}`)
-      .join(", ");
-    summary.log.push(`+ skills: [${applied}]`);
-  }
-
-  if (Object.keys(activeOverrides).length > 0) {
-    const overrideUpdates: Record<string, number> = {};
-    for (const [skill, rank] of Object.entries(activeOverrides)) {
-      const currentRank = currentSkills[skill]?.rank ?? 0;
-      if (rank !== currentRank) {
-        overrideUpdates[`system.skills.${skill}.rank`] = rank;
-      }
-    }
-    if (Object.keys(overrideUpdates).length > 0) {
-      await actor.update(overrideUpdates);
-      const applied = Object.entries(activeOverrides)
-        .map(([s, r]) => `${s}:${r}`)
-        .join(", ");
-      summary.log.push(`+ skill overrides: [${applied}]`);
+function buildOverrideUpdates(
+  currentSkills: Record<string, { rank: number }>,
+  activeOverrides: Record<string, number>
+): Record<string, number> {
+  const updates: Record<string, number> = {};
+  for (const [skill, rank] of Object.entries(activeOverrides)) {
+    const currentRank = currentSkills[skill]?.rank ?? 0;
+    if (rank !== currentRank) {
+      updates[`system.skills.${skill}.rank`] = rank;
     }
   }
+  return updates;
+}
+
+function formatSkillUpdates(updates: Record<string, number>): string {
+  return Object.entries(updates)
+    .map(([s, r]) => `${s.replace("system.skills.", "").replace(".rank", "")}:${r}`)
+    .join(", ");
+}
+
+function formatOverrides(activeOverrides: Record<string, number>): string {
+  return Object.entries(activeOverrides)
+    .map(([s, r]) => `${s}:${r}`)
+    .join(", ");
 }
 
 /**
@@ -133,14 +175,28 @@ export async function applyLanguages(
 /**
  * Imports attribute boosts from Demiplane and applies them.
  */
-// eslint-disable-next-line max-lines-per-function, complexity -- sequential boost application by category, flat control flow
 export async function applyAttributeBoosts(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
   const boostEngines = engines.filter((e) => e.name === "core/selection/attribute/boost.eng" && e.args?.slug);
+  if (boostEngines.length === 0) return;
 
+  const categories = categorizeBoosts(boostEngines);
+
+  await applyItemBoosts(actor, "ancestry", categories.ancestryBoosts, summary);
+  await applyItemBoosts(actor, "background", categories.backgroundBoosts, summary);
+  await applyLevelBoosts(actor, categories.levelBoosts, summary);
+}
+
+interface BoostCategories {
+  ancestryBoosts: string[];
+  backgroundBoosts: string[];
+  levelBoosts: Record<string, string[]>;
+}
+
+function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories {
   const attrMap: Record<string, string> = {
     strength: "str",
     dexterity: "dex",
@@ -162,8 +218,6 @@ export async function applyAttributeBoosts(
       ancestryBoosts.push(slug);
     } else if (sourceRow === "background-boosts") {
       backgroundBoosts.push(slug);
-    } else if (sourceRow === "class-key-attribute") {
-      // Handled by Grant Chain
     } else {
       const levelMatch = sourceRow.match(/attribute-boosts-level-(\d+)/);
       if (levelMatch) {
@@ -174,36 +228,37 @@ export async function applyAttributeBoosts(
     }
   }
 
-  const ancestryItem = actor.items.find((i: { type: string }) => i.type === "ancestry");
-  if (ancestryItem && ancestryBoosts.length > 0) {
-    const updates: Record<string, string> = {};
-    ancestryBoosts.forEach((slug, i) => {
-      updates[`system.boosts.${i}.selected`] = slug;
-    });
-    await ancestryItem.update(updates);
-    summary.log.push(`+ boosts: ancestry [${ancestryBoosts.join(", ")}]`);
-  }
+  return { ancestryBoosts, backgroundBoosts, levelBoosts };
+}
 
-  const backgroundItem = actor.items.find((i: { type: string }) => i.type === "background");
-  if (backgroundItem && backgroundBoosts.length > 0) {
-    const updates: Record<string, string> = {};
-    backgroundBoosts.forEach((slug, i) => {
-      updates[`system.boosts.${i}.selected`] = slug;
-    });
-    await backgroundItem.update(updates);
-    summary.log.push(`+ boosts: background [${backgroundBoosts.join(", ")}]`);
-  }
+async function applyItemBoosts(actor: Actor, type: string, boosts: string[], summary: ImportSummary): Promise<void> {
+  if (boosts.length === 0) return;
+  const item = actor.items.find((i: { type: string }) => i.type === type);
+  if (!item) return;
 
-  if (Object.keys(levelBoosts).length > 0) {
-    const updates: Record<string, string[]> = {};
-    for (const [level, boosts] of Object.entries(levelBoosts)) {
-      updates[`system.build.attributes.boosts.${level}`] = boosts;
-    }
-    await actor.update(updates);
-    summary.log.push(
-      `+ boosts: levels [${Object.entries(levelBoosts)
-        .map(([l, b]) => `L${l}:${b.join(",")}`)
-        .join("; ")}]`
-    );
+  const updates: Record<string, string> = {};
+  boosts.forEach((slug, i) => {
+    updates[`system.boosts.${i}.selected`] = slug;
+  });
+  await item.update(updates);
+  summary.log.push(`+ boosts: ${type} [${boosts.join(", ")}]`);
+}
+
+async function applyLevelBoosts(
+  actor: Actor,
+  levelBoosts: Record<string, string[]>,
+  summary: ImportSummary
+): Promise<void> {
+  if (Object.keys(levelBoosts).length === 0) return;
+
+  const updates: Record<string, string[]> = {};
+  for (const [level, boosts] of Object.entries(levelBoosts)) {
+    updates[`system.build.attributes.boosts.${level}`] = boosts;
   }
+  await actor.update(updates);
+  summary.log.push(
+    `+ boosts: levels [${Object.entries(levelBoosts)
+      .map(([l, b]) => `L${l}:${b.join(",")}`)
+      .join("; ")}]`
+  );
 }
