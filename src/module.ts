@@ -33,6 +33,7 @@ Hooks.once("ready", async () => {
 
   importOrchestrator = new ImportOrchestrator();
   exportManager = new ExportManager(client);
+  exportManager.setOnConflictHandler((actor) => reimportActorOnConflict(actor));
   hookManager = new HookManager(exportManager);
   void new CharacterLinkDialog(client);
 
@@ -177,8 +178,46 @@ async function exportLinkedCharacter(actor: Actor) {
   const result = await exportManager.flush(actor);
   if (result.success) {
     ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
+  } else if (result.conflict) {
+    ui.notifications.warn(
+      `Demiplane character changed on the server since last import — re-importing "${actor.name}" to avoid overwriting. Your pending changes were not pushed; please re-apply them after the re-import.`
+    );
+    // Re-import is performed by the registered conflict handler.
   }
   return result;
+}
+
+/**
+ * Re-imports an actor from Demiplane after an optimistic-concurrency conflict,
+ * refreshing both its actor state and the stored `lastUpdated` timestamp.
+ * Registered on the ExportManager so that both manual exports and debounced
+ * auto-pushes recover identically on conflict.
+ */
+async function reimportActorOnConflict(actor: Actor) {
+  const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+  const token = game.settings.get(MODULE_ID, "demiplaneToken") as string | undefined;
+  if (!characterId || !token) {
+    ui.notifications.warn(`Unable to re-import "${actor.name}": missing character link or token.`);
+    return;
+  }
+  try {
+    // Delete previously imported items first, mirroring Update from Demiplane
+    const importedItems = actor.items.filter((item) => {
+      const moduleFlags = (item.flags as Record<string, unknown> | undefined)?.[MODULE_ID] as
+        Record<string, unknown> | undefined;
+      return moduleFlags !== undefined;
+    });
+    if (importedItems.length > 0) {
+      await actor.deleteEmbeddedDocuments(
+        "Item",
+        importedItems.map((item) => (item as { id: string }).id)
+      );
+    }
+  } catch (error) {
+    debugLog(`[conflict] failed to delete imported items before re-import: ${String(error)}`);
+  }
+  const summary = await importLinkedCharacter(actor, characterId, token);
+  ui.notifications.info(`Re-imported "${actor.name}" from Demiplane — ${summary.itemsImported} items.`);
 }
 // Add "Update from Demiplane" to actor right-click context menu
 // Parameter types are inferred from the hook registry: v14 passes the directory

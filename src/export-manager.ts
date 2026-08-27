@@ -39,6 +39,7 @@ export interface PendingItemChange {
 export interface ExportResult {
   success: boolean;
   error?: string;
+  conflict?: boolean;
 }
 
 interface CharacterMetadata {
@@ -74,9 +75,22 @@ export class ExportManager {
   private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly apiCallTimestamps: Map<string, number[]> = new Map();
   private suspended = false;
+  private onConflictHandler: ((actor: Actor) => Promise<void>) | undefined = undefined;
 
   constructor(client: DemiplaneClient) {
     this.client = client;
+  }
+
+  /**
+   * Registers a callback invoked when a push is aborted because the server
+   * character was updated elsewhere (optimistic-concurrency conflict). The
+   * handler typically re-imports the actor to refresh its state and the stored
+   * `lastUpdated` timestamp.
+   *
+   * @param handler - Async callback receiving the conflicting actor.
+   */
+  setOnConflictHandler(handler: (actor: Actor) => Promise<void>): void {
+    this.onConflictHandler = handler;
   }
 
   /**
@@ -198,6 +212,50 @@ export class ExportManager {
       return { success: false, error };
     }
 
+    // Optimistic concurrency: check if Demiplane has been updated since last import
+    const storedUpdated = actor.getFlag(MODULE_ID, "lastUpdated") as string | undefined;
+    const startedAt = Date.now();
+    if (storedUpdated) {
+      debugLog(`[push] conflict check: stored lastUpdated=${storedUpdated}`);
+      try {
+        const serverUpdated = await this.client.fetchCharacterUpdated(characterId);
+        const matched = serverUpdated === storedUpdated;
+        debugLog(
+          `[push] conflict check: server updated=${serverUpdated} (took ${Date.now() - startedAt}ms) ` +
+            `${matched ? "MATCH" : "MISMATCH"}`
+        );
+        if (!matched) {
+          const error = "Conflict: Demiplane character was updated elsewhere. Re-importing.";
+          addExportIssue(actor, error);
+          debugLog(
+            `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
+          );
+          // Clear pending changes so we don't retry the stale push
+          this.pendingChanges.delete(characterId);
+          this.pendingItemChanges.delete(characterId);
+          // Trigger conflict recovery (re-import) without blocking the flush return
+          if (this.onConflictHandler) {
+            void this.onConflictHandler(actor);
+          }
+          return { success: false, error, conflict: true };
+        }
+      } catch (error) {
+        debugLog(`[push] failed to fetch updated for conflict check: ${String(error)}`);
+        // If we can't fetch updated, proceed with push but log
+      }
+    } else {
+      debugLog(`[push] no stored lastUpdated flag — skipping optimistic concurrency check`);
+    }
+
+    // Keep session alive
+    try {
+      await this.client.updateLastAccess();
+      debugLog(`[push] updateLastAccess succeeded (took ${Date.now() - startedAt}ms)`);
+    } catch (error) {
+      debugLog(`[push] updateLastAccess failed: ${String(error)}`);
+      // Non-critical: ignore failure to update last access
+    }
+
     const fetched = await this.buildUpdatedCharacterData(
       characterId,
       actor,
@@ -210,8 +268,10 @@ export class ExportManager {
       return { success: false, error };
     }
 
+    debugLog(`[push] starting push (build took ${Date.now() - startedAt}ms)`);
     const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
+    debugLog(`[push] push resolved ${result.success ? "success" : "failure"} (took ${Date.now() - startedAt}ms)`);
     return result;
   }
 
@@ -474,6 +534,19 @@ export class ExportManager {
       this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);
       await this.updateSyncTimestamp(actor);
+      // Update stored lastUpdated to new server value; the push should have bumped it
+      try {
+        const oldUpdated = actor.getFlag(MODULE_ID, "lastUpdated") as string | undefined;
+        const newUpdated = await this.client.fetchCharacterUpdated(characterId);
+        await actor.setFlag(MODULE_ID, "lastUpdated", newUpdated);
+        debugLog(
+          `[push] refreshed lastUpdated: old=${oldUpdated ?? "none"} new=${newUpdated} ` +
+            `${oldUpdated === newUpdated || !oldUpdated ? "(unchanged)" : "(bumped by push)"}`
+        );
+      } catch (error) {
+        debugLog(`[push] failed to refresh lastUpdated: ${String(error)}`);
+        // Non-critical: will be refreshed on next import/fetch
+      }
       return;
     }
 

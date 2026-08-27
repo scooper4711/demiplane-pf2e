@@ -13,6 +13,7 @@
 
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary, ItemCategory } from "./types.js";
 import { MODULE_ID, stampImported } from "./types.js";
+import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
@@ -36,8 +37,15 @@ export class ImportOrchestrator {
       log: [],
     };
 
-    const engines = await this.fetchCharacterEngines(characterId, token, summary);
-    if (!engines) return summary;
+    const fetched = await this.fetchCharacterEngines(characterId, token, summary);
+    if (!fetched) return summary;
+    const { engines, updated } = fetched;
+    if (updated) {
+      await actor.setFlag(MODULE_ID, "lastUpdated", updated);
+      debugLog(`[import] stored lastUpdated=${updated}`);
+    } else {
+      debugLog(`[import] character has no updated timestamp; leaving lastUpdated unchanged`);
+    }
 
     // eslint-disable-next-line no-console -- single always-on log per pull
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
@@ -215,7 +223,7 @@ export class ImportOrchestrator {
     characterId: string,
     token: string | undefined,
     summary: ImportSummary
-  ): Promise<DemiplaneEngineEntry[] | null> {
+  ): Promise<{ engines: DemiplaneEngineEntry[]; updated: string | null } | null> {
     if (!token) {
       summary.errors.push("No authentication token provided");
       return null;
@@ -225,7 +233,7 @@ export class ImportOrchestrator {
       const query = `query($id: uuid!) {
         demiplane_user_character(where: {uuid: {_eq: $id}, deleted_at: {_is_null: true}, enabled: {_eq: true}}) {
           data
-          version
+          updated
         }
       }`;
 
@@ -242,7 +250,7 @@ export class ImportOrchestrator {
         data?: {
           demiplane_user_character: Array<{
             data: { engines: DemiplaneEngineEntry[] };
-            version: number;
+            updated: string | null;
           }>;
         };
         errors?: Array<{ message: string }>;
@@ -259,7 +267,7 @@ export class ImportOrchestrator {
         return null;
       }
 
-      return character.data.engines;
+      return { engines: character.data.engines, updated: character.updated };
     } catch (error) {
       summary.errors.push(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;

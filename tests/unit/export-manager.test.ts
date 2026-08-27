@@ -13,10 +13,11 @@ vi.stubGlobal("ui", {
 
 import { ExportManager } from "../../src/export-manager.js";
 
-function createMockActor(characterId = "char-123") {
+function createMockActor(characterId = "char-123", lastUpdated?: string) {
   return {
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId;
+      if (key === "lastUpdated") return lastUpdated;
       return undefined;
     },
     setFlag: vi.fn().mockResolvedValue(undefined),
@@ -56,6 +57,8 @@ function createMockClient(overrides = {}) {
       editPermission: 0,
     }),
     updateCharacter: vi.fn().mockResolvedValue({ success: true, message: null, result: null }),
+    fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T00:00:00.000Z"),
+    updateLastAccess: vi.fn().mockResolvedValue(true),
     isAuthenticated: vi.fn().mockReturnValue(true),
     ...overrides,
   };
@@ -155,6 +158,81 @@ describe("ExportManager", () => {
       await manager.flush(actor as never);
 
       expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
+    });
+  });
+
+  describe("flush detects conflicts via updated timestamp", () => {
+    it("returns conflict when server updated differs from stored lastUpdated", async () => {
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T12:00:00.000Z"),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor("char-123", "2026-08-27T10:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(false);
+      expect(result.conflict).toBe(true);
+      expect(result.error).toContain("Conflict");
+      expect(client.fetchCharacterUpdated).toHaveBeenCalledWith("char-123");
+      expect(client.updateCharacter).not.toHaveBeenCalled();
+      expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
+    });
+
+    it("invokes the registered conflict handler on conflict", async () => {
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T12:00:00.000Z"),
+      });
+      const manager = new ExportManager(client as never);
+      const onConflict = vi.fn().mockResolvedValue(undefined);
+      manager.setOnConflictHandler(onConflict);
+      const actor = createMockActor("char-123", "2026-08-27T10:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.conflict).toBe(true);
+      await vi.waitFor(() => expect(onConflict).toHaveBeenCalledWith(actor));
+    });
+
+    it("does not invoke the conflict handler when there is no conflict", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const onConflict = vi.fn().mockResolvedValue(undefined);
+      manager.setOnConflictHandler(onConflict);
+      const actor = createMockActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(onConflict).not.toHaveBeenCalled();
+    });
+
+    it("proceeds with push when server updated matches stored lastUpdated", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(result.conflict).toBeUndefined();
+      expect(client.updateCharacter).toHaveBeenCalled();
+    });
+
+    it("proceeds with push when no lastUpdated flag is stored", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor("char-123");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(client.updateCharacter).toHaveBeenCalled();
     });
   });
 
