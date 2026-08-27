@@ -125,7 +125,7 @@ export class ImportOrchestrator {
                 taken,
               };
           }
-          batchItems.push(stampImported(itemData));
+          batchItems.push(stampImported(itemData, eng._slug));
           summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
           summary.itemsImported++;
         } else {
@@ -309,7 +309,7 @@ export class ImportOrchestrator {
     const itemData = await resolveCompendiumItem(eng._slug);
     if (itemData) {
       await this.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      await actor.createEmbeddedDocuments("Item", [stampImported(itemData)] as never);
+      await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)] as never);
       summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       summary.itemsImported++;
     } else {

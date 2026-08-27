@@ -1,4 +1,5 @@
 import { MODULE_ID } from "./import/types.js";
+import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 
 /**
@@ -37,6 +38,59 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
   if (typeof heroPoints === "number") {
     exportManager.queueChange(actor, "character_hero-points", heroPoints);
   }
+}
+
+/**
+ * Queues quantity and equipped-state changes for every syncable item on a
+ * linked actor so a manual push re-syncs full item state (including hand
+ * slots) rather than only combat resources.
+ */
+export function queueAllItemChanges(exportManager: ExportManager, actor: Actor): void {
+  for (const item of actor.items) {
+    const system = item.system as {
+      slug?: string;
+      equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
+      quantity?: number;
+    };
+    const slug = system?.slug;
+    if (typeof slug !== "string") continue;
+
+    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
+    const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
+
+    if (typeof system?.quantity === "number") {
+      if (slug in TREASURE_ITEM_MAP) {
+        exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, system.quantity);
+      } else {
+        exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", system.quantity);
+      }
+    }
+
+    const carryType = system?.equipped?.carryType;
+    if (typeof carryType === "string") {
+      queueEquipped(exportManager, actor, item, slug, demiplaneSlug, system.equipped);
+    }
+  }
+}
+
+function queueEquipped(
+  exportManager: ExportManager,
+  actor: Actor,
+  item: Item,
+  slug: string,
+  demiplaneSlug: string | undefined,
+  equipped: { carryType?: string; handsHeld?: number; inSlot?: boolean } | undefined
+): void {
+  const handsHeld = typeof equipped?.handsHeld === "number" ? (equipped.handsHeld as number) : undefined;
+  const inSlot = typeof equipped?.inSlot === "boolean" ? (equipped.inSlot as boolean) : undefined;
+  exportManager.queueItemChange(
+    actor,
+    slug,
+    demiplaneSlug,
+    "equipped",
+    { carryType: equipped?.carryType ?? "stowed", handsHeld, inSlot },
+    item.type
+  );
 }
 
 type ActorSyncHook = "updateActor" | "updateItem" | "createItem" | "deleteItem";
@@ -95,20 +149,59 @@ export class HookManager {
     if (!game.settings.get(MODULE_ID, "autoSync")) return;
 
     const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
+    const dpFlags = (item as { flags?: Record<string, Record<string, unknown>> })?.flags?.["demiplane-pf2e"];
+    const demiplaneSlug = typeof dpFlags?.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
 
     const quantity = this.getNestedValue(changes, "system.quantity");
     if (typeof quantity === "number") {
       if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
         this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
       } else if (typeof slug === "string") {
-        this.exportManager.queueItemChange(actor, slug, "quantity", quantity);
+        this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", quantity);
       }
     }
 
-    const carryType = this.getNestedValue(changes, "system.equipped.carryType");
-    if (typeof carryType === "string" && typeof slug === "string") {
-      this.exportManager.queueItemChange(actor, slug, "equipped", carryType);
-    }
+    this.handleEquippedChange(item, actor, slug, demiplaneSlug, changes);
+  }
+
+  private handleEquippedChange(
+    item: Item,
+    actor: Actor,
+    slug: string | undefined,
+    demiplaneSlug: string | undefined,
+    changes: Record<string, unknown>
+  ): void {
+    const equippedChanged =
+      Object.keys(changes).some((key) => key === "system.equipped" || key.startsWith("system.equipped.")) ||
+      this.getNestedValue(changes, "system.equipped") !== undefined;
+    if (!equippedChanged || typeof slug !== "string") return;
+
+    const itemType = (item as { type?: string })?.type;
+    const changeCarryType = this.getNestedValue(changes, "system.equipped.carryType");
+    const changeHandsHeld = this.getNestedValue(changes, "system.equipped.handsHeld");
+    const liveEquipped = (
+      item.system as unknown as {
+        equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
+      }
+    )?.equipped;
+    const effectiveCarryType =
+      typeof changeCarryType === "string" ? changeCarryType : (liveEquipped?.carryType ?? "stowed");
+    const effectiveHandsHeld =
+      typeof changeHandsHeld === "number" ? changeHandsHeld : (liveEquipped?.handsHeld ?? undefined);
+    const effectiveInSlot = typeof liveEquipped?.inSlot === "boolean" ? (liveEquipped.inSlot as boolean) : undefined;
+
+    debugLog(
+      `Equipped change: ${slug} -> carryType=${effectiveCarryType}, handsHeld=${effectiveHandsHeld}, inSlot=${effectiveInSlot}, type=${itemType}`
+    );
+
+    this.exportManager.queueItemChange(
+      actor,
+      slug,
+      demiplaneSlug,
+      "equipped",
+      { carryType: effectiveCarryType, handsHeld: effectiveHandsHeld, inSlot: effectiveInSlot },
+      itemType
+    );
   }
 
   private onItemCreate(item: Item): void {

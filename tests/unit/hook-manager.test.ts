@@ -23,7 +23,7 @@ vi.stubGlobal("game", {
   },
 });
 
-import { HookManager, queueCombatResourceChanges } from "../../src/hook-manager.js";
+import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "../../src/hook-manager.js";
 
 const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
@@ -347,7 +347,7 @@ describe("HookManager", () => {
       triggerHook("updateItem", item, changes);
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "gold-bar", "quantity", 1);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "gold-bar", undefined, "quantity", 1);
     });
 
     it("queues equipped state changes for equipment items", () => {
@@ -362,7 +362,14 @@ describe("HookManager", () => {
 
       triggerHook("updateItem", item, changes);
 
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "equipped", "worn");
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "longsword",
+        undefined,
+        "equipped",
+        { carryType: "worn", handsHeld: undefined },
+        undefined
+      );
     });
 
     it("queues both quantity and equipped when both change", () => {
@@ -377,8 +384,41 @@ describe("HookManager", () => {
 
       triggerHook("updateItem", item, changes);
 
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "quantity", 2);
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "equipped", "held");
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", undefined, "quantity", 2);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "longsword",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: undefined },
+        undefined
+      );
+    });
+
+    it("queues armor equipped state from live item when change lacks carryType", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Armored Coat", {
+        type: "armor",
+        system: {
+          slug: "armored-coat",
+          equipped: { carryType: "worn", handsHeld: 0, inSlot: true },
+        },
+      });
+      const changes = { system: { equipped: { inSlot: false } } };
+
+      triggerHook("updateItem", item, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "armored-coat",
+        undefined,
+        "equipped",
+        { carryType: "worn", handsHeld: 0, inSlot: true },
+        "armor"
+      );
     });
 
     it("does not queue when autoSync is disabled", () => {
@@ -428,6 +468,92 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 22);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 4);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 2);
+    });
+  });
+
+  describe("queueAllItemChanges", () => {
+    it("queues quantity and equipped state for syncable items", () => {
+      const actor = {
+        ...createMockActor(),
+        items: [
+          {
+            type: "weapon",
+            name: "Longsword",
+            system: { slug: "longsword", quantity: 1, equipped: { carryType: "held", handsHeld: 1 } },
+            flags: {},
+          },
+          {
+            type: "armor",
+            name: "Breastplate",
+            system: { slug: "breastplate", quantity: 1, equipped: { carryType: "worn", handsHeld: 0 } },
+            flags: {},
+          },
+        ],
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", undefined, "quantity", 1);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "longsword",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "breastplate",
+        undefined,
+        "equipped",
+        { carryType: "worn", handsHeld: 0 },
+        "armor"
+      );
+    });
+
+    it("routes treasure items to currency engines", () => {
+      const actor = {
+        ...createMockActor(),
+        items: [
+          {
+            type: "treasure",
+            name: "Gold Pieces",
+            system: { slug: "gold-pieces", quantity: 35, equipped: { carryType: "worn", handsHeld: 0 } },
+            flags: {},
+          },
+        ],
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 35);
+    });
+
+    it("uses the stored demiplaneSlug when present", () => {
+      const actor = {
+        ...createMockActor(),
+        items: [
+          {
+            type: "weapon",
+            name: "Longsword",
+            system: { slug: "longsword", quantity: 1, equipped: { carryType: "held", handsHeld: 1 } },
+            flags: { "demiplane-pf2e": { demiplaneSlug: "longsword-rm" } },
+          },
+        ],
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", "longsword-rm", "quantity", 1);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "longsword",
+        "longsword-rm",
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
     });
   });
 

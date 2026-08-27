@@ -3,6 +3,7 @@
 ## Project Concept
 
 A Foundry VTT module that provides two-way sync with Demiplane's Nexus character tools:
+
 - **Demiplane -> Foundry (Source of Truth):** Character building (class, ancestry, feats, spells, skills, attributes, etc.)
 - **Foundry -> Demiplane (Session State):** Consumables, inventory counts, currency, HP, spell slots used, hero points — things that change during play
 
@@ -35,6 +36,7 @@ Key operations discovered:
 **URL:** `POST https://character.demiplane.com/stream-engines`
 
 Request payload includes:
+
 ```json
 {
   "isSheet": true,
@@ -106,43 +108,43 @@ The character is stored as a JSON blob with an `engines` array. Each entry repre
 
 ### Demiplane -> Foundry (Character Build — Read)
 
-| Data | Engine Name Pattern | Notes |
-|------|-------------------|-------|
-| Name | `custom_character_name` | value: "Ezren" |
-| Level | `custom_character_level` | value: 5 |
-| Class | `tabula/class/{slug}.eng` | slug: "wizard-rm" |
-| Ancestry | `tabula/ancestry/{slug}.eng` | slug: "human-rm" |
-| Heritage | `tabula/heritage/{slug}.eng` | slug: "skilled-human-rm" |
-| Background | `tabula/background/{slug}.eng` | slug: "scholar-rm" |
-| Attribute Boosts | `core/selection/attribute/boost.eng` | args.slug = "dexterity", etc. |
-| Skill Training | `core/selection/skill/increase/index.eng` | args.slug = skill name |
-| Feats | `tabula/feat/{slug}.eng` | slug: "familiar-rm", etc. |
-| Class Features | `tabula/class-feature/{slug}.eng` | slug: "school-of-battle-magic-rm" |
-| Spells (known/book) | `tabula/spell/{slug}.eng` | with `addSpellData.baseSpellbookSpell: true` |
-| Spells (prepared) | `tabula/spell/{slug}.eng` | with `isPrepare: true` |
-| Items | `tabula/item/{slug}.eng` | slug: "staff-of-air-basic-rm" |
-| Familiar | `tabula/familiar/{slug}.eng` | slug: "cat-rm" |
-| Familiar Abilities | `tabula/familiar-ability/{slug}.eng` | slug: "darkvision-rm" |
+| Data                | Engine Name Pattern                       | Notes                                        |
+| ------------------- | ----------------------------------------- | -------------------------------------------- |
+| Name                | `custom_character_name`                   | value: "Ezren"                               |
+| Level               | `custom_character_level`                  | value: 5                                     |
+| Class               | `tabula/class/{slug}.eng`                 | slug: "wizard-rm"                            |
+| Ancestry            | `tabula/ancestry/{slug}.eng`              | slug: "human-rm"                             |
+| Heritage            | `tabula/heritage/{slug}.eng`              | slug: "skilled-human-rm"                     |
+| Background          | `tabula/background/{slug}.eng`            | slug: "scholar-rm"                           |
+| Attribute Boosts    | `core/selection/attribute/boost.eng`      | args.slug = "dexterity", etc.                |
+| Skill Training      | `core/selection/skill/increase/index.eng` | args.slug = skill name                       |
+| Feats               | `tabula/feat/{slug}.eng`                  | slug: "familiar-rm", etc.                    |
+| Class Features      | `tabula/class-feature/{slug}.eng`         | slug: "school-of-battle-magic-rm"            |
+| Spells (known/book) | `tabula/spell/{slug}.eng`                 | with `addSpellData.baseSpellbookSpell: true` |
+| Spells (prepared)   | `tabula/spell/{slug}.eng`                 | with `isPrepare: true`                       |
+| Items               | `tabula/item/{slug}.eng`                  | slug: "staff-of-air-basic-rm"                |
+| Familiar            | `tabula/familiar/{slug}.eng`              | slug: "cat-rm"                               |
+| Familiar Abilities  | `tabula/familiar-ability/{slug}.eng`      | slug: "darkvision-rm"                        |
 
 ### Foundry -> Demiplane (Session State — Write)
 
 These are all `CustomDemiplaneEngine` entries that can be updated:
 
-| Data | Store Name | Type |
-|------|-----------|------|
-| Current HP | `character_hit-points_current` | number |
-| Temp HP | `character_hit-points_temp` | number |
-| Hero Points | `character_hero-points` | number |
-| Focus Points | `character_focus_current` | number |
-| Gold | `character_currency_gold` | number |
-| Silver | `character_currency_silver` | number |
-| Copper | `character_currency_copper` | number |
-| Platinum | `character_currency_platinum` | number |
-| Equipped Primary | `character_hand_primary_equipped-id` | engine UUID |
-| Equipped Both | `character_hand_both_equipped-id` | engine UUID |
-| Staff Charges | `character_spell-feature_{id}_charges_current` | number |
-| Initiative Skill | `character_initiative` | string (skill slug) |
-| View Permission | `view-permission` | number |
+| Data             | Store Name                                     | Type                |
+| ---------------- | ---------------------------------------------- | ------------------- |
+| Current HP       | `character_hit-points_current`                 | number              |
+| Temp HP          | `character_hit-points_temp`                    | number              |
+| Hero Points      | `character_hero-points`                        | number              |
+| Focus Points     | `character_focus_current`                      | number              |
+| Gold             | `character_currency_gold`                      | number              |
+| Silver           | `character_currency_silver`                    | number              |
+| Copper           | `character_currency_copper`                    | number              |
+| Platinum         | `character_currency_platinum`                  | number              |
+| Equipped Primary | `character_hand_primary_equipped-id`           | engine UUID         |
+| Equipped Both    | `character_hand_both_equipped-id`              | engine UUID         |
+| Staff Charges    | `character_spell-feature_{id}_charges_current` | number              |
+| Initiative Skill | `character_initiative`                         | string (skill slug) |
+| View Permission  | `view-permission`                              | number              |
 
 ---
 
@@ -160,6 +162,7 @@ character_acrobatics_mod, character_arcana_mod, character_athletics_mod, ...
 ```
 
 Each entry includes:
+
 - `store_name` — internal key
 - `description` — human-readable label
 - `data_type` — "number" or string
@@ -168,6 +171,7 @@ Each entry includes:
 - `max_store_name` — for values with a maximum (like HP)
 
 **Important:** Only entries with `"set": true` can be written back. These include:
+
 - `hit_points` (current)
 - `hit_points_temp`
 - `hero_points`
@@ -219,6 +223,7 @@ The `$data` parameter contains the full `engines` array plus `engineCacheIdsBySo
 Demiplane uses slugs like `fireball-rm`, `wizard-rm`, `staff-of-air-basic-rm`. Foundry PF2e uses compendium IDs and its own slug system. The mapping between these two systems is the main engineering challenge.
 
 Possible approaches:
+
 1. **Direct slug matching** — strip the `-rm` suffix and match against Foundry compendium slugs
 2. **Name matching** — use the `name` field in engine args to fuzzy-match Foundry compendium entries
 3. **Mapping table** — build/maintain a lookup table between systems
@@ -229,7 +234,9 @@ Possible approaches:
 ## Architecture Recommendations
 
 ### Module Type
+
 A Foundry VTT module (not a browser extension) makes more sense here since:
+
 - Foundry modules can make HTTP requests to external APIs
 - The module needs access to Foundry's Actor data for the Foundry -> Demiplane direction
 - It can hook into Foundry's update lifecycle to trigger syncs
@@ -237,6 +244,7 @@ A Foundry VTT module (not a browser extension) makes more sense here since:
 ### Sync Flow
 
 **Import (Demiplane -> Foundry):**
+
 1. User provides character UUID (from Demiplane URL) and auth token
 2. Module fetches character via GraphQL API
 3. Parse engines array into structured character data
@@ -244,12 +252,14 @@ A Foundry VTT module (not a browser extension) makes more sense here since:
 5. Create/update Foundry Actor
 
 **Export (Foundry -> Demiplane):**
+
 1. Hook into Foundry Actor update events (HP change, item use, currency change)
 2. Map changed values to Demiplane CustomDemiplaneEngine entries
 3. Fetch current character version from Demiplane (conflict check)
 4. Push updated engines array via updateCharacterV2 mutation
 
 ### Auth Considerations
+
 - Demiplane auth tokens appear to be session-based (cookie/JWT from their auth system)
 - The module will need a way to authenticate — options:
   - User pastes a token from Demiplane (simplest)
@@ -271,6 +281,7 @@ A Foundry VTT module (not a browser extension) makes more sense here since:
 ## Foundry VTT Actor Creation Strategy
 
 ### System Details (Tested)
+
 - Foundry VTT v14.366
 - PF2e System v8.4.0
 
@@ -279,11 +290,12 @@ A Foundry VTT module (not a browser extension) makes more sense here since:
 The PF2e system uses a **GrantItem rule engine** — when you add a class, ancestry, or feat to a character, `GrantItem` rules on that item automatically cascade and add related features. This is why directly writing actor data breaks things.
 
 **Core Pattern:**
+
 ```js
 // 1. Resolve Demiplane slug -> Foundry compendium UUID
-const foundrySlug = demiplaneSlug.replace(/-rm$/, '');
+const foundrySlug = demiplaneSlug.replace(/-rm$/, "");
 const index = await pack.getIndex({ fields: ["system.slug"] });
-const entry = Array.from(index.values()).find(i => i.system?.slug === foundrySlug);
+const entry = Array.from(index.values()).find((i) => i.system?.slug === foundrySlug);
 const item = await fromUuid(entry.uuid);
 
 // 2. Add to actor (this triggers the grant cascade)
@@ -294,37 +306,38 @@ await actor.createEmbeddedDocuments("Item", [item.toObject()]);
 
 Demiplane uses slugs with a `-rm` suffix for Remastered content. Stripping this suffix maps directly to Foundry PF2e compendium slugs:
 
-| Demiplane Slug | Foundry Slug | Match? |
-|---|---|---|
-| fireball-rm | fireball | Yes |
-| force-barrage-rm | force-barrage | Yes |
-| haste-rm | haste | Yes |
-| familiar-rm | familiar | Yes |
-| incredible-initiative-rm | incredible-initiative | Yes |
-| wizard-rm | wizard | Yes |
-| human-rm | human | Yes |
-| crossbow-rm | crossbow | Yes |
-| glass-shield | glass-shield | Yes (no -rm suffix) |
-| staff-of-air-basic-rm | staff-of-air | **Partial** (tier naming differs) |
+| Demiplane Slug           | Foundry Slug          | Match?                            |
+| ------------------------ | --------------------- | --------------------------------- |
+| fireball-rm              | fireball              | Yes                               |
+| force-barrage-rm         | force-barrage         | Yes                               |
+| haste-rm                 | haste                 | Yes                               |
+| familiar-rm              | familiar              | Yes                               |
+| incredible-initiative-rm | incredible-initiative | Yes                               |
+| wizard-rm                | wizard                | Yes                               |
+| human-rm                 | human                 | Yes                               |
+| crossbow-rm              | crossbow              | Yes                               |
+| glass-shield             | glass-shield          | Yes (no -rm suffix)               |
+| staff-of-air-basic-rm    | staff-of-air          | **Partial** (tier naming differs) |
 
 Slugs without `-rm` (newer content) map directly with no transformation needed.
 
 ### Compendium Packs for Character Building
 
-| Pack Key | Label | Items |
-|---|---|---|
-| pf2e.classes | Classes | 29 |
-| pf2e.ancestries | Ancestries | 50 |
-| pf2e.heritages | Heritages | 328 |
-| pf2e.backgrounds | Backgrounds | 514 |
-| pf2e.feats-srd | Feats | 6,283 |
-| pf2e.spells-srd | Spells | 1,993 |
-| pf2e.equipment-srd | Equipment | 5,856 |
-| pf2e.classfeatures | Class Features | 880 |
+| Pack Key           | Label          | Items |
+| ------------------ | -------------- | ----- |
+| pf2e.classes       | Classes        | 29    |
+| pf2e.ancestries    | Ancestries     | 50    |
+| pf2e.heritages     | Heritages      | 328   |
+| pf2e.backgrounds   | Backgrounds    | 514   |
+| pf2e.feats-srd     | Feats          | 6,283 |
+| pf2e.spells-srd    | Spells         | 1,993 |
+| pf2e.equipment-srd | Equipment      | 5,856 |
+| pf2e.classfeatures | Class Features | 880   |
 
 ### Item Addition Methods (By Type)
 
 **Ancestry/Class/Heritage/Background:**
+
 ```js
 // Use createEmbeddedDocuments — the grant system handles cascading features
 const classItem = await fromUuid("Compendium.pf2e.classes.Item.RwjIZzIxzPpUglnK");
@@ -333,6 +346,7 @@ await actor.createEmbeddedDocuments("Item", [classItem.toObject()]);
 ```
 
 **Feats:**
+
 ```js
 // Same pattern — feats with GrantItem rules auto-add sub-features
 const feat = await fromUuid(featUuid);
@@ -340,13 +354,15 @@ await actor.createEmbeddedDocuments("Item", [feat.toObject()]);
 ```
 
 **Spells (via spellcasting entry):**
+
 ```js
-const spellcasting = actor.spellcasting.find(e => e.name === "Arcane Prepared Spells");
+const spellcasting = actor.spellcasting.find((e) => e.name === "Arcane Prepared Spells");
 const spell = await fromUuid(spellUuid);
 await spellcasting.addSpell(spell, { groupId: rankGroupId });
 ```
 
 **Equipment/Inventory:**
+
 ```js
 const item = await fromUuid(equipmentUuid);
 await actor.addToInventory(item); // Handles stacking automatically
@@ -355,11 +371,13 @@ await actor.addToInventory(item); // Handles stacking automatically
 ### The Grant Chain System
 
 When items are added to an actor, the PF2e system's rule engine processes `GrantItem` rules:
+
 - Adding "Wizard" class → grants "Arcane School", "Arcane Thesis", "Arcane Bond", etc.
 - Adding "Familiar" feat → grants the familiar action item
 - Adding "Scholar" background → grants "Assurance (Arcana)"
 
 Items track their relationships:
+
 - `flags.pf2e.itemGrants` — what this item has granted to the actor
 - `flags.pf2e.grantedBy` — which item caused this item to be added
 - `onDelete: "cascade"` — if the parent is removed, the granted item is too
@@ -367,11 +385,13 @@ Items track their relationships:
 ### Handling User Choices (ChoiceSet Rules)
 
 Some grants require user selection (e.g., "Choose a skill for Skilled Human"). In the Demiplane data, these choices are already resolved in the engine `args`:
+
 ```json
 { "slug": "athletics", "sourceRow": "select-skill-skilled-human-rm..." }
 ```
 
 The module would need to either:
+
 1. Programmatically satisfy ChoiceSet prompts using Demiplane's resolved selections
 2. Or add the resulting granted item directly (bypassing the choice UI)
 
@@ -405,12 +425,14 @@ Hooks.on("deleteItem", (item) => {
 ## Discovered During Research (Playwright MCP)
 
 All of this was discovered by navigating to a live Demiplane character sheet and intercepting network traffic using Playwright MCP. The Playwright MCP server can be used in development to:
+
 - Test authentication flows
 - Inspect live API responses
 - Verify sync operations
 - Debug mapping issues by comparing Demiplane's rendered sheet with the raw data
 
 Playwright MCP config:
+
 ```json
 {
   "mcpServers": {
@@ -461,7 +483,7 @@ const originalPreCreate = ChoiceSetRE.prototype.preCreate;
 
 ChoiceSetRE.prototype.preCreate = async function(params) {
   if (!window.__IMPORT_MODE__) return originalPreCreate.call(this, params);
-  
+
   // Inflate choices, match against Demiplane data, set selection
   this.choices = await this.inflateChoices(rollOptions, params.tempItems);
   const matched = /* find matching choice from Demiplane selections */;
@@ -476,26 +498,26 @@ ChoiceSetRE.prototype.preCreate = async function(params) {
 
 ### ChoiceSet Selection Types
 
-| ChoiceSet type | `selection` value format | Example |
-|---|---|---|
-| Skill choice | Plain slug string | `"acrobatics"` |
-| Attribute choice | Plain slug string | `"strength"` |
-| Feat/item choice (filter-based) | Compendium UUID | `"Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS"` |
+| ChoiceSet type                  | `selection` value format | Example                                             |
+| ------------------------------- | ------------------------ | --------------------------------------------------- |
+| Skill choice                    | Plain slug string        | `"acrobatics"`                                      |
+| Attribute choice                | Plain slug string        | `"strength"`                                        |
+| Feat/item choice (filter-based) | Compendium UUID          | `"Compendium.pf2e.feats-srd.Item.w8Ycgeq2zfyshtoS"` |
 
 ### Demiplane sourceRow → Foundry Feat Slot Mapping
 
 Feats need `system.location` and `system.level.taken` set correctly:
 
 | Demiplane sourceRow pattern | Foundry location | level.taken |
-|---|---|---|
-| `fighter-feat-level-1-rm` | `class-1` | 1 |
-| `fighter-feat-level-2-rm` | `class-2` | 2 |
-| `fighter-feat-level-4-rm` | `class-4` | 4 |
-| `ancestry-feats` | `ancestry-1` | 1 |
-| `ancestry-feat-level-5-rm` | `ancestry-5` | 5 |
-| `skill-feat-level-2-rm` | `skill-2` | 2 |
-| `skill-feat-level-4-rm` | `skill-4` | 4 |
-| `general-feat-level-3-rm` | `general-3` | 3 |
+| --------------------------- | ---------------- | ----------- |
+| `fighter-feat-level-1-rm`   | `class-1`        | 1           |
+| `fighter-feat-level-2-rm`   | `class-2`        | 2           |
+| `fighter-feat-level-4-rm`   | `class-4`        | 4           |
+| `ancestry-feats`            | `ancestry-1`     | 1           |
+| `ancestry-feat-level-5-rm`  | `ancestry-5`     | 5           |
+| `skill-feat-level-2-rm`     | `skill-2`        | 2           |
+| `skill-feat-level-4-rm`     | `skill-4`        | 4           |
+| `general-feat-level-3-rm`   | `general-3`      | 3           |
 
 **Regex**: `sourceRow.match(/^(?:fighter|class|ancestry|skill|general)-feat(?:s)?-level-(\d+)/)` → type + level
 
@@ -504,11 +526,12 @@ Without setting these, feats appear in "Bonus Feats" section.
 ### Slug Extraction from Engine Name
 
 Some engines (ancestry, class, background) have no `args.slug`. Extract from name:
+
 ```javascript
 function getSlug(eng) {
   if (eng.args?.slug) return eng.args.slug;
   const match = eng.name.match(/\/([^/]+)\.eng$/);
-  return match ? match[1] : null;  // "tabula/ancestry/human-rm.eng" → "human-rm"
+  return match ? match[1] : null; // "tabula/ancestry/human-rm.eng" → "human-rm"
 }
 ```
 
@@ -574,6 +597,7 @@ PF2e's `ChoiceSetRuleElement.preCreate` opens an interactive `PickAThingPrompt` 
 2. **Monkey-patch fallback (secondary)**: Patch `ChoiceSetRuleElement.prototype.preCreate` during import. If pre-selection wasn't set (or doesn't match), the patch inflates choices, finds the best match from Demiplane data, and sets the selection. This handles cases where we can't know the exact value format ahead of time.
 
 **Why this works better than replacing preCreate entirely:**
+
 - The original preCreate handles name adjustment (e.g., "Skilled Human" → "Skilled Human (Acrobatics)")
 - The original preCreate processes GrantItem rules that follow the ChoiceSet (e.g., Natural Ambition grants Reactive Shield)
 - The original preCreate sets `flags.pf2e.rulesSelections` correctly
@@ -603,6 +627,7 @@ When the monkey-patch fires, it tries to match available choices against Demipla
 ### presetChoiceSelections (Pre-Selection)
 
 Before adding an item, this method:
+
 1. Finds ChoiceSet rules on the item data
 2. Looks for Demiplane engines whose `sourceRow` contains `select-{type}-{itemSlug}`
 3. For filter-based ChoiceSets (feat grants), resolves the child slug to a compendium UUID
@@ -619,6 +644,7 @@ Before adding an item, this method:
 ### What Is NOT Class-Specific
 
 The entire ChoiceSet resolution is generic:
+
 - Slug matching works for any class/ancestry/heritage
 - `parseFeatSlot` regex handles `{classname}-feat-level-N-rm` for any class
 - Attribute boost logic maps `ancestry-boosts`, `background-boosts`, `attribute-boosts-level-N-rm` generically
@@ -629,6 +655,7 @@ The entire ChoiceSet resolution is generic:
 ### Attribute Boosts (Working)
 
 Applied via:
+
 - Ancestry item: `system.boosts.{n}.selected = "str"` (on the ancestry embedded item)
 - Background item: `system.boosts.{n}.selected = "con"` (on the background embedded item)
 - Level boosts: `system.build.attributes.boosts.{level} = ["str", "dex", "con", "int"]` (on the actor)
@@ -647,6 +674,7 @@ Attribute names mapped: `strength → str`, `dexterity → dex`, etc.
 ### Skill Proficiencies (Partially Working)
 
 **What works via Grant Chain:**
+
 - Saves (fortitude, reflex, will) — from class
 - Perception — from class
 - Attack/defense proficiencies — from class
@@ -654,6 +682,7 @@ Attribute names mapped: `strength → str`, `dexterity → dex`, etc.
 - Background skill (farming-lore from Farmhand) — via Grant Chain
 
 **What still needs work:**
+
 - Fighter's initial proficiency skills (crafting + 3+INT others) — class ChoiceSet is multi-select, not matching correctly
 - Skill increases at levels 3, 5 — not being applied
 - The skill rank values may need direct setting on `system.skills.{skill}.rank`
@@ -663,6 +692,7 @@ Attribute names mapped: `strength → str`, `dexterity → dex`, etc.
 Run: `npx playwright test tests/integration/valeros-import.spec.ts`
 
 Requires:
+
 - Foundry on port 30001 (FOUNDRY_TEST_PORT) with PF2e + module
 - DEMIPLANE_TOKEN in .env
 
@@ -685,6 +715,7 @@ Skills are set directly on `system.skills.{skill}.rank` after the Grant Chain ru
 ### Demiplane Override Pattern
 
 Demiplane stores proficiency overrides as CustomDemiplaneEngine pairs:
+
 - `character_{skill}_prof` — the override value (0=untrained, 1=trained, 2=expert, etc.)
 - `character_{skill}_prof--overridden` — flag (value=1 means override is active)
 
@@ -693,6 +724,7 @@ Both must be present and the `--overridden` flag must be 1 for the override to a
 ### Demiplane Character Updated
 
 The user corrected the Demiplane Valeros character:
+
 - Skilled Human now selects **intimidation** (was bugged with acrobatics)
 - Combat Climber removed (Level 2 skill feat slot now empty)
 - Intimidation override to Expert (Demiplane bug was showing Master)
@@ -743,6 +775,7 @@ Note: `version` field in GraphQL doesn't increment on saves — it's the charact
 ## Current Status (Session 3)
 
 ### Import Features Complete
+
 - **Core identity**: Name, level, avatar (Demiplane URL), prototype token
 - **Build**: Ancestry, heritage, background, class, feats (with slot placement), class features
 - **Class features with ChoiceSet**: Arcane School → School of Battle Magic, Arcane Thesis → Spell Substitution, Bloodline → Imperial (imported as separate items with selection set on parent)
@@ -759,33 +792,39 @@ Note: `version` field in GraphQL doesn't increment on saves — it's the charact
 ### Architecture Decisions (Updated)
 
 **Sync model:**
+
 - Demiplane = source of truth for CHARACTER BUILD
 - Foundry = source of truth for SESSION STATE (prepared spells, spent slots, conditions)
 - Foundry → Demiplane: push session state (HP, hero points, currency) automatically
 - Demiplane → Foundry: user-initiated "Update from Demiplane" (delete imported items + reimport)
 
 **Re-sync strategy:**
+
 - All items created during import get flagged: `flags["foundry-demiplane-pf2e"].imported = true`
 - "Update from Demiplane" deletes all flagged items, then reimports
 - Manually added items (homebrew, GM-granted) survive because they lack the flag
 - No retroactive linking — UUID set only at creation time
 
 **Import-only characters:**
+
 - Only characters created via "Import Demiplane Character" button get the UUID link
 - No ability to attach a UUID to an existing actor
 - Familiars/pets: deferred to later
 
 **ChoiceSet resolution:**
+
 - Hybrid approach: pre-set `rule.selection` on item data + monkey-patch `ChoiceSetRuleElement.preCreate` as fallback
 - GrantItem doesn't fire during import (PF2e timing issue), so class-feature children are imported as standalone items
 - Parent features still get their ChoiceSet selection set for display correctness
 
 **Spell slots:**
+
 - NOT imported — Demiplane computes them client-side from class progression rules
 - Data exists in the Demiplane UI (Prepare view shows "3/3", "2/2" etc.) but not exposed in the engine API
 - Users set slot max in Foundry after import, or we find the Demiplane endpoint later
 
 **Slug resolution:**
+
 - Strip `-rm` (remaster) suffix
 - Strip class suffixes (`-sorcerer`, `-wizard`, etc.) as fallback
 - Try `bloodline-` prefix for bloodline features
@@ -793,50 +832,65 @@ Note: `version` field in GraphQL doesn't increment on saves — it's the charact
 
 ### Demiplane Engine Patterns (Reference)
 
-| Pattern | Meaning |
-|---------|---------|
-| `tabula/ancestry/X-rm.eng` | Ancestry selection |
-| `tabula/heritage/X-rm.eng` | Heritage selection |
-| `tabula/background/X-rm.eng` | Background selection |
-| `tabula/class/X-rm.eng` | Class selection |
-| `tabula/feat/X-rm.eng` | Feat (category from sourceRow) |
-| `tabula/class-feature/X-rm.eng` | Class feature ChoiceSet child |
-| `tabula/spell/X-rm.eng` | Spell (rank from selectionRank, source from parentSpellFeature) |
-| `tabula/item/X-rm.eng` | Equipment item |
-| `tabula/generic-feature/X.eng` | Generic selection (weapon group, etc.) |
-| `core/selection/attribute/boost.eng` | Attribute boost |
-| `core/selection/skill/increase/index.eng` | Skill proficiency |
-| `core/selection/skill/custom-skill/index.eng` | Lore skill |
-| `character_currency_X` | Currency (platinum/gold/silver/copper) |
-| `character_hit-points_current` | Current HP |
-| `character_hit-points_temp` | Temp HP |
-| `character_hero-points` | Hero points |
-| `character_avatar` | Character art URL |
-| `character_name` | Character name |
-| `character_level` | Character level |
-| `character_organizedplayid` | Org play ID (split on last dash) |
-| `character_hand_primary_equipped-id` | Primary hand equipment ID |
-| `character_hand_offhand_equipped-id` | Off-hand equipment ID |
-| `character_hand_both_equipped-id` | Two-handed equipment ID |
-| `{id}-is-equipped` | Worn/invested item |
-| `{id}-container` | Item stored in container |
-| `{id}--quantity` | Item quantity override |
-| `{id}-spell-is-signature` | Signature spell marker |
-| `character-languages-user` | Free-text additional languages |
-| `character_personality_beliefs` | Deity name |
+| Pattern                                       | Meaning                                                         |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| `tabula/ancestry/X-rm.eng`                    | Ancestry selection                                              |
+| `tabula/heritage/X-rm.eng`                    | Heritage selection                                              |
+| `tabula/background/X-rm.eng`                  | Background selection                                            |
+| `tabula/class/X-rm.eng`                       | Class selection                                                 |
+| `tabula/feat/X-rm.eng`                        | Feat (category from sourceRow)                                  |
+| `tabula/class-feature/X-rm.eng`               | Class feature ChoiceSet child                                   |
+| `tabula/spell/X-rm.eng`                       | Spell (rank from selectionRank, source from parentSpellFeature) |
+| `tabula/item/X-rm.eng`                        | Equipment item                                                  |
+| `tabula/generic-feature/X.eng`                | Generic selection (weapon group, etc.)                          |
+| `core/selection/attribute/boost.eng`          | Attribute boost                                                 |
+| `core/selection/skill/increase/index.eng`     | Skill proficiency                                               |
+| `core/selection/skill/custom-skill/index.eng` | Lore skill                                                      |
+| `character_currency_X`                        | Currency (platinum/gold/silver/copper)                          |
+| `character_hit-points_current`                | Current HP                                                      |
+| `character_hit-points_temp`                   | Temp HP                                                         |
+| `character_hero-points`                       | Hero points                                                     |
+| `character_avatar`                            | Character art URL                                               |
+| `character_name`                              | Character name                                                  |
+| `character_level`                             | Character level                                                 |
+| `character_organizedplayid`                   | Org play ID (split on last dash)                                |
+| `character_hand_primary_equipped-id`          | Primary hand equipment ID                                       |
+| `character_hand_offhand_equipped-id`          | Off-hand equipment ID                                           |
+| `character_hand_both_equipped-id`             | Two-handed equipment ID                                         |
+| `{id}-is-equipped`                            | Worn/invested item                                              |
+| `{id}-container`                              | Item stored in container                                        |
+| `{id}--quantity`                              | Item quantity override                                          |
+
+> **Quantity sync limitation (Foundry → Demiplane):** Demiplane only stores a
+> `{id}--quantity` override engine once an item has been at quantity > 1 on the
+> Demiplane side (it is not pre-created for single items). The engine carries a
+> Demiplane-assigned `demiplaneEngineId` that we cannot derive for items that have
+> never been duplicated, and that ID appears to be item-specific (different items
+> get different quantity-override definition IDs — e.g. a staff `--quantity` engine
+> had `demiplaneEngineId 077b5cf6-...` while another item's was `66803d78-...`).
+> Our export only **updates** an existing `--quantity` engine (`if (existing)`),
+> so: changing Foundry quantity works for items Demiplane already tracks as
+> duplicates, but bumping a single imported item (no `--quantity` engine) to 2 is
+> **not pushed**. Documented as a known limitation — would require synthesizing the
+> engine with a valid quantity-override definition ID (see demo `tmp/two-staffs.json`).
+> | `{id}-spell-is-signature` | Signature spell marker |
+> | `character-languages-user` | Free-text additional languages |
+> | `character_personality_beliefs` | Deity name |
 
 ### Spell sourceRow patterns
 
-| sourceRow | Meaning |
-|-----------|---------|
-| `builder-spell-section--{spellcasting-feature}--{rank}` | Spell learned from class progression (spellbook/repertoire) |
-| `manual-sheet-drawer` | Manually added spell (wizard: copied from scroll; also used for prepared-today in some contexts) |
-| `{uuid}_select-spell-{feat-slug}-{id}` | Spell granted by a feat (Adapted Cantrip, Adaptive Adept) |
+| sourceRow                                               | Meaning                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `builder-spell-section--{spellcasting-feature}--{rank}` | Spell learned from class progression (spellbook/repertoire)                                      |
+| `manual-sheet-drawer`                                   | Manually added spell (wizard: copied from scroll; also used for prepared-today in some contexts) |
+| `{uuid}_select-spell-{feat-slug}-{id}`                  | Spell granted by a feat (Adapted Cantrip, Adaptive Adept)                                        |
 
 ### Tests: 19 passing (Valeros Level 5)
+
 All integration tests run on port 30001 against a separate Foundry TestData instance.
 
 ### Next Steps
+
 1. Add `imported` flag to all items created during import
 2. Implement "Update from Demiplane" context menu on linked actors
 3. Foundry → Demiplane push (HP, hero points, currency via GraphQL mutation)

@@ -36,9 +36,11 @@ export interface DemiplaneEngineEntry {
 export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "equipment";
 
 /** Stamp an item data object with the imported flag before creation. */
-export function stampImported(itemData: Record<string, unknown>): Record<string, unknown> {
+export function stampImported(itemData: Record<string, unknown>, demiplaneSlug?: string): Record<string, unknown> {
   const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
-  flags["demiplane-pf2e"] = { ...flags["demiplane-pf2e"], imported: true };
+  const dpFlags: Record<string, unknown> = { ...flags["demiplane-pf2e"], imported: true };
+  if (demiplaneSlug) dpFlags.demiplaneSlug = demiplaneSlug;
+  flags["demiplane-pf2e"] = dpFlags;
   itemData.flags = flags;
   return itemData;
 }

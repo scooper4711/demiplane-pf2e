@@ -79,7 +79,7 @@ async function showDemiplaneInfoDialog(
       },
       {
         action: "push",
-        label: "Push HP to Demiplane",
+        label: "Push to Demiplane",
         icon: "fa-solid fa-upload",
         callback: () => exportCharacter(actor),
       },

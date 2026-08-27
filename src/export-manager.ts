@@ -1,4 +1,6 @@
 import { MODULE_ID } from "./import/types.js";
+import { normalizeEquipmentSlug } from "./import/slug-utils.js";
+import { debugLog } from "./import/debug-log.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 
@@ -20,10 +22,18 @@ export interface PendingChange {
 
 export type ItemChangeType = "quantity" | "equipped";
 
+export interface EquippedState {
+  carryType: string;
+  handsHeld?: number | undefined;
+  inSlot?: boolean | undefined;
+}
+
 export interface PendingItemChange {
   itemSlug: string;
+  demiplaneSlug: string | undefined;
   changeType: ItemChangeType;
-  value: number | string;
+  value: number | string | EquippedState;
+  itemType: string | undefined;
   timestamp: number;
 }
 
@@ -110,7 +120,14 @@ export class ExportManager {
     this.debounceTimers.set(characterId, timer);
   }
 
-  queueItemChange(actor: Actor, itemSlug: string, changeType: ItemChangeType, value: number | string): void {
+  queueItemChange(
+    actor: Actor,
+    itemSlug: string,
+    demiplaneSlug: string | undefined,
+    changeType: ItemChangeType,
+    value: number | string | EquippedState,
+    itemType?: string
+  ): void {
     if (this.suspended) return;
 
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
@@ -123,8 +140,10 @@ export class ExportManager {
 
     this.pendingItemChanges.get(characterId)!.set(key, {
       itemSlug,
+      demiplaneSlug,
       changeType,
       value,
+      itemType,
       timestamp: Date.now(),
     });
 
@@ -217,6 +236,7 @@ export class ExportManager {
     this.debounceTimers.clear();
   }
 
+  // eslint-disable-next-line complexity -- monolith assembling field + item + hand-slot engines for the push payload
   private async buildUpdatedCharacterData(
     characterId: string,
     changes: Map<string, PendingChange>,
@@ -238,36 +258,141 @@ export class ExportManager {
       }
     }
 
+    interface ResolvedItemChange {
+      change: PendingItemChange;
+      demiplaneId: string;
+    }
+    const resolved: ResolvedItemChange[] = [];
     for (const itemChange of itemChanges.values()) {
-      const itemEngine = fetched.engines.find(
-        (e) =>
-          e.type === "DemiplaneEngine" &&
-          e.name.startsWith("tabula/item/") &&
-          (e.args?.slug as string) === itemChange.itemSlug
-      );
+      const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
+      const itemEngine = fetched.engines.find((e) => {
+        if (e.type !== "DemiplaneEngine" || !e.name.startsWith("tabula/item/")) return false;
+        const engineSlug = (e.args?.slug as string) ?? "";
+        return normalizeEquipmentSlug(engineSlug) === normalizeEquipmentSlug(matchSlug);
+      });
       if (!itemEngine) continue;
+      resolved.push({ change: itemChange, demiplaneId: itemEngine.demiplaneEngineId });
+    }
 
-      const demiplaneId = itemEngine.demiplaneEngineId;
+    debugLog(
+      `[push] resolved ${String(resolved.length)} item change(s) of ${String(itemChanges.size)} pending:`,
+      resolved.map(({ change, demiplaneId }) => ({
+        slug: change.itemSlug,
+        demiplaneSlug: change.demiplaneSlug,
+        changeType: change.changeType,
+        value: change.value,
+        demiplaneId,
+      }))
+    );
+
+    for (const { change: itemChange, demiplaneId } of resolved) {
       if (itemChange.changeType === "quantity") {
         const qtyName = `${demiplaneId}--quantity`;
         const existing = findCustomEngineByName(updatedEngines, qtyName);
         if (existing) {
-          updatedEngines = updatedEngines.map((e) => (e === existing ? { ...e, value: itemChange.value } : e));
+          updatedEngines = updatedEngines.map((e) =>
+            e === existing ? { ...e, value: itemChange.value as number } : e
+          );
         }
       } else if (itemChange.changeType === "equipped") {
-        const equipped = itemChange.value as string;
+        const equippedState = itemChange.value as EquippedState;
+        const carryType = equippedState.carryType;
+        const isArmor = itemChange.itemType === "armor";
+        const isEquipped = isArmor
+          ? carryType === "worn" && equippedState.inSlot !== false
+          : carryType === "worn" || carryType === "held";
+
         const equippedName = `${demiplaneId}-is-equipped`;
         const existingEquipped = findCustomEngineByName(updatedEngines, equippedName);
-
-        if (equipped === "worn" || equipped === "held") {
-          if (existingEquipped) {
-            updatedEngines = updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: 1 } : e));
-          }
-        } else if (existingEquipped) {
-          updatedEngines = updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: 0 } : e));
+        debugLog(
+          `[push] equipped state for ${itemChange.itemSlug}: carryType=${carryType}, inSlot=${equippedState.inSlot}, isArmor=${isArmor}, isEquipped=${isEquipped}, engine=${equippedName} found=${existingEquipped !== undefined}`
+        );
+        if (existingEquipped) {
+          updatedEngines = updatedEngines.map((e) =>
+            e === existingEquipped ? { ...e, value: isEquipped ? 1 : 0 } : e
+          );
         }
       }
     }
+
+    const primaryHandName = "character_hand_primary_equipped-id";
+    const offhandName = "character_hand_offhand_equipped-id";
+    const bothHandsName = "character_hand_both_equipped-id";
+    const existingPrimary = findCustomEngineByName(updatedEngines, primaryHandName);
+    const existingOffhand = findCustomEngineByName(updatedEngines, offhandName);
+    const existingBoth = findCustomEngineByName(updatedEngines, bothHandsName);
+    debugLog(
+      `[push] hand engines found: primary=${existingPrimary !== undefined}, offhand=${existingOffhand !== undefined}, both=${existingBoth !== undefined}; values before: primary=${existingPrimary?.value}, offhand=${existingOffhand?.value}, both=${existingBoth?.value}`
+    );
+
+    const setPrimary = (id: string) => {
+      if (existingPrimary)
+        updatedEngines = updatedEngines.map((e) => (e === existingPrimary ? { ...e, value: id } : e));
+    };
+    const setOffhand = (id: string) => {
+      if (existingOffhand)
+        updatedEngines = updatedEngines.map((e) => (e === existingOffhand ? { ...e, value: id } : e));
+    };
+    const setBoth = (id: string) => {
+      if (existingBoth) updatedEngines = updatedEngines.map((e) => (e === existingBoth ? { ...e, value: id } : e));
+    };
+    const clearAllHands = (id: string) => {
+      if (existingPrimary && existingPrimary.value === id)
+        updatedEngines = updatedEngines.map((e) => (e === existingPrimary ? { ...e, value: "na" } : e));
+      if (existingOffhand && existingOffhand.value === id)
+        updatedEngines = updatedEngines.map((e) => (e === existingOffhand ? { ...e, value: "na" } : e));
+      if (existingBoth && existingBoth.value === id)
+        updatedEngines = updatedEngines.map((e) => (e === existingBoth ? { ...e, value: "na" } : e));
+    };
+
+    const heldEquipped = resolved.filter(({ change }) => {
+      if (change.changeType !== "equipped") return false;
+      const equippedState = change.value as EquippedState;
+      return equippedState.carryType === "held" && change.itemType !== "armor";
+    });
+    const heldIds = heldEquipped.map(({ demiplaneId: id }) => id);
+    const heldHandValues = heldEquipped.map(({ change }) => {
+      const equippedState = change.value as EquippedState;
+      return typeof equippedState.handsHeld === "number" ? equippedState.handsHeld : 1;
+    });
+
+    let primaryUsed = false;
+    let offhandUsed = false;
+    let bothUsed = false;
+
+    for (let i = 0; i < heldIds.length; i++) {
+      const id = heldIds[i]!;
+      const handsHeld = heldHandValues[i]!;
+      if (bothUsed) continue;
+
+      if (handsHeld >= 2) {
+        if (primaryUsed) continue;
+        setBoth(id);
+        bothUsed = true;
+        continue;
+      }
+
+      if (!primaryUsed) {
+        setPrimary(id);
+        primaryUsed = true;
+      } else if (!offhandUsed) {
+        setOffhand(id);
+        offhandUsed = true;
+      }
+    }
+
+    for (const { change: itemChange, demiplaneId: id } of resolved) {
+      if (itemChange.changeType !== "equipped") continue;
+      const equippedState = itemChange.value as EquippedState;
+      const isArmor = itemChange.itemType === "armor";
+      if (equippedState.carryType !== "held" || isArmor) {
+        clearAllHands(id);
+      }
+    }
+
+    debugLog(
+      `[push] hand values after: primary=${existingPrimary?.value}, offhand=${existingOffhand?.value}, both=${existingBoth?.value}`
+    );
 
     return {
       data: {

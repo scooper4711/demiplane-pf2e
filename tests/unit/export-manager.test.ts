@@ -434,4 +434,338 @@ describe("ExportManager", () => {
       expect(manager.hasPendingChanges("char-123")).toBe(true);
     });
   });
+
+  describe("item hand slot assignment", () => {
+    function makeClientWithItems(itemEngines: Record<string, unknown>[]) {
+      const base = createMockClient();
+      base.fetchCharacterData.mockResolvedValue({
+        engines: [
+          {
+            id: "eng-hp",
+            name: "character_hit-points_current",
+            value: 30,
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-hp",
+            args: { id: null },
+          },
+          {
+            id: "hand-primary",
+            name: "character_hand_primary_equipped-id",
+            value: "na",
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-primary",
+            args: { id: null },
+          },
+          {
+            id: "hand-offhand",
+            name: "character_hand_offhand_equipped-id",
+            value: "na",
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-offhand",
+            args: { id: null },
+          },
+          {
+            id: "hand-both",
+            name: "character_hand_both_equipped-id",
+            value: "na",
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-both",
+            args: { id: null },
+          },
+          ...itemEngines,
+        ],
+        engineCacheIdsBySource: { "pathfinder2e-v2": ["eng-hp"] },
+        name: "Test Character",
+        level: 5,
+        avatarUrl: "https://example.com/avatar.png",
+        viewPermission: 0,
+        editPermission: 0,
+      });
+      return base;
+    }
+
+    function itemEngine(slug: string, demiplaneId: string) {
+      return {
+        id: `eng-${slug}`,
+        demiplaneEngineId: demiplaneId,
+        name: `tabula/item/${slug}.eng`,
+        type: "DemiplaneEngine",
+        saveType: "CharacterSheet",
+        args: { id: null, slug },
+      };
+    }
+
+    function findEngine(payload: { data: { engines: { name: string; value: unknown }[] } }, name: string) {
+      return payload.data.engines.find((e) => e.name === name)?.value;
+    }
+
+    it("assigns first 1H to primary, second 1H to offhand", async () => {
+      const client = makeClientWithItems([itemEngine("sword-a", "id-a"), itemEngine("sword-b", "id-b")]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "sword-a",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "sword-b",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("id-a");
+      expect(findEngine(payload, "character_hand_offhand_equipped-id")).toBe("id-b");
+      expect(findEngine(payload, "character_hand_both_equipped-id")).toBe("na");
+    });
+
+    it("ignores third and subsequent 1H items", async () => {
+      const client = makeClientWithItems([
+        itemEngine("sword-a", "id-a"),
+        itemEngine("sword-b", "id-b"),
+        itemEngine("sword-c", "id-c"),
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "sword-a",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "sword-b",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "sword-c",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("id-a");
+      expect(findEngine(payload, "character_hand_offhand_equipped-id")).toBe("id-b");
+    });
+
+    it("places a 2H weapon in both hands and ignores subsequent held items", async () => {
+      const client = makeClientWithItems([itemEngine("greatsword", "id-gs"), itemEngine("sword-a", "id-a")]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "greatsword",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 2 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "sword-a",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_both_equipped-id")).toBe("id-gs");
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("na");
+      expect(findEngine(payload, "character_hand_offhand_equipped-id")).toBe("na");
+    });
+
+    it("ignores a 2H that follows a 1H, then assigns next 1H to offhand", async () => {
+      const client = makeClientWithItems([
+        itemEngine("sword-a", "id-a"),
+        itemEngine("greatsword", "id-gs"),
+        itemEngine("sword-b", "id-b"),
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "sword-a",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "greatsword",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 2 },
+        "weapon"
+      );
+      manager.queueItemChange(
+        actor as never,
+        "sword-b",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("id-a");
+      expect(findEngine(payload, "character_hand_offhand_equipped-id")).toBe("id-b");
+      expect(findEngine(payload, "character_hand_both_equipped-id")).toBe("na");
+    });
+
+    it("clears hands when a held item is unequipped", async () => {
+      const client = makeClientWithItems([itemEngine("sword-a", "id-a")]);
+      client.fetchCharacterData.mockResolvedValue({
+        engines: [
+          {
+            id: "hand-primary",
+            name: "character_hand_primary_equipped-id",
+            value: "id-a",
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-primary",
+            args: { id: null },
+          },
+          itemEngine("sword-a", "id-a"),
+        ],
+        engineCacheIdsBySource: {},
+        name: "Test Character",
+        level: 5,
+        avatarUrl: "https://example.com/avatar.png",
+        viewPermission: 0,
+        editPermission: 0,
+      });
+
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "sword-a",
+        undefined,
+        "equipped",
+        { carryType: "stowed", handsHeld: 0 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("na");
+    });
+
+    it("resolves a remastered (-rm) engine slug from a stripped Foundry slug", async () => {
+      const client = makeClientWithItems([itemEngine("bastard-sword-rm", "id-bastard")]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "bastard-sword",
+        undefined,
+        "equipped",
+        { carryType: "held", handsHeld: 1 },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "character_hand_primary_equipped-id")).toBe("id-bastard");
+    });
+
+    it("sets armor -is-equipped to 0 when worn but not in its slot", async () => {
+      const client = makeClientWithItems([
+        itemEngine("armored-coat", "id-coat"),
+        {
+          id: "eng-coat-equipped",
+          name: "id-coat-is-equipped",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-coat-equipped",
+          args: { id: null },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "armored-coat",
+        undefined,
+        "equipped",
+        { carryType: "worn", handsHeld: 0, inSlot: false },
+        "armor"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "id-coat-is-equipped")).toBe(0);
+    });
+
+    it("sets armor -is-equipped to 1 when worn in its slot", async () => {
+      const client = makeClientWithItems([
+        itemEngine("armored-coat", "id-coat"),
+        {
+          id: "eng-coat-equipped",
+          name: "id-coat-is-equipped",
+          value: 0,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-coat-equipped",
+          args: { id: null },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemChange(
+        actor as never,
+        "armored-coat",
+        undefined,
+        "equipped",
+        { carryType: "worn", handsHeld: 0, inSlot: true },
+        "armor"
+      );
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(findEngine(payload, "id-coat-is-equipped")).toBe(1);
+    });
+  });
 });

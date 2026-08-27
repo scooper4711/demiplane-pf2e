@@ -3,7 +3,7 @@ import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { ExportManager } from "./export-manager.js";
-import { HookManager, queueCombatResourceChanges } from "./hook-manager.js";
+import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
@@ -168,6 +168,7 @@ async function importLinkedCharacter(actor: Actor, characterId: string, token: s
 
 async function exportLinkedCharacter(actor: Actor) {
   queueCombatResourceChanges(exportManager, actor);
+  queueAllItemChanges(exportManager, actor);
   const dryRun = game.settings.get(MODULE_ID, "dryRun");
   const result = await exportManager.flush(actor, { dryRun });
   if (dryRun) {
@@ -176,7 +177,7 @@ async function exportLinkedCharacter(actor: Actor) {
     return result;
   }
   if (result.success) {
-    ui.notifications.info(`Pushed HP and hero points for "${actor.name}" to Demiplane.`);
+    ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
   }
   return result;
 }
