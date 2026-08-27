@@ -4,6 +4,8 @@ export interface ResolvedItem {
   slug: string;
 }
 
+import { debugLog } from "./import/debug-log.js";
+
 const DEFAULT_PACK_SEARCH_ORDER = [
   "pf2e.classes",
   "pf2e.ancestries",
@@ -49,8 +51,7 @@ export class SlugMapper {
 
       const index = await pack.getIndex();
       const matchingEntries = index.filter(
-        (entry: { system?: { slug?: string }; _id: string }) =>
-          entry.system?.slug === foundrySlug,
+        (entry: { system?: { slug?: string }; _id: string }) => entry.system?.slug === foundrySlug
       );
 
       for (const entry of matchingEntries) {
@@ -59,8 +60,8 @@ export class SlugMapper {
         if (!firstMatch) {
           firstMatch = { uuid, packKey, slug: foundrySlug };
         } else {
-          console.info(
-            `demiplane-pf2e | Duplicate slug "${foundrySlug}" found in pack "${packKey}"; using first match from "${firstMatch.packKey}"`,
+          debugLog(
+            `Duplicate slug "${foundrySlug}" found in pack "${packKey}"; using first match from "${firstMatch.packKey}"`
           );
         }
       }
@@ -71,7 +72,7 @@ export class SlugMapper {
     }
 
     console.warn(
-      `demiplane-pf2e | Slug mapping failed: Demiplane slug "${demiplaneSlug}" → derived Foundry slug "${foundrySlug}" not found in packs: [${this.packSearchOrder.join(", ")}]`,
+      `demiplane-pf2e | Slug mapping failed: Demiplane slug "${demiplaneSlug}" → derived Foundry slug "${foundrySlug}" not found in packs: [${this.packSearchOrder.join(", ")}]`
     );
 
     return undefined;

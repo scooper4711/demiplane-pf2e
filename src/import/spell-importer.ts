@@ -1,5 +1,6 @@
 import { stampImported, MODULE_ID } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
+import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { findSpellEngines, isCurriculumSpell } from "./spell-engines.js";
 import { resolveSpellSlots } from "./spell-slot-resolver.js";
@@ -199,9 +200,7 @@ async function placePreparedSpells(
     slotsUpdate[`slot${String(rank)}`] = { prepared };
   }
 
-  console.warn(
-    `${MODULE_ID} | [prepared] Placing ${String(preparedEngines.length)} prepared spells in entry ${entryId}`
-  );
+  debugLog(`[prepared] Placing ${String(preparedEngines.length)} prepared spells in entry ${entryId}`);
 
   const entry = actor.items.get(entryId);
   if (entry) {
@@ -255,7 +254,7 @@ async function markSignatureSpells(
   if (updates.length > 0) {
     await actor.updateEmbeddedDocuments("Item", updates as never);
     summary.log.push(`+ signature: ${String(updates.length)} spells marked as signature`);
-    console.warn(`${MODULE_ID} | [signature] Marked ${String(updates.length)} signature spells`);
+    debugLog(`[signature] Marked ${String(updates.length)} signature spells`);
   }
 }
 
@@ -405,14 +404,12 @@ async function applySlotMaximums(
 ): Promise<void> {
   const engineId = findEngineIdForSlots(engines, slotSlug);
   if (!engineId) {
-    console.warn(`${MODULE_ID} | [spell-slots] No engine found for slot resolution, skipping`);
+    debugLog(`[spell-slots] No engine found for slot resolution, skipping`);
     return;
   }
 
   const label = slotSlug ? `curriculum (${slotSlug})` : "regular";
-  console.warn(
-    `${MODULE_ID} | [spell-slots] Resolving ${label} slots for feature="${parentSpellFeature}", engineId="${engineId}"`
-  );
+  debugLog(`[spell-slots] Resolving ${label} slots for feature="${parentSpellFeature}", engineId="${engineId}"`);
 
   try {
     const progression = await resolveSpellSlots({
@@ -423,8 +420,8 @@ async function applySlotMaximums(
       slotSlug,
     });
 
-    console.warn(
-      `${MODULE_ID} | [spell-slots] Resolved: cantrips=${String(progression.cantrips)}, slots=${JSON.stringify(progression.slots)}`
+    debugLog(
+      `[spell-slots] Resolved: cantrips=${String(progression.cantrips)}, slots=${JSON.stringify(progression.slots)}`
     );
 
     const slotsUpdate = buildSlotsUpdate(progression);

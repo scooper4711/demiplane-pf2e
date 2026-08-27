@@ -1,5 +1,6 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { MODULE_ID, stampImported } from "./types.js";
+import { stampImported } from "./types.js";
+import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
 
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
@@ -207,9 +208,7 @@ async function createItemSpellcastingEntry(
   tradition: string,
   summary: ImportSummary
 ): Promise<void> {
-  console.warn(
-    `${MODULE_ID} | [item-spells] Creating entry for "${source.itemName}" with ${String(source.spells.length)} spells`
-  );
+  debugLog(`[item-spells] Creating entry for "${source.itemName}" with ${String(source.spells.length)} spells`);
 
   const created = await actor.createEmbeddedDocuments("Item", [
     stampImported({

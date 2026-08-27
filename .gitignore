@@ -12,3 +12,4 @@ tmp/
 .github/instructions/
 .github/copilot-instructions.md
 .playwright-mcp/
+.kiro/

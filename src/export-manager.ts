@@ -411,6 +411,8 @@ export class ExportManager {
 
   private async handlePushResult(result: ExportResult, characterId: string, actor: Actor): Promise<void> {
     if (result.success) {
+      // eslint-disable-next-line no-console -- single always-on log per push
+      console.info(`${MODULE_ID} | Pushed character data to Demiplane (${characterId})`);
       this.pendingChanges.delete(characterId);
       this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);

@@ -207,9 +207,7 @@ export class HookManager {
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    console.log(
-      `${MODULE_ID} | Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`
-    );
+    debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
   }
 
   private getGrantedChoiceLog(item: Item): string {
@@ -231,7 +229,7 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    console.log(`${MODULE_ID} | Item deleted from linked actor: ${item.name}`);
+    debugLog(`Item deleted from linked actor: ${item.name}`);
   }
 
   private isLinkedCharacterActor(actor: Actor): boolean {

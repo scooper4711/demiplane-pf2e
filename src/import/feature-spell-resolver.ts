@@ -1,5 +1,6 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { MODULE_ID, stampImported } from "./types.js";
+import { stampImported } from "./types.js";
+import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
 
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
@@ -213,8 +214,8 @@ export async function applyFeatureGrantedSpells(
   const characterLevel = getCharacterLevel(engines);
   const { innate, focus, focusPoints } = await resolveFeatureGrantedSpells(engines, characterLevel);
 
-  console.warn(
-    `${MODULE_ID} | [feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells, ${String(focusPoints)} focus points`
+  debugLog(
+    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells, ${String(focusPoints)} focus points`
   );
 
   if (innate.length > 0) {

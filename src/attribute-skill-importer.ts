@@ -1,7 +1,4 @@
-import type {
-  CharacterEngine,
-  DemiplaneEngine,
-} from "@scooper4711/demiplane-api";
+import type { CharacterEngine, DemiplaneEngine } from "@scooper4711/demiplane-api";
 import { isDemiplaneEngine } from "@scooper4711/demiplane-api";
 
 const VALID_ATTRIBUTES = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -45,14 +42,11 @@ export interface SkillIncreaseEntry {
  * Identifies entries whose name equals "core/selection/attribute/boost.eng"
  * and extracts the attribute slug from args.slug.
  */
-export function extractAttributeBoosts(
-  engines: CharacterEngine[],
-): AttributeBoostEntry[] {
+export function extractAttributeBoosts(engines: CharacterEngine[]): AttributeBoostEntry[] {
   return engines
     .filter(
       (engine): engine is DemiplaneEngine =>
-        isDemiplaneEngine(engine) &&
-        engine.name === "core/selection/attribute/boost.eng",
+        isDemiplaneEngine(engine) && engine.name === "core/selection/attribute/boost.eng"
     )
     .map((engine) => ({
       slug: engine.args.slug ?? "",
@@ -67,14 +61,11 @@ export function extractAttributeBoosts(
  * Identifies entries whose name equals "core/selection/skill/increase/index.eng"
  * and extracts the skill slug from args.slug.
  */
-export function extractSkillIncreases(
-  engines: CharacterEngine[],
-): SkillIncreaseEntry[] {
+export function extractSkillIncreases(engines: CharacterEngine[]): SkillIncreaseEntry[] {
   return engines
     .filter(
       (engine): engine is DemiplaneEngine =>
-        isDemiplaneEngine(engine) &&
-        engine.name === "core/selection/skill/increase/index.eng",
+        isDemiplaneEngine(engine) && engine.name === "core/selection/skill/increase/index.eng"
     )
     .map((engine) => ({
       slug: engine.args.slug ?? "",
@@ -104,32 +95,27 @@ function isValidSkill(slug: string): slug is SkillSlug {
  */
 export async function applyAttributeBoosts(
   actor: Actor,
-  boosts: AttributeBoostEntry[],
+  boosts: AttributeBoostEntry[]
 ): Promise<{ applied: number; skipped: number }> {
   let applied = 0;
   let skipped = 0;
 
   for (const boost of boosts) {
     if (!boost.slug) {
-      console.warn(
-        "demiplane-pf2e | Attribute boost has empty slug, skipping",
-      );
+      console.warn("demiplane-pf2e | Attribute boost has empty slug, skipping");
       skipped++;
       continue;
     }
 
     if (!isValidAttribute(boost.slug)) {
-      console.warn(
-        `demiplane-pf2e | Invalid attribute slug "${boost.slug}", skipping`,
-      );
+      console.warn(`demiplane-pf2e | Invalid attribute slug "${boost.slug}", skipping`);
       skipped++;
       continue;
     }
 
     const existingBoosts = actor.system?.build?.attributes?.boosts ?? {};
     const alreadyApplied = Object.values(existingBoosts).some(
-      (levelBoosts: unknown) =>
-        Array.isArray(levelBoosts) && levelBoosts.includes(boost.slug),
+      (levelBoosts: unknown) => Array.isArray(levelBoosts) && levelBoosts.includes(boost.slug)
     );
 
     if (alreadyApplied) {
@@ -149,24 +135,20 @@ export async function applyAttributeBoosts(
  */
 export async function applySkillIncreases(
   actor: Actor,
-  increases: SkillIncreaseEntry[],
+  increases: SkillIncreaseEntry[]
 ): Promise<{ applied: number; skipped: number }> {
   let applied = 0;
   let skipped = 0;
 
   for (const increase of increases) {
     if (!increase.slug) {
-      console.warn(
-        "demiplane-pf2e | Skill increase has empty slug, skipping",
-      );
+      console.warn("demiplane-pf2e | Skill increase has empty slug, skipping");
       skipped++;
       continue;
     }
 
     if (!isValidSkill(increase.slug)) {
-      console.warn(
-        `demiplane-pf2e | Invalid skill slug "${increase.slug}", skipping`,
-      );
+      console.warn(`demiplane-pf2e | Invalid skill slug "${increase.slug}", skipping`);
       skipped++;
       continue;
     }

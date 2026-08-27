@@ -1,4 +1,5 @@
 import { MODULE_ID } from "./import/types.js";
+import { debugLog } from "./import/debug-log.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
@@ -14,13 +15,13 @@ let exportManager: ExportManager;
 let hookManager: HookManager;
 
 Hooks.once("init", () => {
-  console.log(`${MODULE_ID} | Initializing Demiplane PF2e Sync`);
+  debugLog(`Initializing Demiplane PF2e Sync`);
   registerSettings();
   SyncTabRenderer.registerSettingsHook();
 });
 
 Hooks.once("ready", async () => {
-  console.log(`${MODULE_ID} | Ready`);
+  debugLog(`Ready`);
 
   await showPreReleaseWarning();
 
@@ -72,7 +73,7 @@ Hooks.once("ready", async () => {
     };
   }
 
-  console.log(`${MODULE_ID} | API registered`);
+  debugLog(`API registered`);
 });
 
 // Add "Import Demiplane Character" button to the Actors sidebar
@@ -221,17 +222,17 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
           "Item",
           importedItems.map((item) => item.id)
         );
-        console.warn(`${MODULE_ID} | [update] Deleted ${importedItems.length} previously imported items`);
+        debugLog(`[update] Deleted ${importedItems.length} previously imported items`);
       }
 
       const remainingItems = actor.items.filter(() => true);
       if (remainingItems.length > 0) {
-        console.warn(
-          `${MODULE_ID} | [update] ${remainingItems.length} items remain on actor after delete:`,
+        debugLog(
+          `[update] ${remainingItems.length} items remain on actor after delete:`,
           remainingItems.map((item) => `${item.name} (type=${item.type}, id=${item.id})`).join(", ")
         );
       } else {
-        console.warn(`${MODULE_ID} | [update] Actor is clean — all items deleted`);
+        debugLog(`[update] Actor is clean — all items deleted`);
       }
 
       const summary = await importLinkedCharacter(actor, characterId, token);

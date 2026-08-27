@@ -6,7 +6,10 @@ const mockGetIndex = vi.fn();
 const mockPack = { getIndex: mockGetIndex };
 const mockPacks = new Map<string, typeof mockPack>();
 
-vi.stubGlobal("game", { packs: mockPacks });
+vi.stubGlobal("game", {
+  packs: mockPacks,
+  settings: { get: () => true },
+});
 
 describe("transformSlug", () => {
   it("strips -rm suffix", () => {
@@ -33,9 +36,7 @@ describe("SlugMapper", () => {
   });
 
   it("resolves a slug from the first matching pack", async () => {
-    mockGetIndex.mockResolvedValue([
-      { _id: "item1", system: { slug: "fireball" } },
-    ]);
+    mockGetIndex.mockResolvedValue([{ _id: "item1", system: { slug: "fireball" } }]);
     mockPacks.set("pf2e.spells-srd", mockPack);
 
     const mapper = new SlugMapper(["pf2e.spells-srd"]);
@@ -57,9 +58,7 @@ describe("SlugMapper", () => {
     const result = await mapper.resolve("nonexistent");
 
     expect(result).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("nonexistent"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("nonexistent"));
     warnSpy.mockRestore();
   });
 
@@ -70,21 +69,17 @@ describe("SlugMapper", () => {
     ]);
     mockPacks.set("pf2e.equipment-srd", mockPack);
 
-    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const mapper = new SlugMapper(["pf2e.equipment-srd"]);
     const result = await mapper.resolve("shield");
 
     expect(result?.uuid).toBe("Compendium.pf2e.equipment-srd.Item.item1");
-    expect(infoSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Duplicate slug"),
-    );
-    infoSpy.mockRestore();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Duplicate slug"));
+    warnSpy.mockRestore();
   });
 
   it("skips packs that don't exist", async () => {
-    mockGetIndex.mockResolvedValue([
-      { _id: "cls1", system: { slug: "fighter" } },
-    ]);
+    mockGetIndex.mockResolvedValue([{ _id: "cls1", system: { slug: "fighter" } }]);
     mockPacks.set("pf2e.classes", mockPack);
     // "pf2e.feats-srd" not in mockPacks
 

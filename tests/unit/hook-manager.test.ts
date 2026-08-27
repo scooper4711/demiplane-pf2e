@@ -18,6 +18,7 @@ vi.stubGlobal("game", {
   settings: {
     get: (_moduleId: string, key: string) => {
       if (key === "autoSync") return autoSyncEnabled;
+      if (key === "debugImport") return debugEnabled;
       return undefined;
     },
   },
@@ -27,6 +28,7 @@ import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "..
 
 const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
+let debugEnabled = true;
 
 function createMockExportManager() {
   return {
@@ -71,6 +73,7 @@ describe("HookManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     autoSyncEnabled = true;
+    debugEnabled = true;
     for (const key of Object.keys(hookRegistry)) {
       delete hookRegistry[key];
     }
@@ -94,7 +97,7 @@ describe("HookManager", () => {
     it("logs pre-selected granted choices", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const item = createMockItem(createMockActor(), "Bloodline", {
         system: { rules: [{ key: "ChoiceSet", flag: "bloodline", selection: null }] },
         flags: { pf2e: { rulesSelections: { bloodline: "imperial" } } },
@@ -102,26 +105,26 @@ describe("HookManager", () => {
 
       triggerHook("createItem", item);
 
-      expect(logSpy).toHaveBeenCalledWith(
-        `${MODULE_ID} | Item created on linked actor: Bloodline; granted choices: bloodline=imperial`
+      expect(warnSpy).toHaveBeenCalledWith(
+        `${MODULE_ID} | [debug] Item created on linked actor: Bloodline; granted choices: bloodline=imperial`
       );
-      logSpy.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it("logs none when no granted choices were selected", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
-      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
       const item = createMockItem(createMockActor(), "Class Feature", {
         system: { rules: [{ key: "ChoiceSet", flag: "choice", selection: null }] },
       });
 
       triggerHook("createItem", item);
 
-      expect(logSpy).toHaveBeenCalledWith(
-        `${MODULE_ID} | Item created on linked actor: Class Feature; granted choices: choice=none`
+      expect(warnSpy).toHaveBeenCalledWith(
+        `${MODULE_ID} | [debug] Item created on linked actor: Class Feature; granted choices: choice=none`
       );
-      logSpy.mockRestore();
+      warnSpy.mockRestore();
     });
   });
 

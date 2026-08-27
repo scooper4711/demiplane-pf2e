@@ -39,6 +39,9 @@ export class ImportOrchestrator {
     const engines = await this.fetchCharacterEngines(characterId, token, summary);
     if (!engines) return summary;
 
+    // eslint-disable-next-line no-console -- single always-on log per pull
+    console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
+
     this.choiceSetHandler.setEngines(engines);
 
     const selectionData = this.buildSelectionData(engines);
