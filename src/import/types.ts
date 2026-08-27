@@ -18,6 +18,8 @@ export interface ImportOptions {
 export interface ImportSummary {
   itemsImported: number;
   itemsSkipped: number;
+  /** Human-readable problems that should surface as sync issues (missing slugs, lookups that failed). */
+  unresolved: string[];
   errors: string[];
   log: string[];
 }

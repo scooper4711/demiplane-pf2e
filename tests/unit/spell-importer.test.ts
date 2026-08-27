@@ -34,6 +34,7 @@ describe("applySpells", () => {
     return {
       itemsImported: 0,
       itemsSkipped: 0,
+      unresolved: [],
       errors: [],
       log: [],
     };

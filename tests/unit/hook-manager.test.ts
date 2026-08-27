@@ -350,7 +350,15 @@ describe("HookManager", () => {
       triggerHook("updateItem", item, changes);
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "gold-bar", undefined, "quantity", 1);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "gold-bar",
+        undefined,
+        "quantity",
+        1,
+        undefined,
+        true
+      );
     });
 
     it("queues equipped state changes for equipment items", () => {
@@ -387,7 +395,15 @@ describe("HookManager", () => {
 
       triggerHook("updateItem", item, changes);
 
-      expect(exportManager.queueItemChange).toHaveBeenCalledWith(actor, "longsword", undefined, "quantity", 2);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "longsword",
+        undefined,
+        "quantity",
+        2,
+        undefined,
+        true
+      );
       expect(exportManager.queueItemChange).toHaveBeenCalledWith(
         actor,
         "longsword",

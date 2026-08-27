@@ -31,6 +31,7 @@ export class ImportOrchestrator {
     const summary: ImportSummary = {
       itemsImported: 0,
       itemsSkipped: 0,
+      unresolved: [],
       errors: [],
       log: [],
     };
@@ -132,6 +133,7 @@ export class ImportOrchestrator {
           summary.itemsImported++;
         } else {
           summary.log.push(`- ${category}: ${eng._slug} (not found)`);
+          summary.unresolved.push(`Could not import ${category} "${eng._slug}": not found in compendium`);
           summary.itemsSkipped++;
         }
       }
@@ -316,6 +318,7 @@ export class ImportOrchestrator {
       summary.itemsImported++;
     } else {
       summary.log.push(`- ${category}: ${eng._slug} (not found)`);
+      summary.unresolved.push(`Could not import ${category} "${eng._slug}": not found in compendium`);
       summary.itemsSkipped++;
     }
   }

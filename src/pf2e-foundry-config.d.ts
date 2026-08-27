@@ -149,6 +149,8 @@ interface DemiplaneActorFlags {
   characterId?: string;
   lastImportTimestamp?: number;
   lastExportTimestamp?: number;
+  importIssues?: string[];
+  exportIssues?: string[];
 }
 
 interface DemiplaneItemFlags {
@@ -226,5 +228,16 @@ declare module "fvtt-types/configuration" {
    */
   interface AssumeHookRan {
     ready: never;
+  }
+
+  /**
+   * Registers the module's custom hook so `Hooks.on`/`Hooks.callAll` accept it.
+   * `Hooks.on` is typed against `keyof HookConfig` (which extends `AllHooks`),
+   * so merging the key onto `HookConfig` makes the event name type-check.
+   */
+  namespace Hooks {
+    interface HookConfig {
+      demiplaneSyncIssuesChanged: (actor: Actor) => void;
+    }
   }
 }

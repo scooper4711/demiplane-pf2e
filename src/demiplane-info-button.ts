@@ -1,5 +1,6 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
+import { getExportIssues, getImportIssues, clearAllIssues } from "./sync-issues.js";
 
 type ImportCharacterFn = (actor: Actor, characterId: string, token: string) => Promise<ImportSummary>;
 type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
@@ -30,7 +31,7 @@ export function registerDemiplaneInfoButton(
   });
 }
 
-async function showDemiplaneInfoDialog(
+export async function showDemiplaneInfoDialog(
   actor: Actor,
   characterId: string,
   importCharacter: ImportCharacterFn,
@@ -41,6 +42,11 @@ async function showDemiplaneInfoDialog(
   const lastExport = actor.getFlag(MODULE_ID, "lastExportTimestamp") as number | undefined;
   const lastImportDisplay = lastImport ? new Date(lastImport).toLocaleString() : "Never";
   const lastExportDisplay = lastExport ? new Date(lastExport).toLocaleString() : "Never";
+
+  const importIssues = [...getImportIssues(actor)];
+  const exportIssues = [...getExportIssues(actor)];
+  const hasIssues = importIssues.length + exportIssues.length > 0;
+  const issuesSection = buildIssuesSection(importIssues, exportIssues);
 
   const manualItems = actor.items.filter((item) => {
     const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
@@ -55,6 +61,7 @@ async function showDemiplaneInfoDialog(
         <p><strong>Last push to Demiplane:</strong> ${lastExportDisplay}</p>
         <p><a href="${sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
+      ${issuesSection}
       ${manualItemsSection}
       <hr>
       <section>
@@ -69,6 +76,7 @@ async function showDemiplaneInfoDialog(
 
   await foundry.applications.api.DialogV2.wait({
     window: { title: `Demiplane — ${actor.name}` },
+    classes: hasIssues ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
     content,
     buttons: [
       {
@@ -85,11 +93,39 @@ async function showDemiplaneInfoDialog(
       },
       {
         action: "close",
-        label: "Close",
+        label: hasIssues ? "Dismiss" : "Close",
         default: true,
+        callback: () => {
+          if (hasIssues) clearAllIssues(actor);
+        },
       },
     ],
   });
+}
+
+function buildIssuesSection(importIssues: string[], exportIssues: string[]): string {
+  if (importIssues.length === 0 && exportIssues.length === 0) return "";
+  const rows = [
+    ...importIssues.map((m) => ({ kind: "Import", message: m })),
+    ...exportIssues.map((m) => ({ kind: "Export", message: m })),
+  ];
+  const list = rows.map((r) => `<li><span class="kind-tag">${r.kind}</span> ${escapeHtml(r.message)}</li>`).join("\n");
+  return `
+    <hr>
+    <section>
+      <p><strong class="sync-issues-heading">Sync issues</strong> (${String(rows.length)}):</p>
+      <ul class="demiplane-sync-issues">${list}</ul>
+      <p class="hint">The red indicator clears once you dismiss this dialog. Foundry-only items are listed below.</p>
+    </section>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function buildManualItemsSection(items: Item[]): string {

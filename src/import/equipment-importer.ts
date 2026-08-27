@@ -136,6 +136,7 @@ export async function applyEquipment(
 
     if (!indexEntry) {
       skipped.push(slug);
+      summary.unresolved.push(`Could not import equipment "${slug}": not found in compendium`);
       continue;
     }
 

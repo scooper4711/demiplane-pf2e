@@ -151,6 +151,7 @@ async function addSpells(
     const spellData = await resolveSpell(slug);
     if (!spellData) {
       summary.log.push(`- spell: ${foundrySlug} (not found)`);
+      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
       continue;
     }
 

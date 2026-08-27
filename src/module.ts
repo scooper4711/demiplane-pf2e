@@ -5,9 +5,10 @@ import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { ExportManager } from "./export-manager.js";
 import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
-import { SyncTabRenderer } from "./sync-tab-renderer.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
+import { registerTitlebarDot } from "./titlebar-dot.js";
+import { resetImportIssues, addImportIssue } from "./sync-issues.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -33,11 +34,11 @@ Hooks.once("ready", async () => {
   importOrchestrator = new ImportOrchestrator();
   exportManager = new ExportManager(client);
   hookManager = new HookManager(exportManager);
-  void new SyncTabRenderer();
   void new CharacterLinkDialog(client);
 
   hookManager.register();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
+  registerTitlebarDot();
 
   // Keep the client token in sync when the setting changes
   Hooks.on("updateSetting", (setting: { key: string }) => {
@@ -158,9 +159,13 @@ function extractCharacterId(input: string): string | null {
 }
 
 async function importLinkedCharacter(actor: Actor, characterId: string, token: string) {
+  resetImportIssues(actor);
   exportManager.suspend();
   try {
-    return await importOrchestrator.importCharacter(actor, characterId, { token });
+    const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
+    for (const issue of summary.unresolved) addImportIssue(actor, issue);
+    for (const error of summary.errors) addImportIssue(actor, error);
+    return summary;
   } finally {
     exportManager.resume();
   }

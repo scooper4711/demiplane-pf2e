@@ -33,6 +33,7 @@ describe("applyEquipment", () => {
     return {
       itemsImported: 0,
       itemsSkipped: 0,
+      unresolved: [],
       errors: [],
       log: [],
     };
@@ -161,6 +162,7 @@ describe("applyCurrency", () => {
     return {
       itemsImported: 0,
       itemsSkipped: 0,
+      unresolved: [],
       errors: [],
       log: [],
     };

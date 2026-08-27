@@ -1,6 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import { normalizeEquipmentSlug } from "./import/slug-utils.js";
 import { debugLog } from "./import/debug-log.js";
+import { addExportIssue } from "./sync-issues.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 
@@ -30,6 +31,8 @@ export interface PendingItemChange {
   changeType: ItemChangeType;
   value: number | string | EquippedState;
   itemType: string | undefined;
+  /** True when queued from a user edit (vs. a bulk refresh). Used to gate edit-only warnings. */
+  edited?: boolean;
   timestamp: number;
 }
 
@@ -126,7 +129,8 @@ export class ExportManager {
     demiplaneSlug: string | undefined,
     changeType: ItemChangeType,
     value: number | string | EquippedState,
-    itemType?: string
+    itemType?: string,
+    edited?: boolean
   ): void {
     if (this.suspended) return;
 
@@ -138,14 +142,17 @@ export class ExportManager {
       this.pendingItemChanges.set(characterId, new Map());
     }
 
-    this.pendingItemChanges.get(characterId)!.set(key, {
+    const entry: PendingItemChange = {
       itemSlug,
       demiplaneSlug,
       changeType,
       value,
       itemType,
       timestamp: Date.now(),
-    });
+    };
+    if (edited !== undefined) entry.edited = edited;
+
+    this.pendingItemChanges.get(characterId)!.set(key, entry);
 
     const existingTimer = this.debounceTimers.get(characterId);
     if (existingTimer) {
@@ -176,21 +183,31 @@ export class ExportManager {
     }
 
     if (!this.isWithinRateLimit(characterId)) {
+      const error = "Rate limit exceeded: maximum 30 API calls per 60 seconds";
+      addExportIssue(actor, error);
       return {
         success: false,
-        error: "Rate limit exceeded: maximum 30 API calls per 60 seconds",
+        error,
       };
     }
 
     if (!this.client.isAuthenticated()) {
       const error = "No Demiplane token configured. Ask your GM to set it in module settings.";
+      addExportIssue(actor, error);
       this.notifyFailure(error);
       return { success: false, error };
     }
 
-    const fetched = await this.buildUpdatedCharacterData(characterId, changes ?? new Map(), itemChanges ?? new Map());
+    const fetched = await this.buildUpdatedCharacterData(
+      characterId,
+      actor,
+      changes ?? new Map(),
+      itemChanges ?? new Map()
+    );
     if (!fetched) {
-      return { success: false, error: "Failed to fetch character data" };
+      const error = "Failed to fetch character data";
+      addExportIssue(actor, error);
+      return { success: false, error };
     }
 
     const result = await this.pushWithRetry(characterId, fetched);
@@ -224,6 +241,7 @@ export class ExportManager {
 
   private async buildUpdatedCharacterData(
     characterId: string,
+    actor: Actor,
     changes: Map<string, PendingChange>,
     itemChanges: Map<string, PendingItemChange>
   ): Promise<FetchedCharacter | null> {
@@ -238,7 +256,7 @@ export class ExportManager {
 
     updatedEngines = this.applyFieldChanges(updatedEngines, changes);
     const resolved = this.resolveItemChanges(fetched, itemChanges);
-    updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved);
+    updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved, actor);
     updatedEngines = this.applyHandSlotAssignment(updatedEngines, resolved);
 
     return {
@@ -297,7 +315,11 @@ export class ExportManager {
     return resolved;
   }
 
-  private applyItemChangeEngines(updatedEngines: CustomEngine[], resolved: ResolvedItemChange[]): CustomEngine[] {
+  private applyItemChangeEngines(
+    updatedEngines: CustomEngine[],
+    resolved: ResolvedItemChange[],
+    actor: Actor
+  ): CustomEngine[] {
     let engines = updatedEngines;
     for (const { change: itemChange, demiplaneId } of resolved) {
       if (itemChange.changeType === "quantity") {
@@ -305,6 +327,11 @@ export class ExportManager {
         const existing = findCustomEngineByName(engines, qtyName);
         if (existing) {
           engines = engines.map((e) => (e === existing ? { ...e, value: itemChange.value as number } : e));
+        } else if (itemChange.edited) {
+          addExportIssue(
+            actor,
+            `Quantity for "${itemChange.itemSlug}" could not be pushed: Demiplane does not track it`
+          );
         }
       } else if (itemChange.changeType === "equipped") {
         engines = this.applyEquippedEngine(engines, itemChange, demiplaneId);
@@ -440,6 +467,7 @@ export class ExportManager {
       return;
     }
 
+    addExportIssue(actor, result.error ?? "Push to Demiplane failed unexpectedly");
     this.notifyFailure(result.error);
   }
 

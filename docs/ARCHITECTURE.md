@@ -28,7 +28,9 @@ graph TD
     subgraph "Foundry VTT Browser"
         Module[module.ts<br/>Bootstrap + Hook Registration]
         Settings[settings.ts<br/>Module Settings]
-        ST[SyncTabRenderer<br/>Actor Sheet UI]
+        ST[titlebar-dot.ts<br/>Sync Issue Indicator]
+        SI[sync-issues.ts<br/>Import/Export Issue Sets]
+        IBTN[demiplane-info-button.ts<br/>Demiplane Dialog]
         CLD[CharacterLinkDialog<br/>UUID Linking]
         HM[HookManager<br/>Actor Change Detection]
         IO[ImportOrchestrator<br/>Import Pipeline]
@@ -157,14 +159,28 @@ classDiagram
         -mapFieldToStoreName(path): string|undefined
     }
 
-    class SyncTabRenderer {
-        +renderTab(sheet, actor): void
-        +buildTabData(actor): SyncTabData
-        -renderStatus(data): string
-        -renderPendingChanges(data): string
-        -renderConflictWarning(data): string
-        -renderImportSummary(data): string
-        -bindEventHandlers(sheet): void
+    class TitlebarDot {
+        +register(importCharacter, exportCharacter): void
+        -applyDot(dot, actor): void
+        -getOpenSheetsFor(actor): ActorSheet[]
+    }
+
+    class SyncIssues {
+        +getImportIssues(actor): Set
+        +getExportIssues(actor): Set
+        +hasActiveIssues(actor): boolean
+        +resetImportIssues(actor): void
+        +clearExportIssues(actor): void
+        +clearAllIssues(actor): void
+        +addImportIssue(actor, msg): void
+        +addExportIssue(actor, msg): void
+    }
+
+    class DemiplaneInfoDialog {
+        +showDemiplaneInfoDialog(actor, id, import, export): Promise
+        -buildIssuesSection(importIssues, exportIssues): string
+        -buildManualItemsSection(items): string
+        -performUpdate(actor, id, import): Promise
     }
 
     class CharacterLinkDialog {
@@ -209,7 +225,11 @@ classDiagram
     ExportManager --> DemiplaneClient : pushes changes
     HookManager --> ExportManager : queues changes
 
-    SyncTabRenderer ..> ExportManager : reads pending state
+    SyncIssues ..> ExportManager : export issues
+    SyncIssues ..> ImportOrchestrator : import issues
+    DemiplaneInfoDialog --> SyncIssues : lists/dismisses
+    TitlebarDot --> SyncIssues : reads active issues
+    TitlebarDot --> DemiplaneInfoDialog : opens on click
     CharacterLinkDialog --> DemiplaneClient : validates UUID
 ```
 
@@ -235,11 +255,14 @@ sequenceDiagram
     Module->>Module: Create ImportOrchestrator(client)
     Module->>Module: Create ExportManager(client)
     Module->>Module: Create HookManager(exportManager)
-    Module->>Module: Create SyncTabRenderer()
     Module->>Module: Create CharacterLinkDialog(client)
 
     Module->>Module: hookManager.register()
     Note over Module: Registers updateActor, updateItem,<br/>createItem, deleteItem hooks
+
+    Module->>Module: registerDemiplaneInfoButton(import, export)
+    Module->>Module: registerTitlebarDot(import, export)
+    Note over Module: Renders sync-issue dot on linked sheet titlebars;<br/>click opens the Demiplane dialog
 
     Module->>Module: Expose module API on game.modules
 
@@ -393,7 +416,9 @@ src/
 ├── settings.ts                    Foundry module settings (token, autoSync, debugImport)
 ├── hook-manager.ts                Listens to actor/item hooks, maps fields, queues exports
 ├── export-manager.ts              Debounced + rate-limited push to Demiplane
-├── sync-tab-renderer.ts           Renders "Sync" tab on actor sheets
+├── sync-issues.ts                Import/export sync-issue sets on linked actors
+├── titlebar-dot.ts               Red indicator on actor sheet titlebars for open issues
+├── demiplane-info-button.ts      Header button + Demiplane dialog (lists issues, dismissable)
 ├── character-link-dialog.ts       Dialog for linking/unlinking UUID to actor
 ├── character-link-input.ts        Parses UUID or Demiplane URL
 ├── slug-mapper.ts                 (Legacy) standalone slug resolution class

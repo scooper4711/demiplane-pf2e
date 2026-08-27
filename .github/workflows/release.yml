@@ -53,6 +53,7 @@ jobs:
         run: |
           zip --recurse-paths ./module.zip \
             module.json \
+            module.css \
             dist/ \
             README.md
 

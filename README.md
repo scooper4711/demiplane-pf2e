@@ -114,7 +114,7 @@ The token is stored as a world setting so players can import characters they own
 
 **"No Demiplane token configured"** — Ask the GM to configure the authorization token. See the [Getting the Demiplane Token](#getting-the-demiplane-token) section above.
 
-**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them on the Sync tab so you can add them manually.
+**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. A red dot appears on the linked actor's titlebar while such sync issues are outstanding.
 
 ## Pre-Release Notice
 

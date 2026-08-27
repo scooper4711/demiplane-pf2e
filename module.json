@@ -17,6 +17,7 @@
     }
   ],
   "esmodules": ["dist/module.js"],
+  "styles": ["module.css"],
   "relationships": {
     "systems": [
       {

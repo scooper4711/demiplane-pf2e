@@ -53,7 +53,9 @@ demiplane-pf2e/
     export-manager.ts          # Debounced session state export
     conflict-resolver.ts       # Version-based conflict detection
     hook-manager.ts            # Foundry hook registration and dispatch
-    sync-tab-renderer.ts       # Actor sheet Sync tab UI
+    sync-issues.ts               # Import/export sync-issue sets on linked actors
+    titlebar-dot.ts              # Red titlebar indicator for open sync issues
+    demiplane-info-button.ts     # Demiplane dialog (lists + dismisses issues)
     character-link-input.ts    # UUID/URL parsing for actor linking
     character-link-dialog.ts   # Per-actor character link dialog
     attribute-skill-importer.ts # Attribute boost and skill training logic
@@ -132,11 +134,11 @@ The module's import pipeline is class-agnostic by design. The `SlugMapper` resol
 
 ### What files to modify
 
-| Scenario | File |
-|----------|------|
-| Slug doesn't resolve | Check `slug-mapper.ts` pack search order |
-| Engine not categorized | Update category logic in `import-orchestrator.ts` |
-| Grant Chain conflict | Adjust skip logic in `attribute-skill-importer.ts` |
+| Scenario               | File                                               |
+| ---------------------- | -------------------------------------------------- |
+| Slug doesn't resolve   | Check `slug-mapper.ts` pack search order           |
+| Engine not categorized | Update category logic in `import-orchestrator.ts`  |
+| Grant Chain conflict   | Adjust skip logic in `attribute-skill-importer.ts` |
 
 ### What tests to add
 
@@ -156,15 +158,15 @@ This project uses [Conventional Commits](https://www.conventionalcommits.org/) w
 
 ### Types
 
-| Type | Use for |
-|------|---------|
-| `feat` | New features or capabilities |
-| `fix` | Bug fixes |
+| Type       | Use for                                               |
+| ---------- | ----------------------------------------------------- |
+| `feat`     | New features or capabilities                          |
+| `fix`      | Bug fixes                                             |
 | `refactor` | Code changes that neither fix a bug nor add a feature |
-| `docs` | Documentation changes |
-| `test` | Adding or updating tests |
-| `chore` | Build, tooling, dependency updates |
-| `style` | Formatting, whitespace (no logic change) |
+| `docs`     | Documentation changes                                 |
+| `test`     | Adding or updating tests                              |
+| `chore`    | Build, tooling, dependency updates                    |
+| `style`    | Formatting, whitespace (no logic change)              |
 
 ### Rules
 

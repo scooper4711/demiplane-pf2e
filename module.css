@@ -1,0 +1,58 @@
+/*
+ * Demiplane PF2e Sync — module styles.
+ *
+ * The sync-issue indicator is a red dot rendered as a pseudo-element. It appears:
+ *  - before the "Demiplane" header button on linked actor sheets (via the
+ *    `has-sync-errors` class on the `.demiplane-info-btn` button);
+ *  - before the "Sync issues" heading inside the Demiplane dialog; and
+ *  - in the title bar of the Demiplane pop-up dialog (via the
+ *    `has-sync-errors` class on the dialog's `.demiplane-sync-dialog` element).
+ *
+ * All placement is controlled here — switch pseudo-elements and flip the margin
+ * to move a dot, or adjust vertical-alignment / sizing as needed.
+ */
+
+/* Red dot on the actor sheet header button, placed before "Demiplane". */
+.demiplane-info-btn.has-sync-errors::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #e53935;
+  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
+  vertical-align: super;
+  pointer-events: none;
+}
+
+/* Red dot before the "Sync issues" heading inside the Demiplane dialog. */
+.sync-issues-heading::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #e53935;
+  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
+  vertical-align: middle;
+  pointer-events: none;
+}
+
+/* Red dot in the title bar of the Demiplane pop-up dialog. */
+.demiplane-sync-dialog.has-sync-errors .window-title::before {
+  content: "";
+  display: inline-block;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: #e53935;
+  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
+  vertical-align: super;
+  pointer-events: none;
+}

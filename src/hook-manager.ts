@@ -157,7 +157,7 @@ export class HookManager {
       if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
         this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
       } else if (typeof slug === "string") {
-        this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", quantity);
+        this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", quantity, undefined, true);
       }
     }
 
