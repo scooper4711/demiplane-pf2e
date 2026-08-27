@@ -51,6 +51,11 @@ interface FetchedCharacter {
   meta: CharacterMetadata;
 }
 
+interface ResolvedItemChange {
+  change: PendingItemChange;
+  demiplaneId: string;
+}
+
 /**
  * Handles debounced session state export from Foundry to Demiplane.
  *
@@ -217,7 +222,6 @@ export class ExportManager {
     this.debounceTimers.clear();
   }
 
-  // eslint-disable-next-line complexity -- monolith assembling field + item + hand-slot engines for the push payload
   private async buildUpdatedCharacterData(
     characterId: string,
     changes: Map<string, PendingChange>,
@@ -232,17 +236,41 @@ export class ExportManager {
 
     let updatedEngines: CustomEngine[] = fetched.engines as CustomEngine[];
 
+    updatedEngines = this.applyFieldChanges(updatedEngines, changes);
+    const resolved = this.resolveItemChanges(fetched, itemChanges);
+    updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved);
+    updatedEngines = this.applyHandSlotAssignment(updatedEngines, resolved);
+
+    return {
+      data: {
+        engines: updatedEngines,
+        engineCacheIdsBySource: fetched.engineCacheIdsBySource ?? {},
+      },
+      meta: {
+        name: fetched.name,
+        level: fetched.level,
+        avatarUrl: fetched.avatarUrl,
+        viewPermission: fetched.viewPermission,
+        editPermission: fetched.editPermission,
+      },
+    };
+  }
+
+  private applyFieldChanges(updatedEngines: CustomEngine[], changes: Map<string, PendingChange>): CustomEngine[] {
+    let engines = updatedEngines;
     for (const change of changes.values()) {
-      const existing = findCustomEngineByName(fetched.engines, change.field);
+      const existing = findCustomEngineByName(engines, change.field);
       if (existing) {
-        updatedEngines = updatedEngines.map((e) => (e === existing ? { ...e, value: change.value } : e));
+        engines = engines.map((e) => (e === existing ? { ...e, value: change.value } : e));
       }
     }
+    return engines;
+  }
 
-    interface ResolvedItemChange {
-      change: PendingItemChange;
-      demiplaneId: string;
-    }
+  private resolveItemChanges(
+    fetched: CharacterData,
+    itemChanges: Map<string, PendingItemChange>
+  ): ResolvedItemChange[] {
     const resolved: ResolvedItemChange[] = [];
     for (const itemChange of itemChanges.values()) {
       const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
@@ -266,101 +294,78 @@ export class ExportManager {
       }))
     );
 
+    return resolved;
+  }
+
+  private applyItemChangeEngines(updatedEngines: CustomEngine[], resolved: ResolvedItemChange[]): CustomEngine[] {
+    let engines = updatedEngines;
     for (const { change: itemChange, demiplaneId } of resolved) {
       if (itemChange.changeType === "quantity") {
         const qtyName = `${demiplaneId}--quantity`;
-        const existing = findCustomEngineByName(updatedEngines, qtyName);
+        const existing = findCustomEngineByName(engines, qtyName);
         if (existing) {
-          updatedEngines = updatedEngines.map((e) =>
-            e === existing ? { ...e, value: itemChange.value as number } : e
-          );
+          engines = engines.map((e) => (e === existing ? { ...e, value: itemChange.value as number } : e));
         }
       } else if (itemChange.changeType === "equipped") {
-        const equippedState = itemChange.value as EquippedState;
-        const carryType = equippedState.carryType;
-        const isArmor = itemChange.itemType === "armor";
-        const isEquipped = isArmor
-          ? carryType === "worn" && equippedState.inSlot !== false
-          : carryType === "worn" || carryType === "held";
-
-        const equippedName = `${demiplaneId}-is-equipped`;
-        const existingEquipped = findCustomEngineByName(updatedEngines, equippedName);
-        debugLog(
-          `[push] equipped state for ${itemChange.itemSlug}: carryType=${carryType}, inSlot=${equippedState.inSlot}, isArmor=${isArmor}, isEquipped=${isEquipped}, engine=${equippedName} found=${existingEquipped !== undefined}`
-        );
-        if (existingEquipped) {
-          updatedEngines = updatedEngines.map((e) =>
-            e === existingEquipped ? { ...e, value: isEquipped ? 1 : 0 } : e
-          );
-        }
+        engines = this.applyEquippedEngine(engines, itemChange, demiplaneId);
       }
     }
+    return engines;
+  }
 
-    const primaryHandName = "character_hand_primary_equipped-id";
-    const offhandName = "character_hand_offhand_equipped-id";
-    const bothHandsName = "character_hand_both_equipped-id";
-    const existingPrimary = findCustomEngineByName(updatedEngines, primaryHandName);
-    const existingOffhand = findCustomEngineByName(updatedEngines, offhandName);
-    const existingBoth = findCustomEngineByName(updatedEngines, bothHandsName);
+  private applyEquippedEngine(
+    updatedEngines: CustomEngine[],
+    itemChange: PendingItemChange,
+    demiplaneId: string
+  ): CustomEngine[] {
+    const equippedState = itemChange.value as EquippedState;
+    const carryType = equippedState.carryType;
+    const isArmor = itemChange.itemType === "armor";
+    const isEquipped = isArmor
+      ? carryType === "worn" && equippedState.inSlot !== false
+      : carryType === "worn" || carryType === "held";
+
+    const equippedName = `${demiplaneId}-is-equipped`;
+    const existingEquipped = findCustomEngineByName(updatedEngines, equippedName);
+    debugLog(
+      `[push] equipped state for ${itemChange.itemSlug}: carryType=${carryType}, inSlot=${equippedState.inSlot}, isArmor=${isArmor}, isEquipped=${isEquipped}, engine=${equippedName} found=${existingEquipped !== undefined}`
+    );
+    if (!existingEquipped) return updatedEngines;
+    return updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: isEquipped ? 1 : 0 } : e));
+  }
+
+  private applyHandSlotAssignment(updatedEngines: CustomEngine[], resolved: ResolvedItemChange[]): CustomEngine[] {
+    let engines = updatedEngines;
+    const existingPrimary = findCustomEngineByName(engines, "character_hand_primary_equipped-id");
+    const existingOffhand = findCustomEngineByName(engines, "character_hand_offhand_equipped-id");
+    const existingBoth = findCustomEngineByName(engines, "character_hand_both_equipped-id");
+
     debugLog(
       `[push] hand engines found: primary=${existingPrimary !== undefined}, offhand=${existingOffhand !== undefined}, both=${existingBoth !== undefined}; values before: primary=${existingPrimary?.value}, offhand=${existingOffhand?.value}, both=${existingBoth?.value}`
     );
 
     const setPrimary = (id: string) => {
-      if (existingPrimary)
-        updatedEngines = updatedEngines.map((e) => (e === existingPrimary ? { ...e, value: id } : e));
+      if (existingPrimary) engines = engines.map((e) => (e === existingPrimary ? { ...e, value: id } : e));
     };
     const setOffhand = (id: string) => {
-      if (existingOffhand)
-        updatedEngines = updatedEngines.map((e) => (e === existingOffhand ? { ...e, value: id } : e));
+      if (existingOffhand) engines = engines.map((e) => (e === existingOffhand ? { ...e, value: id } : e));
     };
     const setBoth = (id: string) => {
-      if (existingBoth) updatedEngines = updatedEngines.map((e) => (e === existingBoth ? { ...e, value: id } : e));
+      if (existingBoth) engines = engines.map((e) => (e === existingBoth ? { ...e, value: id } : e));
     };
     const clearAllHands = (id: string) => {
       if (existingPrimary && existingPrimary.value === id)
-        updatedEngines = updatedEngines.map((e) => (e === existingPrimary ? { ...e, value: "na" } : e));
+        engines = engines.map((e) => (e === existingPrimary ? { ...e, value: "na" } : e));
       if (existingOffhand && existingOffhand.value === id)
-        updatedEngines = updatedEngines.map((e) => (e === existingOffhand ? { ...e, value: "na" } : e));
+        engines = engines.map((e) => (e === existingOffhand ? { ...e, value: "na" } : e));
       if (existingBoth && existingBoth.value === id)
-        updatedEngines = updatedEngines.map((e) => (e === existingBoth ? { ...e, value: "na" } : e));
+        engines = engines.map((e) => (e === existingBoth ? { ...e, value: "na" } : e));
     };
 
-    const heldEquipped = resolved.filter(({ change }) => {
-      if (change.changeType !== "equipped") return false;
-      const equippedState = change.value as EquippedState;
-      return equippedState.carryType === "held" && change.itemType !== "armor";
-    });
-    const heldIds = heldEquipped.map(({ demiplaneId: id }) => id);
-    const heldHandValues = heldEquipped.map(({ change }) => {
-      const equippedState = change.value as EquippedState;
-      return typeof equippedState.handsHeld === "number" ? equippedState.handsHeld : 1;
-    });
-
-    let primaryUsed = false;
-    let offhandUsed = false;
-    let bothUsed = false;
-
-    for (let i = 0; i < heldIds.length; i++) {
-      const id = heldIds[i]!;
-      const handsHeld = heldHandValues[i]!;
-      if (bothUsed) continue;
-
-      if (handsHeld >= 2) {
-        if (primaryUsed) continue;
-        setBoth(id);
-        bothUsed = true;
-        continue;
-      }
-
-      if (!primaryUsed) {
-        setPrimary(id);
-        primaryUsed = true;
-      } else if (!offhandUsed) {
-        setOffhand(id);
-        offhandUsed = true;
-      }
-    }
+    const assignments = this.computeHandAssignments(this.heldHandItems(resolved));
+    if (assignments.primary) setPrimary(assignments.primary);
+    if (assignments.offhand) setOffhand(assignments.offhand);
+    if (assignments.both) setBoth(assignments.both);
 
     for (const { change: itemChange, demiplaneId: id } of resolved) {
       if (itemChange.changeType !== "equipped") continue;
@@ -375,19 +380,53 @@ export class ExportManager {
       `[push] hand values after: primary=${existingPrimary?.value}, offhand=${existingOffhand?.value}, both=${existingBoth?.value}`
     );
 
-    return {
-      data: {
-        engines: updatedEngines,
-        engineCacheIdsBySource: fetched.engineCacheIdsBySource ?? {},
-      },
-      meta: {
-        name: fetched.name,
-        level: fetched.level,
-        avatarUrl: fetched.avatarUrl,
-        viewPermission: fetched.viewPermission,
-        editPermission: fetched.editPermission,
-      },
-    };
+    return engines;
+  }
+
+  private heldHandItems(resolved: ResolvedItemChange[]): { id: string; handsHeld: number }[] {
+    return resolved
+      .filter(({ change }) => {
+        if (change.changeType !== "equipped") return false;
+        const equippedState = change.value as EquippedState;
+        return equippedState.carryType === "held" && change.itemType !== "armor";
+      })
+      .map(({ change, demiplaneId }) => ({
+        id: demiplaneId,
+        handsHeld:
+          typeof (change.value as EquippedState).handsHeld === "number"
+            ? (change.value as EquippedState).handsHeld!
+            : 1,
+      }));
+  }
+
+  private computeHandAssignments(heldItems: { id: string; handsHeld: number }[]): {
+    primary?: string;
+    offhand?: string;
+    both?: string;
+  } {
+    const assignments: { primary?: string; offhand?: string; both?: string } = {};
+    let primaryUsed = false;
+    let offhandUsed = false;
+    let bothUsed = false;
+
+    for (const item of heldItems) {
+      if (bothUsed) continue;
+      if (item.handsHeld >= 2) {
+        if (primaryUsed) continue;
+        assignments.both = item.id;
+        bothUsed = true;
+        continue;
+      }
+      if (!primaryUsed) {
+        assignments.primary = item.id;
+        primaryUsed = true;
+      } else if (!offhandUsed) {
+        assignments.offhand = item.id;
+        offhandUsed = true;
+      }
+    }
+
+    return assignments;
   }
 
   private async handlePushResult(result: ExportResult, characterId: string, actor: Actor): Promise<void> {
