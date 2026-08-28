@@ -26,6 +26,13 @@ describe("applySpells", () => {
           type: "spell",
         },
         { _id: "sp4", name: "Heal", system: { slug: "heal" }, type: "spell" },
+        { _id: "sp5", name: "Daze", system: { slug: "daze" }, type: "spell" },
+        { _id: "sp6", name: "Divine Lance", system: { slug: "divine-lance" }, type: "spell" },
+        { _id: "sp7", name: "Guidance", system: { slug: "guidance" }, type: "spell" },
+        { _id: "sp8", name: "Light", system: { slug: "light" }, type: "spell" },
+        { _id: "sp9", name: "Stabilize", system: { slug: "stabilize" }, type: "spell" },
+        { _id: "sp10", name: "Bless", system: { slug: "bless" }, type: "spell" },
+        { _id: "sp11", name: "Sanctuary", system: { slug: "sanctuary" }, type: "spell" },
       ]),
     });
   });
@@ -143,5 +150,81 @@ describe("applySpells", () => {
     const summary = makeSummary();
     await applySpells(actor as never, [], summary);
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  function makeClericSpell(slug: string, rank: number, spellSlot: string): DemiplaneEngineEntry {
+    return {
+      id: slug,
+      name: `tabula/spell/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: {
+        slug,
+        isPrepare: true,
+        selectionRank: rank,
+        parentSpellFeature: "cleric-spellcasting-rm",
+        spellSlot,
+      },
+    };
+  }
+
+  it("prepares cleric spells (isPrepare only, no spellbook)", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      makeClericSpell("daze-rm", 0, "cantrip"),
+      makeClericSpell("divine-lance-rm", 0, "cantrip"),
+      makeClericSpell("guidance-rm", 0, "cantrip"),
+      makeClericSpell("light-rm", 0, "cantrip"),
+      makeClericSpell("stabilize-rm", 0, "cantrip"),
+      makeClericSpell("bless-rm", 1, "rank-1"),
+      makeClericSpell("sanctuary-rm", 1, "rank-1"),
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    const entry = (actor.items as unknown as Array<Record<string, unknown>>).find(
+      (i) => i.type === "spellcastingEntry" && i.name === "Divine Prepared Spells"
+    );
+    expect(entry).toBeDefined();
+
+    const slots = (entry!.system as Record<string, Record<string, { prepared: Array<{ id: string | null }> }>>).slots;
+    expect(slots.slot0.prepared.length).toBe(5);
+    expect(slots.slot1.prepared.length).toBe(2);
+
+    const allIds = [...slots.slot0.prepared, ...slots.slot1.prepared].map((p) => p.id);
+    expect(allIds.every((id) => id !== null)).toBe(true);
+
+    // Spells should also exist as items in the actor
+    const spellItems = (actor.items as unknown as Array<Record<string, unknown>>).filter((i) => i.type === "spell");
+    expect(spellItems.length).toBe(7);
+  });
+
+  it("creates Divine Font entry with heal x4", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = Array.from({ length: 4 }, () =>
+      makeClericSpell("heal-rm", 1, "divine-font")
+    );
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    const entry = (actor.items as unknown as Array<Record<string, unknown>>).find(
+      (i) => i.type === "spellcastingEntry" && i.name === "Divine Font (Healing)"
+    );
+    expect(entry).toBeDefined();
+    expect(((entry!.system as Record<string, Record<string, string>>).prepared as Record<string, string>).value).toBe(
+      "spontaneous"
+    );
+
+    const slots = (entry!.system as Record<string, Record<string, { prepared: Array<{ id: string | null }> }>>).slots;
+    expect(slots.slot1.prepared.length).toBe(4);
+    const healIds = slots.slot1.prepared.map((p) => p.id);
+    expect(healIds.every((id) => id !== null)).toBe(true);
+    expect(new Set(healIds).size).toBe(1); // single Heal item referenced 4x
+
+    const healItem = (
+      actor.items as unknown as Array<Record<string, { location: { heightenedLevel: number; signature: boolean } }>>
+    ).find((i) => i.type === "spell" && (i.system as Record<string, unknown>).slug === "heal");
+    expect(healItem).toBeDefined();
+    expect(healItem!.system.location.heightenedLevel).toBe(1);
+    expect(healItem!.system.location.signature).toBe(true);
   });
 });

@@ -11,7 +11,7 @@ export function createMockPack(
     name: string;
     system: { slug: string };
     [key: string]: unknown;
-  }> = [],
+  }> = []
 ) {
   return {
     getIndex: vi.fn().mockResolvedValue(items),
@@ -23,9 +23,7 @@ export function createMockPack(
 }
 
 // Mock game.packs collection
-export function createMockPacks(
-  packMap: Record<string, ReturnType<typeof createMockPack>> = {},
-) {
+export function createMockPacks(packMap: Record<string, ReturnType<typeof createMockPack>> = {}) {
   return {
     get: vi.fn().mockImplementation((key: string) => packMap[key] ?? null),
     filter: vi.fn().mockReturnValue(Object.values(packMap)),
@@ -33,9 +31,7 @@ export function createMockPacks(
 }
 
 // Mock actor
-export function createMockActor(
-  initialData: { name?: string; items?: Array<Record<string, unknown>> } = {},
-) {
+export function createMockActor(initialData: { name?: string; items?: Array<Record<string, unknown>> } = {}) {
   const items: Array<Record<string, unknown>> = initialData.items ?? [];
 
   const actor = {
@@ -76,48 +72,50 @@ export function createMockActor(
     prototypeToken: { texture: { src: "" } },
     update: vi.fn().mockResolvedValue(undefined),
     setFlag: vi.fn().mockResolvedValue(undefined),
-    getFlag: vi
-      .fn()
-      .mockImplementation(
-        (_scope: string, key: string) => actor.flags[_scope]?.[key],
-      ),
-    createEmbeddedDocuments: vi
-      .fn()
-      .mockImplementation(
-        async (_type: string, data: Array<Record<string, unknown>>) => {
-          const created = data.map((d, i) => ({
-            ...d,
-            id: `mock-id-${items.length + i}`,
-            _id: `mock-id-${items.length + i}`,
-            flags: d.flags ?? {},
-            system: {
-              ...(d.system as Record<string, unknown>),
-              slug:
-                (d.system as Record<string, unknown>)?.slug ??
-                d.name?.toString().toLowerCase().replace(/\s+/g, "-"),
-            },
-          }));
-          items.push(...created);
-          return created;
-        },
-      ),
-    deleteEmbeddedDocuments: vi
-      .fn()
-      .mockImplementation(async (_type: string, ids: string[]) => {
-        for (const id of ids) {
-          const idx = items.findIndex((i) => i.id === id || i._id === id);
-          if (idx >= 0) items.splice(idx, 1);
-        }
-      }),
+    getFlag: vi.fn().mockImplementation((_scope: string, key: string) => actor.flags[_scope]?.[key]),
+    createEmbeddedDocuments: vi.fn().mockImplementation(async (_type: string, data: Array<Record<string, unknown>>) => {
+      const created = data.map((d, i) => {
+        const item: Record<string, unknown> = {
+          ...d,
+          id: `mock-id-${items.length + i}`,
+          _id: `mock-id-${items.length + i}`,
+          flags: d.flags ?? {},
+          system: {
+            ...(d.system as Record<string, unknown>),
+            slug: (d.system as Record<string, unknown>)?.slug ?? d.name?.toString().toLowerCase().replace(/\s+/g, "-"),
+          },
+        };
+        item.update = async (updateData: Record<string, unknown>) => {
+          if (updateData.system) {
+            item.system = {
+              ...(item.system as Record<string, unknown>),
+              ...(updateData.system as Record<string, unknown>),
+            };
+            const { system: _system, ...rest } = updateData;
+            Object.assign(item, rest);
+          } else {
+            Object.assign(item, updateData);
+          }
+          return item;
+        };
+        return item;
+      });
+      items.push(...created);
+      return created;
+    }),
+    deleteEmbeddedDocuments: vi.fn().mockImplementation(async (_type: string, ids: string[]) => {
+      for (const id of ids) {
+        const idx = items.findIndex((i) => i.id === id || i._id === id);
+        if (idx >= 0) items.splice(idx, 1);
+      }
+    }),
   };
 
   return actor;
 }
 
 // Install globals
-export function installFoundryMocks(
-  packMap: Record<string, ReturnType<typeof createMockPack>> = {},
-) {
+export function installFoundryMocks(packMap: Record<string, ReturnType<typeof createMockPack>> = {}) {
   const packs = createMockPacks(packMap);
 
   (globalThis as unknown as Record<string, unknown>).game = {
@@ -127,19 +125,17 @@ export function installFoundryMocks(
     settings: { get: vi.fn(), register: vi.fn() },
   };
 
-  (globalThis as unknown as Record<string, unknown>).fromUuid = vi
-    .fn()
-    .mockImplementation(async (uuid: string) => {
-      // Parse "Compendium.{packKey}.Item.{id}"
-      const parts = uuid.split(".");
-      if (parts.length >= 5) {
-        const packKey = `${parts[1]}.${parts[2]}`;
-        const id = parts[4];
-        const pack = packs.get(packKey);
-        if (pack) return pack.getDocument(id);
-      }
-      return null;
-    });
+  (globalThis as unknown as Record<string, unknown>).fromUuid = vi.fn().mockImplementation(async (uuid: string) => {
+    // Parse "Compendium.{packKey}.Item.{id}"
+    const parts = uuid.split(".");
+    if (parts.length >= 5) {
+      const packKey = `${parts[1]}.${parts[2]}`;
+      const id = parts[4];
+      const pack = packs.get(packKey);
+      if (pack) return pack.getDocument(id);
+    }
+    return null;
+  });
 
   (globalThis as unknown as Record<string, unknown>).CONFIG = {
     PF2E: { languages: {} },

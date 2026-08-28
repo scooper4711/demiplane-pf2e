@@ -22,6 +22,12 @@ const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
   "psychic-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
 };
 
+const FONT_SPELL_SLOT = "divine-font";
+
+function isDivineFontSpell(eng: DemiplaneEngineEntry): boolean {
+  return (eng.args?.spellSlot as string | undefined) === FONT_SPELL_SLOT;
+}
+
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
 function getPacks(): NonNullable<typeof game.packs> {
@@ -54,15 +60,22 @@ interface SpellGroup {
 function groupSpells(engines: DemiplaneEngineEntry[]): {
   main: SpellGroup[];
   innate: DemiplaneEngineEntry[];
+  font: DemiplaneEngineEntry[];
 } {
   const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
+  const fontSpells: DemiplaneEngineEntry[] = [];
 
   for (const eng of spellEngines) {
     const parentFeature = eng.args?.parentSpellFeature as string | undefined;
     const sourceType = eng.args?.sourceType as string | undefined;
     const isPrepare = eng.args?.isPrepare === true;
+
+    if (isDivineFontSpell(eng)) {
+      fontSpells.push(eng);
+      continue;
+    }
 
     if (sourceType === "select-spell") {
       innateSpells.push(eng);
@@ -100,7 +113,7 @@ function groupSpells(engines: DemiplaneEngineEntry[]): {
     }
   }
 
-  return { main: [...mainGroups.values()], innate: innateSpells };
+  return { main: [...mainGroups.values()], innate: innateSpells, font: fontSpells };
 }
 
 // ─── Entry Creation ──────────────────────────────────────────────────────────
@@ -180,6 +193,8 @@ async function placePreparedSpells(
 ): Promise<void> {
   if (preparedEngines.length === 0) return;
 
+  await addMissingPreparedItems(actor, entryId, preparedEngines, slugToId, summary);
+
   const slotsByRank = new Map<number, Array<{ id: string | null; expended: boolean }>>();
 
   for (const eng of preparedEngines) {
@@ -208,6 +223,46 @@ async function placePreparedSpells(
     await entry.update({ system: { slots: slotsUpdate } } as never);
     summary.log.push(`+ prepared: ${String(preparedEngines.length)} spells placed in slots`);
   }
+}
+
+/**
+ * Prepared spells must also exist as spell items in the entry. For casters that
+ * only emit `isPrepare` spells (e.g. cleric), the spellbook pass adds nothing,
+ * so resolve and add any missing spell items here before placing them in slots.
+ */
+async function addMissingPreparedItems(
+  actor: Actor,
+  entryId: string,
+  preparedEngines: DemiplaneEngineEntry[],
+  slugToId: Map<string, string>,
+  summary: ImportSummary
+): Promise<void> {
+  const missing: Record<string, unknown>[] = [];
+  for (const eng of preparedEngines) {
+    const slug = eng.args?.slug as string;
+    if (!slug || slugToId.has(toFoundrySlug(slug))) continue;
+
+    const spellData = await resolveSpell(slug);
+    if (!spellData) {
+      summary.log.push(`- prepared: ${toFoundrySlug(slug)} (not found)`);
+      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
+      continue;
+    }
+
+    (spellData as { system: Record<string, unknown> }).system.location = { value: entryId };
+    missing.push(stampImported(spellData));
+  }
+
+  if (missing.length === 0) return;
+
+  const created = (await actor.createEmbeddedDocuments("Item", missing as never)) as Array<{
+    id: string;
+    system: { slug: string };
+  }>;
+  for (const item of created) {
+    slugToId.set(item.system.slug, item.id);
+  }
+  summary.log.push(`+ prepared: ${String(missing.length)} spells added to entry`);
 }
 
 // ─── Signature Spells ────────────────────────────────────────────────────────
@@ -279,8 +334,8 @@ export async function applySpells(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const { main, innate } = groupSpells(engines);
-  if (main.length === 0 && innate.length === 0) return;
+  const { main, innate, font } = groupSpells(engines);
+  if (main.length === 0 && innate.length === 0 && font.length === 0) return;
 
   let totalAdded = 0;
 
@@ -290,6 +345,10 @@ export async function applySpells(
 
   if (innate.length > 0) {
     totalAdded += await importInnateSpells(actor, innate, main, engines, summary);
+  }
+
+  if (font.length > 0) {
+    totalAdded += await importFontSpells(actor, font, summary);
   }
 
   if (totalAdded > 0) {
@@ -391,6 +450,100 @@ function deriveInnateEntryName(innate: DemiplaneEngineEntry[], engines: Demiplan
 
   if (feat?.args?.name) return `${feat.args.name as string} (Innate)`;
   return "Innate Spells";
+}
+
+// ─── Divine Font (Cleric) ──────────────────────────────────────────────────────
+
+/**
+ * Imports Divine Font spells (e.g. cleric heal/harm) into a dedicated
+ * "Divine Font (Healing)" spellcasting entry. Demiplane represents these as
+ * spell engines with `args.spellSlot === "divine-font"`; they are grouped
+ * separately so they don't land in the regular prepared-spell slots.
+ */
+async function importFontSpells(
+  actor: Actor,
+  fontEngines: DemiplaneEngineEntry[],
+  summary: ImportSummary
+): Promise<number> {
+  if (fontEngines.length === 0) return 0;
+
+  const entryName = "Divine Font (Healing)";
+  const entryId = await createEntry(actor, entryName, "divine", "spontaneous", "wis");
+  const slugToId = await addFontSpells(actor, entryId, fontEngines, summary);
+  await placeFontSlots(actor, entryId, fontEngines, slugToId, summary);
+  return slugToId.size;
+}
+
+async function addFontSpells(
+  actor: Actor,
+  entryId: string,
+  fontEngines: DemiplaneEngineEntry[],
+  summary: ImportSummary
+): Promise<Map<string, string>> {
+  const slugToId = new Map<string, string>();
+  const seen = new Set<string>();
+  const items: Record<string, unknown>[] = [];
+
+  for (const eng of fontEngines) {
+    const slug = eng.args?.slug as string;
+    if (!slug) continue;
+
+    const foundrySlug = toFoundrySlug(slug);
+    if (seen.has(foundrySlug)) continue;
+    seen.add(foundrySlug);
+
+    const spellData = await resolveSpell(slug);
+    if (!spellData) {
+      summary.log.push(`- divine font: ${foundrySlug} (not found)`);
+      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
+      continue;
+    }
+
+    const heightenedLevel = (eng.args?.selectionRank as number) ?? 1;
+    (spellData as { system: Record<string, unknown> }).system.location = {
+      value: entryId,
+      heightenedLevel,
+      signature: true,
+    };
+    items.push(stampImported(spellData));
+  }
+
+  if (items.length > 0) {
+    const created = (await actor.createEmbeddedDocuments("Item", items as never)) as Array<{
+      id: string;
+      system: { slug: string };
+    }>;
+    for (const item of created) {
+      slugToId.set(item.system.slug, item.id);
+    }
+  }
+
+  return slugToId;
+}
+
+async function placeFontSlots(
+  actor: Actor,
+  entryId: string,
+  fontEngines: DemiplaneEngineEntry[],
+  slugToId: Map<string, string>,
+  summary: ImportSummary
+): Promise<void> {
+  const entryName = "Divine Font (Healing)";
+  const healSlug = toFoundrySlug((fontEngines[0]?.args?.slug as string) ?? "heal");
+  const healId = slugToId.get(healSlug) ?? null;
+  const count = fontEngines.length;
+
+  const slots = Array.from({ length: count }, () => ({ id: healId, expended: false }));
+  const slotsUpdate = {
+    slot0: { max: 0, value: 0, prepared: [] as Array<{ id: string | null; expended: boolean }> },
+    slot1: { max: count, value: count, prepared: slots },
+  };
+
+  const entry = actor.items.get(entryId);
+  if (entry) {
+    await entry.update({ system: { slots: slotsUpdate } } as never);
+    summary.log.push(`+ divine font: ${String(count)} ${entryName} slots`);
+  }
 }
 
 // ─── Slot Maximums ───────────────────────────────────────────────────────────
