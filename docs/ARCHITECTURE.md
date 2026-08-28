@@ -26,28 +26,28 @@ This document describes the internal architecture of `demiplane-pf2e`: component
 ```mermaid
 graph TD
     subgraph "Foundry VTT Browser"
-        Module[module.ts<br/>Bootstrap + Hook Registration]
-        Settings[settings.ts<br/>Module Settings]
-        ST[titlebar-dot.ts<br/>Sync Issue Indicator]
-        SI[sync-issues.ts<br/>Import/Export Issue Sets]
-        IBTN[demiplane-info-button.ts<br/>Demiplane Dialog]
-        CLD[CharacterLinkDialog<br/>UUID Linking]
-        HM[HookManager<br/>Actor Change Detection]
-        IO[ImportOrchestrator<br/>Import Pipeline]
-        EM[ExportManager<br/>Debounced Push]
+        Module["module.ts<br/>Bootstrap + Hook Registration"]
+        Settings["settings.ts<br/>Module Settings"]
+        ST["titlebar-dot.ts<br/>Sync Issue Indicator"]
+        SI["sync-issues.ts<br/>Import/Export Issue Sets"]
+        IBTN["demiplane-info-button.ts<br/>Demiplane Dialog"]
+        CLD["CharacterLinkDialog<br/>UUID Linking"]
+        HM["HookManager<br/>Actor Change Detection"]
+        IO["ImportOrchestrator<br/>Import Pipeline"]
+        EM["ExportManager<br/>Debounced Push"]
     end
 
     subgraph "Import Subsystem"
-        CSH[ChoiceSetHandler<br/>Auto-Select Choices]
-        CompRes[compendium-resolver<br/>Slug → UUID]
-        SlugUtils[slug-utils<br/>Slug Transformation]
-        SpellImp[spell-importer<br/>Spellcasting Entries]
-        SpellSlot[spell-slot-resolver<br/>Slot Progression]
-        FeatSpell[feature-spell-resolver<br/>Focus/Innate Spells]
-        ItemSpell[item-spell-resolver<br/>Staff/Wand Spells]
-        EquipImp[equipment-importer<br/>Items + Containers]
-        AttrImp[attribute-language-importer<br/>Boosts + Skills + Languages]
-        BioImp[biography-importer<br/>Bio Fields + Deity]
+        CSH["ChoiceSetHandler<br/>Auto-Select Choices"]
+        CompRes["compendium-resolver<br/>Slug → UUID"]
+        SlugUtils["slug-utils<br/>Slug Transformation"]
+        SpellImp["spell-importer<br/>Spellcasting Entries"]
+        SpellSlot["spell-slot-resolver<br/>Slot Progression"]
+        FeatSpell["feature-spell-resolver<br/>Focus/Innate Spells"]
+        ItemSpell["item-spell-resolver<br/>Staff/Wand Spells"]
+        EquipImp["equipment-importer<br/>Items + Containers"]
+        AttrImp["attribute-language-importer<br/>Boosts + Skills + Languages"]
+        BioImp["biography-importer<br/>Bio Fields + Deity"]
     end
 
     subgraph "@scooper4711/demiplane-api"
@@ -56,8 +56,8 @@ graph TD
     end
 
     subgraph "External APIs"
-        GQL[Demiplane GraphQL<br/>apiv4.demiplane.com]
-        SE[Stream-Engines<br/>character.demiplane.com]
+        GQL["Demiplane GraphQL<br/>apiv4.demiplane.com"]
+        SE["Stream-Engines<br/>character.demiplane.com"]
     end
 
     subgraph "Foundry Core"
@@ -258,11 +258,11 @@ sequenceDiagram
     Module->>Module: Create CharacterLinkDialog(client)
 
     Module->>Module: hookManager.register()
-    Note over Module: Registers updateActor, updateItem,<br/>createItem, deleteItem hooks
+    Note over Module: Registers updateActor, updateItem, createItem, deleteItem hooks
 
     Module->>Module: registerDemiplaneInfoButton(import, export)
     Module->>Module: registerTitlebarDot(import, export)
-    Note over Module: Renders sync-issue dot on linked sheet titlebars;<br/>click opens the Demiplane dialog
+    Note over Module: Renders the sync-issue dot on linked sheet titlebars. Click to open the Demiplane dialog
 
     Module->>Module: Expose module API on game.modules
 
@@ -306,10 +306,10 @@ sequenceDiagram
     Note over CSH: Monkey-patches ChoiceSet.preCreate
 
     IO->>IO: categorizeEngines(engines)
-    Note over IO: → ancestry, heritage, background, class,<br/>feats[], equipment[]
+    Note over IO: → ancestry, heritage, background, class, feats[], equipment[]
 
     IO->>IO: buildSelectionData(engines)
-    Note over IO: Identifies feat grants via ChoiceSet<br/>to avoid duplication
+    Note over IO: Identifies feat grants via ChoiceSet to avoid duplication
 
     rect rgb(230, 245, 255)
         Note over IO,Act: Sequential Phase (Grant Chain)
