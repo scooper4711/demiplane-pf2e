@@ -1,3 +1,14 @@
+![GitHub Release](https://img.shields.io/github/v/release/scooper4711/demiplane-pf2s)
+![GitHub Downloads](https://img.shields.io/github/downloads/scooper4711/demiplane-pf2s/total)
+![Foundry v14+](https://img.shields.io/badge/Foundry-v14-informational)
+![Forge Installs](https://img.shields.io/badge/dynamic/json?label=Forge%20Installs&query=package.installs&suffix=%25&url=https%3A%2F%2Fforge-vtt.com%2Fapi%2Fbazaar%2Fpackage%2Fdemiplane-pf2s&colorB=4aa94a)
+
+![CI](https://img.shields.io/github/actions/workflow/status/scooper4711/demiplane-pf2s/ci.yml?label=CI)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=scooper4711_demiplane-pf2s&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=scooper4711_demiplane-pf2s)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=scooper4711_demiplane-pf2s&metric=coverage)](https://sonarcloud.io/summary/new_code?id=scooper4711_demiplane-pf2s)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=scooper4711_demiplane-pf2s&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=scooper4711_demiplane-pf2s)
+![License](https://img.shields.io/github/license/scooper4711/demiplane-pf2s)
+
 # Demiplane PF2e Sync for Foundry VTT
 
 Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.com), then bring it straight into your Foundry game. No copy-pasting stats, no manual data entry, no "wait, what level did I take Fleet at?"
