@@ -24,6 +24,17 @@ function createMockActor(characterId = "char-123", lastUpdated?: string) {
   };
 }
 
+function createFlagTrackingActor(characterId = "char-123", lastUpdated?: string) {
+  const flags: Record<string, unknown> = { characterId, lastUpdated };
+  return {
+    getFlag: (_moduleId: string, key: string) => flags[key],
+    setFlag: vi.fn((_moduleId: string, key: string, value: unknown) => {
+      flags[key] = value;
+      return Promise.resolve();
+    }),
+  };
+}
+
 function createMockClient(overrides = {}) {
   return {
     fetchCharacterData: vi.fn().mockResolvedValue({
@@ -160,17 +171,41 @@ describe("ExportManager", () => {
       expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
     });
 
-    it("does not update the stored lastUpdated timestamp after a successful push", async () => {
+    it("refreshes the stored lastUpdated timestamp after a successful push", async () => {
       const client = createMockClient({
         fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T01:00:00.000Z"),
       });
       const manager = new ExportManager(client as never);
-      const actor = createMockActor("char-123", "2026-08-27T00:00:00.000Z");
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T01:00:00.000Z");
 
       manager.queueChange(actor as never, "character_hit-points_current", 25);
-      await manager.flush(actor as never);
+      const result = await manager.flush(actor as never);
 
-      expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", expect.anything());
+      expect(result.success).toBe(true);
+      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", "2026-08-27T01:00:00.000Z");
+    });
+
+    it("refreshes lastUpdated so a push-triggered follow-up flush does not falsely conflict", async () => {
+      // First fetch = conflict check (matches stored); server advances after the push;
+      // third fetch = follow-up flush conflict check.
+      const fetchUpdated = vi
+        .fn()
+        .mockResolvedValueOnce("2026-08-27T00:00:00.000Z")
+        .mockResolvedValueOnce("2026-08-27T00:01:00.000Z")
+        .mockResolvedValueOnce("2026-08-27T00:01:00.000Z");
+      const client = createMockClient({ fetchCharacterUpdated: fetchUpdated });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const first = await manager.flush(actor as never);
+      expect(first.success).toBe(true);
+      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", "2026-08-27T00:01:00.000Z");
+
+      // A downstream actor update (e.g. resource) queues another push.
+      manager.queueChange(actor as never, "character_hero-points", 1);
+      const second = await manager.flush(actor as never);
+      expect(second.success).toBe(true);
     });
   });
 

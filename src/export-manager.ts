@@ -596,12 +596,32 @@ export class ExportManager {
       this.pendingChanges.delete(characterId);
       this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);
+      await this.syncConflictTimestamp(characterId, actor);
       await this.updateSyncTimestamp(actor);
       return;
     }
 
     addExportIssue(actor, result.error ?? "Push to Demiplane failed unexpectedly");
     this.notifyFailure(result.error);
+  }
+
+  /**
+   * After a successful push the server's `updated` timestamp advances past the
+   * value we imported/synced against. Refresh the stored `lastUpdated` flag so the
+   * next optimistic-concurrency check (which a push may itself trigger via
+   * downstream actor updates) matches instead of falsely reporting a conflict
+   * and forcing a re-import.
+   */
+  private async syncConflictTimestamp(characterId: string, actor: Actor): Promise<void> {
+    try {
+      const serverUpdated = await this.client.fetchCharacterUpdated(characterId);
+      if (serverUpdated) {
+        await actor.setFlag(MODULE_ID, "lastUpdated", serverUpdated);
+        debugLog(`[push] refreshed lastUpdated=${serverUpdated} after successful push`);
+      }
+    } catch (error) {
+      debugLog(`[push] failed to refresh lastUpdated after push: ${String(error)}`);
+    }
   }
 
   private async updateSyncTimestamp(actor: Actor): Promise<void> {

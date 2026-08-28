@@ -370,16 +370,22 @@ export class ImportOrchestrator {
    * duplicate we stamped with `flags.demiplane-pf2e.imported`.
    */
   private async removeDuplicateItems(actor: Actor, summary: ImportSummary): Promise<void> {
-    const items = Array.from(actor.items) as Array<Record<string, unknown>>;
+    const items = Array.from(actor.items) as unknown as Array<Record<string, unknown>>;
     const seen = new Map<string, Record<string, unknown>>();
     const toDelete: string[] = [];
+
+    const isImportStamped = (item: Record<string, unknown>): boolean => {
+      const flags = (item.flags as Record<string, Record<string, unknown>> | undefined) ?? {};
+      const dpFlags = flags["demiplane-pf2e"] as { imported?: boolean } | undefined;
+      return Boolean(dpFlags?.imported);
+    };
 
     for (const item of items) {
       const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
       const core = (flags.core || {}) as { sourceId?: string };
       const key = core.sourceId || `${String(item.type)}::${String(item.name)}`;
 
-      const isStamped = Boolean((flags["demiplane-pf2e"] as { imported?: boolean } | undefined)?.imported);
+      const isStamped = isImportStamped(item);
 
       const existing = seen.get(key);
       if (!existing) {
@@ -387,10 +393,7 @@ export class ImportOrchestrator {
         continue;
       }
 
-      const existingStamped = Boolean(
-        ((existing.flags || {}) as Record<string, Record<string, unknown>>)["demiplane-pf2e"] as
-          { imported?: boolean } | undefined
-      )?.imported;
+      const existingStamped = isImportStamped(existing);
 
       if (isStamped && !existingStamped) {
         toDelete.push(String(item._id));
