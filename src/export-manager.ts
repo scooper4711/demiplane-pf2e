@@ -17,7 +17,7 @@ export interface PendingChange {
   timestamp: number;
 }
 
-export type ItemChangeType = "quantity" | "equipped";
+export type ItemChangeType = "quantity" | "equipped" | "delete";
 
 export interface EquippedState {
   carryType: string;
@@ -167,7 +167,39 @@ export class ExportManager {
     if (edited !== undefined) entry.edited = edited;
 
     this.pendingItemChanges.get(characterId)!.set(key, entry);
+    this.scheduleFlush(actor, characterId);
+  }
 
+  /**
+   * Queues the deletion of an item from Demiplane when it is removed from a
+   * linked Foundry actor. The matching engine (and its related custom engines)
+   * are stripped from the character data on the next push.
+   *
+   * @param actor - The linked actor the item was removed from.
+   * @param slot - The demiplane/equipment slug of the deleted item.
+   */
+  queueItemDelete(actor: Actor, slot: string): void {
+    if (this.suspended || !slot) return;
+
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+    if (!characterId) return;
+
+    const key = `${slot}:delete`;
+    if (!this.pendingItemChanges.has(characterId)) {
+      this.pendingItemChanges.set(characterId, new Map());
+    }
+    this.pendingItemChanges.get(characterId)!.set(key, {
+      itemSlug: slot,
+      demiplaneSlug: slot,
+      changeType: "delete",
+      value: 0,
+      itemType: undefined,
+      timestamp: Date.now(),
+    });
+    this.scheduleFlush(actor, characterId);
+  }
+
+  private scheduleFlush(actor: Actor, characterId: string): void {
     const existingTimer = this.debounceTimers.get(characterId);
     if (existingTimer) {
       clearTimeout(existingTimer);
@@ -382,7 +414,9 @@ export class ExportManager {
   ): CustomEngine[] {
     let engines = updatedEngines;
     for (const { change: itemChange, demiplaneId } of resolved) {
-      if (itemChange.changeType === "quantity") {
+      if (itemChange.changeType === "delete") {
+        engines = this.applyItemDelete(engines, itemChange, demiplaneId);
+      } else if (itemChange.changeType === "quantity") {
         const qtyName = `${demiplaneId}--quantity`;
         const existing = findCustomEngineByName(engines, qtyName);
         if (existing) {
@@ -408,6 +442,35 @@ export class ExportManager {
       }
     }
     return engines;
+  }
+
+  /**
+   * Removes an item from the engine list, including its base engine and any
+   * custom engines tied to it (quantity, equipped state), so the item is
+   * deleted from the Demiplane character on the next push.
+   *
+   * @param engines - Current engine list.
+   * @param itemChange - The pending delete change.
+   * @param demiplaneId - The resolved Demiplane engine ID of the deleted item.
+   * @returns The engine list without the deleted item's engines.
+   */
+  private applyItemDelete(engines: CustomEngine[], itemChange: PendingItemChange, demiplaneId: string): CustomEngine[] {
+    const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
+    const kept = engines.filter((e) => {
+      // Remove the base item engine matching the deleted slug.
+      if (e.name.startsWith("tabula/item/") && e.args?.slug) {
+        if (normalizeEquipmentSlug(String(e.args.slug)) === normalizeEquipmentSlug(matchSlug)) return false;
+      }
+      // Remove any custom engine owned by this item's engine id.
+      const name = e.name ?? "";
+      return name !== `${demiplaneId}--quantity` && name !== `${demiplaneId}-is-equipped`;
+    });
+
+    debugLog(
+      `[push] delete ${matchSlug}: removed ${String(engines.length - kept.length)} engine(s) ` +
+        `(demiplaneId=${demiplaneId})`
+    );
+    return kept;
   }
 
   private applyEquippedEngine(

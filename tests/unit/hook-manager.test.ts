@@ -34,6 +34,7 @@ function createMockExportManager() {
   return {
     queueChange: vi.fn(),
     queueItemChange: vi.fn(),
+    queueItemDelete: vi.fn(),
   };
 }
 
@@ -125,6 +126,102 @@ describe("HookManager", () => {
         `${MODULE_ID} | [debug] Item created on linked actor: Class Feature; granted choices: choice=none`
       );
       warnSpy.mockRestore();
+    });
+  });
+
+  describe("deleteItem hook", () => {
+    it("queues deletion using the item's demiplane slug", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Armored Coat", {
+        type: "armor",
+        system: { slug: "armored-coat" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "armored-coat" } },
+      });
+
+      triggerHook("deleteItem", item);
+
+      expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "armored-coat");
+    });
+
+    it("falls back to the system slug when no demiplane slug is stored", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Longsword", { type: "weapon", system: { slug: "longsword" } });
+
+      triggerHook("deleteItem", item);
+
+      expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "longsword");
+    });
+
+    it("queues deletion for equipment, ammunition, and treasure inventory types", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook("deleteItem", createMockItem(actor, "Arrows", { type: "ammo", system: { slug: "arrows" } }));
+      triggerHook(
+        "deleteItem",
+        createMockItem(actor, "Healing Potion", { type: "consumable", system: { slug: "healing-potion" } })
+      );
+      triggerHook("deleteItem", createMockItem(actor, "Gold Bar", { type: "treasure", system: { slug: "gold-bar" } }));
+
+      expect(exportManager.queueItemDelete).toHaveBeenCalledTimes(3);
+    });
+
+    it("does not queue deletion for non-inventory items like feats, classes, and backgrounds", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook(
+        "deleteItem",
+        createMockItem(actor, "Power Attack", { type: "feat", system: { slug: "power-attack" } })
+      );
+      triggerHook("deleteItem", createMockItem(actor, "Fighter", { type: "class", system: { slug: "fighter" } }));
+      triggerHook(
+        "deleteItem",
+        createMockItem(actor, "Farmhand", { type: "background", system: { slug: "farmhand" } })
+      );
+      triggerHook("deleteItem", createMockItem(actor, "Dwarf", { type: "ancestry", system: { slug: "dwarf" } }));
+      triggerHook("deleteItem", createMockItem(actor, "Fireball", { type: "spell", system: { slug: "fireball" } }));
+
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("does not queue deletion for an item without a slug", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Mystery Item", { type: "equipment", system: {} });
+
+      triggerHook("deleteItem", item);
+
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("does not queue deletion for unlinked or non-character actors", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const unlinked = createMockItem(createMockActor("character", null), "Sword", {
+        type: "weapon",
+        system: { slug: "sword" },
+      });
+      triggerHook("deleteItem", unlinked);
+
+      const nonCharacter = createMockItem(createMockActor("npc"), "Sword", {
+        type: "weapon",
+        system: { slug: "sword" },
+      });
+      triggerHook("deleteItem", nonCharacter);
+
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
     });
   });
 

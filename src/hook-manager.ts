@@ -23,6 +23,24 @@ const TREASURE_ITEM_MAP: Record<string, string> = {
 };
 
 /**
+ * PF2e item subtypes that live in the character's inventory and therefore map
+ * to a "tabula/item/*.eng" Demiplane engine. Non-inventory items (feats,
+ * backgrounds, classes, spells, etc.) are excluded from delete propagation.
+ */
+const INVENTORY_ITEM_TYPES = new Set([
+  "ammo",
+  "armor",
+  "backpack",
+  "book",
+  "consumable",
+  "equipment",
+  "kit",
+  "shield",
+  "treasure",
+  "weapon",
+]);
+
+/**
  * Queues current HP, temporary HP, and hero points from a linked actor
  * so they can be flushed immediately (manual push / exportNow).
  */
@@ -229,7 +247,24 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    debugLog(`Item deleted from linked actor: ${item.name}`);
+
+    const itemType = (item as { type?: string })?.type;
+    if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
+      debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
+      return;
+    }
+
+    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
+    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
+    const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
+    const slot = demiplaneSlug ?? slug;
+    if (!slot) {
+      debugLog(`Item deleted from linked actor (no demiplane slug, skipping push): ${item.name}`);
+      return;
+    }
+
+    debugLog(`Item deleted from linked actor: ${item.name} (${slot})`);
+    this.exportManager.queueItemDelete(actor, slot);
   }
 
   private isLinkedCharacterActor(actor: Actor): boolean {

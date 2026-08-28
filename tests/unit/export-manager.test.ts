@@ -828,4 +828,116 @@ describe("ExportManager", () => {
       expect(findEngine(payload, "id-coat-is-equipped")).toBe(1);
     });
   });
+
+  describe("item deletion", () => {
+    function makeClientWithItems(itemEngines: Record<string, unknown>[]) {
+      const base = createMockClient();
+      base.fetchCharacterData.mockResolvedValue({
+        engines: [
+          {
+            id: "eng-hp",
+            name: "character_hit-points_current",
+            value: 30,
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-hp",
+            args: { id: null },
+          },
+          ...itemEngines,
+        ],
+        engineCacheIdsBySource: { "pathfinder2e-v2": ["eng-hp"] },
+        name: "Test Character",
+        level: 5,
+        avatarUrl: "https://example.com/avatar.png",
+        viewPermission: 0,
+        editPermission: 0,
+      });
+      return base;
+    }
+
+    function itemEngine(slug: string, demiplaneId: string) {
+      return {
+        id: `eng-${slug}`,
+        demiplaneEngineId: demiplaneId,
+        name: `tabula/item/${slug}.eng`,
+        type: "DemiplaneEngine",
+        saveType: "CharacterSheet",
+        args: { id: null, slug },
+      };
+    }
+
+    function customEngine(name: string, value: number) {
+      return {
+        id: `eng-${name}`,
+        name,
+        value,
+        type: "CustomDemiplaneEngine",
+        saveType: "CharacterSheet",
+        storeType: "override",
+        demiplaneEngineId: `de-${name}`,
+        args: { id: null },
+      };
+    }
+
+    function hasEngine(payload: { data: { engines: { name: string }[] } }, name: string) {
+      return payload.data.engines.some((e) => e.name === name);
+    }
+
+    it("removes the deleted item engine and its related custom engines", async () => {
+      const client = makeClientWithItems([
+        itemEngine("armored-coat", "id-coat"),
+        customEngine("id-coat--quantity", 2),
+        customEngine("id-coat-is-equipped", 1),
+        itemEngine("longsword", "id-sword"),
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemDelete(actor as never, "armored-coat");
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(hasEngine(payload, "tabula/item/armored-coat.eng")).toBe(false);
+      expect(hasEngine(payload, "id-coat--quantity")).toBe(false);
+      expect(hasEngine(payload, "id-coat-is-equipped")).toBe(false);
+      expect(hasEngine(payload, "tabula/item/longsword.eng")).toBe(true);
+    });
+
+    it("matches the deleted item via slug normalization", async () => {
+      const client = makeClientWithItems([itemEngine("arrows", "id-arrows")]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemDelete(actor as never, "arrow");
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(hasEngine(payload, "tabula/item/arrows.eng")).toBe(false);
+    });
+
+    it("leaves unrelated engines untouched when the item is absent", async () => {
+      const client = makeClientWithItems([itemEngine("longsword", "id-sword"), customEngine("id-sword--quantity", 1)]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemDelete(actor as never, "absent-item");
+      await manager.flush(actor as never);
+
+      const payload = vi.mocked(client.updateCharacter).mock.calls[0][0];
+      expect(hasEngine(payload, "tabula/item/longsword.eng")).toBe(true);
+      expect(hasEngine(payload, "id-sword--quantity")).toBe(true);
+      expect(hasEngine(payload, "character_hit-points_current")).toBe(true);
+    });
+
+    it("does not push when the delete slug is empty", async () => {
+      const client = makeClientWithItems([itemEngine("longsword", "id-sword")]);
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueItemDelete(actor as never, "");
+
+      expect(vi.mocked(client.updateCharacter)).not.toHaveBeenCalled();
+    });
+  });
 });
