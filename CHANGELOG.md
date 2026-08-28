@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.5] - 2026-08-28
+
+### Added
+
+- propagate item deletions from Foundry to Demiplane
+- implement optimistic locking on push with server-updated check and auto re-import
+
+### Fixed
+
+- stop bumping lastUpdated on Foundry pushes
+- import bolts and sync quantity for single items
+
+### Changed
+
+- updated to latest versions of libraries
+- clarify character-import template with expected actor export
+- bump @scooper4711/demiplane-api to 0.3.0
+
+[0.2.0-beta.5]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.5
+
 ## [0.2.0-beta.4] - 2026-08-27
 
 ### Added
