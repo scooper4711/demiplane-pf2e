@@ -597,19 +597,6 @@ export class ExportManager {
       this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);
       await this.updateSyncTimestamp(actor);
-      // Update stored lastUpdated to new server value; the push should have bumped it
-      try {
-        const oldUpdated = actor.getFlag(MODULE_ID, "lastUpdated") as string | undefined;
-        const newUpdated = await this.client.fetchCharacterUpdated(characterId);
-        await actor.setFlag(MODULE_ID, "lastUpdated", newUpdated);
-        debugLog(
-          `[push] refreshed lastUpdated: old=${oldUpdated ?? "none"} new=${newUpdated} ` +
-            `${oldUpdated === newUpdated || !oldUpdated ? "(unchanged)" : "(bumped by push)"}`
-        );
-      } catch (error) {
-        debugLog(`[push] failed to refresh lastUpdated: ${String(error)}`);
-        // Non-critical: will be refreshed on next import/fetch
-      }
       return;
     }
 

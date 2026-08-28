@@ -159,6 +159,19 @@ describe("ExportManager", () => {
 
       expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
     });
+
+    it("does not update the stored lastUpdated timestamp after a successful push", async () => {
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T01:00:00.000Z"),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      await manager.flush(actor as never);
+
+      expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", expect.anything());
+    });
   });
 
   describe("flush detects conflicts via updated timestamp", () => {
