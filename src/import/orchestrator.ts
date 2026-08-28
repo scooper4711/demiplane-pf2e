@@ -65,6 +65,11 @@ export class ImportOrchestrator {
     }) as never);
 
     try {
+      // Create Lore items BEFORE any ancestry/background/class/feat items. Feats
+      // like Assurance can reference lore skills granted by ancestry/background,
+      // and their grants fire natively during item creation.
+      await this.createLoreItems(actor, engines, summary);
+
       for (const category of ["ancestry", "heritage", "background", "class"] as ItemCategory[]) {
         for (const eng of categorized[category]) {
           await this.addItemToActor(actor, eng, category, summary);
@@ -77,10 +82,15 @@ export class ImportOrchestrator {
         selectionData.grantedFeatSlugs.add(slug);
       }
 
-      await this.createLoreItems(actor, engines, summary);
       await this.importBatchItems(actor, categorized, selectionData, summary);
 
       await this.applyPostProcessing(actor, engines, summary);
+
+      // Some feats appear both in the Demiplane engine list (imported via the
+      // batch above) and as native PF2e grants from another item (e.g. Gnome
+      // Obsession granted by the Gnome ancestry, Animal Empathy granted by the
+      // Druid's Voice of Nature). Remove the duplicate copies we stamped.
+      await this.removeDuplicateItems(actor, summary);
     } finally {
       Hooks.off("preCreateItem", importHookId);
       this.choiceSetHandler.disable();
@@ -181,23 +191,20 @@ export class ImportOrchestrator {
     if (Object.keys(updates).length > 0) await actor.update(updates);
   }
 
+  /**
+   * Creates Lore skill items for the character. Lore can be granted by ancestry
+   * features (e.g. Gnome Obsession's "additional Lore") or by the background
+   * (`trainedSkills.lore`). Feats such as Assurance can reference these lore
+   * skills, so this MUST run *before* any ancestry/background/class/feat items
+   * are created — otherwise a feat's GrantItem/ChoiceSet resolves against a
+   * skill list that does not yet contain the lore, popping the grant UI.
+   *
+   * Reads background lore from the compendium entry (not from the actor) so it
+   * can run up-front, before the background item itself has been added.
+   */
   private async createLoreItems(actor: Actor, engines: DemiplaneEngineEntry[], summary: ImportSummary): Promise<void> {
-    const loreNames: string[] = [];
-
-    const bg = actor.items.find((i: { type: string }) => i.type === "background");
-    if (bg) {
-      const bgLores = (bg.system as { trainedSkills?: { lore?: string[] } }).trainedSkills?.lore ?? [];
-      loreNames.push(...bgLores);
-    }
-
-    const customSkills = engines.filter(
-      (e) => e.name === "core/selection/skill/custom-skill/index.eng" && e.args?.name
-    );
-    for (const eng of customSkills) {
-      const name = eng.args.name as string;
-      if (!loreNames.includes(name)) loreNames.push(name);
-    }
-
+    const backgroundLores = await this.getBackgroundLoreNames(engines);
+    const loreNames = collectLoreNames(engines, backgroundLores);
     if (loreNames.length === 0) return;
 
     const existingLores = actor.items
@@ -217,6 +224,18 @@ export class ImportOrchestrator {
       );
       summary.log.push(`+ lore: [${newLores.join(", ")}]`);
     }
+  }
+
+  private async getBackgroundLoreNames(engines: DemiplaneEngineEntry[]): Promise<string[]> {
+    const bgEngine = engines.find(
+      (e) => e.type === "DemiplaneEngine" && e.name.includes("/background/") && e.args?.slug
+    );
+    if (!bgEngine) return [];
+    const bgSlug = getSlug(bgEngine);
+    if (!bgSlug) return [];
+    const bgItem = await resolveCompendiumItem(bgSlug);
+    const system = (bgItem as { system?: { trainedSkills?: { lore?: string[] } } } | null)?.system;
+    return system?.trainedSkills?.lore ?? [];
   }
 
   private async fetchCharacterEngines(
@@ -343,6 +362,52 @@ export class ImportOrchestrator {
    * Returns the slugs of any items it created, so callers can exclude them from
    * subsequent batch imports.
    */
+  /**
+   * Removes items that were both imported from the Demiplane engine list and
+   * created a second time by PF2e's native GrantItem handling (e.g. an ancestry
+   * feat granted by the ancestry, or a class-granted feat). We prefer to keep the
+   * native-granted copy (it carries the correct grant linkage) and delete the
+   * duplicate we stamped with `flags.demiplane-pf2e.imported`.
+   */
+  private async removeDuplicateItems(actor: Actor, summary: ImportSummary): Promise<void> {
+    const items = Array.from(actor.items) as Array<Record<string, unknown>>;
+    const seen = new Map<string, Record<string, unknown>>();
+    const toDelete: string[] = [];
+
+    for (const item of items) {
+      const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
+      const core = (flags.core || {}) as { sourceId?: string };
+      const key = core.sourceId || `${String(item.type)}::${String(item.name)}`;
+
+      const isStamped = Boolean((flags["demiplane-pf2e"] as { imported?: boolean } | undefined)?.imported);
+
+      const existing = seen.get(key);
+      if (!existing) {
+        seen.set(key, item);
+        continue;
+      }
+
+      const existingStamped = Boolean(
+        ((existing.flags || {}) as Record<string, Record<string, unknown>>)["demiplane-pf2e"] as
+          { imported?: boolean } | undefined
+      )?.imported;
+
+      if (isStamped && !existingStamped) {
+        toDelete.push(String(item._id));
+      } else if (!isStamped && existingStamped) {
+        toDelete.push(String(existing._id));
+        seen.set(key, item);
+      } else {
+        toDelete.push(String(item._id));
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await actor.deleteEmbeddedDocuments("Item", toDelete as never);
+      summary.log.push(`- removed ${toDelete.length} duplicate item(s)`);
+    }
+  }
+
   private async resolvePendingGrants(actor: Actor, summary: ImportSummary): Promise<Set<string>> {
     const grantedSlugs = new Set<string>();
     const allItems = Array.from(actor.items) as Array<{
@@ -451,4 +516,39 @@ export class ImportOrchestrator {
       return false;
     });
   }
+}
+
+/**
+ * Collects the names of Lore skills a character should have, from background
+ * training and from Demiplane custom skill/lore selections.
+ *
+ * Background lore names come from the background item's `trainedSkills.lore`.
+ * Additional lore (e.g. via an ancestry's "additional Lore" feature like Gnome
+ * Obsession) arrives as a `core/selection/skill/custom-selection/index.eng`
+ * engine whose `args.name` holds the Lore name. Custom lore skills may also
+ * arrive as `core/selection/skill/custom-skill/index.eng`.
+ */
+export function collectLoreNames(engines: DemiplaneEngineEntry[], backgroundLores: string[] = []): string[] {
+  const loreNames = [...backgroundLores];
+
+  const customSkillEngines = engines.filter(
+    (e) => e.name === "core/selection/skill/custom-skill/index.eng" && e.args?.name
+  );
+  for (const eng of customSkillEngines) {
+    const name = eng.args!.name as string;
+    if (!loreNames.includes(name)) loreNames.push(name);
+  }
+
+  const customSelectionLoreEngines = engines.filter(
+    (e) =>
+      e.name === "core/selection/skill/custom-selection/index.eng" &&
+      e.args?.name &&
+      /lore/i.test(e.args.name as string)
+  );
+  for (const eng of customSelectionLoreEngines) {
+    const name = eng.args!.name as string;
+    if (!loreNames.includes(name)) loreNames.push(name);
+  }
+
+  return loreNames;
 }

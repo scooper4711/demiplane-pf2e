@@ -52,11 +52,26 @@ export class ChoiceSetHandler {
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- required for monkey-patch closure
     const self = this;
     ChoiceSetRE.prototype.preCreate = async function (this: ChoiceSetContext, params: PreCreateParams) {
-      if (!self.importMode || this.selection !== null) {
-        debugLog(
-          `[ChoiceSet] preCreate passthrough: importMode=${String(self.importMode)}, selection=${String(this.selection)}, item=${params.itemSource.name}`
-        );
+      if (!self.importMode) {
         return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
+      }
+
+      if (this.selection !== null) {
+        // A selection was pre-set (e.g. by PF2e's native grant resolution). If it
+        // doesn't correspond to a real available choice, it's a bad placeholder
+        // (e.g. the generic "lore" slug instead of the actual "forest-lore" skill)
+        // and would pop the grant UI. Re-resolve it below instead of passing through.
+        const valid = await self.isPreSetSelectionValid(this, params);
+        if (valid) {
+          debugLog(
+            `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(this.selection)}, item=${params.itemSource.name}`
+          );
+          return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
+        }
+        debugLog(
+          `[ChoiceSet] preCreate: pre-set selection ${String(this.selection)} is not a valid choice; re-resolving, item=${params.itemSource.name}`
+        );
+        // fall through to re-resolution
       }
 
       debugLog(
@@ -78,25 +93,7 @@ export class ChoiceSetHandler {
       const matched = self.findMatchInChoices(this.choices, this.item.name);
       const selected = matched ?? this.choices[0];
       if (selected) {
-        debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${self.describeChoice(selected)}`);
-        this.selection = params.ruleSource.selection = selected.value;
-
-        // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation
-        // so that subsequent GrantItem rules can resolve {item|flags.pf2e.rulesSelections.X}
-        const itemFlags = this.item.flags as Record<string, Record<string, unknown>>;
-        if (!itemFlags.pf2e) itemFlags.pf2e = {};
-        const pf2eFlags = itemFlags.pf2e as Record<string, unknown>;
-        if (!pf2eFlags.rulesSelections) pf2eFlags.rulesSelections = {};
-        (pf2eFlags.rulesSelections as Record<string, unknown>)[this.flag || "choice"] = selected.value;
-
-        debugLog(
-          `[ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${this.flag || "choice"} = ${String(selected.value)}`
-        );
-
-        // Reset ignored state on sibling rules so GrantItem processes after selection is available
-        for (const rule of this.item.rules) {
-          rule.ignored = false;
-        }
+        self.applySelectedChoice(this, params, selected, matched !== null);
       }
     };
   }
@@ -109,6 +106,47 @@ export class ChoiceSetHandler {
       this.originalPreCreate = null;
     }
     debugLog("[ChoiceSet] Monkey-patch disabled, import mode off");
+  }
+
+  /**
+   * Determines whether a ChoiceSet's already-present `selection` is one of the
+   * choices PF2e would actually offer. A pre-set selection that isn't a valid
+   * choice (e.g. the generic "lore" slug rather than "forest-lore") would
+   * otherwise cause the grant UI to pop; in that case the caller should
+   * re-resolve the selection via the normal matching strategies.
+   */
+  private async isPreSetSelectionValid(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
+    if (context.selection === null) return true;
+    const rollOptions = new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
+    const choices = await context.inflateChoices(rollOptions, params.tempItems);
+    return Array.isArray(choices) && choices.some((c) => c.value === context.selection);
+  }
+
+  private applySelectedChoice(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    selected: { value: unknown; label: string },
+    matched: boolean
+  ): void {
+    debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
+    context.selection = params.ruleSource.selection = selected.value;
+
+    // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation
+    // so that subsequent GrantItem rules can resolve {item|flags.pf2e.rulesSelections.X}
+    const itemFlags = context.item.flags as Record<string, Record<string, unknown>>;
+    if (!itemFlags.pf2e) itemFlags.pf2e = {};
+    const pf2eFlags = itemFlags.pf2e as Record<string, unknown>;
+    if (!pf2eFlags.rulesSelections) pf2eFlags.rulesSelections = {};
+    (pf2eFlags.rulesSelections as Record<string, unknown>)[context.flag || "choice"] = selected.value;
+
+    debugLog(
+      `[ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${context.flag || "choice"} = ${String(selected.value)}`
+    );
+
+    // Reset ignored state on sibling rules so GrantItem processes after selection is available
+    for (const rule of context.item.rules) {
+      rule.ignored = false;
+    }
   }
 
   private getChoiceSetPrototype(): { prototype: Record<string, unknown> } {
@@ -131,6 +169,7 @@ export class ChoiceSetHandler {
   ): { value: unknown; label: string } | null {
     const match =
       this.matchSkillSlugs(choices) ??
+      this.matchCustomSelectionLore(choices, itemName) ??
       this.matchAllSlugs(choices) ??
       this.matchClassFeatures(choices) ??
       this.matchGenericFeatures(choices) ??
@@ -151,6 +190,47 @@ export class ChoiceSetHandler {
     for (const choice of choices) {
       const val = typeof choice.value === "string" ? choice.value : "";
       if (allSkillSlugs.includes(val)) return choice;
+    }
+    return null;
+  }
+
+  /**
+   * Matches a ChoiceSet (e.g. the skill choice on the Assurance feat) to a Lore
+   * skill selected via a `core/selection/skill/custom-selection/index.eng` engine
+   * (the "additional Lore" granted by ancestry/background features). The engine's
+   * `args.name` holds the Lore name (e.g. "Forest Lore"); we slugify it and match
+   * against the available skill choices so the grant resolves silently instead of
+   * prompting the user.
+   *
+   * Scoped to the originating feat via the engine `sourceRow` when an item name is
+   * known, so it doesn't mis-target unrelated skill choices.
+   */
+  private matchCustomSelectionLore(
+    choices: Array<{ value: unknown; label: string }>,
+    itemName?: string
+  ): { value: unknown; label: string } | null {
+    const itemSlug = itemName ? this.toChoiceSlug(itemName) : "";
+    const loreEngines = this.currentEngines.filter(
+      (e) =>
+        e.name === "core/selection/skill/custom-selection/index.eng" &&
+        e.args?.name &&
+        (itemSlug === "" ||
+          (e.args.sourceRow as string)?.includes(`${itemSlug}-rm`) ||
+          (e.args.sourceRow as string)?.includes(itemSlug))
+    );
+
+    debugLog(
+      `[ChoiceSet match] custom-selection lore engines${itemName ? ` for "${itemName}"` : ""}: [${loreEngines
+        .map((e) => String(e.args?.name))
+        .join(", ")}]`
+    );
+
+    for (const eng of loreEngines) {
+      const target = this.toChoiceSlug(eng.args!.name as string);
+      for (const choice of choices) {
+        const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
+        if (val === target || this.toChoiceSlug(choice.label) === target) return choice;
+      }
     }
     return null;
   }
@@ -396,6 +476,12 @@ export class ChoiceSetHandler {
     // Use the engine's args.name lowercased as the choice value (e.g. "athletics").
     if (eng?.name.includes("/generic-feature/") && eng.args?.name) {
       return (eng.args.name as string).toLowerCase().replace(/\s+/g, "-");
+    }
+    // For custom-selection lore engines (e.g. Gnome Obsession's "additional Lore"),
+    // args.slug is the generic "lore" placeholder while args.name holds the real
+    // skill ("Forest Lore"). Derive the specific skill slug so the grant resolves.
+    if (eng?.name === "core/selection/skill/custom-selection/index.eng" && eng.args?.name) {
+      return this.toChoiceSlug(eng.args.name as string);
     }
     return childSlug;
   }

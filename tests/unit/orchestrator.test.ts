@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { ImportOrchestrator } from "../../src/import/orchestrator.js";
+import { ImportOrchestrator, collectLoreNames } from "../../src/import/orchestrator.js";
 
 describe("ImportOrchestrator", () => {
   beforeEach(() => {
@@ -149,5 +149,39 @@ describe("ImportOrchestrator", () => {
     const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
 
     expect(summary.errors[0]).toContain("Character not found");
+  });
+});
+
+describe("collectLoreNames", () => {
+  const mkEngine = (name: string, args?: Record<string, unknown>) =>
+    ({ name, type: "DemiplaneEngine", args }) as unknown as DemiplaneEngineEntry;
+
+  it("includes background lore names", () => {
+    expect(collectLoreNames([], ["Underworld Lore"])).toEqual(["Underworld Lore"]);
+  });
+
+  it("captures custom-skill lore selections", () => {
+    const engines = [mkEngine("core/selection/skill/custom-skill/index.eng", { name: "Sailing Lore" })];
+    expect(collectLoreNames(engines)).toEqual(["Sailing Lore"]);
+  });
+
+  it("captures custom-selection lore (e.g. Gnome Obsession additional Lore)", () => {
+    const engines = [
+      mkEngine("core/selection/skill/custom-selection/index.eng", {
+        name: "Forest Lore",
+        skill: "additional-lore-rm-abc-0-lore",
+      }),
+    ];
+    expect(collectLoreNames(engines)).toEqual(["Forest Lore"]);
+  });
+
+  it("ignores custom-selection engines that are not lore skills", () => {
+    const engines = [mkEngine("core/selection/skill/custom-selection/index.eng", { name: "Stealth" })];
+    expect(collectLoreNames(engines)).toEqual([]);
+  });
+
+  it("deduplicates across sources", () => {
+    const engines = [mkEngine("core/selection/skill/custom-selection/index.eng", { name: "Forest Lore" })];
+    expect(collectLoreNames(engines, ["Forest Lore"])).toEqual(["Forest Lore"]);
   });
 });
