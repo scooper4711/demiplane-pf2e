@@ -25,6 +25,12 @@ describe("applyEquipment", () => {
           system: { slug: "half-plate" },
           type: "armor",
         },
+        {
+          _id: "cb1",
+          name: "Commander's Banner",
+          system: { slug: "commanders-banner" },
+          type: "equipment",
+        },
       ]),
     });
   });
@@ -54,6 +60,25 @@ describe("applyEquipment", () => {
     await applyEquipment(actor as never, engines, summary);
 
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
+  });
+
+  it("derives slug from engine name when args.slug is missing", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/item/commanders-banner-rm.eng",
+        type: "DemiplaneEngine",
+        args: undefined,
+        demiplaneEngineId: "eng1",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    expect(summary.unresolved).toEqual([]);
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
   });
 

@@ -159,6 +159,11 @@ describe("generateSlugCandidates", () => {
     expect(candidates).toContain("cantrip-expansion");
   });
 
+  it("strips -commander suffix for commander class feats", () => {
+    const candidates = generateSlugCandidates("combat-assessment-commander");
+    expect(candidates).toContain("combat-assessment");
+  });
+
   it("adds bloodline prefix", () => {
     const candidates = generateSlugCandidates("imperial");
     expect(candidates).toContain("bloodline-imperial");

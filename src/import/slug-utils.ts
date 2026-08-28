@@ -70,6 +70,7 @@ const CLASS_SUFFIXES = [
   "-monk",
   "-champion",
   "-barbarian",
+  "-commander",
   "-alchemist",
   "-investigator",
   "-oracle",

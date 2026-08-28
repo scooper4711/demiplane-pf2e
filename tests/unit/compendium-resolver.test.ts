@@ -4,7 +4,7 @@ import { resolveCompendiumItem, resolveSlugToUuid } from "../../src/import/compe
 
 describe("resolveCompendiumItem", () => {
   beforeEach(() => {
-    const { packs } = installFoundryMocks({
+    installFoundryMocks({
       "pf2e.feats-srd": createMockPack([
         {
           _id: "feat1",
@@ -15,6 +15,11 @@ describe("resolveCompendiumItem", () => {
           _id: "feat2",
           name: "Cantrip Expansion",
           system: { slug: "cantrip-expansion" },
+        },
+        {
+          _id: "feat3",
+          name: "Combat Assessment",
+          system: { slug: "combat-assessment" },
         },
       ]),
       "pf2e.classfeatures": createMockPack([
@@ -39,6 +44,12 @@ describe("resolveCompendiumItem", () => {
     expect((result as Record<string, unknown>).name).toBe("Cantrip Expansion");
   });
 
+  it("resolves commander class feats by stripping -commander suffix", async () => {
+    const result = await resolveCompendiumItem("combat-assessment-commander-rm");
+    expect(result).not.toBeNull();
+    expect((result as Record<string, unknown>).name).toBe("Combat Assessment");
+  });
+
   it("resolves by adding bloodline prefix", async () => {
     const result = await resolveCompendiumItem("imperial-rm");
     expect(result).not.toBeNull();
@@ -53,7 +64,7 @@ describe("resolveCompendiumItem", () => {
 
 describe("resolveSlugToUuid", () => {
   beforeEach(() => {
-    const { packs } = installFoundryMocks({
+    installFoundryMocks({
       "pf2e.feats-srd": createMockPack([
         {
           _id: "feat1",

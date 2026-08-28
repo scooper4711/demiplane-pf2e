@@ -134,7 +134,7 @@ export async function applyEquipment(
   const skipped: string[] = [];
 
   for (const eng of itemEngines) {
-    const slug = normalizeEquipmentSlug((eng.args?.slug as string) ?? eng.name.split("/").pop() ?? "");
+    const slug = deriveEquipmentSlug(eng);
     const demiplaneId = eng.demiplaneEngineId as string;
     const indexEntry = findBySlug(equipIndex as never, slug);
 
@@ -170,6 +170,15 @@ export async function applyEquipment(
   if (skipped.length > 0) {
     summary.log.push(`! equipment skipped: [${skipped.join(", ")}]`);
   }
+}
+
+/**
+ * Derives the Foundry equipment slug for an item engine. Uses args.slug when
+ * present, otherwise falls back to the engine name (stripping the ".eng" suffix).
+ */
+function deriveEquipmentSlug(eng: DemiplaneEngineEntry): string {
+  const rawSlug = (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
+  return normalizeEquipmentSlug(rawSlug);
 }
 
 const CURRENCY_MAP = [
