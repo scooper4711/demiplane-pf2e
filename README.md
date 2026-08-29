@@ -17,10 +17,7 @@ Level up on Demiplane, click update in Foundry, and you're good to go.
 
 ## Demo
 
-<video controls width="100%" src="./docs/Demiplane%20Import%20Demo.mp4">
-  Your browser doesn't support embedded video.
-  <a href="./docs/Demiplane%20Import%20Demo.mp4">Download the demo video</a>.
-</video>
+[docs/Demiplane%20Import%20Demo.mp4](https://github.com/scooper4711/demiplane-pf2e/raw/refs/heads/main/docs/Demiplane%20Import%20Demo.mp4)
 
 ## Why You Want This
 
