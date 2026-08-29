@@ -18,6 +18,7 @@ import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";
+import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
 import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
@@ -260,7 +261,7 @@ export class ImportOrchestrator {
         }
       }`;
 
-      const response = await fetch("https://apiv4.demiplane.com/v1/graphql", {
+      const response = await fetch(DEMIPLANE_GRAPHQL_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

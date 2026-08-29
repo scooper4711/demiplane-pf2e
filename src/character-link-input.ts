@@ -1,23 +1,18 @@
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { DEMIPLANE_SHEET_BASE } from "./config.js";
 
-const DEMIPLANE_URL_PREFIX =
-  "https://app.demiplane.com/nexus/pathfinder2e/character-sheet/";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export type CharacterLinkParseResult =
-  | { valid: true; uuid: string }
-  | { valid: false; error: string };
+const DEMIPLANE_URL_PREFIX = `${DEMIPLANE_SHEET_BASE}/`;
 
-export function parseCharacterLinkInput(
-  input: string,
-): CharacterLinkParseResult {
+export type CharacterLinkParseResult = { valid: true; uuid: string } | { valid: false; error: string };
+
+export function parseCharacterLinkInput(input: string): CharacterLinkParseResult {
   const trimmed = input.trim();
 
   if (!trimmed) {
     return {
       valid: false,
-      error:
-        "Input is empty. Please provide a Demiplane character UUID or URL.",
+      error: "Input is empty. Please provide a Demiplane character UUID or URL.",
     };
   }
 

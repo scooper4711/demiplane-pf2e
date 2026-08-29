@@ -1,5 +1,6 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
+import { DEITIES_PACK } from "../config.js";
 
 /**
  * Maps a Demiplane engine name to the Foundry actor path it populates.
@@ -85,7 +86,7 @@ async function applyDeity(
 ): Promise<void> {
   // Deity — add as item from pf2e.deities compendium
   if (!deityName) return;
-  const deityPack = game.packs.get("pf2e.deities");
+  const deityPack = game.packs.get(DEITIES_PACK);
   if (!deityPack) return;
   const index = await deityPack.getIndex();
   const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());

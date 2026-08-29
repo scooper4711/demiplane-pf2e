@@ -1,6 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
+import { DEMIPLANE_SHEET_BASE } from "./config.js";
 
 /**
  * Renders and manages the per-actor dialog for linking a Demiplane character.
@@ -27,7 +28,7 @@ export class CharacterLinkDialog {
           id="demiplane-character-input"
           name="characterInput"
           value="${currentId ?? ""}"
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..."
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx or ${DEMIPLANE_SHEET_BASE}/..."
         />
         <p class="notes">Enter a Demiplane character UUID or paste the full character sheet URL.</p>
       </div>

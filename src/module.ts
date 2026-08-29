@@ -10,6 +10,7 @@ import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
 import { resetImportIssues, addImportIssue } from "./sync-issues.js";
+import { DEMIPLANE_SHEET_BASE } from "./config.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -94,7 +95,7 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
     const result = await foundry.applications.api.DialogV2.input({
       window: { title: "Import Demiplane Character" },
       content: `<div class="form-group"><label>Demiplane Character UUID or URL</label>
-<input type="text" name="characterRef" placeholder="UUID or https://app.demiplane.com/nexus/pathfinder2e/character-sheet/..." autofocus /></div>` as foundry.applications.api.DialogV2.Content<{
+<input type="text" name="characterRef" placeholder="UUID or ${DEMIPLANE_SHEET_BASE}/..." autofocus /></div>` as foundry.applications.api.DialogV2.Content<{
         characterRef: string;
       }>,
       ok: { label: "Import" },

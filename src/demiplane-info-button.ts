@@ -2,12 +2,10 @@ import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import { getExportIssues, getImportIssues, clearAllIssues } from "./sync-issues.js";
 import { deleteImportedItems } from "./import/reconcile.js";
+import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
 
 type ImportCharacterFn = (actor: Actor, characterId: string, token: string) => Promise<ImportSummary>;
 type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
-
-const DEMIPLANE_SHEET_BASE = "https://app.demiplane.com/nexus/pathfinder2e/character-sheet";
-const KOFI_URL = "https://ko-fi.com/coop207627";
 
 /**
  * Registers a header button on linked actor sheets that opens

@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { normalizeEquipmentSlug } from "./slug-utils.js";
+import { EQUIPMENT_PACK } from "../config.js";
 
 interface EquipmentState {
   primaryHandId: string | undefined;
@@ -121,9 +122,9 @@ export async function applyEquipment(
 
   const state = buildEquipmentState(engines);
 
-  const equipPack = game.packs!.get("pf2e.equipment-srd");
+  const equipPack = game.packs!.get(EQUIPMENT_PACK);
   if (!equipPack) {
-    summary.errors.push("pf2e.equipment-srd compendium not found");
+    summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
     return;
   }
   const equipIndex = (await equipPack.getIndex({
@@ -193,7 +194,7 @@ export async function applyCurrency(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const equipPack = game.packs!.get("pf2e.equipment-srd");
+  const equipPack = game.packs!.get(EQUIPMENT_PACK);
   if (!equipPack) return;
   const index = (await equipPack.getIndex({
     fields: ["system.slug"],

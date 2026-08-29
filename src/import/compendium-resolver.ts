@@ -1,10 +1,8 @@
 import { PACKS } from "./types.js";
 import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
+import { SPELLS_PACK } from "../config.js";
 
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
-
-/** Compendium that holds PF2e spells. */
-export const SPELLS_PACK = "pf2e.spells-srd";
 
 function getPacks(): NonNullable<typeof game.packs> {
   if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
