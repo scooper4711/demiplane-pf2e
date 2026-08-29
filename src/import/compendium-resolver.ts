@@ -17,7 +17,7 @@ export async function resolveSpellFromCompendium(slug: string): Promise<Record<s
   const pack = getPacks().get(SPELLS_PACK);
   if (!pack) return null;
   const foundrySlug = toFoundrySlug(slug);
-  const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
+  const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
@@ -36,7 +36,7 @@ export async function resolveCompendiumItem(demiplaneSlug: string): Promise<Reco
     for (const packKey of PACKS) {
       const pack = packs.get(packKey);
       if (!pack) continue;
-      const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
+      const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
       const match = index.find((i) => i.system?.slug === slug);
       if (match) {
         const doc = await fromUuid(`Compendium.${packKey}.Item.${match._id}`);
@@ -57,7 +57,7 @@ export async function resolveSlugToUuid(foundrySlug: string): Promise<string | n
     for (const packKey of PACKS) {
       const pack = packs.get(packKey);
       if (!pack) continue;
-      const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
+      const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
       const match = index.find((i) => i.system?.slug === slug);
       if (match) return `Compendium.${packKey}.Item.${match._id}`;
     }
