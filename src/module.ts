@@ -26,7 +26,10 @@ Hooks.once("init", () => {
 Hooks.once("ready", async () => {
   debugLog(`Ready`);
 
-  await showPreReleaseWarning();
+  // Pre-release warning only applies once the write feature (auto-sync) is enabled.
+  if (game.settings.get(MODULE_ID, "autoSync")) {
+    await showPreReleaseWarning();
+  }
 
   client = new DemiplaneClient();
   const storedToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
@@ -55,6 +58,12 @@ Hooks.once("ready", async () => {
       if (newToken) {
         client.setToken(newToken);
       }
+    }
+
+    // The pre-release warning is tied to the write feature (auto-sync). Show it
+    // whenever auto-sync is switched on so users are re-warned before writing.
+    if (setting.key === `${MODULE_ID}.autoSync` && game.settings.get(MODULE_ID, "autoSync")) {
+      void showPreReleaseWarning();
     }
   });
 
@@ -86,6 +95,9 @@ Hooks.once("ready", async () => {
 Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
   const actionButtons = html.querySelector(".action-buttons");
   if (!actionButtons || actionButtons.querySelector(".demiplane-import-btn")) return;
+
+  // Only GMs (including Assistant GMs) or users able to create actors may import.
+  if (!(game.user?.isGM || game.user?.can("ACTOR_CREATE"))) return;
 
   const button = document.createElement("button");
   button.type = "button";
@@ -137,25 +149,15 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
 });
 
 function showPreReleaseWarning(): Promise<void> {
-  return new Promise((resolve) => {
-    new Dialog({
-      title: "Demiplane PF2e Sync — Pre-Release Warning",
-      content: `
-        <p><strong>This module is pre-release software and should only be used for testing.</strong></p>
-        <p>Using this module can result in data loss for the Foundry Actor, the Demiplane character, or both.</p>
-        <p>Please ensure you have backups before proceeding.</p>
-      `,
-      buttons: {
-        ok: {
-          icon: `<i class="fas fa-check"></i>`,
-          label: "I Understand",
-          callback: () => resolve(),
-        },
-      },
-      close: () => resolve(),
-      default: "ok",
-    }).render(true);
-  });
+  return foundry.applications.api.DialogV2.prompt({
+    window: { title: "Demiplane PF2e Sync — Pre-Release Warning" },
+    content: `
+      <p><strong>This module is pre-release software and should only be used for testing.</strong></p>
+      <p>Using this module can result in data loss for the Foundry Actor, the Demiplane character, or both.</p>
+      <p>Please ensure you have backups before proceeding.</p>
+    `,
+    ok: { label: "I Understand" },
+  }).then(() => undefined);
 }
 
 function extractCharacterId(input: string): string | null {
@@ -248,7 +250,11 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
     icon: `<i class="fas fa-sync"></i>`,
     visible: (li) => {
       const actor = game.actors.get(li.dataset.entryId ?? "", { strict: false });
-      return !!actor?.getFlag(MODULE_ID, "characterId");
+      if (!actor?.getFlag(MODULE_ID, "characterId")) return false;
+      const user = game.user;
+      if (!user) return false;
+      // Only GMs (including Assistant GMs) or users with OWNER permission on the actor.
+      return user.isGM || actor.testUserPermission(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER);
     },
     // `onClick` receives (event, target) — the reverse of the deprecated `callback`.
     onClick: async (_event, li) => {
