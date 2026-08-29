@@ -6,37 +6,18 @@ import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
+import {
+  ChangeBuffer,
+  type EquippedState,
+  type ItemChangeType,
+  type PendingChange,
+  type PendingItemChange,
+} from "./export/change-buffer.js";
 
-const DEBOUNCE_MS = 2000;
-const RATE_LIMIT_WINDOW_MS = 60_000;
-const RATE_LIMIT_MAX_CALLS = 30;
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
-export interface PendingChange {
-  field: string;
-  value: number;
-  timestamp: number;
-}
-
-export type ItemChangeType = "quantity" | "equipped" | "delete";
-
-export interface EquippedState {
-  carryType: string;
-  handsHeld?: number | undefined;
-  inSlot?: boolean | undefined;
-}
-
-export interface PendingItemChange {
-  itemSlug: string;
-  demiplaneSlug: string | undefined;
-  changeType: ItemChangeType;
-  value: number | string | EquippedState;
-  itemType: string | undefined;
-  /** True when queued from a user edit (vs. a bulk refresh). Used to gate edit-only warnings. */
-  edited?: boolean;
-  timestamp: number;
-}
+export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
 
 export interface ExportResult {
   success: boolean;
@@ -69,18 +50,21 @@ interface ResolvedItemChange {
  * batches them into a single API call. Rate-limited to 30 API calls
  * per 60-second rolling window per character. Retries up to 3 times
  * with exponential backoff on failure.
+ *
+ * The per-character pending change buffer has been extracted into `ChangeBuffer`;
+ * the remaining payload-building, optimistic-concurrency check, retry, and flush
+ * orchestration still live here.
  */
 export class ExportManager {
   private readonly client: DemiplaneClient;
-  private readonly pendingChanges: Map<string, Map<string, PendingChange>> = new Map();
-  private readonly pendingItemChanges: Map<string, Map<string, PendingItemChange>> = new Map();
-  private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
-  private readonly apiCallTimestamps: Map<string, number[]> = new Map();
-  private readonly suspendCounts = new Map<string, number>();
+  private readonly changeBuffer: ChangeBuffer;
   private onConflictHandler: ((actor: Actor) => Promise<void>) | undefined = undefined;
 
   constructor(client: DemiplaneClient) {
     this.client = client;
+    this.changeBuffer = new ChangeBuffer((actor) => {
+      void this.flush(actor);
+    });
   }
 
   /**
@@ -103,55 +87,15 @@ export class ExportManager {
    * another character's exports.
    */
   suspend(characterId: string): void {
-    const count = (this.suspendCounts.get(characterId) ?? 0) + 1;
-    this.suspendCounts.set(characterId, count);
-    if (count > 1) return; // already suppressed; keep the first suspension's state
-
-    const timer = this.debounceTimers.get(characterId);
-    if (timer) {
-      clearTimeout(timer);
-      this.debounceTimers.delete(characterId);
-    }
-    this.pendingChanges.delete(characterId);
-    this.pendingItemChanges.delete(characterId);
+    this.changeBuffer.suspend(characterId);
   }
 
   resume(characterId: string): void {
-    const count = this.suspendCounts.get(characterId) ?? 0;
-    if (count <= 1) this.suspendCounts.delete(characterId);
-    else this.suspendCounts.set(characterId, count - 1);
-  }
-
-  private isSuspended(characterId: string): boolean {
-    return (this.suspendCounts.get(characterId) ?? 0) > 0;
+    this.changeBuffer.resume(characterId);
   }
 
   queueChange(actor: Actor, field: string, value: number): void {
-    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
-    if (!characterId) return;
-    if (this.isSuspended(characterId)) return;
-
-    if (!this.pendingChanges.has(characterId)) {
-      this.pendingChanges.set(characterId, new Map());
-    }
-
-    this.pendingChanges.get(characterId)!.set(field, {
-      field,
-      value,
-      timestamp: Date.now(),
-    });
-
-    const existingTimer = this.debounceTimers.get(characterId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
-
-    const timer = setTimeout(() => {
-      this.debounceTimers.delete(characterId);
-      void this.flush(actor);
-    }, DEBOUNCE_MS);
-
-    this.debounceTimers.set(characterId, timer);
+    this.changeBuffer.queueChange(actor, field, value);
   }
 
   queueItemChange(
@@ -163,27 +107,7 @@ export class ExportManager {
     itemType?: string,
     edited?: boolean
   ): void {
-    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
-    if (!characterId) return;
-    if (this.isSuspended(characterId)) return;
-
-    const key = `${itemSlug}:${changeType}`;
-    if (!this.pendingItemChanges.has(characterId)) {
-      this.pendingItemChanges.set(characterId, new Map());
-    }
-
-    const entry: PendingItemChange = {
-      itemSlug,
-      demiplaneSlug,
-      changeType,
-      value,
-      itemType,
-      timestamp: Date.now(),
-    };
-    if (edited !== undefined) entry.edited = edited;
-
-    this.pendingItemChanges.get(characterId)!.set(key, entry);
-    this.scheduleFlush(actor, characterId);
+    this.changeBuffer.queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType, edited);
   }
 
   /**
@@ -195,39 +119,7 @@ export class ExportManager {
    * @param slot - The demiplane/equipment slug of the deleted item.
    */
   queueItemDelete(actor: Actor, slot: string): void {
-    if (!slot) return;
-
-    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
-    if (!characterId) return;
-    if (this.isSuspended(characterId)) return;
-
-    const key = `${slot}:delete`;
-    if (!this.pendingItemChanges.has(characterId)) {
-      this.pendingItemChanges.set(characterId, new Map());
-    }
-    this.pendingItemChanges.get(characterId)!.set(key, {
-      itemSlug: slot,
-      demiplaneSlug: slot,
-      changeType: "delete",
-      value: 0,
-      itemType: undefined,
-      timestamp: Date.now(),
-    });
-    this.scheduleFlush(actor, characterId);
-  }
-
-  private scheduleFlush(actor: Actor, characterId: string): void {
-    const existingTimer = this.debounceTimers.get(characterId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
-
-    const timer = setTimeout(() => {
-      this.debounceTimers.delete(characterId);
-      void this.flush(actor);
-    }, DEBOUNCE_MS);
-
-    this.debounceTimers.set(characterId, timer);
+    this.changeBuffer.queueItemDelete(actor, slot);
   }
 
   async flush(actor: Actor): Promise<ExportResult> {
@@ -242,19 +134,18 @@ export class ExportManager {
     // changes are pushed once the remote sync settles.
     if (isRemoteSyncActive(actor)) {
       debugLog(`[push] remote sync in progress for ${characterId}; deferring flush`);
-      this.scheduleFlush(actor, characterId);
+      this.changeBuffer.rearmFlush(actor, characterId);
       return { success: true };
     }
 
-    this.clearDebounceTimer(characterId);
+    this.changeBuffer.clearDebounceTimer(characterId);
 
-    const changes = this.pendingChanges.get(characterId);
-    const itemChanges = this.pendingItemChanges.get(characterId);
+    const { changes, itemChanges } = this.changeBuffer.peek(characterId);
     if ((!changes || changes.size === 0) && (!itemChanges || itemChanges.size === 0)) {
       return { success: true };
     }
 
-    if (!this.isWithinRateLimit(characterId)) {
+    if (!this.changeBuffer.isWithinRateLimit(characterId)) {
       const error = "Rate limit exceeded: maximum 30 API calls per 60 seconds";
       addExportIssue(actor, error);
       return {
@@ -302,8 +193,7 @@ export class ExportManager {
               `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
             );
             // Clear pending changes so we don't retry the stale push
-            this.pendingChanges.delete(characterId);
-            this.pendingItemChanges.delete(characterId);
+            this.changeBuffer.clear(characterId);
             // Trigger conflict recovery (re-import) without blocking the flush return
             if (this.onConflictHandler) {
               void this.onConflictHandler(actor);
@@ -348,20 +238,11 @@ export class ExportManager {
   }
 
   getPendingChanges(characterId: string): PendingChange[] {
-    const changes = this.pendingChanges.get(characterId);
-    return changes ? Array.from(changes.values()) : [];
+    return this.changeBuffer.getPendingChanges(characterId);
   }
 
   hasPendingChanges(characterId: string): boolean {
-    const changes = this.pendingChanges.get(characterId);
-    return changes !== undefined && changes.size > 0;
-  }
-
-  private clearDebounceTimer(characterId: string): void {
-    const timer = this.debounceTimers.get(characterId);
-    if (!timer) return;
-    clearTimeout(timer);
-    this.debounceTimers.delete(characterId);
+    return this.changeBuffer.hasPendingChanges(characterId);
   }
 
   private async buildUpdatedCharacterData(
@@ -647,9 +528,8 @@ export class ExportManager {
     if (result.success) {
       // eslint-disable-next-line no-console -- single always-on log per push
       console.info(`${MODULE_ID} | Pushed character data to Demiplane (${characterId})`);
-      this.pendingChanges.delete(characterId);
-      this.pendingItemChanges.delete(characterId);
-      this.recordApiCall(characterId);
+      this.changeBuffer.clear(characterId);
+      this.changeBuffer.recordApiCall(characterId);
       await this.syncConflictBaseline(actor);
       await this.updateSyncTimestamp(actor);
       return;
@@ -723,21 +603,6 @@ export class ExportManager {
     if (typeof ui !== "undefined" && ui.notifications) {
       ui.notifications.error(`Demiplane sync failed: ${error ?? "Unknown error"}`);
     }
-  }
-
-  private isWithinRateLimit(characterId: string): boolean {
-    const timestamps = this.apiCallTimestamps.get(characterId) ?? [];
-    const now = Date.now();
-    const windowStart = now - RATE_LIMIT_WINDOW_MS;
-    const recentCalls = timestamps.filter((t) => t > windowStart);
-    this.apiCallTimestamps.set(characterId, recentCalls);
-    return recentCalls.length < RATE_LIMIT_MAX_CALLS;
-  }
-
-  private recordApiCall(characterId: string): void {
-    const timestamps = this.apiCallTimestamps.get(characterId) ?? [];
-    timestamps.push(Date.now());
-    this.apiCallTimestamps.set(characterId, timestamps);
   }
 
   private async pushWithRetry(characterId: string, fetched: FetchedCharacter): Promise<ExportResult> {
