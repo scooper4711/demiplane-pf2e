@@ -76,8 +76,6 @@ Hooks.once("ready", async () => {
         return importLinkedCharacter(actor, characterId, token);
       },
       exportNow: (actor: Actor) => exportLinkedCharacter(actor),
-      getOrchestrator: () => importOrchestrator,
-      getClient: () => client,
     };
   }
 
