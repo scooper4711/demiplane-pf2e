@@ -4,14 +4,20 @@ import { addExportIssue } from "./sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
-import { ChangeBuffer, type EquippedState, type ItemChangeType, type PendingChange } from "./export/change-buffer.js";
+import {
+  ChangeBuffer,
+  type EquippedState,
+  type ItemChangeType,
+  type PendingChange,
+  type PendingItemChange,
+} from "./export/change-buffer.js";
 import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
+import { ConflictResolver } from "./export/conflict-resolver.js";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
-export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
-export type { FetchedCharacter } from "./export/push-payload-builder.js";
+export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange, FetchedCharacter };
 
 export interface ExportResult {
   success: boolean;
@@ -27,14 +33,20 @@ export interface ExportResult {
  * per 60-second rolling window per character. Retries up to 3 times
  * with exponential backoff on failure.
  *
- * The per-character pending change buffer (`ChangeBuffer`) and the payload
- * builder (`PushPayloadBuilder`) have been extracted; the optimistic-concurrency
- * check and flush orchestration/retry still live here.
+ * The heavy lifting is delegated to collaborators:
+ * - `ChangeBuffer` owns the per-character pending change maps, debounce timers,
+ *   and rate-limit tracking.
+ * - `PushPayloadBuilder` turns the buffered changes into the Demiplane payload.
+ * - `ConflictResolver` performs the optimistic-concurrency content check.
+ *
+ * `ExportManager` keeps only orchestration (the flush flow), retry/backoff, and
+ * the wiring of those collaborators.
  */
 export class ExportManager {
   private readonly client: DemiplaneClient;
   private readonly changeBuffer: ChangeBuffer;
   private readonly payloadBuilder: PushPayloadBuilder;
+  private readonly conflictResolver: ConflictResolver;
   private onConflictHandler: ((actor: Actor) => Promise<void>) | undefined = undefined;
 
   constructor(client: DemiplaneClient) {
@@ -43,6 +55,7 @@ export class ExportManager {
       void this.flush(actor);
     });
     this.payloadBuilder = new PushPayloadBuilder(client);
+    this.conflictResolver = new ConflictResolver(client);
   }
 
   /**
@@ -140,57 +153,21 @@ export class ExportManager {
     }
 
     // Optimistic concurrency: check if Demiplane has been updated since last import
-    const storedUpdated = actor.getFlag(MODULE_ID, "lastUpdated") as string | undefined;
-    const startedAt = Date.now();
-    if (storedUpdated) {
-      debugLog(`[push] conflict check: stored lastUpdated=${storedUpdated}`);
-      try {
-        const serverUpdated = await this.client.fetchCharacterUpdated(characterId);
-        const matched = serverUpdated === storedUpdated;
-        debugLog(
-          `[push] conflict check: server updated=${serverUpdated} (took ${Date.now() - startedAt}ms) ` +
-            `${matched ? "MATCH" : "MISMATCH"}`
-        );
-        if (!matched) {
-          // `updated` advanced, but that alone isn't proof of a conflicting edit: the
-          // Demiplane sheet (or an autosave) can bump `updated` without changing any
-          // content. Verify the character's actual engine content changed before we
-          // abort the push and trigger a re-import.
-          const contentChanged = await this.isRemoteContentChanged(characterId, actor);
-          if (!contentChanged) {
-            debugLog(
-              `[push] updated mismatch but engine content unchanged — benign bump; ` +
-                `proceeding with push and refreshing lastUpdated`
-            );
-            await actor.setFlag(MODULE_ID, "lastUpdated", serverUpdated);
-            // fall through to the push below
-          } else {
-            const error = "Conflict: Demiplane character was updated elsewhere. Re-importing.";
-            addExportIssue(actor, error);
-            debugLog(
-              `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
-            );
-            // Clear pending changes so we don't retry the stale push
-            this.changeBuffer.clear(characterId);
-            // Trigger conflict recovery (re-import) without blocking the flush return
-            if (this.onConflictHandler) {
-              void this.onConflictHandler(actor);
-            }
-            return { success: false, error, conflict: true };
-          }
-        }
-      } catch (error) {
-        debugLog(`[push] failed to fetch updated for conflict check: ${String(error)}`);
-        // If we can't fetch updated, proceed with push but log
+    const conflict = await this.conflictResolver.checkConflict(characterId, actor);
+    if (conflict.status === "conflict") {
+      // Clear pending changes so we don't retry the stale push
+      this.changeBuffer.clear(characterId);
+      // Trigger conflict recovery (re-import) without blocking the flush return
+      if (this.onConflictHandler) {
+        void this.onConflictHandler(actor);
       }
-    } else {
-      debugLog(`[push] no stored lastUpdated flag — skipping optimistic concurrency check`);
+      return { success: false, error: conflict.error, conflict: true };
     }
 
     // Keep session alive
     try {
       await this.client.updateLastAccess();
-      debugLog(`[push] updateLastAccess succeeded (took ${Date.now() - startedAt}ms)`);
+      debugLog(`[push] updateLastAccess succeeded`);
     } catch (error) {
       debugLog(`[push] updateLastAccess failed: ${String(error)}`);
       // Non-critical: ignore failure to update last access
@@ -208,10 +185,10 @@ export class ExportManager {
       return { success: false, error };
     }
 
-    debugLog(`[push] starting push (build took ${Date.now() - startedAt}ms)`);
+    debugLog(`[push] starting push`);
     const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
-    debugLog(`[push] push resolved ${result.success ? "success" : "failure"} (took ${Date.now() - startedAt}ms)`);
+    debugLog(`[push] push resolved ${result.success ? "success" : "failure"}`);
     return result;
   }
 
@@ -264,29 +241,6 @@ export class ExportManager {
       );
     } catch (error) {
       debugLog(`[push] failed to re-baseline conflict state after push: ${String(error)}`);
-    }
-  }
-
-  /**
-   * Determines whether the character's engine content on Demiplane differs from
-   * the content we last synced. Used to tell a genuine remote edit apart from a
-   * benign `updated` bump so we don't needlessly abort pushes / re-import.
-   * Returns `true` (conflict) when content can't be compared, to stay safe.
-   */
-  private async isRemoteContentChanged(characterId: string, actor: Actor): Promise<boolean> {
-    try {
-      const data = await this.client.fetchCharacterData(characterId);
-      const currentSig = computeEngineSig((data.engines as Array<{ name?: string; value?: unknown }>) ?? []);
-      const storedSig = actor.getFlag(MODULE_ID, "engineSig") as string | undefined;
-      if (!storedSig) return true; // no baseline — be conservative
-      const changed = currentSig !== storedSig;
-      debugLog(
-        `[push] content compare: ${changed ? "CONTENT CHANGED (real conflict)" : "content unchanged (benign bump)"}`
-      );
-      return changed;
-    } catch (error) {
-      debugLog(`[push] failed to compare remote content: ${String(error)} — assuming conflict`);
-      return true;
     }
   }
 
