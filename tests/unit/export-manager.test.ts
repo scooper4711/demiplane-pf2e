@@ -67,6 +67,7 @@ function createMockClient(overrides = {}) {
       avatarUrl: "https://example.com/avatar.png",
       viewPermission: 0,
       editPermission: 0,
+      updated: "2026-08-27T00:00:00.000Z",
     }),
     updateCharacter: vi.fn().mockResolvedValue({ success: true, message: null, result: null }),
     fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T00:00:00.000Z"),
@@ -172,9 +173,34 @@ describe("ExportManager", () => {
       expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastExportTimestamp", expect.any(Number));
     });
 
-    it("refreshes the stored lastUpdated timestamp after a successful push", async () => {
+    it("re-baselines lastUpdated and engineSig from the server after a successful push", async () => {
       const client = createMockClient({
         fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T01:00:00.000Z"),
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [
+            {
+              id: "eng-hp",
+              name: "character_hit-points_current",
+              value: 30,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-hp",
+              args: { id: null },
+            },
+            {
+              id: "eng-hero",
+              name: "character_hero-points",
+              value: 1,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-hero",
+              args: { id: null },
+            },
+          ],
+          updated: "2026-08-27T01:00:00.000Z",
+        }),
       });
       const manager = new ExportManager(client as never);
       const actor = createFlagTrackingActor("char-123", "2026-08-27T01:00:00.000Z");
@@ -183,18 +209,48 @@ describe("ExportManager", () => {
       const result = await manager.flush(actor as never);
 
       expect(result.success).toBe(true);
+      // lastUpdated is refreshed from the server's actual stored timestamp...
       expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", "2026-08-27T01:00:00.000Z");
+      // ...and the engineSig baseline is re-derived from the server's real content,
+      // not the locally-built engines (which the server may normalize on write).
+      expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "engineSig", expect.any(String));
     });
 
-    it("refreshes lastUpdated so a push-triggered follow-up flush does not falsely conflict", async () => {
-      // First fetch = conflict check (matches stored); server advances after the push;
-      // third fetch = follow-up flush conflict check.
+    it("re-baselines after a push so a push-triggered follow-up flush does not falsely conflict", async () => {
+      // Conflict check reads fetchCharacterUpdated (advances after the first push);
+      // syncConflictBaseline re-reads fetchCharacterData (now reflecting the new
+      // server timestamp) so the follow-up flush matches instead of re-importing.
       const fetchUpdated = vi
         .fn()
         .mockResolvedValueOnce("2026-08-27T00:00:00.000Z")
         .mockResolvedValueOnce("2026-08-27T00:01:00.000Z")
         .mockResolvedValueOnce("2026-08-27T00:01:00.000Z");
-      const client = createMockClient({ fetchCharacterUpdated: fetchUpdated });
+      const fetchData = vi.fn().mockResolvedValue({
+        engines: [
+          {
+            id: "eng-hp",
+            name: "character_hit-points_current",
+            value: 30,
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-hp",
+            args: { id: null },
+          },
+          {
+            id: "eng-hero",
+            name: "character_hero-points",
+            value: 1,
+            type: "CustomDemiplaneEngine",
+            saveType: "CharacterSheet",
+            storeType: "override",
+            demiplaneEngineId: "de-hero",
+            args: { id: null },
+          },
+        ],
+        updated: "2026-08-27T00:01:00.000Z",
+      });
+      const client = createMockClient({ fetchCharacterUpdated: fetchUpdated, fetchCharacterData: fetchData });
       const manager = new ExportManager(client as never);
       const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
 

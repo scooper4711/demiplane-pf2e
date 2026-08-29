@@ -333,19 +333,6 @@ export class ExportManager {
     debugLog(`[push] starting push (build took ${Date.now() - startedAt}ms)`);
     const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
-    if (result.success) {
-      // Record the content we just pushed so a later benign `updated` bump won't
-      // be mistaken for a conflicting edit in the optimistic-concurrency check.
-      try {
-        await actor.setFlag(
-          MODULE_ID,
-          "engineSig",
-          computeEngineSig((fetched.data.engines as Array<{ name?: string; value?: unknown }>) ?? [])
-        );
-      } catch (error) {
-        debugLog(`[push] failed to store engineSig after push: ${String(error)}`);
-      }
-    }
     debugLog(`[push] push resolved ${result.success ? "success" : "failure"} (took ${Date.now() - startedAt}ms)`);
     return result;
   }
@@ -653,7 +640,7 @@ export class ExportManager {
       this.pendingChanges.delete(characterId);
       this.pendingItemChanges.delete(characterId);
       this.recordApiCall(characterId);
-      await this.syncConflictTimestamp(characterId, actor);
+      await this.syncConflictBaseline(actor);
       await this.updateSyncTimestamp(actor);
       return;
     }
@@ -663,21 +650,31 @@ export class ExportManager {
   }
 
   /**
-   * After a successful push the server's `updated` timestamp advances past the
-   * value we imported/synced against. Refresh the stored `lastUpdated` flag so the
-   * next optimistic-concurrency check (which a push may itself trigger via
-   * downstream actor updates) matches instead of falsely reporting a conflict
-   * and forcing a re-import.
+   * After a successful push, re-baseline the conflict state from the SERVER's
+   * actual stored character rather than our locally-built engines.
+   *
+   * The server normalizes engine content on write, so a signature computed from
+   * the engines we *sent* would not match what `isRemoteContentChanged` reads back
+   * on the next push — that false mismatch is what triggered needless re-imports.
+   * Re-fetching the authoritative state fixes both the `engineSig` baseline and
+   * the `lastUpdated` timestamp in one round trip.
    */
-  private async syncConflictTimestamp(characterId: string, actor: Actor): Promise<void> {
+  private async syncConflictBaseline(actor: Actor): Promise<void> {
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+    if (!characterId) return;
     try {
-      const serverUpdated = await this.client.fetchCharacterUpdated(characterId);
+      const data = await this.client.fetchCharacterData(characterId);
+      const serverSig = computeEngineSig((data.engines as Array<{ name?: string; value?: unknown }>) ?? []);
+      await actor.setFlag(MODULE_ID, "engineSig", serverSig);
+      const serverUpdated = data.updated;
       if (serverUpdated) {
         await actor.setFlag(MODULE_ID, "lastUpdated", serverUpdated);
-        debugLog(`[push] refreshed lastUpdated=${serverUpdated} after successful push`);
       }
+      debugLog(
+        `[push] re-baselined conflict state after successful push (engineSig + lastUpdated=${serverUpdated ?? "n/a"})`
+      );
     } catch (error) {
-      debugLog(`[push] failed to refresh lastUpdated after push: ${String(error)}`);
+      debugLog(`[push] failed to re-baseline conflict state after push: ${String(error)}`);
     }
   }
 
