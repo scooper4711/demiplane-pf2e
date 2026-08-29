@@ -3,5 +3,8 @@ if [ -n "$STAGED_FILES" ]; then
   echo "$STAGED_FILES" | xargs npx prettier --write --cache
   echo "$STAGED_FILES" | xargs git add
 fi
+if git diff --cached --name-only --diff-filter=ACMR -- 'docs/*.md' | grep -q .; then
+  npm run validate:mermaid
+fi
 npm run lint
 npm test

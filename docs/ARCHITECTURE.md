@@ -139,7 +139,7 @@ classDiagram
     class ImportOrchestrator {
         -choiceSetHandler: ChoiceSetHandler
         +importCharacter(actor, characterId, options): Promise~ImportSummary~
-        -fetchCharacterEngines(characterId, token, summary): Promise~{engines, updated}|null~
+        -fetchCharacterEngines(characterId, token, summary): Promise~(engines, updated)|null~
         -buildPipeline(): ImportPhase[]
     }
 
@@ -153,7 +153,7 @@ classDiagram
         +summary: ImportSummary
         +choiceSetHandler: ChoiceSetHandler
         +categorized: CategorizedEngines
-        +selectionData: {grantedFeatSlugs, selectedFeats}
+        +selectionData: (grantedFeatSlugs, selectedFeats)
         +grantResolvedSlugs: Set~string~
     }
 
