@@ -44,12 +44,30 @@ describe("module entrypoint", () => {
     expect(items[0].label).toBe("Update from Demiplane");
   });
 
-  it("renders an Import Demiplane Character directory button", () => {
+  it("renders an Import Demiplane Character directory button for GMs", () => {
     const cb = onHook("renderActorDirectory");
     const html = {
       querySelector: (sel: string) => (sel.includes("action-buttons") ? actionButtons : null),
     };
+    (globalThis as unknown as { game: { user: { isGM: boolean; can: () => boolean } } }).game.user = {
+      isGM: true,
+      can: () => true,
+    };
     cb({}, html);
     expect(actionButtons.appendChild).toHaveBeenCalledWith(button);
+  });
+
+  it("does not render the Import button without GM or create-actor permission", () => {
+    const cb = onHook("renderActorDirectory");
+    const html = {
+      querySelector: (sel: string) => (sel.includes("action-buttons") ? actionButtons : null),
+    };
+    actionButtons.appendChild.mockClear();
+    (globalThis as unknown as { game: { user: { isGM: boolean; can: () => boolean } } }).game.user = {
+      isGM: false,
+      can: () => false,
+    };
+    cb({}, html);
+    expect(actionButtons.appendChild).not.toHaveBeenCalled();
   });
 });

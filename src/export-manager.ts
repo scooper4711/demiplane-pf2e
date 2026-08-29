@@ -4,6 +4,7 @@ import { addExportIssue } from "./sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
+import { isClientElectedWriter } from "./sync-election.js";
 import {
   ChangeBuffer,
   type EquippedState,
@@ -52,7 +53,7 @@ export class ExportManager {
   constructor(client: DemiplaneClient) {
     this.client = client;
     this.changeBuffer = new ChangeBuffer((actor) => {
-      void this.flush(actor);
+      void this.flush(actor, { enforceElection: true });
     });
     this.payloadBuilder = new PushPayloadBuilder(client);
     this.conflictResolver = new ConflictResolver(client);
@@ -113,11 +114,21 @@ export class ExportManager {
     this.changeBuffer.queueItemDelete(actor, slot);
   }
 
-  async flush(actor: Actor): Promise<ExportResult> {
+  async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
+    }
+
+    // When an auto-push is coordinated across multiple connected clients, only the
+    // single elected writer may push — otherwise every client duplicates the write.
+    // Drop our own pending changes if we are not the elected writer; the elected
+    // client will push the authoritative state.
+    if (opts.enforceElection && !isClientElectedWriter(actor)) {
+      debugLog(`[push] not the elected writer for ${characterId}; skipping auto-push`);
+      this.changeBuffer.clear(characterId);
+      return { success: true };
     }
 
     // If another client is importing/pushing this character, defer our flush
