@@ -3,6 +3,7 @@ import { debugLog } from "./import/debug-log.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
+import { deleteImportedItems } from "./import/reconcile.js";
 import { ExportManager } from "./export-manager.js";
 import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
@@ -161,14 +162,14 @@ function extractCharacterId(input: string): string | null {
 
 async function importLinkedCharacter(actor: Actor, characterId: string, token: string) {
   resetImportIssues(actor);
-  exportManager.suspend();
+  exportManager.suspend(characterId);
   try {
     const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
     for (const issue of summary.unresolved) addImportIssue(actor, issue);
     for (const error of summary.errors) addImportIssue(actor, error);
     return summary;
   } finally {
-    exportManager.resume();
+    exportManager.resume(characterId);
   }
 }
 
@@ -202,17 +203,7 @@ async function reimportActorOnConflict(actor: Actor) {
   }
   try {
     // Delete previously imported items first, mirroring Update from Demiplane
-    const importedItems = actor.items.filter((item) => {
-      const moduleFlags = (item.flags as Record<string, unknown> | undefined)?.[MODULE_ID] as
-        Record<string, unknown> | undefined;
-      return moduleFlags !== undefined;
-    });
-    if (importedItems.length > 0) {
-      await actor.deleteEmbeddedDocuments(
-        "Item",
-        importedItems.map((item) => (item as { id: string }).id)
-      );
-    }
+    await deleteImportedItems(actor);
   } catch (error) {
     debugLog(`[conflict] failed to delete imported items before re-import: ${String(error)}`);
   }
@@ -250,16 +241,9 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
 
       ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-      const importedItems = actor.items.filter((item) => {
-        const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
-        return moduleFlags !== undefined;
-      });
-      if (importedItems.length > 0) {
-        await actor.deleteEmbeddedDocuments(
-          "Item",
-          importedItems.map((item) => item.id)
-        );
-        debugLog(`[update] Deleted ${importedItems.length} previously imported items`);
+      const deleted = await deleteImportedItems(actor);
+      if (deleted > 0) {
+        debugLog(`[update] Deleted ${deleted} previously imported items`);
       }
 
       const remainingItems = actor.items.filter(() => true);

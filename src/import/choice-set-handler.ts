@@ -45,6 +45,10 @@ export class ChoiceSetHandler {
 
   enable(): void {
     this.importMode = true;
+    if (this.originalPreCreate) {
+      debugLog("[ChoiceSet] Monkey-patch already enabled; skipping re-install");
+      return;
+    }
     const ChoiceSetRE = this.getChoiceSetPrototype();
     this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
     debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");

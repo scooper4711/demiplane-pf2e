@@ -75,7 +75,7 @@ export class ExportManager {
   private readonly pendingItemChanges: Map<string, Map<string, PendingItemChange>> = new Map();
   private readonly debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly apiCallTimestamps: Map<string, number[]> = new Map();
-  private suspended = false;
+  private readonly suspendCounts = new Map<string, number>();
   private onConflictHandler: ((actor: Actor) => Promise<void>) | undefined = undefined;
 
   constructor(client: DemiplaneClient) {
@@ -95,25 +95,40 @@ export class ExportManager {
   }
 
   /**
-   * Drops pending exports while import rewrites actor session state, so those
-   * Foundry updates are not pushed back to Demiplane mid-import.
+   * Suppresses pushes for a single character while it is being re-imported, so
+   * items created/deleted by the import are not echoed back to Demiplane.
+   * Ref-counted and keyed per character so concurrent imports of different
+   * actors (or an import racing a manual push) cannot prematurely resume
+   * another character's exports.
    */
-  suspend(): void {
-    this.suspended = true;
-    this.clearDebounceTimers();
-    this.pendingChanges.clear();
-    this.pendingItemChanges.clear();
+  suspend(characterId: string): void {
+    const count = (this.suspendCounts.get(characterId) ?? 0) + 1;
+    this.suspendCounts.set(characterId, count);
+    if (count > 1) return; // already suppressed; keep the first suspension's state
+
+    const timer = this.debounceTimers.get(characterId);
+    if (timer) {
+      clearTimeout(timer);
+      this.debounceTimers.delete(characterId);
+    }
+    this.pendingChanges.delete(characterId);
+    this.pendingItemChanges.delete(characterId);
   }
 
-  resume(): void {
-    this.suspended = false;
+  resume(characterId: string): void {
+    const count = this.suspendCounts.get(characterId) ?? 0;
+    if (count <= 1) this.suspendCounts.delete(characterId);
+    else this.suspendCounts.set(characterId, count - 1);
+  }
+
+  private isSuspended(characterId: string): boolean {
+    return (this.suspendCounts.get(characterId) ?? 0) > 0;
   }
 
   queueChange(actor: Actor, field: string, value: number): void {
-    if (this.suspended) return;
-
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
+    if (this.isSuspended(characterId)) return;
 
     if (!this.pendingChanges.has(characterId)) {
       this.pendingChanges.set(characterId, new Map());
@@ -147,10 +162,9 @@ export class ExportManager {
     itemType?: string,
     edited?: boolean
   ): void {
-    if (this.suspended) return;
-
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
+    if (this.isSuspended(characterId)) return;
 
     const key = `${itemSlug}:${changeType}`;
     if (!this.pendingItemChanges.has(characterId)) {
@@ -180,10 +194,11 @@ export class ExportManager {
    * @param slot - The demiplane/equipment slug of the deleted item.
    */
   queueItemDelete(actor: Actor, slot: string): void {
-    if (this.suspended || !slot) return;
+    if (!slot) return;
 
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
+    if (this.isSuspended(characterId)) return;
 
     const key = `${slot}:delete`;
     if (!this.pendingItemChanges.has(characterId)) {
@@ -350,13 +365,6 @@ export class ExportManager {
     if (!timer) return;
     clearTimeout(timer);
     this.debounceTimers.delete(characterId);
-  }
-
-  private clearDebounceTimers(): void {
-    for (const timer of this.debounceTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.debounceTimers.clear();
   }
 
   private async buildUpdatedCharacterData(

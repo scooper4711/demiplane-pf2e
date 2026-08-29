@@ -1,6 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import { getExportIssues, getImportIssues, clearAllIssues } from "./sync-issues.js";
+import { deleteImportedItems } from "./import/reconcile.js";
 
 type ImportCharacterFn = (actor: Actor, characterId: string, token: string) => Promise<ImportSummary>;
 type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
@@ -151,16 +152,7 @@ async function performUpdate(actor: Actor, characterId: string, importCharacter:
 
   ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-  const importedItems = actor.items.filter((item) => {
-    const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
-    return moduleFlags !== undefined;
-  });
-  if (importedItems.length > 0) {
-    await actor.deleteEmbeddedDocuments(
-      "Item",
-      importedItems.map((item) => item.id)
-    );
-  }
+  await deleteImportedItems(actor);
 
   const summary = await importCharacter(actor, characterId, token);
   if (summary.errors.length > 0) {

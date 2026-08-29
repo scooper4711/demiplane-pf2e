@@ -60,8 +60,6 @@ export class ImportOrchestrator {
     const selectionData = this.buildSelectionData(engines);
     const categorized = this.categorizeEngines(engines);
 
-    this.choiceSetHandler.enable();
-
     const importHookId = Hooks.on("preCreateItem", ((item: Item) => {
       if (item.parent?.id !== actor.id) return;
       (item as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
@@ -70,6 +68,7 @@ export class ImportOrchestrator {
     }) as never);
 
     try {
+      this.choiceSetHandler.enable();
       // Create Lore items BEFORE any ancestry/background/class/feat items. Feats
       // like Assurance can reference lore skills granted by ancestry/background,
       // and their grants fire natively during item creation.

@@ -676,17 +676,62 @@ describe("ExportManager", () => {
       manager.queueChange(actor as never, "character_hit-points_current", 25);
       expect(manager.hasPendingChanges("char-123")).toBe(true);
 
-      manager.suspend();
+      manager.suspend("char-123");
       expect(manager.hasPendingChanges("char-123")).toBe(false);
 
       manager.queueChange(actor as never, "character_hero-points", 2);
       expect(manager.hasPendingChanges("char-123")).toBe(false);
 
-      manager.resume();
+      manager.resume("char-123");
       manager.queueChange(actor as never, "character_hero-points", 3);
       expect(manager.hasPendingChanges("char-123")).toBe(true);
     });
+
+    it("scopes suspension per character so resuming one does not un-suspend another", () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+
+      const actorA = makeActorForCharacter("char-a");
+      const actorB = makeActorForCharacter("char-b");
+
+      manager.suspend("char-a");
+      manager.suspend("char-b");
+
+      manager.queueChange(actorA as never, "character_hit-points_current", 1);
+      manager.queueChange(actorB as never, "character_hit-points_current", 1);
+      expect(manager.hasPendingChanges("char-a")).toBe(false);
+      expect(manager.hasPendingChanges("char-b")).toBe(false);
+
+      // Resuming char-a must NOT prematurely re-enable char-b's exports.
+      manager.resume("char-a");
+      manager.queueChange(actorB as never, "character_hero-points", 2);
+      expect(manager.hasPendingChanges("char-b")).toBe(false);
+
+      manager.resume("char-b");
+      manager.queueChange(actorB as never, "character_hero-points", 3);
+      expect(manager.hasPendingChanges("char-b")).toBe(true);
+    });
+
+    it("ref-counts repeated suspends of the same character", () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = makeActorForCharacter("char-x");
+
+      manager.suspend("char-x");
+      manager.suspend("char-x");
+      manager.resume("char-x"); // one suspend still outstanding -> still suspended
+      manager.queueChange(actor as never, "character_hit-points_current", 1);
+      expect(manager.hasPendingChanges("char-x")).toBe(false);
+
+      manager.resume("char-x"); // fully resumed
+      manager.queueChange(actor as never, "character_hit-points_current", 2);
+      expect(manager.hasPendingChanges("char-x")).toBe(true);
+    });
   });
+
+  function makeActorForCharacter(id: string): Actor {
+    return createMockActor(id) as unknown as Actor;
+  }
 
   describe("item hand slot assignment", () => {
     function makeClientWithItems(itemEngines: Record<string, unknown>[]) {
