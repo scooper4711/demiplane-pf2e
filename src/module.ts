@@ -6,6 +6,7 @@ import { ImportOrchestrator } from "./import/index.js";
 import { deleteImportedItems } from "./import/reconcile.js";
 import { ExportManager } from "./export-manager.js";
 import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
+import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
@@ -42,6 +43,10 @@ Hooks.once("ready", async () => {
   hookManager.register();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
   registerTitlebarDot();
+
+  // Recover from a previous session that crashed mid-sync, which would otherwise
+  // leave a stale sync mark blocking all pushes for the affected character.
+  void recoverStaleSyncPauses();
 
   // Keep the client token in sync when the setting changes
   Hooks.on("updateSetting", (setting: { key: string }) => {
@@ -161,32 +166,57 @@ function extractCharacterId(input: string): string | null {
   return match ? match[0] : null;
 }
 
+/**
+ * Clears any `syncActiveTokens` marks left on actors by a session that crashed
+ * mid-sync, so they don't permanently block pushes for those characters.
+ */
+async function recoverStaleSyncPauses(): Promise<void> {
+  for (const actor of game.actors.contents) {
+    const tokens = actor.getFlag(MODULE_ID, "syncActiveTokens") as string[] | undefined;
+    if (Array.isArray(tokens) && tokens.length > 0) {
+      await clearSyncPause(actor);
+    }
+  }
+}
+
 async function importLinkedCharacter(actor: Actor, characterId: string, token: string) {
   resetImportIssues(actor);
   exportManager.suspend(characterId);
+  // Mark the character as syncing so every connected client (including this one)
+  // pauses its pushes while the import rewrites the actor. This prevents the
+  // import's own actor updates from echoing back to Demiplane via other clients.
+  await beginSyncPause(actor);
   try {
     const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
     for (const issue of summary.unresolved) addImportIssue(actor, issue);
     for (const error of summary.errors) addImportIssue(actor, error);
     return summary;
   } finally {
+    await endSyncPause(actor);
     exportManager.resume(characterId);
   }
 }
 
 async function exportLinkedCharacter(actor: Actor) {
-  queueCombatResourceChanges(exportManager, actor);
-  queueAllItemChanges(exportManager, actor);
-  const result = await exportManager.flush(actor);
-  if (result.success) {
-    ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
-  } else if (result.conflict) {
-    ui.notifications.warn(
-      `Demiplane character changed on the server since last import — re-importing "${actor.name}" to avoid overwriting. Your pending changes were not pushed; please re-apply them after the re-import.`
-    );
-    // Re-import is performed by the registered conflict handler.
+  // Pause other clients' pushes for the duration of our push so we don't race a
+  // concurrent import/push into an optimistic-concurrency conflict.
+  await beginSyncPause(actor);
+  try {
+    queueCombatResourceChanges(exportManager, actor);
+    queueAllItemChanges(exportManager, actor);
+    const result = await exportManager.flush(actor);
+    if (result.success) {
+      ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
+    } else if (result.conflict) {
+      ui.notifications.warn(
+        `Demiplane character changed on the server since last import — re-importing "${actor.name}" to avoid overwriting. Your pending changes were not pushed; please re-apply them after the re-import.`
+      );
+      // Re-import is performed by the registered conflict handler.
+    }
+    return result;
+  } finally {
+    await endSyncPause(actor);
   }
-  return result;
 }
 
 /**

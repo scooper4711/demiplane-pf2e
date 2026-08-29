@@ -416,6 +416,7 @@ src/
 ├── settings.ts                    Foundry module settings (token, autoSync, debugImport)
 ├── hook-manager.ts                Listens to actor/item hooks, maps fields, queues exports
 ├── export-manager.ts              Debounced + rate-limited push to Demiplane
+├── sync-pause.ts                  Cross-client sync coordination (pauses pushes during import/push)
 ├── sync-issues.ts                Import/export sync-issue sets on linked actors
 ├── titlebar-dot.ts               Red indicator on actor sheet titlebars for open issues
 ├── demiplane-info-button.ts      Header button + Demiplane dialog (lists issues, dismissable)
@@ -506,14 +507,14 @@ graph TD
 
 `HookManager` registers four Foundry hooks during initialization:
 
-| Hook          | Trigger                        | Action                                                |
-| ------------- | ------------------------------ | ----------------------------------------------------- |
-| `updateActor` | Actor data changes             | Maps field path → Demiplane store name, queues export |
-| `updateItem`  | Item on linked actor changes   | Logs change (future: consumable sync)                 |
-| `createItem`  | Item added to linked actor     | Logs creation (future: equipment sync)                |
-| `deleteItem`  | Item removed from linked actor | Logs deletion (future: equipment sync)                |
+| Hook          | Trigger                        | Action                                                                        |
+| ------------- | ------------------------------ | ----------------------------------------------------------------------------- |
+| `updateActor` | Actor data changes             | Maps field path → Demiplane store name, queues export (skipped while syncing) |
+| `updateItem`  | Item on linked actor changes   | Queues item change (skipped while syncing)                                    |
+| `createItem`  | Item added to linked actor     | Logs creation (skipped while syncing)                                         |
+| `deleteItem`  | Item removed from linked actor | Queues deletion (skipped while syncing)                                       |
 
-All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e.characterId` flag set.
+All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e.characterId` flag set. **While any client has an in-flight import or push for the character** (the `demiplane-pf2e.syncActiveTokens` actor flag is non-empty), the hooks suppress queueing so a sync's replicated actor updates don't echo back to Demiplane. See `sync-pause.ts` and DESIGN §16.
 
 ### Actor Field → Store Name Mapping
 

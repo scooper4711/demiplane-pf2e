@@ -5,6 +5,7 @@ import { addExportIssue } from "./sync-issues.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
+import { isRemoteSyncActive } from "./sync-pause.js";
 
 const DEBOUNCE_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -234,6 +235,15 @@ export class ExportManager {
 
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
+    }
+
+    // If another client is importing/pushing this character, defer our flush
+    // rather than racing it into a conflict. Re-arm the timer so the pending
+    // changes are pushed once the remote sync settles.
+    if (isRemoteSyncActive(actor)) {
+      debugLog(`[push] remote sync in progress for ${characterId}; deferring flush`);
+      this.scheduleFlush(actor, characterId);
+      return { success: true };
     }
 
     this.clearDebounceTimer(characterId);

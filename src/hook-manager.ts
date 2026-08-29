@@ -1,6 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
+import { isSyncActive } from "./sync-pause.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -152,6 +153,9 @@ export class HookManager {
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {
     if (!this.isLinkedCharacterActor(actor)) return;
     if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    // While any client is importing or pushing this character, actor updates are
+    // just the sync echoing to other clients — don't queue them back to Demiplane.
+    if (isSyncActive(actor)) return;
 
     for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
       const value = this.getChangeValue(changes, actorPath);
@@ -165,6 +169,7 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (isSyncActive(actor)) return;
 
     const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
     const dpFlags = (item as { flags?: Record<string, Record<string, unknown>> })?.flags?.["demiplane-pf2e"];
@@ -225,6 +230,7 @@ export class HookManager {
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (isSyncActive(actor)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
   }
 
@@ -247,6 +253,7 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (isSyncActive(actor)) return;
 
     const itemType = (item as { type?: string })?.type;
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {

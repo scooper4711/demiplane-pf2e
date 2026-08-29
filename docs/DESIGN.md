@@ -21,6 +21,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Game-System-Agnostic Library](#13-game-system-agnostic-npm-library)
 - [Exponential Backoff Retry](#14-exponential-backoff-retry-strategy)
 - [Imported Item Flag Tracking](#15-imported-item-flag-tracking)
+- [Cross-Client Sync Pause](#16-cross-client-sync-pause)
 
 ---
 
@@ -338,3 +339,32 @@ After 4 total attempts (initial + 3 retries), the module notifies the user via `
 ```
 
 This means re-import is always a clean slate for module-managed items while preserving the user's custom additions.
+
+---
+
+## 16. Cross-Client Sync Pause
+
+**Decision:** While a character is being imported or pushed on _any_ connected client, every other client pauses its pushes (and imports) for that character, coordinated through a replicated actor flag.
+
+**Rationale:** In a multiplayer Foundry game, an import on the GM's client rewrites the linked actor. Those actor/embedded-item updates are replicated to every player client. On a player client the normal `updateActor` / `updateItem` / `createItem` / `deleteItem` hooks would then queue a push back to Demiplane. That push updates the server, which can trigger another import on the GM's client — an **infinite update loop** that thrashes both Foundry and Demiplane.
+
+The loop is broken by marking the character as "syncing" on the actor document itself. Actor flags replicate to all clients, so any client that observes the mark suppresses its own export-queueing until the sync ends.
+
+**Mechanism (`src/sync-pause.ts`):**
+
+- `beginSyncPause(actor)` / `endSyncPause(actor)` wrap an import or push. They add/remove a **token** to a `demiplane-pf2e.syncActiveTokens` array stored on the actor flag.
+- `isSyncActive(actor)` (used by `HookManager`) blocks hook-driven queueing on _every_ client — including the one that started the sync.
+- `isRemoteSyncActive(actor)` (used by `ExportManager.flush`) blocks pushing only when a _different_ client is syncing, so a client never blocks its own in-flight push.
+- A per-character **array of tokens** (one per in-flight sync) is used rather than a single boolean so two clients syncing the same character concurrently do not clear each other's mark.
+
+**Tradeoffs considered:**
+
+| Approach                          | Pros                                                                                        | Cons                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| World-scoped setting (boolean)    | Simple cross-client flag                                                                    | GM-only writable; boolean clobbers concurrent syncs; global   |
+| Socket-based mutex                | Authoritative cross-client lock                                                             | More machinery; Foundry sockets add complexity                |
+| Per-character actor flag (chosen) | Replicated to all clients; writable by any owner; per-character; token-array avoids clobber | Slight extra actor writes; relies on flag replication latency |
+
+**Safety nets:** A stale mark left by a crashed session would otherwise block pushes forever, so `module.ts` clears any non-empty `syncActiveTokens` on `ready` via `clearSyncPause`. `endSyncPause` is always reached through `try/finally`, so a thrown import/push still releases the mark.
+
+**Known limitation:** The mark is per-character, so two _different_ characters importing simultaneously do not block each other (by design). A genuinely concurrent import of the _same_ character on two clients is rare and is additionally guarded by the optimistic-concurrency `engineSig`/`lastUpdated` checks in the export path.

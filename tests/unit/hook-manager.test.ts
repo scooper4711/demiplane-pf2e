@@ -38,13 +38,17 @@ function createMockExportManager() {
   };
 }
 
-function createMockActor(type: string = "character", characterId: string | null = "char-uuid-1234") {
+function createMockActor(
+  type: string = "character",
+  characterId: string | null = "char-uuid-1234",
+  flags: Record<string, unknown> = {}
+) {
   return {
     type,
     name: "Test Actor",
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId ?? undefined;
-      return undefined;
+      return flags[key];
     },
   };
 }
@@ -684,6 +688,41 @@ describe("HookManager", () => {
       expect(Hooks.off).toHaveBeenCalledWith("updateItem", expect.any(Number));
       expect(Hooks.off).toHaveBeenCalledWith("createItem", expect.any(Number));
       expect(Hooks.off).toHaveBeenCalledWith("deleteItem", expect.any(Number));
+    });
+  });
+
+  describe("cross-client sync pause", () => {
+    it("does not queue an actor push while another client is syncing the character", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const actor = createMockActor("character", "char-uuid-1234", { syncActiveTokens: ["remote-token"] });
+
+      triggerHook("updateActor", actor, { "system.attributes.hp.value": 25 });
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("still queues an actor push when no sync is in progress", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const actor = createMockActor("character", "char-uuid-1234");
+
+      triggerHook("updateActor", actor, { "system.attributes.hp.value": 25 });
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 25);
+    });
+
+    it("does not queue an item push while another client is syncing the character", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const actor = createMockActor("character", "char-uuid-1234", { syncActiveTokens: ["remote-token"] });
+      const item = createMockItem(actor, "Healing Potion", {
+        system: { slug: "healing-potion", quantity: 3 },
+      });
+
+      triggerHook("updateItem", item, { "system.quantity": 3 });
+
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
     });
   });
 });

@@ -153,6 +153,8 @@ interface DemiplaneActorFlags {
   engineSig?: string;
   importIssues?: string[];
   exportIssues?: string[];
+  /** Tokens for in-flight imports/pushes, replicated across clients to coordinate sync pauses. */
+  syncActiveTokens?: string[];
 }
 
 interface DemiplaneItemFlags {
