@@ -3,9 +3,27 @@ import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
 
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
+/** Compendium that holds PF2e spells. */
+export const SPELLS_PACK = "pf2e.spells-srd";
+
 function getPacks(): NonNullable<typeof game.packs> {
   if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
   return game.packs;
+}
+
+/**
+ * Resolves a Demiplane spell slug directly to its compendium document object.
+ * Spell resolvers only ever look in the spells compendium.
+ */
+export async function resolveSpellFromCompendium(slug: string): Promise<Record<string, unknown> | null> {
+  const pack = getPacks().get(SPELLS_PACK);
+  if (!pack) return null;
+  const foundrySlug = toFoundrySlug(slug);
+  const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
+  const match = index.find((i) => i.system?.slug === foundrySlug);
+  if (!match) return null;
+  const doc = await pack.getDocument(match._id);
+  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
 }
 
 /**

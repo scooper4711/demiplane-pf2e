@@ -2,8 +2,8 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { stampImported } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
-
-const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
+import { fetchStreamEngineLines, type EngineModifier } from "./stream-engines.js";
+import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
 export interface GrantedSpell {
@@ -50,108 +50,21 @@ function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
 
 // ─── Stream-Engines Fetch ────────────────────────────────────────────────────
 
-interface SpellModifier {
-  type: "add-spell";
-  level: number;
-  addSpell: string;
-  tradition: string;
-  isInnate?: boolean;
-  spellLevel?: number;
-  parentFeature?: string;
-  autoScaleSpellLevel?: boolean;
-}
-
-interface FocusPointModifier {
-  type: "add-focus-point";
-  addFocus: number;
-}
-
-type FeatureModifier = SpellModifier | FocusPointModifier;
-
-async function fetchFeatureModifiers(engineIds: string[]): Promise<FeatureModifier[]> {
-  try {
-    const response = await fetch(STREAM_ENGINES_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        engineIdsBySource: { "pathfinder2e-v2": engineIds },
-        isSheet: true,
-        nexusSlug: "pathfinder2e",
-      }),
-    });
-
-    if (!response.ok) return [];
-
-    const text = await response.text();
-    return parseModifiersFromNdjson(text);
-  } catch {
-    return [];
-  }
-}
-
-function parseModifiersFromNdjson(ndjsonText: string): FeatureModifier[] {
-  const lines = ndjsonText.split("\n").filter((line) => line.trim());
-  const modifiers: FeatureModifier[] = [];
-
+async function fetchFeatureModifiers(engineIds: string[]): Promise<EngineModifier[]> {
+  const lines = await fetchStreamEngineLines(engineIds);
+  const modifiers: EngineModifier[] = [];
   for (const line of lines) {
-    modifiers.push(...extractModifiersFromLine(line));
+    for (const mod of line.modifiers) {
+      if (mod.type === "add-spell" || mod.type === "add-focus-point") modifiers.push(mod);
+    }
   }
-
   return modifiers;
-}
-
-interface EngineNode {
-  name: string;
-  data?: { string?: string };
-}
-
-function extractModifiersFromLine(line: string): FeatureModifier[] {
-  try {
-    const parsed = JSON.parse(line) as { data?: { nodes?: Record<string, EngineNode> } };
-    const nodes = Object.values(parsed.data?.nodes ?? {});
-
-    for (const node of nodes) {
-      if (node.name !== "StringObject" || !node.data?.string) continue;
-
-      const results = extractModifiersFromStringNode(node.data.string);
-      if (results.length > 0) return results;
-    }
-  } catch {
-    // Skip malformed lines
-  }
-
-  return [];
-}
-
-function extractModifiersFromStringNode(jsonString: string): FeatureModifier[] {
-  try {
-    const obj = JSON.parse(jsonString) as {
-      engineModifiers?: Array<Record<string, unknown>>;
-    };
-
-    if (!obj.engineModifiers) return [];
-
-    const results: FeatureModifier[] = [];
-
-    for (const mod of obj.engineModifiers) {
-      if (mod.type === "add-spell" && typeof mod.addSpell === "string") {
-        results.push(mod as unknown as SpellModifier);
-      }
-      if (mod.type === "add-focus-point" && typeof mod.addFocus === "number") {
-        results.push(mod as unknown as FocusPointModifier);
-      }
-    }
-
-    return results;
-  } catch {
-    return [];
-  }
 }
 
 // ─── Categorization ──────────────────────────────────────────────────────────
 
 function categorizeGrantedSpells(
-  modifiers: FeatureModifier[],
+  modifiers: EngineModifier[],
   characterLevel: number
 ): { innate: GrantedSpell[]; focus: GrantedSpell[]; focusPoints: number } {
   const innate: GrantedSpell[] = [];
@@ -184,22 +97,6 @@ function categorizeGrantedSpells(
   }
 
   return { innate, focus, focusPoints };
-}
-
-// ─── Apply to Actor ──────────────────────────────────────────────────────────
-
-type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
-
-async function resolveSpellFromCompendium(slug: string): Promise<Record<string, unknown> | null> {
-  if (!game.packs) return null;
-  const pack = game.packs.get("pf2e.spells-srd");
-  if (!pack) return null;
-  const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
-  const foundrySlug = toFoundrySlug(slug);
-  const match = index.find((i) => i.system?.slug === foundrySlug);
-  if (!match) return null;
-  const doc = await pack.getDocument(match._id);
-  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
 }
 
 /**

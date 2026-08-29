@@ -4,6 +4,7 @@ import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { findSpellEngines, isCurriculumSpell } from "./spell-engines.js";
 import { resolveSpellSlots } from "./spell-slot-resolver.js";
+import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 
 interface SpellcastingConfig {
   tradition: string;
@@ -26,24 +27,6 @@ const FONT_SPELL_SLOT = "divine-font";
 
 function isDivineFontSpell(eng: DemiplaneEngineEntry): boolean {
   return (eng.args?.spellSlot as string | undefined) === FONT_SPELL_SLOT;
-}
-
-type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
-
-function getPacks(): NonNullable<typeof game.packs> {
-  if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
-  return game.packs;
-}
-
-async function resolveSpell(slug: string): Promise<Record<string, unknown> | null> {
-  const pack = getPacks().get("pf2e.spells-srd");
-  if (!pack) return null;
-  const index = (await pack.getIndex({ fields: ["system.slug"] } as never)) as unknown as PackIndex;
-  const foundrySlug = toFoundrySlug(slug);
-  const match = index.find((i) => i.system?.slug === foundrySlug);
-  if (!match) return null;
-  const doc = await pack.getDocument(match._id);
-  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
 }
 
 // ─── Grouping ────────────────────────────────────────────────────────────────
@@ -161,7 +144,7 @@ async function addSpells(
     if (seen.has(foundrySlug)) continue;
     seen.add(foundrySlug);
 
-    const spellData = await resolveSpell(slug);
+    const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- spell: ${foundrySlug} (not found)`);
       summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
@@ -242,7 +225,7 @@ async function addMissingPreparedItems(
     const slug = eng.args?.slug as string;
     if (!slug || slugToId.has(toFoundrySlug(slug))) continue;
 
-    const spellData = await resolveSpell(slug);
+    const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- prepared: ${toFoundrySlug(slug)} (not found)`);
       summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
@@ -492,7 +475,7 @@ async function addFontSpells(
     if (seen.has(foundrySlug)) continue;
     seen.add(foundrySlug);
 
-    const spellData = await resolveSpell(slug);
+    const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- divine font: ${foundrySlug} (not found)`);
       summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
