@@ -45,21 +45,21 @@ The token is stored with `scope: "client"` so each user stores their own token l
 
 ---
 
-## 2. Populate Existing Actors Instead of Creating New Ones
+## 2. Populate Existing Actors vs Creating New Ones
 
-**Decision:** Import writes character data into a pre-existing Foundry actor rather than creating a new one.
+**Decision:** Import creates a new, blank actor and imports into that.
 
-**Rationale:** Players configure actors with map tokens, vision settings, permission grants, journal links, and combat tracker entries before or during a campaign. Creating a new actor on every import would break all of those associations. Populating an existing actor preserves the established game world context.
+**Rationale:** Allowing the module to populate an existing actor would require reconciliation logic to avoid duplicating items. This is complicated by the fact that the Demiplane UUID is not known for existing items, and the module cannot rely on item names alone (users may rename items). Creating a new actor avoids this complexity and ensures a clean import.
 
 **Tradeoffs considered:**
 
-| Approach                | Pros                                                   | Cons                                                          |
-| ----------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
-| Create new actor        | Simpler code, no reconciliation needed                 | Destroys tokens, permissions, journal links; confuses players |
-| Populate existing actor | Preserves all Foundry-side state; seamless for players | Requires item reconciliation logic to avoid duplicates        |
-| Clone + merge           | Could keep a "clean" copy                              | Double the actor count; still breaks token links              |
+| Approach                | Pros                                                   | Cons                                                         |
+| ----------------------- | ------------------------------------------------------ | ------------------------------------------------------------ |
+| Create new actor        | Simpler code, no reconciliation needed                 | Existing links and setup must be replicated to the new actor |
+| Populate existing actor | Preserves all Foundry-side state; seamless for players | Requires item reconciliation logic to avoid duplicates       |
+| Clone + merge           | Could keep a "clean" copy                              | Double the actor count; still breaks token links             |
 
-The reconciliation overhead (removing stale imported items before re-adding) is manageable and far less disruptive than recreating actors.
+Creating a new actor was chosen because it avoids the complexity of item reconciliation and ensures that the imported character state is consistent with Demiplane. Players can then manually link tokens to the new actor as needed.
 
 ---
 
@@ -90,7 +90,7 @@ Two seconds was chosen because a typical PF2e combat round involves 2–4 HP cha
 
 **Implementation:** The rolling-window tracking is implemented in `ChangeBuffer.isWithinRateLimit` / `recordApiCall`; `ExportManager` consults it before each flush.
 
-**Rationale:** Demiplane's API does not publish official rate limits. Testing showed that sustained bursts beyond this threshold produce intermittent failures. With the 2-second debounce, normal play rarely approaches this limit — a debounced call every 2 seconds would be 30 per minute only if changes are truly continuous.
+**Rationale:** Demiplane's API does not publish official rate limits. This limit is deemed conservative enough to avoid hitting undocumented server-side throttling while still allowing normal gameplay. The module tracks the number of API calls made in the last 60 seconds and blocks further calls if the limit is reached, queuing them for later.
 
 **Tradeoffs considered:**
 
@@ -100,17 +100,15 @@ Two seconds was chosen because a typical PF2e combat round involves 2–4 HP cha
 | 30/60s    | Handles combat-heavy sessions without hitting limits | Could still be exceeded in extreme edge cases          |
 | 60/60s    | Almost never reached                                 | Risk of triggering undocumented server-side throttling |
 
-Validated against 4-hour sessions with 6 players. Even in the most combat-heavy sessions, individual characters rarely exceed 15–20 sync calls per minute.
-
 ---
 
 ## 5. Delete-and-Reimport Sync Strategy
 
 **Decision:** "Update from Demiplane" deletes all items flagged as imported and runs a full re-import, rather than attempting incremental merge or version-based conflict detection.
 
-**Rationale:** Demiplane's character `version` field does not reliably increment when a character is saved via the character builder. This was discovered during development — the field exists in the API response but its value remains static across saves. Without a reliable remote version signal, traditional conflict detection (compare local version vs. remote version) cannot work.
+**Rationale:** Demiplane's character engine appears to deal only with the entire character. There are no API endpoints that provide a diff of changes since the last sync, nor does Demiplane increment a version number on engine changes. This makes incremental merge or version-based conflict detection unreliable.
 
-The delete-and-reimport approach sidesteps this entirely:
+The delete-and-reimport is the most robust in this circumstance:
 
 1. Only actors that were initially imported from Demiplane can be re-updated (they have a linked UUID).
 2. On update: delete all items flagged `demiplane-pf2e.imported = true` from the actor.
@@ -124,9 +122,9 @@ The delete-and-reimport approach sidesteps this entirely:
 | Delete flagged items + full re-import | Always produces correct state; no stale data; simple mental model | Slower than incremental; loses item-specific Foundry state (e.g., custom notes on imported items) |
 | Incremental merge (diff engines)      | Faster; preserves local item state                                | Requires reliable version/diff signal that Demiplane doesn't provide                              |
 | Version-based conflict detection      | Industry standard for optimistic concurrency                      | Demiplane's version field doesn't increment — non-functional                                      |
-| Timestamp comparison                  | Could detect recent changes                                       | Clock skew; Demiplane doesn't expose reliable timestamps                                          |
+| Timestamp comparison                  | Could detect recent changes                                       | Clock skew; Demiplane doesn't expose item-level timestamps                                        |
 
-The approach is robust because it treats Demiplane as the single source of truth for character build data, while Foundry owns session state (HP, hero points, currency) and any manually added items.
+The approach is robust because it treats Demiplane as the single source of truth for character build data, while Foundry owns session state (HP, hero points, currency, item quantity) and any manually added items.
 
 **User-facing behavior:**
 

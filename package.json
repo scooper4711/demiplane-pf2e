@@ -21,6 +21,7 @@
     "check:duplication": "node scripts-build/check-duplication.cjs",
     "check:quality": "npm run lint && npm run check:duplication",
     "test:all": "npm run test && npm run check:quality",
+    "validate:mermaid": "node scripts/validate-mermaid.mjs",
     "prepare": "husky"
   },
   "keywords": [
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.30.0",
+    "@mermaid-js/mermaid-cli": "^11.16.0",
     "@playwright/test": "^1.62.1",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.0",
