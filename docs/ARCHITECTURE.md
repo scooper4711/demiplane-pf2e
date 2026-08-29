@@ -33,7 +33,7 @@ graph TD
         IBTN["demiplane-info-button.ts<br/>Demiplane Dialog"]
         CLD["CharacterLinkDialog<br/>UUID Linking"]
         HM["HookManager<br/>Actor Change Detection"]
-        IO["ImportOrchestrator<br/>Import Pipeline"]
+        IO["ImportOrchestrator<br/>Import Pipeline Driver"]
         EM["ExportManager<br/>Push Orchestration"]
         CB["ChangeBuffer<br/>Queue + Debounce + Rate Limit"]
         PB["PushPayloadBuilder<br/>Build Payload"]
@@ -51,6 +51,7 @@ graph TD
         EquipImp["equipment-importer<br/>Items + Containers"]
         AttrImp["attribute-language-importer<br/>Boosts + Skills + Languages"]
         BioImp["biography-importer<br/>Bio Fields + Deity"]
+        Phases["phases.ts<br/>ImportPhase Pipeline"]
     end
 
     subgraph "@scooper4711/demiplane-api"
@@ -104,6 +105,13 @@ graph TD
 
     IO --> FeatSpell
     IO --> ItemSpell
+    IO --> Phases
+    Phases --> CSH
+    Phases --> CompRes
+    Phases --> SpellImp
+    Phases --> EquipImp
+    Phases --> AttrImp
+    Phases --> BioImp
 
     ST --> ACTOR
     CLD --> ACTOR
@@ -129,19 +137,53 @@ classDiagram
     }
 
     class ImportOrchestrator {
-        -client: DemiplaneClient
         -choiceSetHandler: ChoiceSetHandler
         +importCharacter(actor, characterId, options): Promise~ImportSummary~
-        -fetchCharacterEngines(characterId): Promise~DemiplaneEngineEntry[]~
-        -categorizeEngines(engines): CategorizedEngines
-        -buildSelectionData(engines): SelectionData
-        -addItemToActor(actor, slug, pack, options): Promise~Item|null~
-        -importBatchItems(actor, engines): Promise~void~
-        -resolvePendingGrants(actor, engines): Promise~void~
-        -createLoreItems(actor, background, engines): Promise~void~
-        -setActorIdentity(actor, engines): Promise~void~
-        -syncSessionState(actor, engines): Promise~void~
+        -fetchCharacterEngines(characterId, token, summary): Promise~{engines, updated}|null~
+        -buildPipeline(): ImportPhase[]
     }
+
+    class ImportPhase {
+        <<interface>>
+        +run(actor, ctx: ImportContext): Promise~void~
+    }
+
+    class ImportContext {
+        +engines: DemiplaneEngineEntry[]
+        +summary: ImportSummary
+        +choiceSetHandler: ChoiceSetHandler
+        +categorized: CategorizedEngines
+        +selectionData: {grantedFeatSlugs, selectedFeats}
+        +grantResolvedSlugs: Set~string~
+    }
+
+    class LoreItemsPhase {
+        +run(actor, ctx): Promise~void~
+    }
+    class SequentialItemsPhase {
+        +run(actor, ctx): Promise~void~
+    }
+    class ResolveGrantsPhase {
+        +run(actor, ctx): Promise~void~
+    }
+    class BatchItemsPhase {
+        +run(actor, ctx): Promise~void~
+    }
+    class PostProcessingPhase {
+        +run(actor, ctx): Promise~void~
+    }
+    class RemoveDuplicatesPhase {
+        +run(actor, ctx): Promise~void~
+    }
+
+    ImportOrchestrator --> ImportPhase : drives in order
+    ImportPhase <|.. LoreItemsPhase
+    ImportPhase <|.. SequentialItemsPhase
+    ImportPhase <|.. ResolveGrantsPhase
+    ImportPhase <|.. BatchItemsPhase
+    ImportPhase <|.. PostProcessingPhase
+    ImportPhase <|.. RemoveDuplicatesPhase
+    ImportContext ..> ImportPhase : passed to run()
 
     class ExportManager {
         -client: DemiplaneClient
@@ -361,8 +403,14 @@ sequenceDiagram
     IO->>IO: buildSelectionData(engines)
     Note over IO: Identifies feat grants via ChoiceSet to avoid duplication
 
+    rect rgb(235, 245, 255)
+        Note over IO,Act: LoreItemsPhase (before sequential — feats may reference lore)
+        IO->>Comp: resolve background lore + collectLoreNames
+        IO->>Act: createEmbeddedDocuments([lore items])
+    end
+
     rect rgb(230, 245, 255)
-        Note over IO,Act: Sequential Phase (Grant Chain)
+        Note over IO,Act: SequentialItemsPhase (Grant Chain)
         IO->>Comp: resolveCompendiumItem(ancestrySlug)
         Comp-->>IO: Item data
         IO->>Act: createEmbeddedDocuments([ancestry])
@@ -380,17 +428,17 @@ sequenceDiagram
         IO->>Act: createEmbeddedDocuments([class])
     end
 
-    IO->>IO: resolvePendingGrants(actor, engines)
-    IO->>IO: createLoreItems(actor, background, engines)
+    IO->>IO: ResolveGrantsPhase → resolvePendingGrants(actor, engines)
+    Note over IO: Adds resolved slugs to selectionData.grantedFeatSlugs
 
     rect rgb(255, 245, 230)
-        Note over IO,Act: Batch Phase
-        IO->>Comp: resolve all feat slugs
-        IO->>Act: createEmbeddedDocuments(allFeats)
+        Note over IO,Act: BatchItemsPhase
+        IO->>Comp: resolve all feat + equipment slugs (skip granted)
+        IO->>Act: createEmbeddedDocuments(allFeatsAndEquipment)
     end
 
     rect rgb(240, 255, 240)
-        Note over IO,Act: Post-Import Phases
+        Note over IO,Act: PostProcessingPhase
         IO->>Act: setActorIdentity (name, level, avatar)
         IO->>Act: applyAttributeBoosts
         IO->>Act: applyLanguages
@@ -403,9 +451,12 @@ sequenceDiagram
         IO->>Act: syncSessionState (HP, hero points)
     end
 
+    IO->>IO: RemoveDuplicatesPhase → removeDuplicateItems(actor)
+
     IO->>CSH: uninstall()
-    IO->>Act: setFlag("lastKnownVersion", version)
-    IO->>Act: setFlag("lastSyncTimestamp", now)
+    IO->>Act: setFlag("lastUpdated", updated)
+    IO->>Act: setFlag("engineSig", computeEngineSig(engines))
+    IO->>Act: setFlag("lastImportTimestamp", now)
     IO-->>Module: ImportSummary
 ```
 
@@ -482,7 +533,8 @@ src/
 ├── import/
 │   ├── index.ts                   Barrel re-export
 │   ├── types.ts                   Core types: DemiplaneEngineEntry, ImportSummary, etc.
-│   ├── orchestrator.ts            Central import pipeline coordinator
+│   ├── orchestrator.ts            Thin import driver; builds + runs the phase pipeline
+│   ├── phases.ts                  ImportPhase interface, ImportContext, and phase implementations
 │   ├── slug-utils.ts              Slug transformation and categorization
 │   ├── compendium-resolver.ts     Slug → compendium UUID resolution
 │   ├── choice-set-handler.ts      ChoiceSet monkey-patch with 6 strategies
@@ -509,51 +561,55 @@ The import subsystem is the most complex part of the module. Here is how its com
 
 ```mermaid
 graph TD
-    IO[ImportOrchestrator] --> |"1. categorize"| SU[slug-utils]
-    IO --> |"2. setup"| CSH[ChoiceSetHandler]
-    IO --> |"3. resolve items"| CR[compendium-resolver]
+    IO[ImportOrchestrator] --> |"fetch + flags"| SU[slug-utils]
+    IO --> |"build pipeline"| PH[phases.ts]
+    IO --> |"install/uninstall"| CSH[ChoiceSetHandler]
+
+    PH --> |"categorize"| SU
+    PH --> |"resolve items"| CR[compendium-resolver]
     CR --> SU
     CR --> |"search packs"| COMP[Compendium Packs]
 
-    IO --> |"4a. spells"| SI[spell-importer]
+    PH --> |"4a. spells"| SI[spell-importer]
     SI --> |"slot counts"| SSR[spell-slot-resolver]
     SI --> CR
     SSR --> |"POST"| SE[Stream-Engines API]
 
-    IO --> |"4b. feature spells"| FSR[feature-spell-resolver]
+    PH --> |"4b. feature spells"| FSR[feature-spell-resolver]
     FSR --> |"POST"| SE
     FSR --> CR
 
-    IO --> |"4c. item spells"| ISR[item-spell-resolver]
+    PH --> |"4c. item spells"| ISR[item-spell-resolver]
     ISR --> |"POST"| SE
     ISR --> CR
 
-    IO --> |"4d. equipment"| EI[equipment-importer]
+    PH --> |"4d. equipment"| EI[equipment-importer]
     EI --> CR
 
-    IO --> |"4e. attributes"| ALI[attribute-language-importer]
-    IO --> |"4f. biography"| BI[biography-importer]
+    PH --> |"4e. attributes"| ALI[attribute-language-importer]
+    PH --> |"4f. biography"| BI[biography-importer]
 ```
 
 ### Import Phase Order
 
-| Phase | Component                     | What It Does                                         |
-| ----- | ----------------------------- | ---------------------------------------------------- |
-| 1     | `orchestrator`                | Fetch engines, categorize by type                    |
-| 2     | `ChoiceSetHandler`            | Install monkey-patch for auto-selection              |
-| 3     | `orchestrator`                | Sequential: ancestry → heritage → background → class |
-| 4     | `orchestrator`                | Resolve pending grants from sequential items         |
-| 5     | `orchestrator`                | Create lore items from background                    |
-| 6     | `orchestrator`                | Batch: all feats                                     |
-| 7     | `equipment-importer`          | Equipment with containers and carry state            |
-| 8     | `attribute-language-importer` | Attribute boosts, skill proficiencies, languages     |
-| 9     | `biography-importer`          | Biography text fields, deity                         |
-| 10    | `spell-importer`              | Class spellcasting entries with slot placement       |
-| 11    | `feature-spell-resolver`      | Focus and innate spells from features                |
-| 12    | `item-spell-resolver`         | Staff and wand spell lists                           |
-| 13    | `orchestrator`                | Session state (HP, hero points, etc.)                |
-| 14    | `ChoiceSetHandler`            | Uninstall monkey-patch                               |
-| 15    | `orchestrator`                | Stamp version + timestamp flags                      |
+| Phase | Component               | What It Does                                                                                              |
+| ----- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
+| 1     | `ImportOrchestrator`    | Fetch engines, stamp `lastUpdated`/`engineSig` flags                                                      |
+| 2     | `ChoiceSetHandler`      | Install monkey-patch for auto-selection                                                                   |
+| 3     | `LoreItemsPhase`        | Create lore items (must precede ancestry/class)                                                           |
+| 4     | `SequentialItemsPhase`  | Sequential: ancestry → heritage → background → class                                                      |
+| 5     | `ResolveGrantsPhase`    | Resolve pending native grants; exclude from batch                                                         |
+| 6     | `BatchItemsPhase`       | Batch: all feats + equipment                                                                              |
+| 7     | `PostProcessingPhase`   | Identity, boosts, skills, languages, bio, equipment, currency, spells, feature/item spells, session state |
+| 8     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                         |
+| 9     | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                                    |
+| 10    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                          |
+
+The `ImportPhase` pipeline steps (3–8) are implemented in `src/import/phases.ts`
+and driven in order by `ImportOrchestrator.importCharacter` inside its
+`try/finally`. Each phase receives an `ImportContext` carrying the fetched
+`engines`, the `ImportSummary`, the `ChoiceSetHandler`, the categorized engines,
+the selection data, and the resolved-grant slugs.
 
 ---
 
@@ -678,7 +734,8 @@ graph LR
 
 ### Engine Categorization Rules
 
-The orchestrator categorizes engines by inspecting the `name` path:
+The import pipeline (`categorizeEngines` in `src/import/phases.ts`, called by
+`ImportOrchestrator.importCharacter`) categorizes engines by inspecting the `name` path:
 
 | Path Contains                         | Category   | Notes                          |
 | ------------------------------------- | ---------- | ------------------------------ |
