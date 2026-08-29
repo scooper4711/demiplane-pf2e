@@ -20,6 +20,9 @@ export function registerDemiplaneInfoButton(
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
 
+    const user = game.user;
+    if (!user || !(user.isGM || actor.testUserPermission(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER))) return;
+
     buttons.unshift({
       label: "Demiplane",
       class: "demiplane-info-btn",

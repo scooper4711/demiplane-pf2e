@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { showDemiplaneInfoDialog } from "../../src/demiplane-info-button.js";
+import { showDemiplaneInfoDialog, registerDemiplaneInfoButton } from "../../src/demiplane-info-button.js";
 
 const DEMI_UUID = "12345678-1234-1234-1234-123456789012";
 
@@ -95,5 +95,62 @@ describe("demiplane-info-button", () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     await clickAction("close");
     expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "importIssues", expect.anything());
+  });
+});
+
+describe("registerDemiplaneInfoButton gating", () => {
+  let importFn: ReturnType<typeof vi.fn>;
+  let exportFn: ReturnType<typeof vi.fn>;
+  let hooksOn: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    importFn = vi.fn();
+    exportFn = vi.fn();
+    hooksOn = vi.fn();
+    (globalThis as unknown as { Hooks: { on: unknown } }).Hooks = { on: hooksOn };
+    (globalThis as unknown as { CONST: unknown }).CONST = {
+      DOCUMENT_OWNERSHIP_LEVELS: { NONE: 0, LIMITED: 1, OBSERVER: 2, OWNER: 3 },
+    };
+  });
+
+  function capturedCallback(): (sheet: unknown, buttons: Array<{ class?: string }>) => void {
+    const calls = hooksOn.mock.calls as Array<[string, (...args: unknown[]) => void]>;
+    return calls.find((c) => c[0] === "getActorSheetHeaderButtons")?.[1] as never;
+  }
+
+  function linkedActor(isOwner: boolean): {
+    getFlag: ReturnType<typeof vi.fn>;
+    testUserPermission: ReturnType<typeof vi.fn>;
+  } {
+    return {
+      getFlag: vi.fn((_m: string, k: string) => (k === "characterId" ? "char-123" : undefined)),
+      testUserPermission: vi.fn(() => isOwner),
+    };
+  }
+
+  it("adds the Demiplane button for GMs", () => {
+    (globalThis as unknown as { game: { user: { isGM: boolean } } }).game = { user: { isGM: true } };
+    registerDemiplaneInfoButton(importFn, exportFn);
+    const buttons: Array<{ class?: string }> = [];
+    capturedCallback()({ actor: linkedActor(false) }, buttons);
+    expect(buttons.length).toBe(1);
+    expect(buttons[0].class).toBe("demiplane-info-btn");
+  });
+
+  it("adds the Demiplane button for character owners", () => {
+    (globalThis as unknown as { game: { user: { isGM: boolean } } }).game = { user: { isGM: false } };
+    registerDemiplaneInfoButton(importFn, exportFn);
+    const buttons: Array<{ class?: string }> = [];
+    capturedCallback()({ actor: linkedActor(true) }, buttons);
+    expect(buttons.length).toBe(1);
+    expect(buttons[0].class).toBe("demiplane-info-btn");
+  });
+
+  it("omits the button for non-GM, non-owner users", () => {
+    (globalThis as unknown as { game: { user: { isGM: boolean } } }).game = { user: { isGM: false } };
+    registerDemiplaneInfoButton(importFn, exportFn);
+    const buttons: Array<{ class?: string }> = [];
+    capturedCallback()({ actor: linkedActor(false) }, buttons);
+    expect(buttons.length).toBe(0);
   });
 });
