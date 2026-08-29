@@ -150,6 +150,7 @@ interface DemiplaneActorFlags {
   lastImportTimestamp?: number;
   lastExportTimestamp?: number;
   lastUpdated?: string;
+  engineSig?: string;
   importIssues?: string[];
   exportIssues?: string[];
 }

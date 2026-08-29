@@ -12,6 +12,7 @@ vi.stubGlobal("ui", {
 });
 
 import { ExportManager } from "../../src/export-manager.js";
+import { computeEngineSig } from "../../src/engine-sig.js";
 
 function createMockActor(characterId = "char-123", lastUpdated?: string) {
   return {
@@ -207,6 +208,42 @@ describe("ExportManager", () => {
       const second = await manager.flush(actor as never);
       expect(second.success).toBe(true);
     });
+
+    it("creates a missing override engine when pushing a field that has no existing engine", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      // character_hit-points_temp is not present in the mock's fetched engines.
+      manager.queueChange(actor as never, "character_hit-points_temp", 9);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      const updateCall = client.updateCharacter.mock.calls[0];
+      const engines = updateCall[0].data.engines as Array<Record<string, unknown>>;
+      const created = engines.find((e) => e.name === "character_hit-points_temp" && e.type === "CustomDemiplaneEngine");
+      expect(created).toBeDefined();
+      expect(created?.value).toBe(9);
+      expect(created?.storeType).toBe("override");
+      expect(created?.saveType).toBe("CharacterSheet");
+    });
+
+    it("updates an existing override engine rather than duplicating it", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      // character_hit-points_current DOES exist in the mock's fetched engines.
+      manager.queueChange(actor as never, "character_hit-points_current", 12);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      const updateCall = client.updateCharacter.mock.calls[0];
+      const engines = updateCall[0].data.engines as Array<Record<string, unknown>>;
+      const matches = engines.filter((e) => e.name === "character_hit-points_current");
+      expect(matches).toHaveLength(1);
+      expect(matches[0].value).toBe(12);
+    });
   });
 
   describe("flush detects conflicts via updated timestamp", () => {
@@ -281,6 +318,114 @@ describe("ExportManager", () => {
 
       expect(result.success).toBe(true);
       expect(client.updateCharacter).toHaveBeenCalled();
+    });
+
+    it("does not report a conflict when updated advanced but engine content is unchanged", async () => {
+      // Mirrors the real-world case: a pushed edit plus a benign Demiplane-sheet
+      // `updated` bump that doesn't actually change any engine content.
+      const storedEngines = [
+        {
+          id: "eng-hp",
+          name: "character_hit-points_current",
+          value: 30,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hp",
+          args: { id: null },
+        },
+        {
+          id: "eng-hero",
+          name: "character_hero-points",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hero",
+          args: { id: null },
+        },
+      ];
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T12:00:00.000Z"),
+        fetchCharacterData: vi.fn().mockResolvedValue({ engines: storedEngines }),
+      });
+      const manager = new ExportManager(client as never);
+      const onConflict = vi.fn().mockResolvedValue(undefined);
+      manager.setOnConflictHandler(onConflict);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T10:00:00.000Z");
+      actor.setFlag("demiplane-pf2e", "engineSig", computeEngineSig(storedEngines));
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(result.conflict).toBeUndefined();
+      expect(onConflict).not.toHaveBeenCalled();
+      expect(client.updateCharacter).toHaveBeenCalled();
+    });
+
+    it("still reports a conflict when updated advanced AND engine content actually changed", async () => {
+      const storedEngines = [
+        {
+          id: "eng-hp",
+          name: "character_hit-points_current",
+          value: 30,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hp",
+          args: { id: null },
+        },
+        {
+          id: "eng-hero",
+          name: "character_hero-points",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hero",
+          args: { id: null },
+        },
+      ];
+      const changedEngines = [
+        {
+          id: "eng-hp",
+          name: "character_hit-points_current",
+          value: 99,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hp",
+          args: { id: null },
+        },
+        {
+          id: "eng-hero",
+          name: "character_hero-points",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hero",
+          args: { id: null },
+        },
+      ];
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T12:00:00.000Z"),
+        fetchCharacterData: vi.fn().mockResolvedValue({ engines: changedEngines }),
+      });
+      const manager = new ExportManager(client as never);
+      const onConflict = vi.fn().mockResolvedValue(undefined);
+      manager.setOnConflictHandler(onConflict);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T10:00:00.000Z");
+      actor.setFlag("demiplane-pf2e", "engineSig", computeEngineSig(storedEngines));
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(false);
+      expect(result.conflict).toBe(true);
+      expect(onConflict).toHaveBeenCalled();
+      expect(client.updateCharacter).not.toHaveBeenCalled();
     });
   });
 

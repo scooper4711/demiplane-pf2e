@@ -4,6 +4,7 @@ import { debugLog } from "./import/debug-log.js";
 import { addExportIssue } from "./sync-issues.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
+import { computeEngineSig } from "./engine-sig";
 
 const DEBOUNCE_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60_000;
@@ -257,19 +258,33 @@ export class ExportManager {
             `${matched ? "MATCH" : "MISMATCH"}`
         );
         if (!matched) {
-          const error = "Conflict: Demiplane character was updated elsewhere. Re-importing.";
-          addExportIssue(actor, error);
-          debugLog(
-            `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
-          );
-          // Clear pending changes so we don't retry the stale push
-          this.pendingChanges.delete(characterId);
-          this.pendingItemChanges.delete(characterId);
-          // Trigger conflict recovery (re-import) without blocking the flush return
-          if (this.onConflictHandler) {
-            void this.onConflictHandler(actor);
+          // `updated` advanced, but that alone isn't proof of a conflicting edit: the
+          // Demiplane sheet (or an autosave) can bump `updated` without changing any
+          // content. Verify the character's actual engine content changed before we
+          // abort the push and trigger a re-import.
+          const contentChanged = await this.isRemoteContentChanged(characterId, actor);
+          if (!contentChanged) {
+            debugLog(
+              `[push] updated mismatch but engine content unchanged — benign bump; ` +
+                `proceeding with push and refreshing lastUpdated`
+            );
+            await actor.setFlag(MODULE_ID, "lastUpdated", serverUpdated);
+            // fall through to the push below
+          } else {
+            const error = "Conflict: Demiplane character was updated elsewhere. Re-importing.";
+            addExportIssue(actor, error);
+            debugLog(
+              `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
+            );
+            // Clear pending changes so we don't retry the stale push
+            this.pendingChanges.delete(characterId);
+            this.pendingItemChanges.delete(characterId);
+            // Trigger conflict recovery (re-import) without blocking the flush return
+            if (this.onConflictHandler) {
+              void this.onConflictHandler(actor);
+            }
+            return { success: false, error, conflict: true };
           }
-          return { success: false, error, conflict: true };
         }
       } catch (error) {
         debugLog(`[push] failed to fetch updated for conflict check: ${String(error)}`);
@@ -303,6 +318,19 @@ export class ExportManager {
     debugLog(`[push] starting push (build took ${Date.now() - startedAt}ms)`);
     const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
+    if (result.success) {
+      // Record the content we just pushed so a later benign `updated` bump won't
+      // be mistaken for a conflicting edit in the optimistic-concurrency check.
+      try {
+        await actor.setFlag(
+          MODULE_ID,
+          "engineSig",
+          computeEngineSig((fetched.data.engines as Array<{ name?: string; value?: unknown }>) ?? [])
+        );
+      } catch (error) {
+        debugLog(`[push] failed to store engineSig after push: ${String(error)}`);
+      }
+    }
     debugLog(`[push] push resolved ${result.success ? "success" : "failure"} (took ${Date.now() - startedAt}ms)`);
     return result;
   }
@@ -372,9 +400,30 @@ export class ExportManager {
       const existing = findCustomEngineByName(engines, change.field);
       if (existing) {
         engines = engines.map((e) => (e === existing ? { ...e, value: change.value } : e));
+      } else {
+        // The character has no override engine for this field yet (e.g. hit points,
+        // hero points, or a currency that Demiplane stores only as a computed value).
+        // Create one so the push actually reflects the change instead of being
+        // silently dropped — Demiplane accepts a CustomDemiplaneEngine override.
+        const created = this.createOverrideEngine(change.field, change.value);
+        engines = [...engines, created];
+        debugLog(`[push] created override engine ${change.field} with value ${String(change.value)}`);
       }
     }
     return engines;
+  }
+
+  private createOverrideEngine(name: string, value: number): CustomEngine {
+    return {
+      id: `custom_${name}`,
+      name,
+      value,
+      type: "CustomDemiplaneEngine",
+      saveType: "CharacterSheet",
+      storeType: "override",
+      demiplaneEngineId: crypto.randomUUID(),
+      args: { id: null },
+    };
   }
 
   private resolveItemChanges(
@@ -621,6 +670,29 @@ export class ExportManager {
       }
     } catch (error) {
       debugLog(`[push] failed to refresh lastUpdated after push: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Determines whether the character's engine content on Demiplane differs from
+   * the content we last synced. Used to tell a genuine remote edit apart from a
+   * benign `updated` bump so we don't needlessly abort pushes / re-import.
+   * Returns `true` (conflict) when content can't be compared, to stay safe.
+   */
+  private async isRemoteContentChanged(characterId: string, actor: Actor): Promise<boolean> {
+    try {
+      const data = await this.client.fetchCharacterData(characterId);
+      const currentSig = computeEngineSig((data.engines as Array<{ name?: string; value?: unknown }>) ?? []);
+      const storedSig = actor.getFlag(MODULE_ID, "engineSig") as string | undefined;
+      if (!storedSig) return true; // no baseline — be conservative
+      const changed = currentSig !== storedSig;
+      debugLog(
+        `[push] content compare: ${changed ? "CONTENT CHANGED (real conflict)" : "content unchanged (benign bump)"}`
+      );
+      return changed;
+    } catch (error) {
+      debugLog(`[push] failed to compare remote content: ${String(error)} — assuming conflict`);
+      return true;
     }
   }
 

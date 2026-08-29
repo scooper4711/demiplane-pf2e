@@ -23,6 +23,7 @@ import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
 import { applyItemSpells } from "./item-spell-resolver.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
+import { computeEngineSig } from "../engine-sig.js";
 
 export class ImportOrchestrator {
   private choiceSetHandler = new ChoiceSetHandler();
@@ -46,6 +47,10 @@ export class ImportOrchestrator {
     } else {
       debugLog(`[import] character has no updated timestamp; leaving lastUpdated unchanged`);
     }
+    // Snapshot the imported engine content so a later benign `updated` bump
+    // (e.g. the Demiplane sheet being open) isn't mistaken for a conflict.
+    await actor.setFlag(MODULE_ID, "engineSig", computeEngineSig(engines));
+    debugLog(`[import] stored engineSig for ${engines.length} engines`);
 
     // eslint-disable-next-line no-console -- single always-on log per pull
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
