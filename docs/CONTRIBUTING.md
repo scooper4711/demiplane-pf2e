@@ -48,17 +48,16 @@ demiplane-pf2e/
   src/
     module.ts                  # Module entrypoint - wires all components
     settings.ts                # Foundry module settings registration
-    slug-mapper.ts             # Demiplane slug -> Foundry compendium resolution
-    import-orchestrator.ts     # Full character import pipeline
     export-manager.ts          # Debounced session state export
-    conflict-resolver.ts       # Version-based conflict detection
     hook-manager.ts            # Foundry hook registration and dispatch
-    sync-issues.ts               # Import/export sync-issue sets on linked actors
-    titlebar-dot.ts              # Red titlebar indicator for open sync issues
-    demiplane-info-button.ts     # Demiplane dialog (lists + dismisses issues)
+    sync-pause.ts              # Cross-client sync coordination
+    sync-issues.ts             # Import/export sync-issue sets on linked actors
+    titlebar-dot.ts            # Red titlebar indicator for open sync issues
+    demiplane-info-button.ts   # Demiplane dialog (lists + dismisses issues)
     character-link-input.ts    # UUID/URL parsing for actor linking
     character-link-dialog.ts   # Per-actor character link dialog
-    attribute-skill-importer.ts # Attribute boost and skill training logic
+    import/                    # Character import pipeline (orchestrator, phases, importers)
+    export/                    # Push collaborators (change-buffer, payload-builder, conflict-resolver)
   tests/
     unit/                      # Unit tests (specific examples, edge cases)
     property/                  # Property-based tests (universal correctness)
@@ -120,25 +119,25 @@ ESLint with `typescript-eslint` handles code quality rules. Prettier handles for
 
 ## Adding Support for a New Character Class
 
-The module's import pipeline is class-agnostic by design. The `SlugMapper` resolves any class slug from the `pf2e.classes` compendium, and the `ImportOrchestrator` handles sequencing automatically. However, some classes have unique data patterns that may need attention.
+The module's import pipeline is class-agnostic by design. The `slug-utils` helpers resolve any class slug from the `pf2e.classes` compendium, and the `ImportOrchestrator` handles sequencing automatically. However, some classes have unique data patterns that may need attention.
 
 ### What to check
 
-1. **Slug mapping** (`src/slug-mapper.ts`): Verify the class slug resolves correctly. Demiplane uses `-rm` suffixes for Remastered content (e.g., `fighter-rm` becomes `fighter`). If the class has an unusual slug, add a test case.
+1. **Slug mapping** (`src/import/slug-utils.ts`): Verify the class slug resolves correctly. Demiplane uses `-rm` suffixes for Remastered content (e.g., `fighter-rm` becomes `fighter`). If the class has an unusual slug, add a test case.
 
-2. **Class features** (`src/import-orchestrator.ts`): The orchestrator categorizes engine entries by their path prefix. Class features use the `classfeatures` pack. Confirm the new class's features follow the standard naming pattern (`tabula/classfeature/...`).
+2. **Class features** (`src/import/orchestrator.ts`): The orchestrator categorizes engine entries by their path prefix. Class features use the `classfeatures` pack. Confirm the new class's features follow the standard naming pattern (`tabula/classfeature/...`).
 
 3. **Spellcasting**: If the class has spells, verify that spell engines (path pattern `tabula/spell/...`) resolve correctly through the `pf2e.spells-srd` compendium pack.
 
-4. **Attribute boosts and skills** (`src/attribute-skill-importer.ts`): Class-granted boosts and skill increases should be handled by the Grant Chain. The importer skips duplicates already present on the actor. Verify no double-application occurs.
+4. **Attribute boosts and skills** (`src/import/attribute-language-importer.ts`): Class-granted boosts and skill increases should be handled by the Grant Chain. The importer skips duplicates already present on the actor. Verify no double-application occurs.
 
 ### What files to modify
 
-| Scenario               | File                                               |
-| ---------------------- | -------------------------------------------------- |
-| Slug doesn't resolve   | Check `slug-mapper.ts` pack search order           |
-| Engine not categorized | Update category logic in `import-orchestrator.ts`  |
-| Grant Chain conflict   | Adjust skip logic in `attribute-skill-importer.ts` |
+| Scenario               | File                                                  |
+| ---------------------- | ----------------------------------------------------- |
+| Slug doesn't resolve   | Check `slug-utils.ts` pack search order               |
+| Engine not categorized | Update category logic in `import/orchestrator.ts`     |
+| Grant Chain conflict   | Adjust skip logic in `attribute-language-importer.ts` |
 
 ### What tests to add
 

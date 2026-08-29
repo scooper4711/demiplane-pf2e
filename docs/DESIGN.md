@@ -179,7 +179,7 @@ After the four sequential core items, feats and equipment are safe to batch beca
 | Pre-fill rule selections in item data | No runtime patching                                   | ChoiceSet evaluates choices dynamically; pre-fill doesn't work for UUID-based choices |
 | Disable ChoiceSet entirely            | Simplest                                              | Character would be missing critical selections                                        |
 
-The patch is scoped to the import duration only — normal interactive behavior is fully restored after `uninstall()`.
+The patch is scoped to the import duration only — normal interactive behavior is fully restored after `disable()`.
 
 ---
 

@@ -283,14 +283,16 @@ classDiagram
         -engines: DemiplaneEngineEntry[]
         +setEngines(engines): void
         +presetChoiceSelections(itemData): void
-        +install(): void
-        +uninstall(): void
-        -matchBySkillSlug(choices): string|undefined
-        -matchByEngineSlug(choices): string|undefined
-        -matchByClassFeatureSlug(choices): string|undefined
-        -matchByGenericFeatureSlug(choices): string|undefined
-        -matchByFeatUuidSlug(choices): string|undefined
-        -matchByGenericChoiceKeyword(choices): string|undefined
+        +enable(): void
+        +disable(): void
+        -matchSkillSlugs(choices): string|undefined
+        -matchCustomSelectionLore(choices): string|undefined
+        -matchAllSlugs(choices): string|undefined
+        -matchClassFeatures(choices): string|undefined
+        -matchGenericFeatures(choices): string|undefined
+        -matchFeatSlugs(choices): string|undefined
+        -matchGenericChoice(choices): string|undefined
+        -matchByKeyword(choices): string|undefined
     }
 
     class SpellSlotResolver {
@@ -394,7 +396,7 @@ sequenceDiagram
     GQL-->>IO: { engines: DemiplaneEngineEntry[] }
 
     IO->>CSH: setEngines(engines)
-    IO->>CSH: install()
+    IO->>CSH: enable()
     Note over CSH: Monkey-patches ChoiceSet.preCreate
 
     IO->>IO: categorizeEngines(engines)
@@ -453,7 +455,7 @@ sequenceDiagram
 
     IO->>IO: RemoveDuplicatesPhase → removeDuplicateItems(actor)
 
-    IO->>CSH: uninstall()
+    IO->>CSH: disable()
     IO->>Act: setFlag("lastUpdated", updated)
     IO->>Act: setFlag("engineSig", computeEngineSig(engines))
     IO->>Act: setFlag("lastImportTimestamp", now)
@@ -527,8 +529,6 @@ src/
 ├── demiplane-info-button.ts      Header button + Demiplane dialog (lists issues, dismissable)
 ├── character-link-dialog.ts       Dialog for linking/unlinking UUID to actor
 ├── character-link-input.ts        Parses UUID or Demiplane URL
-├── slug-mapper.ts                 (Legacy) standalone slug resolution class
-├── attribute-skill-importer.ts    (Legacy) standalone attribute/skill functions
 │
 ├── import/
 │   ├── index.ts                   Barrel re-export
