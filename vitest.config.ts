@@ -3,10 +3,7 @@ import path from "path";
 export default defineConfig({
   resolve: {
     alias: {
-      "@scooper4711/demiplane-api": path.resolve(
-        __dirname,
-        "../demiplane-api/src/index.ts",
-      ),
+      "@scooper4711/demiplane-api": path.resolve(__dirname, "../demiplane-api/src/index.ts"),
     },
   },
   test: {
@@ -14,8 +11,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov"],
-      include: ["src/import/**/*.ts"],
-      exclude: ["src/import/index.ts"],
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts", "src/**/*.d.ts", "src/import/index.ts"],
     },
   },
 });
