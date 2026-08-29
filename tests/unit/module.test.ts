@@ -1,13 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
+
+vi.mock("@scooper4711/demiplane-api", () => ({
+  DemiplaneClient: class {
+    setToken(): void {}
+    async validateToken(): Promise<void> {}
+  },
+  findCustomEngineByName: () => undefined,
+}));
 
 describe("module entrypoint", () => {
   let hooksOn: ReturnType<typeof vi.fn>;
   let button: { addEventListener: ReturnType<typeof vi.fn> };
   let actionButtons: { querySelector: ReturnType<typeof vi.fn>; appendChild: ReturnType<typeof vi.fn> };
 
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeAll(async () => {
     installFoundryMocks();
     hooksOn = vi.fn();
     (globalThis as unknown as { Hooks: { on: unknown } }).Hooks.on = hooksOn;
