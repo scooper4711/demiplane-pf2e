@@ -127,6 +127,25 @@ describe("ImportOrchestrator", () => {
     expect(createdItems.some((item) => item.name === "Weapon Specialization")).toBe(false);
   });
 
+  it("stamps lastImportTimestamp after a successful pipeline run", async () => {
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+
+    (globalThis as unknown as Record<string, unknown>).game = {
+      ...(globalThis as unknown as { game: Record<string, unknown> }).game,
+      pf2e: {
+        RuleElements: {
+          builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } },
+        },
+      },
+    };
+
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+    expect(summary.errors).toHaveLength(0);
+    expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastImportTimestamp", expect.any(Number));
+  });
+
   it("handles GraphQL errors", async () => {
     (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
       json: async () => ({ errors: [{ message: "Unauthorized" }] }),
