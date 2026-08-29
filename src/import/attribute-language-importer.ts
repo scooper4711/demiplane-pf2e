@@ -1,5 +1,36 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 
+/** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
+export const VALID_ATTRIBUTES: readonly string[] = ["str", "dex", "con", "int", "wis", "cha"] as const;
+
+/** Canonical PF2e skill keys. Lore skills are slugged as `lore-*` and handled separately. */
+export const VALID_SKILLS: readonly string[] = [
+  "acrobatics",
+  "arcana",
+  "athletics",
+  "crafting",
+  "deception",
+  "diplomacy",
+  "intimidation",
+  "medicine",
+  "nature",
+  "occultism",
+  "performance",
+  "religion",
+  "society",
+  "stealth",
+  "survival",
+  "thievery",
+] as const;
+
+export function isAttributeSlug(slug: string): boolean {
+  return VALID_ATTRIBUTES.includes(slug);
+}
+
+export function isSkillSlug(slug: string): boolean {
+  return VALID_SKILLS.includes(slug) || slug.includes("lore");
+}
+
 interface ProfKnowledge {
   profOverrides: Record<string, number>;
   overriddenFlags: Set<string>;
@@ -75,6 +106,7 @@ function computeSkillRanks(
     const slug = eng.args.slug as string;
     const sourceRow = (eng.args.sourceRow as string) || "";
 
+    if (!isSkillSlug(slug)) continue;
     if (sourceRow.includes("select-skill-") && sourceRow.match(/heritage|human-rm/)) continue;
     if (slug in activeOverrides) continue;
 
@@ -214,6 +246,8 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
   for (const eng of boostEngines) {
     const slug = attrMap[eng.args.slug as string] || (eng.args.slug as string);
     const sourceRow = (eng.args.sourceRow as string) || "";
+
+    if (!isAttributeSlug(slug)) continue;
 
     if (sourceRow === "ancestry-boosts") {
       ancestryBoosts.push(slug);

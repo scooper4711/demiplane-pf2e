@@ -4,6 +4,8 @@ import {
   applySkillProficiencies,
   applyLanguages,
   applyAttributeBoosts,
+  isAttributeSlug,
+  isSkillSlug,
 } from "../../src/import/attribute-language-importer.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
@@ -199,7 +201,6 @@ describe("applyAttributeBoosts", () => {
   beforeEach(() => {
     installFoundryMocks();
   });
-
   function makeSummary(): ImportSummary {
     return {
       itemsImported: 0,
@@ -270,5 +271,19 @@ describe("applyAttributeBoosts", () => {
         "system.build.attributes.boosts.1": ["str", "con"],
       })
     );
+  });
+});
+
+describe("slug validation", () => {
+  it("recognizes valid ability abbreviations", () => {
+    expect(isAttributeSlug("str")).toBe(true);
+    expect(isAttributeSlug("cha")).toBe(true);
+    expect(isAttributeSlug("wisdom")).toBe(false);
+  });
+
+  it("recognizes standard skills and lore slugs", () => {
+    expect(isSkillSlug("athletics")).toBe(true);
+    expect(isSkillSlug("lore-warfare")).toBe(true);
+    expect(isSkillSlug("not-a-skill")).toBe(false);
   });
 });
