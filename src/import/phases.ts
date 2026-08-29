@@ -8,7 +8,8 @@
  */
 
 import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
-import { MODULE_ID, stampImported } from "./types.js";
+import { stampImported } from "./types.js";
+import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
@@ -234,8 +235,8 @@ export class ResolveGrantsPhase implements ImportPhase {
       if (typeof resolved === "string" && resolved.startsWith("Compendium.")) {
         uuid = resolved;
       } else {
-        console.warn(
-          `${MODULE_ID} | [orchestrator] Cannot resolve GrantItem template on ${itemName}: flag=${flag}, value=${String(resolved)}`
+        debugLog(
+          `[orchestrator] Cannot resolve GrantItem template on ${itemName}: flag=${flag}, value=${String(resolved)}`
         );
         return null;
       }

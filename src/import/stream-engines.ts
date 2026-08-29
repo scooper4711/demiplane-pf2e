@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./types.js";
+import { debugLog } from "./debug-log.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
 export const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
@@ -172,9 +172,7 @@ export async function fetchStreamEngineLines(engineIds: string[]): Promise<RawEn
     const text = await response.text();
     return parseEngineLines(text);
   } catch (error) {
-    console.warn(
-      `${MODULE_ID} | stream-engines fetch failed: ${error instanceof Error ? error.message : String(error)}`
-    );
+    debugLog(`stream-engines fetch failed: ${error instanceof Error ? error.message : String(error)}`);
     return [];
   }
 }

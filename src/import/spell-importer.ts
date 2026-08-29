@@ -1,4 +1,4 @@
-import { stampImported, MODULE_ID } from "./types.js";
+import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
@@ -573,7 +573,7 @@ async function applySlotMaximums(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.warn(`${MODULE_ID} | [spell-slots] Failed to resolve ${label} slots: ${message}`);
+    debugLog(`[spell-slots] Failed to resolve ${label} slots: ${message}`);
     summary.log.push(`! spell-slots: failed to resolve ${label} (${message})`);
   }
 }
