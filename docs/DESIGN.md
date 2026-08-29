@@ -22,6 +22,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Exponential Backoff Retry](#14-exponential-backoff-retry-strategy)
 - [Imported Item Flag Tracking](#15-imported-item-flag-tracking)
 - [Cross-Client Sync Pause](#16-cross-client-sync-pause)
+- [Conflict Resolution Heuristic](#17-conflict-resolution-heuristic)
 
 ---
 
@@ -374,3 +375,29 @@ The loop is broken by marking the character as "syncing" on the actor document i
 **Safety nets:** A stale mark left by a crashed session would otherwise block pushes forever, so `module.ts` clears any non-empty `syncActiveTokens` on `ready` via `clearSyncPause`. `endSyncPause` is always reached through `try/finally`, so a thrown import/push still releases the mark.
 
 **Known limitation:** The mark is per-character, so two _different_ characters importing simultaneously do not block each other (by design). A genuinely concurrent import of the _same_ character on two clients is rare and is additionally guarded by the optimistic-concurrency `engineSig`/`lastUpdated` checks in the export path.
+
+## 17. Conflict Resolution Heuristic
+
+**Decision:** A push is aborted and a re-import is triggered **only** when the remote character's _engine content_ actually changed since our last sync — not merely because Demiplane bumped the `updated` timestamp.
+
+**Rationale:** Demiplane writes a fresh `updated` timestamp on every save, including benign autosaves and sheet interactions that change no engine content. A naive "timestamp changed ⇒ conflict" rule would abort nearly every push and force a re-import on trivial noise, thrashing both Foundry and Demiplane. We therefore treat `updated` as a _screening_ signal and confirm with a _content_ comparison before declaring a real conflict.
+
+**Mechanism (`src/export/conflict-resolver.ts`, run inside `ExportManager.flush`):**
+
+1. Read the actor's stored `lastUpdated` baseline (set on import and after every successful push). If absent, skip the check and push.
+2. Fetch the server's current `updated`. If it **matches**, push proceeds.
+3. If `updated` **mismatches**, fetch the server's engines and compute a content signature (`engineSig`) over `name`/`value` pairs. Compare against the actor's stored `engineSig`:
+   - **Content unchanged** → benign bump. Refresh `lastUpdated` to the new server value and proceed with the push (no re-import).
+   - **Content changed** → genuine conflict. Abort the push (`{ status: "conflict" }`) and invoke the registered `onConflictHandler`, which re-imports the character from Demiplane (overwriting local state).
+4. Any fetch/compare failure defaults to **`ok`** (proceed with push) rather than blocking — except the content-comparison step, which defaults to **conflict** (conservative) when the remote content cannot be compared.
+
+**Re-baselining:** After a _successful_ push, `flush` re-fetches the authoritative server `updated` (and recomputes `engineSig` from the returned engines) so the next push starts from a correct baseline. After a _re-import_, the same baseline is refreshed by the import path.
+
+**Decision table:**
+
+| Server `updated` vs baseline | Engine content vs baseline | Outcome                                             |
+| ---------------------------- | -------------------------- | --------------------------------------------------- |
+| match                        | (not checked)              | Push proceeds                                       |
+| mismatch                     | unchanged                  | Refresh `lastUpdated`; push proceeds (no re-import) |
+| mismatch                     | changed                    | Abort push; trigger re-import                       |
+| compare error                | —                          | Push proceeds (or conflict if content incomparable) |
