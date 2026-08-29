@@ -34,7 +34,10 @@ graph TD
         CLD["CharacterLinkDialog<br/>UUID Linking"]
         HM["HookManager<br/>Actor Change Detection"]
         IO["ImportOrchestrator<br/>Import Pipeline"]
-        EM["ExportManager<br/>Debounced Push"]
+        EM["ExportManager<br/>Push Orchestration"]
+        CB["ChangeBuffer<br/>Queue + Debounce + Rate Limit"]
+        PB["PushPayloadBuilder<br/>Build Payload"]
+        CR["ConflictResolver<br/>Optimistic Concurrency"]
     end
 
     subgraph "Import Subsystem"
@@ -74,6 +77,9 @@ graph TD
     Module --> CLD
 
     HM --> EM
+    EM --> CB
+    EM --> PB
+    EM --> CR
     EM --> DC
     DC --> GQL
 
@@ -139,14 +145,55 @@ classDiagram
 
     class ExportManager {
         -client: DemiplaneClient
-        -pendingChanges: Map~string, PendingChange[]~
-        -debounceTimers: Map~string, number~
-        -callCounts: Map~string, number[]~
-        +queueChange(actor, storeName, value): void
-        +flush(actor, options): Promise~ExportResult~
+        -changeBuffer: ChangeBuffer
+        -payloadBuilder: PushPayloadBuilder
+        -conflictResolver: ConflictResolver
+        +setOnConflictHandler(handler): void
+        +queueChange(actor, field, value): void
+        +queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType?, edited?): void
+        +queueItemDelete(actor, slot): void
+        +flush(actor): Promise~ExportResult~
+        +suspend(characterId): void
+        +resume(characterId): void
+        +getPendingChanges(characterId): PendingChange[]
         +hasPendingChanges(characterId): boolean
-        -checkRateLimit(characterId): boolean
-        -retryWithBackoff(fn, retries): Promise~boolean~
+    }
+
+    class ChangeBuffer {
+        -pendingChanges: Map~string, Map~string, PendingChange~~
+        -pendingItemChanges: Map~string, Map~string, PendingItemChange~~
+        -debounceTimers: Map~string, number~
+        -apiCallTimestamps: Map~string, number[]~
+        -suspendCounts: Map~string, number~
+        +queueChange(actor, field, value): void
+        +queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType?, edited?): void
+        +queueItemDelete(actor, slot): void
+        +suspend(characterId): void
+        +resume(characterId): void
+        +peek(characterId): PendingMaps
+        +clear(characterId): void
+        +isWithinRateLimit(characterId): boolean
+        +recordApiCall(characterId): void
+        +getPendingChanges(characterId): PendingChange[]
+        +hasPendingChanges(characterId): boolean
+    }
+
+    class PushPayloadBuilder {
+        -client: DemiplaneClient
+        +buildUpdatedCharacterData(characterId, actor, changes, itemChanges): Promise~FetchedCharacter|null~
+        -applyFieldChanges(engines, changes): CustomEngine[]
+        -createOverrideEngine(name, value): CustomEngine
+        -resolveItemChanges(fetched, itemChanges): ResolvedItemChange[]
+        -applyItemChangeEngines(engines, resolved, actor): CustomEngine[]
+        -applyItemDelete(engines, itemChange, demiplaneId): CustomEngine[]
+        -applyEquippedEngine(engines, itemChange, demiplaneId): CustomEngine[]
+        -applyHandSlotAssignment(engines, resolved): CustomEngine[]
+    }
+
+    class ConflictResolver {
+        -client: DemiplaneClient
+        +checkConflict(characterId, actor): Promise~ConflictCheckResult~
+        -isRemoteContentChanged(characterId, actor): Promise~boolean~
     }
 
     class HookManager {
@@ -222,6 +269,9 @@ classDiagram
     ImportOrchestrator --> FeatureSpellResolver : focus/innate
     ImportOrchestrator --> ItemSpellResolver : staff/wand
 
+    ExportManager --> ChangeBuffer : buffers changes
+    ExportManager --> PushPayloadBuilder : builds payload
+    ExportManager --> ConflictResolver : conflict check
     ExportManager --> DemiplaneClient : pushes changes
     HookManager --> ExportManager : queues changes
 
@@ -415,7 +465,11 @@ src/
 ├── module.ts                      Entry point: hook registration, service wiring, API exposure
 ├── settings.ts                    Foundry module settings (token, autoSync, debugImport)
 ├── hook-manager.ts                Listens to actor/item hooks, maps fields, queues exports
-├── export-manager.ts              Debounced + rate-limited push to Demiplane
+├── export-manager.ts              Push orchestration: flush flow, retry/backoff, wires collaborators
+├── export/
+│   ├── change-buffer.ts           Per-character pending change buffer: queue, debounce, rate limit, suspend
+│   ├── push-payload-builder.ts    Builds the Demiplane character payload from buffered changes
+│   └── conflict-resolver.ts       Optimistic-concurrency check (fetchCharacterUpdated + engineSig)
 ├── sync-pause.ts                  Cross-client sync coordination (pauses pushes during import/push)
 ├── sync-issues.ts                Import/export sync-issue sets on linked actors
 ├── titlebar-dot.ts               Red indicator on actor sheet titlebars for open issues

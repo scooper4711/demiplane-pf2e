@@ -79,11 +79,15 @@ The reconciliation overhead (removing stale imported items before re-adding) is 
 
 Two seconds was chosen because a typical PF2e combat round involves 2–4 HP changes in quick succession (attack, shield block, persistent damage). Two seconds captures the full burst but syncs before the next player's turn begins.
 
+**Implementation:** The debounce timer and pending-change queue are owned by `ChangeBuffer` (`src/export/change-buffer.ts`); `ExportManager.flush` is triggered when the timer fires.
+
 ---
 
 ## 4. Rate Limit: 30 API Calls per 60 Seconds
 
 **Decision:** The module caps Demiplane API calls to 30 per 60-second rolling window per character.
+
+**Implementation:** The rolling-window tracking is implemented in `ChangeBuffer.isWithinRateLimit` / `recordApiCall`; `ExportManager` consults it before each flush.
 
 **Rationale:** Demiplane's API does not publish official rate limits. Testing showed that sustained bursts beyond this threshold produce intermittent failures. With the 2-second debounce, normal play rarely approaches this limit — a debounced call every 2 seconds would be 30 per minute only if changes are truly continuous.
 
@@ -320,6 +324,8 @@ The library can be tested in plain Node without Foundry mocks. The module tests 
 
 After 4 total attempts (initial + 3 retries), the module notifies the user via `ui.notifications.error` and retains the pending changes for the next sync attempt.
 
+**Implementation:** `ExportManager` keeps the retry/backoff orchestration. The pre-push optimistic-concurrency check (`fetchCharacterUpdated` + `engineSig` content compare) lives in `ConflictResolver` (`src/export/conflict-resolver.ts`), and the payload assembly in `PushPayloadBuilder` (`src/export/push-payload-builder.ts`); `ChangeBuffer` supplies the per-character pending changes.
+
 ---
 
 ## 15. Imported Item Flag Tracking
@@ -354,7 +360,7 @@ The loop is broken by marking the character as "syncing" on the actor document i
 
 - `beginSyncPause(actor)` / `endSyncPause(actor)` wrap an import or push. They add/remove a **token** to a `demiplane-pf2e.syncActiveTokens` array stored on the actor flag.
 - `isSyncActive(actor)` (used by `HookManager`) blocks hook-driven queueing on _every_ client — including the one that started the sync.
-- `isRemoteSyncActive(actor)` (used by `ExportManager.flush`) blocks pushing only when a _different_ client is syncing, so a client never blocks its own in-flight push.
+- `isRemoteSyncActive(actor)` (checked by `ExportManager.flush`) blocks pushing only when a _different_ client is syncing, so a client never blocks its own in-flight push. The optimistic-concurrency `engineSig`/`lastUpdated` checks that follow are owned by `ConflictResolver` (`src/export/conflict-resolver.ts`).
 - A per-character **array of tokens** (one per in-flight sync) is used rather than a single boolean so two clients syncing the same character concurrently do not clear each other's mark.
 
 **Tradeoffs considered:**
