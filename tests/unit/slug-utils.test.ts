@@ -196,6 +196,20 @@ describe("normalizeEquipmentSlug", () => {
     expect(normalizeEquipmentSlug("repair-toolkit-basic-rm")).toBe("repair-toolkit");
   });
 
+  it("maps generic scrolls onto the ranked consumable", () => {
+    expect(normalizeEquipmentSlug("magic-scroll-2nd-rank-rm")).toBe("scroll-of-2nd-rank-spell");
+  });
+
+  it("maps generic wands onto the ranked consumable", () => {
+    expect(normalizeEquipmentSlug("magic-wand-1st-rank-rm")).toBe("magic-wand-1st-rank-spell");
+  });
+
+  it("keeps the ordinal for every rank", () => {
+    expect(normalizeEquipmentSlug("magic-scroll-1st-rank-rm")).toBe("scroll-of-1st-rank-spell");
+    expect(normalizeEquipmentSlug("magic-scroll-3rd-rank-rm")).toBe("scroll-of-3rd-rank-spell");
+    expect(normalizeEquipmentSlug("magic-wand-10th-rank-rm")).toBe("magic-wand-10th-rank-spell");
+  });
+
   it("passes through unknown slugs", () => {
     expect(normalizeEquipmentSlug("half-plate-rm")).toBe("half-plate");
   });
