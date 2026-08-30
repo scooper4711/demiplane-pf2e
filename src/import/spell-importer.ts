@@ -147,7 +147,7 @@ async function addSpells(
     const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- spell: ${foundrySlug} (not found)`);
-      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
+      summary.unmapped.push({ slug, kind: "spell" });
       continue;
     }
 
@@ -228,7 +228,7 @@ async function addMissingPreparedItems(
     const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- prepared: ${toFoundrySlug(slug)} (not found)`);
-      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
+      summary.unmapped.push({ slug, kind: "spell" });
       continue;
     }
 
@@ -478,7 +478,7 @@ async function addFontSpells(
     const spellData = await resolveSpellFromCompendium(slug);
     if (!spellData) {
       summary.log.push(`- divine font: ${foundrySlug} (not found)`);
-      summary.unresolved.push(`Could not import spell "${slug}": not found in compendium`);
+      summary.unmapped.push({ slug, kind: "spell" });
       continue;
     }
 

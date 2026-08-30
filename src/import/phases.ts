@@ -141,7 +141,7 @@ export class SequentialItemsPhase implements ImportPhase {
       ctx.summary.itemsImported++;
     } else {
       ctx.summary.log.push(`- ${category}: ${eng._slug} (not found)`);
-      ctx.summary.unresolved.push(`Could not import ${category} "${eng._slug}": not found in compendium`);
+      ctx.summary.unmapped.push({ slug: eng._slug, kind: category });
       ctx.summary.itemsSkipped++;
     }
   }
@@ -294,7 +294,7 @@ export class BatchItemsPhase implements ImportPhase {
           ctx.summary.itemsImported++;
         } else {
           ctx.summary.log.push(`- ${category}: ${eng._slug} (not found)`);
-          ctx.summary.unresolved.push(`Could not import ${category} "${eng._slug}": not found in compendium`);
+          ctx.summary.unmapped.push({ slug: eng._slug, kind: category });
           ctx.summary.itemsSkipped++;
         }
       }

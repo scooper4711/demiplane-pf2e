@@ -1,6 +1,6 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
-import { getExportIssues, getImportIssues, clearAllIssues } from "./sync-issues.js";
+import { getExportIssues, getImportIssues, getUnmappedSlugs, clearAllIssues } from "./sync-issues.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
 
 type ImportCharacterFn = (
@@ -49,7 +49,9 @@ export async function showDemiplaneInfoDialog(
   const lastImportDisplay = lastImport ? new Date(lastImport).toLocaleString() : "Never";
   const lastExportDisplay = lastExport ? new Date(lastExport).toLocaleString() : "Never";
 
-  const importIssues = [...getImportIssues(actor)];
+  // Unmapped slugs are stored as structured records; their display text is
+  // derived here rather than persisted, so there is only ever one source of truth.
+  const importIssues = [...getUnmappedSlugs(actor).map(formatUnmapped), ...getImportIssues(actor)];
   const exportIssues = [...getExportIssues(actor)];
   const hasIssues = importIssues.length + exportIssues.length > 0;
   const issuesSection = buildIssuesSection(importIssues, exportIssues);

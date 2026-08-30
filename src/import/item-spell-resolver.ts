@@ -146,7 +146,7 @@ async function createItemSpellcastingEntry(
     const spellData = await resolveSpellFromCompendium(entry.spell);
     if (!spellData) {
       summary.log.push(`- item-spell: ${foundrySlug} (not found)`);
-      summary.unresolved.push(`Could not import spell "${entry.spell}": not found in compendium`);
+      summary.unmapped.push({ slug: entry.spell, kind: "spell" });
       continue;
     }
 

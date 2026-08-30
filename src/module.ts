@@ -10,7 +10,7 @@ import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
-import { resetImportIssues, addImportIssue } from "./sync-issues.js";
+import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
 
 let client: DemiplaneClient;
@@ -207,7 +207,7 @@ async function importLinkedCharacter(
     }
 
     const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
-    for (const issue of summary.unresolved) addImportIssue(actor, issue);
+    setUnmappedSlugs(actor, summary.unmapped);
     for (const error of summary.errors) addImportIssue(actor, error);
     return summary;
   } finally {

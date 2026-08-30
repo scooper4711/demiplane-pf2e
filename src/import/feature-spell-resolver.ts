@@ -237,7 +237,7 @@ async function addGrantedSpellsToEntry(
     const spellData = await resolveSpellFromCompendium(spell.slug);
     if (!spellData) {
       summary.log.push(`- ${label}: ${foundrySlug} (not found)`);
-      summary.unresolved.push(`Could not import spell "${spell.slug}": not found in compendium`);
+      summary.unmapped.push({ slug: spell.slug, kind: "spell" });
       continue;
     }
 
