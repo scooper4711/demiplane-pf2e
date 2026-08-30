@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.6] - 2026-08-30
+
+### Added
+
+- hide Demiplane titlebar button + red dot from non-GM/non-owners
+- permission-gate UI, opt-in pre-release warning, single-writer push election
+
+### Fixed
+
+- import scrolls and wands with the spells they carry
+- stop importing from pushing deletions back to Demiplane
+- import domain focus spells, leave focus pool to the system
+- pause pushing across all clients during an in-flight import or push
+- re-baseline conflict state from server after push to stop false re-imports
+- reflect pushed field changes and ignore benign Demiplane updated bumps
+- refresh lastUpdated after push to prevent false-conflict re-import
+- import lore before feat grants and de-duplicate native-granted feats
+- import commander class feats and args-slug-less equipment
+- import cleric prepared spells and Divine Font from Demiplane
+
+### Changed
+
+- attempt 3 to get video in readme
+- validate mermaid diagrams as part of pre-commit hook
+- drop unnecessary 'as never' on getIndex({ fields }) calls
+- lock in ImportOrchestrator thin-driver lastImportTimestamp stamp
+- document conflict-resolution heuristic in DESIGN.md
+- narrow module api to intent-level methods
+- reconcile ARCHITECTURE/DESIGN/CONTRIBUTING with current code
+- route diagnostic console.warn through debugLog
+- reflect ImportPhase pipeline in ARCHITECTURE.md
+- decompose orchestrator into ordered ImportPhase pipeline
+- reflect ChangeBuffer/PushPayloadBuilder/ConflictResolver export collaborators
+- extract ConflictResolver from ExportManager
+- extract PushPayloadBuilder from ExportManager
+- extract ChangeBuffer from ExportManager
+- centralize magic strings into src/config.ts
+- harvest attribute/skill validation tables
+- extract shared stream-engines fetch + spell compendium resolver
+- address P0 correctness findings (idempotent patch, per-character suspend, shared delete)
+- remove dead code and lift all-src coverage above 80%
+- remove dead code and lift all-src coverage above 80%
+- raise import-module coverage above 80%
+- tweaking video link to make embedded video work
+- fixed badges (typo)
+- add badges
+- fix mermaid syntax error
+
+[0.2.0-beta.6]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.6
+
 ## [0.2.0-beta.5] - 2026-08-28
 
 ### Added
