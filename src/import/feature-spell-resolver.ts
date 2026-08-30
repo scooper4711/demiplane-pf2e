@@ -2,7 +2,8 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { stampImported } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
-import { fetchStreamEngineLines, type EngineModifier } from "./stream-engines.js";
+import { fetchStreamEngineLines, fetchDomainEngineData, type EngineModifier } from "./stream-engines.js";
+import type { DomainEngineData } from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
@@ -15,22 +16,35 @@ export interface GrantedSpell {
   spellLevel: number;
 }
 
+/** Matches spellcasting slot keys such as `slot0` / `slot4`. */
+const SLOT_KEY_RE = /^slot(\d+)$/;
+
 /**
  * Fetches feature engines from stream-engines and extracts granted spells.
- * Handles class features, heritage, and ancestry feats.
+ * Handles class features, heritage, ancestry feats and domains. Only spells
+ * within `maxSpellRank` are returned.
  */
 export async function resolveFeatureGrantedSpells(
   engines: DemiplaneEngineEntry[],
-  characterLevel: number
-): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[]; focusPoints: number }> {
+  characterLevel: number,
+  maxSpellRank: number
+): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[] }> {
   const featureEngineIds = collectFeatureEngineIds(engines);
+  const domainEngineIds = collectDomainEngineIds(engines);
 
-  if (featureEngineIds.length === 0) {
-    return { innate: [], focus: [], focusPoints: 0 };
+  if (featureEngineIds.length === 0 && domainEngineIds.length === 0) {
+    return { innate: [], focus: [] };
   }
 
-  const modifiers = await fetchFeatureModifiers(featureEngineIds);
-  return categorizeGrantedSpells(modifiers, characterLevel);
+  const [modifiers, domainData] = await Promise.all([
+    fetchFeatureModifiers(featureEngineIds),
+    fetchDomainEngineData(domainEngineIds),
+  ]);
+
+  const { innate, focus } = categorizeGrantedSpells(modifiers, characterLevel);
+  focus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
+
+  return { innate, focus };
 }
 
 function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
@@ -48,6 +62,19 @@ function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
   return ids;
 }
 
+function collectDomainEngineIds(engines: DemiplaneEngineEntry[]): string[] {
+  const ids: string[] = [];
+
+  for (const eng of engines) {
+    if (!eng.id || eng.type !== "DemiplaneEngine") continue;
+    if ((eng.name as string).startsWith("tabula/domain/")) {
+      ids.push(eng.id as string);
+    }
+  }
+
+  return ids;
+}
+
 // ─── Stream-Engines Fetch ────────────────────────────────────────────────────
 
 async function fetchFeatureModifiers(engineIds: string[]): Promise<EngineModifier[]> {
@@ -55,7 +82,7 @@ async function fetchFeatureModifiers(engineIds: string[]): Promise<EngineModifie
   const modifiers: EngineModifier[] = [];
   for (const line of lines) {
     for (const mod of line.modifiers) {
-      if (mod.type === "add-spell" || mod.type === "add-focus-point") modifiers.push(mod);
+      if (mod.type === "add-spell") modifiers.push(mod);
     }
   }
   return modifiers;
@@ -66,17 +93,11 @@ async function fetchFeatureModifiers(engineIds: string[]): Promise<EngineModifie
 function categorizeGrantedSpells(
   modifiers: EngineModifier[],
   characterLevel: number
-): { innate: GrantedSpell[]; focus: GrantedSpell[]; focusPoints: number } {
+): { innate: GrantedSpell[]; focus: GrantedSpell[] } {
   const innate: GrantedSpell[] = [];
   const focus: GrantedSpell[] = [];
-  let focusPoints = 0;
 
   for (const mod of modifiers) {
-    if (mod.type === "add-focus-point") {
-      focusPoints += mod.addFocus;
-      continue;
-    }
-
     if (mod.type !== "add-spell") continue;
     if (mod.level > characterLevel) continue;
 
@@ -96,7 +117,7 @@ function categorizeGrantedSpells(
     }
   }
 
-  return { innate, focus, focusPoints };
+  return { innate, focus };
 }
 
 /**
@@ -109,23 +130,21 @@ export async function applyFeatureGrantedSpells(
   summary: ImportSummary
 ): Promise<void> {
   const characterLevel = getCharacterLevel(engines);
-  const { innate, focus, focusPoints } = await resolveFeatureGrantedSpells(engines, characterLevel);
+  const maxSpellRank = getMaxAccessibleSpellRank(actor, characterLevel);
+  const { innate, focus } = await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank);
 
   debugLog(
-    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells, ${String(focusPoints)} focus points`
+    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells (max rank ${String(maxSpellRank)})`
   );
 
+  // Focus points are deliberately not written here: the PF2e system derives the
+  // pool from the number of spells in the focus spellcasting entry.
   if (innate.length > 0) {
     await addFeatureInnateSpells(actor, innate, summary);
   }
 
   if (focus.length > 0) {
     await addFeatureFocusSpells(actor, focus, engines, summary);
-  }
-
-  if (focusPoints > 0) {
-    await setFocusPool(actor, focusPoints);
-    summary.log.push(`+ focus pool: ${String(focusPoints)} points`);
   }
 }
 
@@ -168,6 +187,12 @@ function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
   );
   if (patronEngine?.args?.name) {
     return `${patronEngine.args.name as string} Focus Spells`;
+  }
+
+  // Cleric/other domains (module `initialize/domain/index.eng`)
+  const domainEngine = engines.find((e) => e.type === "DemiplaneEngine" && e.name?.startsWith("tabula/domain/"));
+  if (domainEngine?.args?.name) {
+    return `${domainEngine.args.name as string} Domain Spells`;
   }
 
   return "Focus Spells";
@@ -226,14 +251,77 @@ async function addGrantedSpellsToEntry(
   }
 }
 
-async function setFocusPool(actor: Actor, points: number): Promise<void> {
-  await actor.update({
-    "system.resources.focus.max": Math.min(points, 3),
-    "system.resources.focus.value": Math.min(points, 3),
-  } as never);
-}
-
 function getCharacterLevel(engines: DemiplaneEngineEntry[]): number {
   const levelEngine = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
   return Number(levelEngine?.value) || 1;
+}
+
+/**
+ * Domain engines (module `initialize/domain/index.eng`) declare their focus
+ * spells via `domainSpell` / `advancedSpell` fields rather than add-spell
+ * engineModifiers. Domains are always divine.
+ *
+ * Only spells within `maxSpellRank` are returned: the advanced domain spell is
+ * higher-rank and isn't available to low-level characters.
+ */
+async function collectDomainFocusSpells(domainData: DomainEngineData[], maxSpellRank: number): Promise<GrantedSpell[]> {
+  const slugs = domainData.flatMap((data) =>
+    [data.domainSpell, data.advancedSpell].filter((s): s is string => typeof s === "string" && s.length > 0)
+  );
+  if (slugs.length === 0) return [];
+
+  const ranked = await Promise.all(slugs.map(async (slug) => ({ slug, rank: await getSpellRank(slug) })));
+
+  return ranked
+    .filter(({ rank }) => rank <= maxSpellRank)
+    .map(({ slug }) => ({
+      slug,
+      tradition: "divine",
+      level: 0,
+      isInnate: false,
+      isFocus: true,
+      spellLevel: 0,
+    }));
+}
+
+/** Resolves a spell's rank from the compendium; unresolvable spells count as rank 0. */
+async function getSpellRank(slug: string): Promise<number> {
+  const spellData = await resolveSpellFromCompendium(slug);
+  if (!spellData) return 0;
+  return (spellData as { system?: { level?: { value?: number } } }).system?.level?.value ?? 0;
+}
+
+interface SpellcastingEntryLike {
+  system?: { slots?: Record<string, { max?: number }> };
+}
+
+function getSpellcastingEntries(actor: Actor): SpellcastingEntryLike[] {
+  return (
+    (actor as unknown as { itemTypes?: { spellcastingEntry?: SpellcastingEntryLike[] } }).itemTypes
+      ?.spellcastingEntry ?? []
+  );
+}
+
+/**
+ * Highest spell rank the character's class grants slots for. The slot maximums
+ * are written onto the spellcasting entries by `applySpells`, which runs first
+ * and derives them from the class progression in Demiplane. Cantrip slots
+ * (rank 0) don't grant access to a rank.
+ *
+ * Falls back to the standard rank-by-level curve when no entry has slots yet.
+ */
+function getMaxAccessibleSpellRank(actor: Actor, characterLevel: number): number {
+  let maxRank = 0;
+
+  for (const entry of getSpellcastingEntries(actor)) {
+    const slots = entry.system?.slots ?? {};
+
+    for (const [key, slot] of Object.entries(slots)) {
+      const rank = Number(SLOT_KEY_RE.exec(key)?.[1] ?? NaN);
+      if (!Number.isFinite(rank) || rank < 1) continue;
+      if ((slot?.max ?? 0) > 0 && rank > maxRank) maxRank = rank;
+    }
+  }
+
+  return maxRank || Math.ceil(characterLevel / 2);
 }
