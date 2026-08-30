@@ -119,6 +119,12 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
 }
 
 // Install globals
+/** Stand-in for `foundry.applications.api.ApplicationV2`. */
+class MockApplicationV2 {
+  static DEFAULT_OPTIONS = {};
+  static PARTS = {};
+}
+
 export function installFoundryMocks(packMap: Record<string, ReturnType<typeof createMockPack>> = {}) {
   const packs = createMockPacks(packMap);
 
@@ -160,6 +166,15 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
           ""
         ),
     },
+    // Minimal ApplicationV2 surface. Apps resolve their base class at import
+    // time, so this must exist for any module declaring one to be importable.
+    applications: {
+      api: {
+        ApplicationV2: MockApplicationV2,
+        HandlebarsApplicationMixin: (base: typeof MockApplicationV2) => base,
+      },
+      handlebars: { loadTemplates: vi.fn() },
+    },
   };
 
   (globalThis as unknown as Record<string, unknown>).CONFIG = {
@@ -179,6 +194,7 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
     on: vi.fn(),
     once: vi.fn(),
     off: vi.fn(),
+    callAll: vi.fn(),
   };
 
   return { packs };

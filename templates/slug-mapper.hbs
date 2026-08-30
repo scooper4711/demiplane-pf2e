@@ -1,0 +1,60 @@
+<section class="slug-mapper">
+  <p class="hint">
+    Demiplane slugs that could not be matched to a compendium item. Open the browser for a section, then
+    drag items onto a row to map them. Mappings apply to every character on the next import.
+  </p>
+
+  <div class="slug-list">
+    {{#if hasRows}}
+      {{#each sections}}
+        <section class="slug-section" data-kind="{{kind}}">
+          <header class="slug-section-header">
+            <h3>{{label}} <span class="count">({{rows.length}})</span></h3>
+            {{#if canBrowse}}
+              <button type="button" class="browse" data-action="browse" data-kind="{{kind}}"
+                      data-tooltip="Open the compendium browser for {{label}}">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </button>
+            {{/if}}
+          </header>
+
+          <ul class="slug-rows">
+            {{#each rows}}
+              <li class="slug-row{{#if mapped}} mapped{{/if}}{{#if mappingMissing}} broken{{/if}}"
+                  data-slug="{{slug}}" data-kind="{{kind}}">
+                <div class="slug-name">
+                  {{#if icon}}<img class="slug-icon" src="{{icon}}" alt="" />{{/if}}
+                  <span class="slug">{{slug}}</span>
+                </div>
+
+                <div class="slug-target">
+                  {{#if mappingMissing}}
+                    <span class="broken-target">Mapped, but “{{mappedName}}” is no longer in a compendium</span>
+                  {{else if mapped}}
+                    <span class="arrow">→</span>
+                    {{#if icon}}<img class="slug-icon" src="{{icon}}" alt="" />{{/if}}
+                    <span class="target-name">{{mappedName}}</span>
+                  {{else}}
+                    <span class="unmapped">— drop an item here —</span>
+                  {{/if}}
+                </div>
+
+                <div class="slug-meta">
+                  <span class="characters">{{characters}}</span>
+                  {{#if mapped}}
+                    <button type="button" class="clear" data-action="clear" data-kind="{{kind}}"
+                            data-slug="{{slug}}" data-tooltip="Remove this mapping">
+                      <i class="fa-solid fa-times"></i>
+                    </button>
+                  {{/if}}
+                </div>
+              </li>
+            {{/each}}
+          </ul>
+        </section>
+      {{/each}}
+    {{else}}
+      <p class="empty">No unmapped slugs. Every slug from the last import resolved to a compendium item.</p>
+    {{/if}}
+  </div>
+</section>

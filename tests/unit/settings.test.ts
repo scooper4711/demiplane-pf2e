@@ -15,6 +15,7 @@ import { registerSettings } from "../../src/settings.js";
 
 describe("settings", () => {
   let register: ReturnType<typeof vi.fn>;
+  let registerMenu: ReturnType<typeof vi.fn>;
   let hooksOn: ReturnType<typeof vi.fn>;
   let settingsGet: ReturnType<typeof vi.fn>;
   let prompt: ReturnType<typeof vi.fn>;
@@ -32,6 +33,7 @@ describe("settings", () => {
 
   beforeEach(() => {
     register = vi.fn();
+    registerMenu = vi.fn();
     hooksOn = vi.fn();
     settingsGet = vi.fn().mockImplementation((_m: string, k: string) => (k === "demiplaneToken" ? "tok" : undefined));
     prompt = vi.fn().mockResolvedValue(undefined);
@@ -57,7 +59,7 @@ describe("settings", () => {
       createElement: vi.fn(() => button),
     };
     (globalThis as unknown as { game: unknown }).game = {
-      settings: { register, get: settingsGet },
+      settings: { register, registerMenu, get: settingsGet },
       user,
     };
     (globalThis as unknown as { Hooks: unknown }).Hooks = {
@@ -65,8 +67,15 @@ describe("settings", () => {
       once: vi.fn(),
       off: vi.fn(),
     };
-    (globalThis as unknown as { foundry: { applications: { api: { DialogV2: { prompt: unknown } } } } }).foundry = {
-      applications: { api: { DialogV2: { prompt } } },
+    (globalThis as unknown as { foundry: unknown }).foundry = {
+      applications: {
+        api: {
+          DialogV2: { prompt },
+          // The slug mapper app resolves its base class when the menu is registered.
+          ApplicationV2: class {},
+          HandlebarsApplicationMixin: (base: unknown) => base,
+        },
+      },
     };
     (globalThis as unknown as { ui: { notifications: Record<string, ReturnType<typeof vi.fn>> } }).ui = {
       notifications: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -112,6 +121,16 @@ describe("settings", () => {
         expect(call[2].config).toBe(false);
       }
     }
+  });
+
+  it("registers a GM-only menu for the slug mapping screen", () => {
+    registerSettings();
+    expect(registerMenu).toHaveBeenCalledTimes(1);
+    const [moduleId, key, config] = registerMenu.mock.calls[0];
+    expect(moduleId).toBe("demiplane-pf2e");
+    expect(key).toBe("slugMapper");
+    expect(config.restricted).toBe(true);
+    expect(typeof config.type).toBe("function");
   });
 
   it("registers a renderSettingsConfig hook", () => {
