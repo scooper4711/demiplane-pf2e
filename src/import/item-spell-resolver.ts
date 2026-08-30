@@ -39,11 +39,20 @@ export async function applyItemSpells(
   }
 }
 
+/**
+ * Generic ranked scroll/wand items (e.g. `magic-scroll-2nd-rank`,
+ * `magic-wand-1st-rank`). PF2e models these as consumables carrying an embedded
+ * spell, so the equipment importer owns them — they must not also become a
+ * charges spellcasting entry.
+ */
+const GENERIC_CONSUMABLE_SLUG_RE = /^magic-(scroll|wand)-\d+(?:st|nd|rd|th)-rank$/;
+
 function findSpellcastingItems(engines: DemiplaneEngineEntry[]): DemiplaneEngineEntry[] {
   return engines.filter((e) => {
     if (e.type !== "DemiplaneEngine") return false;
     if (!e.name?.startsWith("tabula/item/")) return false;
-    const slug = (e.args?.slug as string) ?? "";
+    const slug = ((e.args?.slug as string | undefined) ?? "").replace(/-rm$/, "");
+    if (GENERIC_CONSUMABLE_SLUG_RE.test(slug)) return false;
     return slug.includes("staff") || slug.includes("wand");
   });
 }
@@ -83,7 +92,7 @@ async function fetchItemSpellSources(itemEngines: DemiplaneEngineEntry[]): Promi
     for (const mod of line.modifiers) {
       if (mod.type === "add-staff-spells") {
         spells.push(...mod.spells.map((s) => ({ rank: s.rank, spell: s.spell })));
-      } else if (mod.type === "add-special-item-spell") {
+      } else if (mod.type === "add-special-item-spell" && typeof mod.spell === "string") {
         spells.push({ rank: Number(mod.rank), spell: mod.spell });
       }
     }

@@ -141,6 +141,16 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
     return null;
   });
 
+  (globalThis as unknown as Record<string, unknown>).foundry = {
+    utils: {
+      /** Foundry IDs are 16-character alphanumeric strings. */
+      randomID: () =>
+        Array.from({ length: 16 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join(
+          ""
+        ),
+    },
+  };
+
   (globalThis as unknown as Record<string, unknown>).CONFIG = {
     PF2E: { languages: {} },
   };

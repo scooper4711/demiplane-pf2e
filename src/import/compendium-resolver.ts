@@ -9,11 +9,13 @@ function getPacks(): NonNullable<typeof game.packs> {
   return game.packs;
 }
 
-/**
- * Resolves a Demiplane spell slug directly to its compendium document object.
- * Spell resolvers only ever look in the spells compendium.
- */
-export async function resolveSpellFromCompendium(slug: string): Promise<Record<string, unknown> | null> {
+interface SpellDocument {
+  _source?: Record<string, unknown>;
+  toObject: () => Record<string, unknown>;
+}
+
+/** Finds a spell's compendium document by Demiplane slug. */
+async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
   const pack = getPacks().get(SPELLS_PACK);
   if (!pack) return null;
   const foundrySlug = toFoundrySlug(slug);
@@ -21,7 +23,26 @@ export async function resolveSpellFromCompendium(slug: string): Promise<Record<s
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
-  return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
+  return doc ? (doc as unknown as SpellDocument) : null;
+}
+
+/**
+ * Resolves a Demiplane spell slug directly to its compendium document object.
+ * Spell resolvers only ever look in the spells compendium.
+ */
+export async function resolveSpellFromCompendium(slug: string): Promise<Record<string, unknown> | null> {
+  const doc = await findSpellDocument(slug);
+  return doc ? doc.toObject() : null;
+}
+
+/**
+ * Resolves a spell's raw source so it can be embedded inside an item — the spell
+ * a scroll or wand consumable carries.
+ */
+export async function resolveSpellSourceFromCompendium(slug: string): Promise<Record<string, unknown> | null> {
+  const doc = await findSpellDocument(slug);
+  if (!doc) return null;
+  return doc._source ?? doc.toObject();
 }
 
 /**

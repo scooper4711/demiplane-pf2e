@@ -161,6 +161,133 @@ describe("applyEquipment", () => {
     await applyEquipment(actor as never, [], summary);
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
   });
+
+  describe("generic scrolls and wands", () => {
+    beforeEach(() => {
+      installFoundryMocks({
+        "pf2e.equipment-srd": createMockPack([
+          {
+            _id: "sc1",
+            name: "Scroll of 2nd-rank Spell",
+            system: { slug: "scroll-of-2nd-rank-spell" },
+            type: "consumable",
+          },
+          {
+            _id: "mw1",
+            name: "Magic Wand (1st-Rank Spell)",
+            system: { slug: "magic-wand-1st-rank-spell" },
+            type: "consumable",
+          },
+        ]),
+        "pf2e.spells-srd": createMockPack([
+          { _id: "cm1", name: "Clear Mind", system: { slug: "clear-mind", level: { value: 2 } }, type: "spell" },
+          { _id: "me1", name: "Mending", system: { slug: "mending", level: { value: 1 } }, type: "spell" },
+        ]),
+      });
+    });
+
+    const scrollEngine: DemiplaneEngineEntry = {
+      id: "1",
+      name: "tabula/item/magic-scroll-2nd-rank-rm.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "magic-scroll-2nd-rank-rm" },
+      demiplaneEngineId: "item1",
+    };
+
+    it("maps the Demiplane slug onto the ranked consumable and embeds its spell", async () => {
+      const actor = createMockActor();
+      const engines: DemiplaneEngineEntry[] = [
+        scrollEngine,
+        {
+          id: "2",
+          name: "tabula/spell/clear-mind-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "clear-mind-rm", sourceData: { engineID: "item1" } },
+        },
+        {
+          id: "3",
+          name: "item1-override-name",
+          type: "CustomDemiplaneEngine",
+          args: { parentEngine: "item1" },
+          value: "Scroll of clear mind",
+        },
+      ];
+      const summary = makeSummary();
+      await applyEquipment(actor as never, engines, summary);
+
+      expect(summary.unresolved).toEqual([]);
+      const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      const system = item.system as Record<string, unknown>;
+
+      expect(item.name).toBe("Scroll of clear mind");
+      expect((system.spell as { system: { slug: string } }).system.slug).toBe("clear-mind");
+      expect(
+        (system.spell as { system: { location: { heightenedLevel: number } } }).system.location.heightenedLevel
+      ).toBe(2);
+    });
+
+    it("gives the embedded spell a valid 16-character Foundry id", async () => {
+      const actor = createMockActor();
+      const engines: DemiplaneEngineEntry[] = [
+        scrollEngine,
+        {
+          id: "2",
+          name: "tabula/spell/clear-mind-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "clear-mind-rm", sourceData: { engineID: "item1" } },
+        },
+      ];
+      const summary = makeSummary();
+      await applyEquipment(actor as never, engines, summary);
+
+      const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      const spell = (item.system as Record<string, unknown>).spell as { _id: string };
+
+      // Foundry rejects UUIDs here, so the embedded spell needs a Foundry-style id.
+      expect(spell._id).toMatch(/^[A-Za-z0-9]{16}$/);
+    });
+
+    it("embeds the wand's spell at the wand's rank", async () => {
+      const actor = createMockActor();
+      const engines: DemiplaneEngineEntry[] = [
+        {
+          id: "1",
+          name: "tabula/item/magic-wand-1st-rank-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "magic-wand-1st-rank-rm" },
+          demiplaneEngineId: "wand1",
+        },
+        {
+          id: "2",
+          name: "tabula/spell/mending-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "mending-rm", sourceData: { engineID: "wand1" } },
+        },
+      ];
+      const summary = makeSummary();
+      await applyEquipment(actor as never, engines, summary);
+
+      expect(summary.unresolved).toEqual([]);
+      const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      const spell = (item.system as Record<string, unknown>).spell as {
+        system: { slug: string; location: { heightenedLevel: number } };
+      };
+
+      expect(item.name).toBe("Magic Wand (1st-Rank Spell)");
+      expect(spell.system.slug).toBe("mending");
+      expect(spell.system.location.heightenedLevel).toBe(1);
+    });
+
+    it("imports the item without a spell when no spell is linked", async () => {
+      const actor = createMockActor();
+      const summary = makeSummary();
+      await applyEquipment(actor as never, [scrollEngine], summary);
+
+      expect(summary.unresolved).toEqual([]);
+      const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      expect((item.system as Record<string, unknown>).spell).toBeUndefined();
+    });
+  });
 });
 
 describe("applyCurrency", () => {

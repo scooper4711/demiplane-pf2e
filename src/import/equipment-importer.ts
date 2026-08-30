@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { normalizeEquipmentSlug } from "./slug-utils.js";
+import { normalizeEquipmentSlug, parseRankedConsumable } from "./slug-utils.js";
+import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
 
 interface EquipmentState {
@@ -10,6 +11,10 @@ interface EquipmentState {
   wornIds: Set<string>;
   containerMap: Map<string, string>;
   quantityMap: Map<string, number>;
+  /** Item engine id → the slug of the spell the item carries. */
+  spellByItemId: Map<string, string>;
+  /** Item engine id → the character-specific name for the item. */
+  nameById: Map<string, string>;
 }
 
 interface EquippedResult {
@@ -31,15 +36,16 @@ function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
   const wornIds = new Set<string>();
   const containerMap = new Map<string, string>();
   const quantityMap = new Map<string, number>();
+  const spellByItemId = new Map<string, string>();
+  const nameById = new Map<string, string>();
+
+  const customBags = { wornIds, containerMap, quantityMap, nameById };
 
   for (const eng of engines) {
-    if (eng.type !== "CustomDemiplaneEngine") continue;
-    if (eng.name.endsWith("-is-equipped") && eng.value === 1) {
-      wornIds.add(eng.name.replace("-is-equipped", ""));
-    } else if (eng.name.endsWith("-container")) {
-      containerMap.set(eng.name.replace("-container", ""), String(eng.value));
-    } else if (eng.name.endsWith("--quantity")) {
-      quantityMap.set(eng.name.replace("--quantity", ""), Number(eng.value) || 1);
+    if (eng.type === "DemiplaneEngine") {
+      collectCarriedSpell(eng, spellByItemId);
+    } else if (eng.type === "CustomDemiplaneEngine") {
+      collectCustomEngine(eng, customBags);
     }
   }
 
@@ -50,7 +56,45 @@ function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
     wornIds,
     containerMap,
     quantityMap,
+    spellByItemId,
+    nameById,
   };
+}
+
+/** A spell linked to a scroll or wand names its owning item in `sourceData`. */
+function collectCarriedSpell(eng: DemiplaneEngineEntry, spellByItemId: Map<string, string>): void {
+  if (!eng.name.startsWith("tabula/spell/")) return;
+
+  const ownerId = (eng.args?.sourceData as { engineID?: string } | undefined)?.engineID;
+  const spellSlug = eng.args?.slug as string | undefined;
+  if (ownerId && spellSlug) spellByItemId.set(ownerId, spellSlug);
+}
+
+function collectCustomEngine(
+  eng: DemiplaneEngineEntry,
+  bags: {
+    wornIds: Set<string>;
+    containerMap: Map<string, string>;
+    quantityMap: Map<string, number>;
+    nameById: Map<string, string>;
+  }
+): void {
+  if (eng.name.endsWith("-override-name")) {
+    const parentId = eng.args?.parentEngine as string | undefined;
+    if (parentId && typeof eng.value === "string" && eng.value) bags.nameById.set(parentId, eng.value);
+    return;
+  }
+  if (eng.name.endsWith("-is-equipped") && eng.value === 1) {
+    bags.wornIds.add(eng.name.replace("-is-equipped", ""));
+    return;
+  }
+  if (eng.name.endsWith("-container")) {
+    bags.containerMap.set(eng.name.replace("-container", ""), String(eng.value));
+    return;
+  }
+  if (eng.name.endsWith("--quantity")) {
+    bags.quantityMap.set(eng.name.replace("--quantity", ""), Number(eng.value) || 1);
+  }
 }
 
 function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemType: string): EquippedResult {
@@ -135,25 +179,15 @@ export async function applyEquipment(
   const skipped: string[] = [];
 
   for (const eng of itemEngines) {
-    const slug = deriveEquipmentSlug(eng);
-    const demiplaneId = eng.demiplaneEngineId as string;
-    const indexEntry = findBySlug(equipIndex as never, slug);
-
-    if (!indexEntry) {
-      skipped.push(slug);
-      summary.unresolved.push(`Could not import equipment "${slug}": not found in compendium`);
-      continue;
-    }
-
-    const doc = await equipPack.getDocument(indexEntry._id);
-    if (!doc) continue;
-
-    const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
-    const system = data.system as Record<string, unknown>;
-    system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
-    system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
-
-    items.push({ data: stampImported(data, slug), demiplaneId });
+    const pending = await buildEquipmentItem(
+      eng,
+      equipPack as unknown as EquipmentPack,
+      equipIndex as never,
+      state,
+      summary,
+      skipped
+    );
+    if (pending) items.push(pending);
   }
 
   if (items.length === 0) {
@@ -173,13 +207,78 @@ export async function applyEquipment(
   }
 }
 
+interface EquipmentPack {
+  getDocument: (id: string) => Promise<unknown>;
+}
+
+/** Builds one equipment item from its engine, or records why it can't be imported. */
+async function buildEquipmentItem(
+  eng: DemiplaneEngineEntry,
+  equipPack: EquipmentPack,
+  equipIndex: never,
+  state: EquipmentState,
+  summary: ImportSummary,
+  skipped: string[]
+): Promise<PendingItem | null> {
+  const demiplaneSlug = rawEquipmentSlug(eng);
+  const slug = normalizeEquipmentSlug(demiplaneSlug);
+  const demiplaneId = eng.demiplaneEngineId as string;
+
+  const indexEntry = findBySlug(equipIndex, slug);
+  if (!indexEntry) {
+    skipped.push(slug);
+    summary.unresolved.push(`Could not import equipment "${slug}": not found in compendium`);
+    return null;
+  }
+
+  const doc = await equipPack.getDocument(indexEntry._id);
+  if (!doc) return null;
+
+  const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
+  const system = data.system as Record<string, unknown>;
+  system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
+  system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
+
+  await attachCarriedSpell(system, demiplaneSlug, state.spellByItemId.get(demiplaneId));
+
+  const customName = state.nameById.get(demiplaneId);
+  if (customName) data.name = customName;
+
+  return { data: stampImported(data, slug), demiplaneId };
+}
+
 /**
- * Derives the Foundry equipment slug for an item engine. Uses args.slug when
- * present, otherwise falls back to the engine name (stripping the ".eng" suffix).
+ * Embeds the spell a scroll or wand carries, mirroring how the PF2e system
+ * builds spell consumables: the spell's own source, detached from any
+ * spellcasting entry and heightened to the item's rank.
  */
-function deriveEquipmentSlug(eng: DemiplaneEngineEntry): string {
-  const rawSlug = (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
-  return normalizeEquipmentSlug(rawSlug);
+async function attachCarriedSpell(
+  system: Record<string, unknown>,
+  demiplaneSlug: string,
+  spellSlug: string | undefined
+): Promise<void> {
+  if (!spellSlug) return;
+
+  const spellSource = await resolveSpellSourceFromCompendium(spellSlug);
+  if (!spellSource) return;
+
+  const ranked = parseRankedConsumable(demiplaneSlug);
+  const spellSystem = (spellSource.system as Record<string, unknown>) ?? {};
+  const rank = ranked?.rank ?? (spellSystem.level as { value?: number } | undefined)?.value ?? 1;
+
+  system.spell = {
+    ...spellSource,
+    _id: foundry.utils.randomID(),
+    system: { ...spellSystem, location: { value: null, heightenedLevel: rank } },
+  };
+}
+
+/**
+ * Derives the raw (Demiplane) equipment slug for an item engine, without
+ * normalizing it to the compendium's naming.
+ */
+function rawEquipmentSlug(eng: DemiplaneEngineEntry): string {
+  return (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
 }
 
 const CURRENCY_MAP = [

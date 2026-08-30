@@ -109,7 +109,41 @@ const EQUIPMENT_SLUG_NORMALIZATIONS: Record<string, string> = {
   "repair-toolkit-basic": "repair-toolkit",
 };
 
+/**
+ * Generic ranked scrolls and wands. Demiplane names them by rank
+ * (`magic-scroll-2nd-rank`), while the compendium has one item per rank with a
+ * different shape (`scroll-of-2nd-rank-spell`).
+ */
+const RANKED_CONSUMABLE_RE = /^magic-(scroll|wand)-(\d+(?:st|nd|rd|th))-rank$/;
+
+export interface RankedConsumable {
+  kind: "scroll" | "wand";
+  /** Ordinal as written by Demiplane, e.g. "2nd". */
+  ordinal: string;
+  rank: number;
+}
+
+/** Recognises a generic ranked scroll/wand, e.g. `magic-scroll-2nd-rank-rm`. */
+export function parseRankedConsumable(demiplaneSlug: string): RankedConsumable | null {
+  const match = RANKED_CONSUMABLE_RE.exec(demiplaneSlug.replace(/-rm$/, ""));
+  if (!match?.[1] || !match[2]) return null;
+  const ordinal = match[2];
+  return {
+    kind: match[1] === "scroll" ? "scroll" : "wand",
+    ordinal,
+    rank: Number(/^(\d+)/.exec(ordinal)?.[1]),
+  };
+}
+
 export function normalizeEquipmentSlug(demiplaneSlug: string): string {
   const stripped = demiplaneSlug.replace(/-rm$/, "");
+
+  const ranked = parseRankedConsumable(stripped);
+  if (ranked) {
+    return ranked.kind === "scroll"
+      ? `scroll-of-${ranked.ordinal}-rank-spell`
+      : `magic-wand-${ranked.ordinal}-rank-spell`;
+  }
+
   return EQUIPMENT_SLUG_NORMALIZATIONS[stripped] ?? stripped;
 }

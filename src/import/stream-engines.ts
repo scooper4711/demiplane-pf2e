@@ -33,11 +33,15 @@ export interface AddStaffSpellsModifier {
   spells: Array<{ rank: number; spell: string }>;
 }
 
-/** A spell granted by a wand / special item. */
+/**
+ * A spell granted by a wand / special item. Generic scroll and wand items emit
+ * only the rank and item type here — the actual spell is carried by a linked
+ * `tabula/spell/*` engine, so `spell` is optional.
+ */
 export interface AddSpecialItemSpellModifier {
   type: "add-special-item-spell";
   rank: string | number;
-  spell: string;
+  spell?: string;
   itemType: string;
 }
 

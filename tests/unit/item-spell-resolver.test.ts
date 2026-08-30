@@ -85,6 +85,59 @@ describe("item-spell-resolver", () => {
     expect(spellCall).toBeDefined();
   });
 
+  it("ignores a rank-only modifier that carries no spell", async () => {
+    installFoundryMocks();
+    // Generic scrolls/wands emit rank + itemType only; the spell lives in a
+    // linked engine, so there is nothing to resolve here.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            ndjsonLine("item-1", {
+              name: "Wand of Mending",
+              engineModifiers: [{ type: "add-special-item-spell", rank: 1, itemType: "wand", freeSpell: true }],
+            }),
+          ].join("\n"),
+      })
+    );
+
+    const actor = createMockActor();
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+
+    await expect(
+      applyItemSpells(
+        actor as never,
+        [itemEngine("tabula/item/wand-of-mending-rm.eng", "wand-of-mending-rm", "item-1")],
+        summary
+      )
+    ).resolves.toBeUndefined();
+
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  it("leaves generic ranked scrolls and wands to the equipment importer", async () => {
+    installFoundryMocks();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, text: async () => "" });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const actor = createMockActor();
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+
+    await applyItemSpells(
+      actor as never,
+      [
+        itemEngine("tabula/item/magic-scroll-2nd-rank-rm.eng", "magic-scroll-2nd-rank-rm", "item-1"),
+        itemEngine("tabula/item/magic-wand-1st-rank-rm.eng", "magic-wand-1st-rank-rm", "item-2"),
+      ],
+      summary
+    );
+
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("derives the tradition from the parent spell feature", async () => {
     installFoundryMocks({
       "pf2e.spells-srd": createMockPack([{ _id: "s1", name: "Mage Hand", system: { slug: "mage-hand" } }]),
