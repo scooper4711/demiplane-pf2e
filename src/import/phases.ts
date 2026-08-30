@@ -110,7 +110,7 @@ export class LoreItemsPhase implements ImportPhase {
     if (!bgEngine) return [];
     const bgSlug = getSlug(bgEngine);
     if (!bgSlug) return [];
-    const bgItem = await resolveCompendiumItem(bgSlug);
+    const bgItem = await resolveCompendiumItem(bgSlug, "background");
     const system = (bgItem as { system?: { trainedSkills?: { lore?: string[] } } } | null)?.system;
     return system?.trainedSkills?.lore ?? [];
   }
@@ -133,7 +133,7 @@ export class SequentialItemsPhase implements ImportPhase {
     category: ItemCategory,
     ctx: ImportContext
   ): Promise<void> {
-    const itemData = await resolveCompendiumItem(eng._slug);
+    const itemData = await resolveCompendiumItem(eng._slug, category);
     if (itemData) {
       await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
       await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)] as never);
@@ -276,7 +276,7 @@ export class BatchItemsPhase implements ImportPhase {
           continue;
         }
 
-        const itemData = await resolveCompendiumItem(eng._slug);
+        const itemData = await resolveCompendiumItem(eng._slug, category);
         if (itemData) {
           await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
           if ((itemData as { type: string }).type === "feat" && eng.args?.sourceRow) {

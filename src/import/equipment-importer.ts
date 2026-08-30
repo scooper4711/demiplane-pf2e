@@ -3,6 +3,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { normalizeEquipmentSlug, parseRankedConsumable } from "./slug-utils.js";
 import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
+import { resolveMappedItem } from "../slug-mapping.js";
 
 interface EquipmentState {
   primaryHandId: string | undefined;
@@ -223,6 +224,11 @@ async function buildEquipmentItem(
   const demiplaneSlug = rawEquipmentSlug(eng);
   const slug = normalizeEquipmentSlug(demiplaneSlug);
   const demiplaneId = eng.demiplaneEngineId as string;
+
+  // A GM mapping is checked before the compendium lookup, and before the slug is
+  // rewritten by normalization, so it matches what the GM mapped.
+  const mapped = await resolveMappedItem("equipment", demiplaneSlug);
+  if (mapped) return { data: stampImported(mapped, slug), demiplaneId };
 
   const indexEntry = findBySlug(equipIndex, slug);
   if (!indexEntry) {
