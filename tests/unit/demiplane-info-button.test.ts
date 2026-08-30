@@ -77,8 +77,16 @@ describe("demiplane-info-button", () => {
   it("updates from Demiplane when the update button is clicked", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     await clickAction("update");
-    expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["i1"]);
-    expect(importFn).toHaveBeenCalledWith(actor, DEMI_UUID, "tok");
+    expect(importFn).toHaveBeenCalledWith(actor, DEMI_UUID, "tok", { wipe: true });
+  });
+
+  it("delegates the imported-item wipe instead of deleting before the sync pause", async () => {
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    await clickAction("update");
+    // Deleting here would run before the import establishes the sync pause, so the
+    // delete hook would treat the removals as user edits and push them to
+    // Demiplane — deleting the real items and faking a server-side conflict.
+    expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
   });
 
   it("escapes HTML in issue messages", async () => {
@@ -93,7 +101,7 @@ describe("demiplane-info-button", () => {
 
   it("clears issues on dismiss when issues are present", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
-    await clickAction("close");
+    await clickAction("dismiss");
     expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "importIssues", expect.anything());
   });
 });
