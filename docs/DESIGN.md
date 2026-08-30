@@ -23,6 +23,10 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Imported Item Flag Tracking](#15-imported-item-flag-tracking)
 - [Cross-Client Sync Pause](#16-cross-client-sync-pause)
 - [Conflict Resolution Heuristic](#17-conflict-resolution-heuristic)
+- [Unmapped Slugs as Structured Records](#18-unmapped-slugs-as-structured-records)
+- [Slug Mapping Storage](#19-slug-mapping-storage--one-setting-per-kind)
+- [Mapping Precedence](#20-mapping-precedence--mappings-win)
+- [Mapping Screen Interaction Model](#21-mapping-screen-interaction-model)
 
 ---
 
@@ -399,3 +403,52 @@ The loop is broken by marking the character as "syncing" on the actor document i
 | mismatch                     | unchanged                  | Refresh `lastUpdated`; push proceeds (no re-import) |
 | mismatch                     | changed                    | Abort push; trigger re-import                       |
 | compare error                | —                          | Push proceeds (or conflict if content incomparable) |
+
+---
+
+## 18. Unmapped Slugs as Structured Records
+
+**Decision:** An unresolved slug is recorded as a structured `UnmappedSlug { slug, kind }`, and its human-readable text is **derived** at display time via `formatUnmapped`. There is no stored message.
+
+**Rationale:** Two representations of the same event can drift, and a pre-rendered string can't drive a UI without being parsed back apart. The module is unreleased, so there is no persisted data to migrate — the cost of a correct model is the rework, not a migration, and that rework is bounded (the sync dialog, the titlebar dot, and their tests). Carrying a legacy string field forward would leave a second source of truth in the codebase permanently.
+
+**Mechanism:** `ImportSummary.unmapped` replaces the old `unresolved: string[]`; `sync-issues.ts` stores the records under an `unmappedSlugs` actor flag and the dialog renders `[...unmapped.map(formatUnmapped), ...importIssues]`, so the visible wording is unchanged. Non-slug failures (e.g. unknown languages) move to `summary.errors` rather than being forced into the shape.
+
+Full requirements and design: [REQUIREMENTS-slug-mapping.md](./REQUIREMENTS-slug-mapping.md), [DESIGN-slug-mapping.md](./DESIGN-slug-mapping.md).
+
+---
+
+## 19. Slug Mapping Storage — One Setting Per Kind
+
+**Decision:** Mappings live in one world-scoped setting per kind (`slugMappingsEquipment`, `slugMappingsFeat`, `slugMappingsSpell`, `slugMappingsAncestry`, `slugMappingsHeritage`, `slugMappingsBackground`, `slugMappingsClass`), each a `slug → { uuid, name }` map, all `config: false`.
+
+**Rationale:** A mapping points at a particular kind of compendium entry, so scoping by kind prevents two kinds sharing a slug from colliding and means the kind need not be repeated inside every entry. Keeping them out of the standard settings list avoids clutter, since the mapping screen is the UI.
+
+**Tradeoffs:**
+
+| Option                            | Pros                                   | Cons                                   |
+| --------------------------------- | -------------------------------------- | -------------------------------------- |
+| One setting per kind **(chosen)** | No cross-kind collisions; kind implied | More settings to register              |
+| Single monolithic setting         | One read                               | Key must encode kind; one large object |
+
+---
+
+## 20. Mapping Precedence — Mappings Win
+
+**Decision:** A GM mapping is consulted **before** the compendium lookup and wins, even when the slug would have resolved on its own.
+
+**Rationale:** This lets a GM override both a missed match and a _wrong-but-successful_ one, including built-in normalizations such as `magic-scroll-*-rank` → `scroll-of-2nd-rank-spell`. Equipment is checked before normalization so the key matches the raw Demiplane slug the GM mapped. A mapping whose target has since disappeared returns `null`, so the import falls back to the normal lookup and re-records the slug as unmapped rather than breaking.
+
+**Tradeoff:** A bad mapping can override good content. Accepted deliberately — the GM has the final say, and a later phase is expected to surface automatic mappings so they can be overridden.
+
+---
+
+## 21. Mapping Screen Interaction Model
+
+**Decision:** The magnifying glass lives on the **section header**, not on each row; it is opened once per kind and left open. Rows are drop targets, and the app stays **non-modal** so it remains usable beside the open Compendium Browser.
+
+**Rationale:** Opening a browser per slug would be tedious and would wrongly imply a fresh browser is needed for every row. The browser is only a way to find things — **dropping** is the action that creates a mapping. This mirrors the PF2e inventory, where one browse button serves a whole section.
+
+**Consequences:** No search seeding is needed (one browser serves many rows, and the browser clears its own search text on close). A dropped item whose type doesn't match the slug's kind is blocked with an explanatory dialog. Ancestry, heritage, background and class have no Compendium Browser tab, so those sections fall back to the Compendium sidebar — acceptable because the glass is a convenience, not a required control.
+
+**Aggregation:** The list is derived by scanning linked actors on open rather than kept in a world registry, so it self-corrects with no pruning: once a slug resolves it simply stops being reported.
