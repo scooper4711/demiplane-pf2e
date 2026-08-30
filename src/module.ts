@@ -179,7 +179,12 @@ async function recoverStaleSyncPauses(): Promise<void> {
   }
 }
 
-async function importLinkedCharacter(actor: Actor, characterId: string, token: string) {
+async function importLinkedCharacter(
+  actor: Actor,
+  characterId: string,
+  token: string,
+  options: { wipe?: boolean } = {}
+) {
   resetImportIssues(actor);
   exportManager.suspend(characterId);
   // Mark the character as syncing so every connected client (including this one)
@@ -187,6 +192,20 @@ async function importLinkedCharacter(actor: Actor, characterId: string, token: s
   // import's own actor updates from echoing back to Demiplane via other clients.
   await beginSyncPause(actor);
   try {
+    // Wiping has to happen inside the pause: the delete hook would otherwise read
+    // these removals as user edits and queue them for push, deleting the real
+    // items on Demiplane and advancing its timestamp into a false conflict.
+    if (options.wipe) {
+      try {
+        const deleted = await deleteImportedItems(actor);
+        if (deleted > 0) {
+          debugLog(`[update] Deleted ${deleted} previously imported items`);
+        }
+      } catch (error) {
+        debugLog(`[update] failed to delete imported items before import: ${String(error)}`);
+      }
+    }
+
     const summary = await importOrchestrator.importCharacter(actor, characterId, { token });
     for (const issue of summary.unresolved) addImportIssue(actor, issue);
     for (const error of summary.errors) addImportIssue(actor, error);
@@ -232,13 +251,7 @@ async function reimportActorOnConflict(actor: Actor) {
     ui.notifications.warn(`Unable to re-import "${actor.name}": missing character link or token.`);
     return;
   }
-  try {
-    // Delete previously imported items first, mirroring Update from Demiplane
-    await deleteImportedItems(actor);
-  } catch (error) {
-    debugLog(`[conflict] failed to delete imported items before re-import: ${String(error)}`);
-  }
-  const summary = await importLinkedCharacter(actor, characterId, token);
+  const summary = await importLinkedCharacter(actor, characterId, token, { wipe: true });
   ui.notifications.info(`Re-imported "${actor.name}" from Demiplane — ${summary.itemsImported} items.`);
 }
 // Add "Update from Demiplane" to actor right-click context menu
@@ -276,22 +289,7 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
 
       ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-      const deleted = await deleteImportedItems(actor);
-      if (deleted > 0) {
-        debugLog(`[update] Deleted ${deleted} previously imported items`);
-      }
-
-      const remainingItems = actor.items.filter(() => true);
-      if (remainingItems.length > 0) {
-        debugLog(
-          `[update] ${remainingItems.length} items remain on actor after delete:`,
-          remainingItems.map((item) => `${item.name} (type=${item.type}, id=${item.id})`).join(", ")
-        );
-      } else {
-        debugLog(`[update] Actor is clean — all items deleted`);
-      }
-
-      const summary = await importLinkedCharacter(actor, characterId, token);
+      const summary = await importLinkedCharacter(actor, characterId, token, { wipe: true });
       if (summary.errors.length > 0) {
         ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
       } else {

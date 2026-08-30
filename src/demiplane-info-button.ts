@@ -1,10 +1,14 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import { getExportIssues, getImportIssues, clearAllIssues } from "./sync-issues.js";
-import { deleteImportedItems } from "./import/reconcile.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
 
-type ImportCharacterFn = (actor: Actor, characterId: string, token: string) => Promise<ImportSummary>;
+type ImportCharacterFn = (
+  actor: Actor,
+  characterId: string,
+  token: string,
+  options?: { wipe?: boolean }
+) => Promise<ImportSummary>;
 type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
 
 /**
@@ -94,7 +98,9 @@ export async function showDemiplaneInfoDialog(
         callback: () => exportCharacter(actor),
       },
       {
-        action: "close",
+        // Deliberately not "close": DialogV2 treats that action as a plain
+        // dismissal and never invokes the callback, so the issues stayed set.
+        action: "dismiss",
         label: hasIssues ? "Dismiss" : "Close",
         default: true,
         callback: () => {
@@ -153,9 +159,7 @@ async function performUpdate(actor: Actor, characterId: string, importCharacter:
 
   ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
 
-  await deleteImportedItems(actor);
-
-  const summary = await importCharacter(actor, characterId, token);
+  const summary = await importCharacter(actor, characterId, token, { wipe: true });
   if (summary.errors.length > 0) {
     ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
   } else {
