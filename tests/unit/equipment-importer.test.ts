@@ -39,7 +39,7 @@ describe("applyEquipment", () => {
     return {
       itemsImported: 0,
       itemsSkipped: 0,
-      unresolved: [],
+      unmapped: [],
       errors: [],
       log: [],
     };
@@ -78,7 +78,7 @@ describe("applyEquipment", () => {
     await applyEquipment(actor as never, engines, summary);
 
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
-    expect(summary.unresolved).toEqual([]);
+    expect(summary.unmapped).toEqual([]);
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
   });
 
@@ -215,7 +215,7 @@ describe("applyEquipment", () => {
       const summary = makeSummary();
       await applyEquipment(actor as never, engines, summary);
 
-      expect(summary.unresolved).toEqual([]);
+      expect(summary.unmapped).toEqual([]);
       const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
       const system = item.system as Record<string, unknown>;
 
@@ -267,7 +267,7 @@ describe("applyEquipment", () => {
       const summary = makeSummary();
       await applyEquipment(actor as never, engines, summary);
 
-      expect(summary.unresolved).toEqual([]);
+      expect(summary.unmapped).toEqual([]);
       const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
       const spell = (item.system as Record<string, unknown>).spell as {
         system: { slug: string; location: { heightenedLevel: number } };
@@ -283,7 +283,7 @@ describe("applyEquipment", () => {
       const summary = makeSummary();
       await applyEquipment(actor as never, [scrollEngine], summary);
 
-      expect(summary.unresolved).toEqual([]);
+      expect(summary.unmapped).toEqual([]);
       const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
       expect((item.system as Record<string, unknown>).spell).toBeUndefined();
     });
@@ -314,7 +314,7 @@ describe("applyCurrency", () => {
     return {
       itemsImported: 0,
       itemsSkipped: 0,
-      unresolved: [],
+      unmapped: [],
       errors: [],
       log: [],
     };

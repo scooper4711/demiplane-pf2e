@@ -29,7 +29,7 @@ describe("item-spell-resolver", () => {
 
   it("does nothing when there are no spellcasting items", async () => {
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
     await applyItemSpells(actor as never, [itemEngine("tabula/item/sword-rm.eng", "sword-rm")], summary);
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
   });
@@ -44,7 +44,7 @@ describe("item-spell-resolver", () => {
     );
 
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 
     await applyItemSpells(
       actor as never,
@@ -68,7 +68,7 @@ describe("item-spell-resolver", () => {
     );
 
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 
     await applyItemSpells(
       actor as never,
@@ -104,7 +104,7 @@ describe("item-spell-resolver", () => {
     );
 
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 
     await expect(
       applyItemSpells(
@@ -123,7 +123,7 @@ describe("item-spell-resolver", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 
     await applyItemSpells(
       actor as never,
@@ -148,7 +148,7 @@ describe("item-spell-resolver", () => {
     );
 
     const actor = createMockActor();
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
     const engines = [
       itemEngine("tabula/item/staff-of-power-rm.eng", "staff-of-power-rm", "item-1"),
       {

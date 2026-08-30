@@ -69,7 +69,7 @@ function clericEntryWithSlots(rank: number) {
 }
 
 function emptySummary(): ImportSummary {
-  return { itemsImported: 0, itemsSkipped: 0, unresolved: [], errors: [], log: [] };
+  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 }
 
 describe("feature-spell-resolver", () => {
@@ -286,7 +286,7 @@ describe("feature-spell-resolver", () => {
         summary
       );
 
-      expect(summary.unresolved.length).toBeGreaterThan(0);
+      expect(summary.unmapped.length).toBeGreaterThan(0);
     });
 
     it("names the focus entry after a wizard school engine", async () => {

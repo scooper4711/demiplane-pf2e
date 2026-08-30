@@ -201,7 +201,7 @@ export async function applyLanguages(
 
   if (unmatched.length > 0) {
     summary.log.push(`! languages not found in Foundry: [${unmatched.join(", ")}]`);
-    summary.unresolved.push(`Languages not found in Foundry: ${unmatched.join(", ")}`);
+    summary.errors.push(`Languages not found in Foundry: ${unmatched.join(", ")}`);
   }
 }
 

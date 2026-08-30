@@ -1,4 +1,5 @@
 import type {} from "fvtt-types/configuration";
+import type { UnmappedSlug } from "./import/types.js";
 
 /**
  * fvtt-types configuration for the Pathfinder 2e system and this module.
@@ -153,6 +154,11 @@ interface DemiplaneActorFlags {
   engineSig?: string;
   importIssues?: string[];
   exportIssues?: string[];
+  /**
+   * Slugs the last import could not resolve, as structured records. Replaced
+   * wholesale each import — see `sync-issues.ts`.
+   */
+  unmappedSlugs?: UnmappedSlug[];
   /** Tokens for in-flight imports/pushes, replicated across clients to coordinate sync pauses. */
   syncActiveTokens?: string[];
 }

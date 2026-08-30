@@ -227,7 +227,9 @@ async function buildEquipmentItem(
   const indexEntry = findBySlug(equipIndex, slug);
   if (!indexEntry) {
     skipped.push(slug);
-    summary.unresolved.push(`Could not import equipment "${slug}": not found in compendium`);
+    // Record the slug as Demiplane reported it, not the normalized one: that is
+    // what a GM mapping is keyed on, and what they need to see.
+    summary.unmapped.push({ slug: demiplaneSlug, kind: "equipment" });
     return null;
   }
 
