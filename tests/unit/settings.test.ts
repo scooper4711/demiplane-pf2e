@@ -79,11 +79,39 @@ describe("settings", () => {
     return calls.find((c) => c[0] === "renderSettingsConfig")?.[1];
   }
 
-  it("registers the three module settings", () => {
+  it("registers the user-facing module settings", () => {
     registerSettings();
-    expect(register).toHaveBeenCalledTimes(3);
     const keys = register.mock.calls.map((c) => c[1]);
     expect(keys).toEqual(expect.arrayContaining(["autoSync", "demiplaneToken", "debugImport"]));
+  });
+
+  it("registers one slug mapping setting per kind", () => {
+    registerSettings();
+    const keys = register.mock.calls.map((c) => c[1]);
+    const mappingKeys = keys.filter((k: string) => k.startsWith("slugMappings"));
+
+    expect(mappingKeys).toHaveLength(7);
+    // One setting per kind, so mappings of different kinds can't collide.
+    expect(mappingKeys).toEqual(
+      expect.arrayContaining([
+        "slugMappingsAncestry",
+        "slugMappingsHeritage",
+        "slugMappingsBackground",
+        "slugMappingsClass",
+        "slugMappingsFeat",
+        "slugMappingsEquipment",
+        "slugMappingsSpell",
+      ])
+    );
+  });
+
+  it("keeps mapping settings out of the standard settings list", () => {
+    registerSettings();
+    for (const call of register.mock.calls) {
+      if (String(call[1]).startsWith("slugMappings")) {
+        expect(call[2].config).toBe(false);
+      }
+    }
   });
 
   it("registers a renderSettingsConfig hook", () => {

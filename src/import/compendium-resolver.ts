@@ -1,6 +1,8 @@
 import { PACKS } from "./types.js";
+import type { SlugKind } from "./types.js";
 import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
 import { SPELLS_PACK } from "../config.js";
+import { resolveMappedItem } from "../slug-mapping.js";
 
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
@@ -16,6 +18,12 @@ interface SpellDocument {
 
 /** Finds a spell's compendium document by Demiplane slug. */
 async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
+  // A GM mapping wins over the compendium lookup, including for a slug that
+  // would otherwise resolve. resolveMappedItem yields item data, so wrap it back
+  // into the document shape this function is expected to return.
+  const mapped = await resolveMappedItem("spell", slug);
+  if (mapped) return { toObject: () => mapped };
+
   const pack = getPacks().get(SPELLS_PACK);
   if (!pack) return null;
   const foundrySlug = toFoundrySlug(slug);
@@ -48,7 +56,15 @@ export async function resolveSpellSourceFromCompendium(slug: string): Promise<Re
 /**
  * Resolves a Demiplane slug to a compendium item document object.
  */
-export async function resolveCompendiumItem(demiplaneSlug: string): Promise<Record<string, unknown> | null> {
+export async function resolveCompendiumItem(
+  demiplaneSlug: string,
+  kind: SlugKind
+): Promise<Record<string, unknown> | null> {
+  // A GM mapping is checked first so it can override even a slug that would have
+  // resolved on its own.
+  const mapped = await resolveMappedItem(kind, demiplaneSlug);
+  if (mapped) return mapped;
+
   const packs = getPacks();
   const foundrySlug = toFoundrySlug(demiplaneSlug);
   const candidates = generateSlugCandidates(foundrySlug);

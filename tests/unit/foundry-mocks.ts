@@ -122,11 +122,22 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
 export function installFoundryMocks(packMap: Record<string, ReturnType<typeof createMockPack>> = {}) {
   const packs = createMockPacks(packMap);
 
+  // A real (if simple) settings store so round-tripping persisted values can be
+  // tested, rather than every read returning undefined.
+  const settingStore = new Map<string, unknown>();
+
   (globalThis as unknown as Record<string, unknown>).game = {
     packs,
     actors: { get: vi.fn(), getName: vi.fn() },
     modules: { get: vi.fn() },
-    settings: { get: vi.fn(), register: vi.fn() },
+    settings: {
+      get: vi.fn((_module: string, key: string) => settingStore.get(key)),
+      set: vi.fn((_module: string, key: string, value: unknown) => {
+        settingStore.set(key, value);
+        return Promise.resolve(value);
+      }),
+      register: vi.fn(),
+    },
   };
 
   (globalThis as unknown as Record<string, unknown>).fromUuid = vi.fn().mockImplementation(async (uuid: string) => {

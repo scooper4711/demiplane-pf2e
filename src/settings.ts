@@ -1,11 +1,14 @@
 import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
+import { registerSlugMappingSettings } from "./slug-mapping.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
 }
 
 export function registerSettings(): void {
+  registerSlugMappingSettings();
+
   game.settings.register(MODULE_ID, "autoSync", {
     name: "Auto-sync on Actor Update",
     hint: "Automatically push current HP, temporary HP, and hero points back to Demiplane",

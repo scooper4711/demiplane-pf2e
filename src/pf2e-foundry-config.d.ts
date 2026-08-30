@@ -228,6 +228,18 @@ declare module "fvtt-types/configuration" {
     "demiplane-pf2e.autoSync": boolean;
     "demiplane-pf2e.demiplaneToken": string;
     "demiplane-pf2e.debugImport": boolean;
+    /** GM-defined compendium targets for unresolved slugs, one map per kind. */
+    "demiplane-pf2e.slugMappingsAncestry": SlugMappings;
+    "demiplane-pf2e.slugMappingsHeritage": SlugMappings;
+    "demiplane-pf2e.slugMappingsBackground": SlugMappings;
+    "demiplane-pf2e.slugMappingsClass": SlugMappings;
+    "demiplane-pf2e.slugMappingsFeat": SlugMappings;
+    "demiplane-pf2e.slugMappingsEquipment": SlugMappings;
+    "demiplane-pf2e.slugMappingsSpell": SlugMappings;
+  }
+
+  interface SlugMappings {
+    [slug: string]: { uuid: string; name: string };
   }
 
   /**
