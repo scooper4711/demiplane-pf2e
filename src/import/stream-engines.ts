@@ -27,12 +27,6 @@ export interface AddSpellModifier {
   autoScaleSpellLevel?: boolean;
 }
 
-/** A focus-point grant. */
-export interface AddFocusPointModifier {
-  type: "add-focus-point";
-  addFocus: number;
-}
-
 /** Spells granted by a staff item. */
 export interface AddStaffSpellsModifier {
   type: "add-staff-spells";
@@ -56,11 +50,7 @@ export interface AddSpellSlotsModifier {
 
 /** Discriminated union of every engineModifier type we understand. */
 export type EngineModifier =
-  | AddSpellModifier
-  | AddFocusPointModifier
-  | AddStaffSpellsModifier
-  | AddSpecialItemSpellModifier
-  | AddSpellSlotsModifier;
+  AddSpellModifier | AddStaffSpellsModifier | AddSpecialItemSpellModifier | AddSpellSlotsModifier;
 
 /** One NDJSON response line: the engine id, its display name, and parsed modifiers. */
 export interface RawEngineLine {
@@ -80,9 +70,6 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
     switch (mod.type) {
       case "add-spell":
         if (typeof mod.addSpell === "string") results.push(mod as unknown as AddSpellModifier);
-        break;
-      case "add-focus-point":
-        if (typeof mod.addFocus === "number") results.push(mod as unknown as AddFocusPointModifier);
         break;
       case "add-staff-spells":
         results.push(mod as unknown as AddStaffSpellsModifier);
@@ -107,6 +94,27 @@ function finalizeLine(id: string | undefined, name: string | undefined, modifier
   return result;
 }
 
+/** Splits an NDJSON payload into its non-empty lines. */
+function splitNdjson(text: string): string[] {
+  return text.split("\n").filter((line) => line.trim());
+}
+
+/** Decodes the JSON payload of each `StringObject` node, skipping malformed ones. */
+function parseStringObjects(nodes: EngineNode[]): Array<Record<string, unknown>> {
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const node of nodes) {
+    if (node.name !== "StringObject" || !node.data?.string) continue;
+    try {
+      results.push(JSON.parse(node.data.string) as Record<string, unknown>);
+    } catch {
+      // Skip malformed nodes
+    }
+  }
+
+  return results;
+}
+
 /**
  * Parses a single NDJSON line from stream-engines. Returns the engine id, the
  * display name (from the first node carrying modifiers), and every engineModifier
@@ -115,22 +123,12 @@ function finalizeLine(id: string | undefined, name: string | undefined, modifier
 export function parseEngineLine(line: string): RawEngineLine {
   try {
     const parsed = JSON.parse(line) as { id?: string; data?: { nodes?: Record<string, EngineNode> } };
-    const nodes = Object.values(parsed.data?.nodes ?? {});
+    const objects = parseStringObjects(Object.values(parsed.data?.nodes ?? {}));
 
-    for (const node of nodes) {
-      if (node.name !== "StringObject" || !node.data?.string) continue;
-
-      try {
-        const obj = JSON.parse(node.data.string) as {
-          name?: string;
-          engineModifiers?: Array<Record<string, unknown>>;
-        };
-        const modifiers = extractModifiersFromObject(obj.engineModifiers ?? []);
-        if (modifiers.length > 0) {
-          return finalizeLine(parsed.id, obj.name, modifiers);
-        }
-      } catch {
-        // Skip malformed nodes
+    for (const obj of objects) {
+      const modifiers = extractModifiersFromObject((obj.engineModifiers as Array<Record<string, unknown>>) ?? []);
+      if (modifiers.length > 0) {
+        return finalizeLine(parsed.id, obj.name as string | undefined, modifiers);
       }
     }
 
@@ -142,20 +140,49 @@ export function parseEngineLine(line: string): RawEngineLine {
 
 /** Parses a full NDJSON stream-engines payload into per-line modifier records. */
 export function parseEngineLines(ndjsonText: string): RawEngineLine[] {
-  return ndjsonText
-    .split("\n")
-    .filter((line) => line.trim())
-    .map(parseEngineLine);
+  return splitNdjson(ndjsonText).map(parseEngineLine);
+}
+
+/** Domain spell slugs carried by a `tabula/domain/*` engine definition. */
+export interface DomainEngineData {
+  name?: string;
+  domainSpell?: string;
+  advancedSpell?: string;
 }
 
 /**
- * Fetches the given Demiplane engine definitions from stream-engines and returns
- * the parsed modifiers for each. Network or parse failures yield an empty list
- * rather than throwing, so callers can degrade gracefully.
+ * Parses a single NDJSON line from stream-engines looking for a domain engine.
+ * Domain engines (module `initialize/domain/index.eng`) declare their focus
+ * spells via `domainSpell` / `advancedSpell` fields on the StringObject node —
+ * not via `add-spell` engineModifiers. Returns an empty record for non-domain
+ * or malformed lines.
  */
-export async function fetchStreamEngineLines(engineIds: string[]): Promise<RawEngineLine[]> {
-  if (engineIds.length === 0) return [];
+export function parseDomainLine(line: string): DomainEngineData {
+  try {
+    const parsed = JSON.parse(line) as { data?: { nodes?: Record<string, EngineNode> } };
+    const objects = parseStringObjects(Object.values(parsed.data?.nodes ?? {}));
 
+    for (const obj of objects) {
+      if (typeof obj.domainSpell !== "string" && typeof obj.advancedSpell !== "string") continue;
+
+      const result: DomainEngineData = {};
+      if (typeof obj.name === "string") result.name = obj.name;
+      if (typeof obj.domainSpell === "string") result.domainSpell = obj.domainSpell;
+      if (typeof obj.advancedSpell === "string") result.advancedSpell = obj.advancedSpell;
+      return result;
+    }
+
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * POSTs engine ids to stream-engines and returns the raw NDJSON response text.
+ * Network failures are logged and yield null so callers can degrade gracefully.
+ */
+async function postStreamEngines(engineIds: string[], label: string): Promise<string | null> {
   try {
     const response = await fetch(STREAM_ENGINES_URL, {
       method: "POST",
@@ -167,12 +194,30 @@ export async function fetchStreamEngineLines(engineIds: string[]): Promise<RawEn
       }),
     });
 
-    if (!response.ok) return [];
-
-    const text = await response.text();
-    return parseEngineLines(text);
+    if (!response.ok) return null;
+    return await response.text();
   } catch (error) {
-    debugLog(`stream-engines fetch failed: ${error instanceof Error ? error.message : String(error)}`);
-    return [];
+    debugLog(`stream-engines (${label}) fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
   }
+}
+
+/** Fetches the given domain engine definitions and returns their spell slugs. */
+export async function fetchDomainEngineData(engineIds: string[]): Promise<DomainEngineData[]> {
+  if (engineIds.length === 0) return [];
+
+  const text = await postStreamEngines(engineIds, "domain");
+  return text ? splitNdjson(text).map(parseDomainLine) : [];
+}
+
+/**
+ * Fetches the given Demiplane engine definitions from stream-engines and returns
+ * the parsed modifiers for each. Network or parse failures yield an empty list
+ * rather than throwing, so callers can degrade gracefully.
+ */
+export async function fetchStreamEngineLines(engineIds: string[]): Promise<RawEngineLine[]> {
+  if (engineIds.length === 0) return [];
+
+  const text = await postStreamEngines(engineIds, "engines");
+  return text ? parseEngineLines(text) : [];
 }

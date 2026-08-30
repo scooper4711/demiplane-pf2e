@@ -9,7 +9,7 @@ export function createMockPack(
   items: Array<{
     _id: string;
     name: string;
-    system: { slug: string };
+    system: { slug: string; level?: { value: number }; [key: string]: unknown };
     [key: string]: unknown;
   }> = []
 ) {
@@ -43,6 +43,10 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
       map: (fn: (i: Record<string, unknown>) => unknown) => items.map(fn),
       size: items.length,
       [Symbol.iterator]: () => items[Symbol.iterator](),
+      get itemTypes() {
+        const ofType = (type: string) => items.filter((i) => i.type === type);
+        return { spellcastingEntry: ofType("spellcastingEntry"), spell: ofType("spell") };
+      },
     },
     system: {
       details: {

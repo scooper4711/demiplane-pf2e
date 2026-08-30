@@ -109,8 +109,9 @@ extract-`engineModifiers` pattern, and the `getPacks`/`PackIndex`/`resolveSpellF
 helpers are repeated in `feature-spell-resolver.ts`, `item-spell-resolver.ts`, and
 `spell-importer.ts` (and `spell-slot-resolver.ts` hits the same endpoint).
 **Recommendation:** one `streamEngines.fetchModifiers(engineIds)` returning a typed
-discriminated union (`AddSpellModifier | AddFocusPointModifier | AddStaffSpellsModifier
-| ...`), plus a single `resolveSpellFromCompendium(slug)` in `compendium-resolver.ts`.
+discriminated union (`AddSpellModifier | AddStaffSpellsModifier | AddSpecialItemSpellModifier
+| AddSpellSlotsModifier`), plus a single `resolveSpellFromCompendium(slug)` in
+`compendium-resolver.ts`.
 Removes ~100+ lines and makes the NDJSON parser a single maintenance surface.
 
 **P1-3. `ExportManager` is a god object (~755 lines).**
