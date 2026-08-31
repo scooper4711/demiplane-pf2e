@@ -4,7 +4,7 @@ import { getUnmappedSlugs } from "./sync-issues.js";
 import { getAllMappings, setMapping, clearMapping, isMappingResolvable } from "./slug-mapping.js";
 import type { SlugMapping } from "./slug-mapping.js";
 
-const TEMPLATE_PATH = `modules/${MODULE_ID}/templates/slug-mapper.hbs`;
+const TEMPLATE_PATH = `modules/${MODULE_ID}/templates/demiplane-mapping.hbs`;
 
 interface SlugRow {
   slug: string;
@@ -14,7 +14,7 @@ interface SlugRow {
   mappedName: string | null;
   /** True when a mapping exists but its target is no longer resolvable. */
   mappingMissing: boolean;
-  icon: string | null;
+  icon: string;
 }
 
 interface SlugSection {
@@ -24,6 +24,9 @@ interface SlugSection {
   /** False when there is no way to open a browser for this kind. */
   canBrowse: boolean;
 }
+
+/** PF2e's own placeholder icon, used for a row with no mapping yet. */
+const UNKNOWN_ITEM_ICON = "systems/pf2e/icons/actions/craft/unknown-item.webp";
 
 const KIND_LABELS: Record<SlugKind, string> = {
   ancestry: "Ancestry",
@@ -77,35 +80,38 @@ export function isAcceptedType(kind: SlugKind, itemType: string): boolean {
  * Foundry global requires that global to exist, and this module is imported
  * during setup when it may not yet be available.
  */
-type SlugMapperAppConstructor = new () => { render: (options?: { force?: boolean }) => Promise<unknown> };
+type DemiplaneMappingAppConstructor = new () => { render: (options?: { force?: boolean }) => Promise<unknown> };
 
-let AppClass: SlugMapperAppConstructor | undefined;
+let AppClass: DemiplaneMappingAppConstructor | undefined;
 
-export function getSlugMapperAppClass(): SlugMapperAppConstructor {
+export function getDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
   if (AppClass) return AppClass;
 
   const base = foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2);
 
-  class SlugMapperApp extends base {
+  class DemiplaneMappingApp extends base {
     static override DEFAULT_OPTIONS = {
-      id: "demiplane-slug-mapper",
-      classes: ["demiplane-slug-mapper"],
+      id: "demiplane-mapping",
+      // `crb-style sheet` picks up PF2e's parchment background; `themed
+      // theme-light` matches the actor window, which keeps the parchment look
+      // regardless of the Foundry theme.
+      classes: ["pf2e", "crb-style", "sheet", "themed", "theme-light"],
       window: {
-        title: "Demiplane — Slug Mapping",
+        title: "Demiplane Mapping",
         contentClasses: ["standard-form"],
         icon: "fa-solid fa-link",
       },
       position: { width: 760, height: 620 },
       actions: {
-        browse: SlugMapperApp.#onClickBrowse,
-        clear: SlugMapperApp.#onClickClear,
+        browse: DemiplaneMappingApp.#onClickBrowse,
+        clear: DemiplaneMappingApp.#onClickClear,
       },
     };
 
     static override PARTS = {
       list: {
         template: TEMPLATE_PATH,
-        scrollable: [".slug-list"],
+        scrollable: [".demiplane-mapping"],
       },
     };
 
@@ -115,7 +121,7 @@ export function getSlugMapperAppClass(): SlugMapperAppConstructor {
     }
 
     protected override _attachPartListeners(_partId: string, html: HTMLElement, _options: unknown): void {
-      for (const row of Array.from(html.querySelectorAll<HTMLElement>(".slug-row"))) {
+      for (const row of Array.from(html.querySelectorAll<HTMLElement>(".mapping-row"))) {
         row.addEventListener("dragover", (event: DragEvent) => {
           event.preventDefault();
           row.classList.add("drop-target");
@@ -162,7 +168,7 @@ export function getSlugMapperAppClass(): SlugMapperAppConstructor {
     }
   }
 
-  AppClass = SlugMapperApp as unknown as SlugMapperAppConstructor;
+  AppClass = DemiplaneMappingApp as unknown as DemiplaneMappingAppConstructor;
   return AppClass;
 }
 
@@ -181,7 +187,7 @@ async function collectSections(): Promise<SlugSection[]> {
     const bySlug = rowsByKind.get(kind)!;
     let row = bySlug.get(slug);
     if (!row) {
-      row = { slug, kind, characters: "", mappedName: null, mappingMissing: false, icon: null };
+      row = { slug, kind, characters: "", mappedName: null, mappingMissing: false, icon: UNKNOWN_ITEM_ICON };
       bySlug.set(slug, row);
     }
     return row;
@@ -225,10 +231,10 @@ function appendCharacter(existing: string, name: string): string {
   return [...names].join(", ");
 }
 
-async function iconFor(mapping: SlugMapping): Promise<string | null> {
+async function iconFor(mapping: SlugMapping): Promise<string> {
   const doc = await fromUuid(mapping.uuid);
   const img = (doc as { img?: string } | null)?.img;
-  return typeof img === "string" && img ? img : null;
+  return typeof img === "string" && img ? img : UNKNOWN_ITEM_ICON;
 }
 
 // ─── Compendium browser ─────────────────────────────────────────────────────
@@ -317,12 +323,12 @@ async function showMismatchDialog(
 
 /** Re-render any open instance so a change is visible immediately. */
 function refresh(): void {
-  const app = foundry.applications.instances.get("demiplane-slug-mapper") as
+  const app = foundry.applications.instances.get("demiplane-mapping") as
     { render: (options?: { force?: boolean }) => Promise<unknown> } | undefined;
   void app?.render({ force: true });
 }
 
-export function registerSlugMapperTemplates(): void {
+export function registerDemiplaneMappingTemplates(): void {
   foundry.applications.handlebars.loadTemplates([TEMPLATE_PATH]);
 }
 

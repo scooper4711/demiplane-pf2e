@@ -28,8 +28,8 @@ function settingKey(kind: SlugKind) {
 export function registerSlugMappingSettings(): void {
   for (const kind of SLUG_KINDS) {
     game.settings.register(MODULE_ID, settingKey(kind), {
-      name: `Slug Mappings — ${kind}`,
-      hint: `GM-defined compendium targets for unresolved ${kind} slugs. Managed on the Slug Mapping screen.`,
+      name: `Demiplane Mapping — ${kind}`,
+      hint: `GM-defined Foundry items for unresolved ${kind} names. Managed on the Demiplane Mapping screen.`,
       scope: "world",
       // Not shown in the standard settings list; the mapping screen is the UI.
       config: false,

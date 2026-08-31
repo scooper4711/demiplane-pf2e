@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { collectSections, EXPECTED_TYPES, isAcceptedType } from "../../src/slug-mapper-app.js";
+import { collectSections, EXPECTED_TYPES, isAcceptedType } from "../../src/demiplane-mapping-app.js";
 import { registerSlugMappingSettings, setMapping } from "../../src/slug-mapping.js";
 import type { UnmappedSlug } from "../../src/import/types.js";
 

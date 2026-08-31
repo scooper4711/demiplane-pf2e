@@ -1,7 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSlugMappingSettings } from "./slug-mapping.js";
-import { getSlugMapperAppClass } from "./slug-mapper-app.js";
+import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -39,11 +39,11 @@ export function registerSettings(): void {
 
   // GM-only submenu; the app itself is the UI, so the setting is config: false.
   game.settings.registerMenu(MODULE_ID, "slugMapper", {
-    name: "Slug Mapping",
-    label: "Slug Mapping",
-    hint: "Map Demiplane slugs that don't resolve onto real compendium items.",
+    name: "Demiplane Mapping",
+    label: "Demiplane Mapping",
+    hint: "Match Demiplane names that don't resolve onto real Foundry items.",
     icon: "fa-solid fa-link",
-    type: getSlugMapperAppClass() as never,
+    type: getDemiplaneMappingAppClass() as never,
     restricted: true,
   });
 
