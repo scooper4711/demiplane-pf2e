@@ -195,6 +195,25 @@ describe("applyLanguages", () => {
       "system.details.languages.value": ["common", "draconic", "elven"],
     });
   });
+
+  it("splits on semicolons", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "character-languages-user",
+        type: "CustomDemiplaneEngine",
+        args: {},
+        value: "Draconic; Elven",
+      },
+    ];
+    const summary = makeSummary();
+    await applyLanguages(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith({
+      "system.details.languages.value": ["common", "draconic", "elven"],
+    });
+  });
 });
 
 describe("applyAttributeBoosts", () => {

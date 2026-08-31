@@ -84,6 +84,19 @@ describe("applyBiography", () => {
     );
   });
 
+  it("splits edicts on semicolons", async () => {
+    const actor = createMockActor();
+    const engines = [makeEngine("character_personality_edicts", "Be brave; Help others; Stay true")];
+    const summary = makeSummary();
+    await applyBiography(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.details.biography.edicts": ["Be brave", "Help others", "Stay true"],
+      })
+    );
+  });
+
   it("parses organized play ID", async () => {
     const actor = createMockActor();
     const engines = [makeEngine("character_organizedplayid", "123456-2001")];
