@@ -46,6 +46,9 @@ function createMockActor(
   return {
     type,
     name: "Test Actor",
+    system: {
+      pfs: { playerNumber: null as number | null, characterNumber: null as number | null },
+    },
     getFlag: (_moduleId: string, key: string) => {
       if (key === "characterId") return characterId ?? undefined;
       return flags[key];
@@ -368,6 +371,59 @@ describe("HookManager", () => {
         "character_personality_anathema",
         "leave friends in danger; break promises"
       );
+    });
+  });
+
+  describe("updateActor hook — organized play ID", () => {
+    it("combines playerNumber and characterNumber into organized play ID", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      actor.system.pfs = { playerNumber: 123456, characterNumber: 2001 };
+      const changes = {
+        system: {
+          pfs: { playerNumber: 123456 },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_organizedplayid", "123456-2001");
+    });
+
+    it("queues organized play ID when character number changes", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      actor.system.pfs = { playerNumber: 123456, characterNumber: 2001 };
+      const changes = {
+        system: {
+          pfs: { characterNumber: 3002 },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_organizedplayid", "123456-3002");
+    });
+
+    it("does not queue when only one field is present in actor", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      actor.system.pfs = { playerNumber: 123456, characterNumber: null };
+      const changes = {
+        system: {
+          pfs: { playerNumber: 123456 },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character_organizedplayid", expect.anything());
     });
   });
 
