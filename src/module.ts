@@ -11,7 +11,7 @@ import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
 import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
-import { registerSlugMapperTemplates } from "./slug-mapper-app.js";
+import { registerDemiplaneMappingTemplates } from "./demiplane-mapping-app.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
 
 let client: DemiplaneClient;
@@ -20,7 +20,7 @@ let exportManager: ExportManager;
 let hookManager: HookManager;
 
 Hooks.once("init", () => {
-  registerSlugMapperTemplates();
+  registerDemiplaneMappingTemplates();
   debugLog(`Initializing Demiplane PF2e Sync`);
   registerSettings();
 });
