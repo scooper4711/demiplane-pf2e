@@ -187,6 +187,25 @@ export class HookManager {
         this.exportManager.queueChange(actor, storeName, value);
       }
     }
+
+    // Organized play ID is a single Demiplane field ("123456-2001") that maps
+    // to two Foundry fields (playerNumber + characterNumber).
+    this.queueOrganizedPlayChange(actor, changes);
+  }
+
+  private queueOrganizedPlayChange(actor: Actor, changes: Record<string, unknown>): void {
+    const pfs = this.getChangeValue(changes, "system.pfs.playerNumber");
+    const charNum = this.getChangeValue(changes, "system.pfs.characterNumber");
+    if (pfs === undefined && charNum === undefined) return;
+
+    const system = (actor as { system?: { pfs?: { playerNumber?: number | null; characterNumber?: number | null } } })
+      .system;
+    const player = typeof pfs === "number" ? pfs : system?.pfs?.playerNumber;
+    const character = typeof charNum === "number" ? charNum : system?.pfs?.characterNumber;
+
+    if (typeof player === "number" && typeof character === "number") {
+      this.exportManager.queueChange(actor, "character_organizedplayid", `${player}-${character}`);
+    }
   }
 
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {
