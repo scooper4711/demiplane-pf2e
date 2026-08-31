@@ -169,7 +169,7 @@ export async function applyLanguages(
   if (!langEngine || !langEngine.value || typeof langEngine.value !== "string") return;
 
   const rawLanguages = (langEngine.value as string)
-    .split(/[,\n\r]+/)
+    .split(/[,\n\r;]+/)
     .map((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
     .filter(Boolean);
 

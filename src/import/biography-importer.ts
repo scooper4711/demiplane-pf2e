@@ -64,7 +64,7 @@ function applyBackstory(updates: Record<string, unknown>, backstory: string | un
 function applyListField(updates: Record<string, unknown>, value: string | undefined, path: string): void {
   if (!value) return;
   updates[path] = value
-    .split(/[,\n\r]+/)
+    .split(/[,\n\r;]+/)
     .map((s: string) => s.trim())
     .filter(Boolean);
 }
