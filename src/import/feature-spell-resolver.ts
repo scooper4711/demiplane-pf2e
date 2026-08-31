@@ -2,8 +2,12 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { stampImported } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
-import { fetchStreamEngineLines, fetchDomainEngineData, type EngineModifier } from "./stream-engines.js";
-import type { DomainEngineData } from "./stream-engines.js";
+import {
+  fetchStreamEngineLines,
+  fetchDomainEngineData,
+  type EngineModifier,
+  type DomainEngineData,
+} from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
@@ -317,7 +321,7 @@ function getMaxAccessibleSpellRank(actor: Actor, characterLevel: number): number
     const slots = entry.system?.slots ?? {};
 
     for (const [key, slot] of Object.entries(slots)) {
-      const rank = Number(SLOT_KEY_RE.exec(key)?.[1] ?? NaN);
+      const rank = Number(SLOT_KEY_RE.exec(key)?.[1] ?? Number.NaN);
       if (!Number.isFinite(rank) || rank < 1) continue;
       if ((slot?.max ?? 0) > 0 && rank > maxRank) maxRank = rank;
     }

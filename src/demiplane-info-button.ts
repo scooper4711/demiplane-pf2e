@@ -62,15 +62,73 @@ export async function showDemiplaneInfoDialog(
   });
   const manualItemsSection = buildManualItemsSection(manualItems);
 
-  const content = `
+  const content = buildDialogContent({
+    sheetUrl,
+    lastImportDisplay,
+    lastExportDisplay,
+    issuesSection,
+    manualItemsSection,
+  });
+
+  await foundry.applications.api.DialogV2.wait({
+    window: { title: `Demiplane — ${actor.name}` },
+    classes: hasIssues ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
+    content,
+    buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, hasIssues),
+  });
+}
+
+function buildDialogButtons(
+  actor: Actor,
+  characterId: string,
+  importCharacter: ImportCharacterFn,
+  exportCharacter: ExportCharacterFn,
+  hasIssues: boolean
+): Array<foundry.applications.api.DialogV2.Button> {
+  return [
+    {
+      action: "update",
+      label: "Update from Demiplane",
+      icon: "fa-solid fa-sync",
+      callback: () => performUpdate(actor, characterId, importCharacter),
+    },
+    {
+      action: "push",
+      label: "Push to Demiplane",
+      icon: "fa-solid fa-upload",
+      callback: () => exportCharacter(actor),
+    },
+    {
+      // Deliberately not "close": DialogV2 treats that action as a plain
+      // dismissal and never invokes the callback, so the issues stayed set.
+      action: "dismiss",
+      label: hasIssues ? "Dismiss" : "Close",
+      default: true,
+      callback: () => {
+        if (hasIssues) clearAllIssues(actor);
+      },
+    },
+  ];
+}
+
+interface DialogContentOptions {
+  sheetUrl: string;
+  lastImportDisplay: string;
+  lastExportDisplay: string;
+  issuesSection: string;
+  manualItemsSection: string;
+}
+
+function buildDialogContent(opts: DialogContentOptions): string {
+  return `
     <div class="demiplane-info-dialog">
       <section>
-        <p><strong>Last import from Demiplane:</strong> ${lastImportDisplay}</p>
-        <p><strong>Last push to Demiplane:</strong> ${lastExportDisplay}</p>
-        <p><a href="${sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
+        <p><strong>Last import from Demiplane:</strong> ${opts.lastImportDisplay}</p>
+        <p><strong>Last push to Demiplane:</strong> ${opts.lastExportDisplay}</p>
+        <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
-      ${issuesSection}
-      ${manualItemsSection}
+      ${opts.issuesSection}
+      ${opts.manualItemsSection}
       <hr>
       <section>
         <p>Does this module save you time at the table?</p>
@@ -81,36 +139,6 @@ export async function showDemiplaneInfoDialog(
         </p>
       </section>
     </div>`;
-
-  await foundry.applications.api.DialogV2.wait({
-    window: { title: `Demiplane — ${actor.name}` },
-    classes: hasIssues ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
-    content,
-    buttons: [
-      {
-        action: "update",
-        label: "Update from Demiplane",
-        icon: "fa-solid fa-sync",
-        callback: () => performUpdate(actor, characterId, importCharacter),
-      },
-      {
-        action: "push",
-        label: "Push to Demiplane",
-        icon: "fa-solid fa-upload",
-        callback: () => exportCharacter(actor),
-      },
-      {
-        // Deliberately not "close": DialogV2 treats that action as a plain
-        // dismissal and never invokes the callback, so the issues stayed set.
-        action: "dismiss",
-        label: hasIssues ? "Dismiss" : "Close",
-        default: true,
-        callback: () => {
-          if (hasIssues) clearAllIssues(actor);
-        },
-      },
-    ],
-  });
 }
 
 function buildIssuesSection(importIssues: string[], exportIssues: string[]): string {

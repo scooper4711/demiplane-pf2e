@@ -244,7 +244,10 @@ export class HookManager {
         const flag = rule.flag || "choice";
         const flags = (item.flags?.pf2e as { rulesSelections?: Record<string, unknown> } | undefined)?.rulesSelections;
         const selection = flags && Object.hasOwn(flags, flag) ? flags[flag] : rule.selection;
-        return `${flag}=${selection ?? "none"}`;
+        const isNullish = selection === null || selection === undefined;
+        const selectionText =
+          typeof selection === "string" ? selection : isNullish ? "none" : JSON.stringify(selection);
+        return `${flag}=${selectionText}`;
       });
 
     return selections.length > 0 ? selections.join(", ") : "none";

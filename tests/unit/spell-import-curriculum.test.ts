@@ -112,7 +112,7 @@ describe("applySpells - curriculum separation", () => {
       return items[0]?.type === "spellcastingEntry";
     });
 
-    expect(entryCalls.length).toBe(2);
+    expect(entryCalls).toHaveLength(2);
 
     // First entry: regular
     const regularEntry = (entryCalls[0][1] as Array<Record<string, unknown>>)[0];
@@ -260,10 +260,10 @@ describe("applySpells - signature spells", () => {
 
     const updateCalls = (actor as unknown as Record<string, { mock: { calls: unknown[][] } }>).updateEmbeddedDocuments
       .mock.calls;
-    expect(updateCalls.length).toBe(1);
+    expect(updateCalls).toHaveLength(1);
 
     const updates = updateCalls[0][1] as Array<Record<string, unknown>>;
-    expect(updates.length).toBe(1);
+    expect(updates).toHaveLength(1);
     expect(updates[0]["system.location.signature"]).toBe(true);
     expect(summary.log.some((l) => l.includes("signature"))).toBe(true);
   });

@@ -159,7 +159,8 @@ export class PushPayloadBuilder {
           };
           engines = [...engines, newEngine];
           if (itemChange.edited) {
-            debugLog(`[push] created new quantity engine ${qtyName} with value ${String(itemChange.value)}`);
+            const qtyValue = itemChange.value as number;
+            debugLog(`[push] created new quantity engine ${qtyName} with value ${String(qtyValue)}`);
           }
         }
       } else if (itemChange.changeType === "equipped") {
@@ -239,12 +240,11 @@ export class PushPayloadBuilder {
       if (existingBoth) engines = engines.map((e) => (e === existingBoth ? { ...e, value: id } : e));
     };
     const clearAllHands = (id: string) => {
-      if (existingPrimary && existingPrimary.value === id)
+      if (existingPrimary?.value === id)
         engines = engines.map((e) => (e === existingPrimary ? { ...e, value: "na" } : e));
-      if (existingOffhand && existingOffhand.value === id)
+      if (existingOffhand?.value === id)
         engines = engines.map((e) => (e === existingOffhand ? { ...e, value: "na" } : e));
-      if (existingBoth && existingBoth.value === id)
-        engines = engines.map((e) => (e === existingBoth ? { ...e, value: "na" } : e));
+      if (existingBoth?.value === id) engines = engines.map((e) => (e === existingBoth ? { ...e, value: "na" } : e));
     };
 
     const assignments = this.computeHandAssignments(this.heldHandItems(resolved));

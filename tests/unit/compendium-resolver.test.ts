@@ -37,28 +37,15 @@ describe("resolveCompendiumItem", () => {
     });
   });
 
-  it("resolves a simple slug after stripping -rm", async () => {
-    const result = await resolveCompendiumItem("power-attack-rm", "feat");
+  it.each([
+    ["power-attack-rm", "Power Attack"],
+    ["cantrip-expansion-sorcerer-rm", "Cantrip Expansion"],
+    ["combat-assessment-commander-rm", "Combat Assessment"],
+    ["imperial-rm", "Bloodline: Imperial"],
+  ])("resolves slug %s to %s", async (slug, expectedName) => {
+    const result = await resolveCompendiumItem(slug, "feat");
     expect(result).not.toBeNull();
-    expect((result as Record<string, unknown>).name).toBe("Power Attack");
-  });
-
-  it("resolves by stripping class suffix", async () => {
-    const result = await resolveCompendiumItem("cantrip-expansion-sorcerer-rm", "feat");
-    expect(result).not.toBeNull();
-    expect((result as Record<string, unknown>).name).toBe("Cantrip Expansion");
-  });
-
-  it("resolves commander class feats by stripping -commander suffix", async () => {
-    const result = await resolveCompendiumItem("combat-assessment-commander-rm", "feat");
-    expect(result).not.toBeNull();
-    expect((result as Record<string, unknown>).name).toBe("Combat Assessment");
-  });
-
-  it("resolves by adding bloodline prefix", async () => {
-    const result = await resolveCompendiumItem("imperial-rm", "feat");
-    expect(result).not.toBeNull();
-    expect((result as Record<string, unknown>).name).toBe("Bloodline: Imperial");
+    expect((result as Record<string, unknown>).name).toBe(expectedName);
   });
 
   it("returns null for unknown slug", async () => {

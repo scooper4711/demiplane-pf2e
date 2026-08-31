@@ -1,5 +1,3 @@
-import { STREAM_ENGINES_URL } from "./import/stream-engines.js";
-
 /** Base URL for a Demiplane character sheet (append `/<characterId>`). */
 export const DEMIPLANE_SHEET_BASE = "https://app.demiplane.com/nexus/pathfinder2e/character-sheet";
 
@@ -15,4 +13,4 @@ export const EQUIPMENT_PACK = "pf2e.equipment-srd";
 export const DEITIES_PACK = "pf2e.deities";
 
 /** Re-export so every external endpoint lives in one module. */
-export { STREAM_ENGINES_URL };
+export { STREAM_ENGINES_URL } from "./import/stream-engines.js";

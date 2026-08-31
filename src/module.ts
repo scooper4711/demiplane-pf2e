@@ -26,6 +26,10 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", async () => {
+  await initializeModule();
+});
+
+async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
   // Pre-release warning only applies once the write feature (auto-sync) is enabled.
@@ -43,7 +47,7 @@ Hooks.once("ready", async () => {
   exportManager = new ExportManager(client);
   exportManager.setOnConflictHandler((actor) => reimportActorOnConflict(actor));
   hookManager = new HookManager(exportManager);
-  void new CharacterLinkDialog(client);
+  new CharacterLinkDialog(client);
 
   hookManager.register();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
@@ -51,9 +55,19 @@ Hooks.once("ready", async () => {
 
   // Recover from a previous session that crashed mid-sync, which would otherwise
   // leave a stale sync mark blocking all pushes for the affected character.
-  void recoverStaleSyncPauses();
+  recoverStaleSyncPauses();
 
-  // Keep the client token in sync when the setting changes
+  registerTokenSyncHooks();
+  registerModuleApi();
+
+  debugLog(`API registered`);
+}
+
+/**
+ * Keeps the client token in sync when the setting changes, and re-shows the
+ * pre-release warning whenever auto-sync is switched on.
+ */
+function registerTokenSyncHooks(): void {
   Hooks.on("updateSetting", (setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
       const newToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
@@ -65,33 +79,35 @@ Hooks.once("ready", async () => {
     // The pre-release warning is tied to the write feature (auto-sync). Show it
     // whenever auto-sync is switched on so users are re-warned before writing.
     if (setting.key === `${MODULE_ID}.autoSync` && game.settings.get(MODULE_ID, "autoSync")) {
-      void showPreReleaseWarning();
+      showPreReleaseWarning();
     }
   });
+}
 
-  // Expose module API for external access and testing
+/**
+ * Exposes the module API for external access and testing.
+ */
+function registerModuleApi(): void {
   const module = game.modules.get(MODULE_ID);
-  if (module) {
-    (module as unknown as { api: Record<string, unknown> }).api = {
-      importCharacter: async (actor: Actor, options?: { token?: string }) => {
-        const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
-        if (!characterId) {
-          ui.notifications.error("No Demiplane character linked to this actor.");
-          return null;
-        }
-        const token = options?.token || (game.settings.get(MODULE_ID, "demiplaneToken") as string);
-        if (!token) {
-          ui.notifications.error("No Demiplane token configured. Set it in module settings.");
-          return null;
-        }
-        return importLinkedCharacter(actor, characterId, token);
-      },
-      exportNow: (actor: Actor) => exportLinkedCharacter(actor),
-    };
-  }
+  if (!module) return;
 
-  debugLog(`API registered`);
-});
+  (module as unknown as { api: Record<string, unknown> }).api = {
+    importCharacter: async (actor: Actor, options?: { token?: string }) => {
+      const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
+      if (!characterId) {
+        ui.notifications.error("No Demiplane character linked to this actor.");
+        return null;
+      }
+      const token = options?.token || (game.settings.get(MODULE_ID, "demiplaneToken") as string);
+      if (!token) {
+        ui.notifications.error("No Demiplane token configured. Set it in module settings.");
+        return null;
+      }
+      return importLinkedCharacter(actor, characterId, token);
+    },
+    exportNow: (actor: Actor) => exportLinkedCharacter(actor),
+  };
+}
 
 // Add "Import Demiplane Character" button to the Actors sidebar
 Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
@@ -164,7 +180,7 @@ function showPreReleaseWarning(): Promise<void> {
 
 function extractCharacterId(input: string): string | null {
   const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
-  const match = input.match(uuidPattern);
+  const match = uuidPattern.exec(input);
   return match ? match[0] : null;
 }
 

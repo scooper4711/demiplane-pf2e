@@ -57,7 +57,7 @@ describe("sync-issues", () => {
 
     expect(getImportIssues(actor).size).toBe(2);
     expect(hasActiveIssues(actor)).toBe(true);
-    expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT).length).toBe(3);
+    expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT)).toHaveLength(3);
     expect(getImportIssues(actor).has("Another import error")).toBe(true);
   });
 
