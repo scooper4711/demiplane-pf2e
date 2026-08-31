@@ -86,7 +86,12 @@ let AppClass: DemiplaneMappingAppConstructor | undefined;
 
 export function getDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
   if (AppClass) return AppClass;
+  AppClass = buildDemiplaneMappingAppClass();
+  return AppClass;
+}
 
+// eslint-disable-next-line max-lines-per-function -- flat class-body declaration: low cognitive load, kept here so the memoizing factory stays single-purpose
+function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
   const base = foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2);
 
   class DemiplaneMappingApp extends base {

@@ -12,13 +12,16 @@ export function computeEngineSig(engines: Array<{ name?: string; value?: unknown
     if (v === null || v === undefined) return "null";
     if (typeof v !== "object") return JSON.stringify(v);
     try {
-      return JSON.stringify(v, Object.keys(v as object).sort());
+      const sortedKeys = Object.keys(v as object).sort((a, b) => a.localeCompare(b));
+      return JSON.stringify(v, sortedKeys);
     } catch {
-      return String(v);
+      // Unserializable value (e.g. a circular reference): fall back to its JSON-safe
+      // representation rather than the ambiguous `[object Object]`.
+      return "[unserializable]";
     }
   };
   return engines
     .map((e) => `${e.name ?? ""}=${stable(e.value ?? null)}`)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .join("|");
 }

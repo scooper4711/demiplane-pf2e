@@ -40,7 +40,7 @@ describe("module entrypoint", () => {
     const cb = onHook("getActorContextOptions");
     const items: Array<{ label: string }> = [];
     cb({}, items);
-    expect(items.length).toBe(1);
+    expect(items).toHaveLength(1);
     expect(items[0].label).toBe("Update from Demiplane");
   });
 

@@ -53,53 +53,65 @@ export class ChoiceSetHandler {
     this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
     debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");
 
-    // eslint-disable-next-line @typescript-eslint/no-this-alias -- required for monkey-patch closure
-    const self = this;
+    const patch = this.handlePreCreate.bind(this);
     ChoiceSetRE.prototype.preCreate = async function (this: ChoiceSetContext, params: PreCreateParams) {
-      if (!self.importMode) {
-        return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
-      }
-
-      if (this.selection !== null) {
-        // A selection was pre-set (e.g. by PF2e's native grant resolution). If it
-        // doesn't correspond to a real available choice, it's a bad placeholder
-        // (e.g. the generic "lore" slug instead of the actual "forest-lore" skill)
-        // and would pop the grant UI. Re-resolve it below instead of passing through.
-        const valid = await self.isPreSetSelectionValid(this, params);
-        if (valid) {
-          debugLog(
-            `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(this.selection)}, item=${params.itemSource.name}`
-          );
-          return (self.originalPreCreate as (...args: unknown[]) => Promise<void>).call(this, params);
-        }
-        debugLog(
-          `[ChoiceSet] preCreate: pre-set selection ${String(this.selection)} is not a valid choice; re-resolving, item=${params.itemSource.name}`
-        );
-        // fall through to re-resolution
-      }
-
-      debugLog(
-        `ChoiceSet preCreate: item=${this.item.name}, flag=${this.flag || "choice"}, prompt=${String(this.prompt)}, choices=${self.describeChoiceQuery(this.choices)}`
-      );
-
-      const rollOptions = new Set([this.actor.getRollOptions(), this.item.getRollOptions("parent")].flat());
-      const predicate = this.resolveInjectedProperties(this.predicate);
-      if (!predicate.test(rollOptions)) return;
-
-      this.choices = await this.inflateChoices(rollOptions, params.tempItems);
-      if (!this.choices || this.choices.length === 0) {
-        debugLog("ChoiceSet presented choices: none");
-        return;
-      }
-
-      debugLog(`ChoiceSet presented choices: ${self.describeChoices(this.choices)}`);
-
-      const matched = self.findMatchInChoices(this.choices, this.item.name);
-      const selected = matched ?? this.choices[0];
-      if (selected) {
-        self.applySelectedChoice(this, params, selected, matched !== null);
-      }
+      await patch(this, params);
     };
+  }
+
+  private description(selection: unknown): string {
+    return typeof selection === "string" ? selection : JSON.stringify(selection);
+  }
+
+  private async handlePreCreate(context: ChoiceSetContext, params: PreCreateParams): Promise<void> {
+    if (!this.importMode) {
+      return this.originalPreCreate!.call(context, params) as Promise<void>;
+    }
+
+    if (context.selection !== null) {
+      // A selection was pre-set (e.g. by PF2e's native grant resolution). If it
+      // doesn't correspond to a real available choice, it's a bad placeholder
+      // (e.g. the generic "lore" slug instead of the actual "forest-lore" skill)
+      // and would pop the grant UI. Re-resolve it below instead of passing through.
+      const valid = await this.isPreSetSelectionValid(context, params);
+      if (valid) {
+        debugLog(
+          `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
+            this.description(context.selection)
+          )}, item=${params.itemSource.name}`
+        );
+        return this.originalPreCreate!.call(context, params) as Promise<void>;
+      }
+      debugLog(
+        `[ChoiceSet] preCreate: pre-set selection ${this.description(
+          context.selection
+        )} is not a valid choice; re-resolving, item=${params.itemSource.name}`
+      );
+    }
+
+    debugLog(
+      `ChoiceSet preCreate: item=${context.item.name}, flag=${context.flag || "choice"}, prompt=${this.description(
+        context.prompt
+      )}, choices=${this.describeChoiceQuery(context.choices)}`
+    );
+
+    const rollOptions = new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
+    const predicate = context.resolveInjectedProperties(context.predicate);
+    if (!predicate.test(rollOptions)) return;
+
+    context.choices = await context.inflateChoices(rollOptions, params.tempItems);
+    if (!context.choices || context.choices.length === 0) {
+      debugLog("ChoiceSet presented choices: none");
+      return;
+    }
+
+    debugLog(`ChoiceSet presented choices: ${this.describeChoices(context.choices)}`);
+
+    const matched = this.findMatchInChoices(context.choices, context.item.name);
+    const selected = matched ?? context.choices[0];
+    if (selected) {
+      this.applySelectedChoice(context, params, selected, matched !== null);
+    }
   }
 
   disable(): void {
@@ -138,9 +150,9 @@ export class ChoiceSetHandler {
     // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation
     // so that subsequent GrantItem rules can resolve {item|flags.pf2e.rulesSelections.X}
     const itemFlags = context.item.flags as Record<string, Record<string, unknown>>;
-    if (!itemFlags.pf2e) itemFlags.pf2e = {};
+    itemFlags.pf2e ??= {};
     const pf2eFlags = itemFlags.pf2e as Record<string, unknown>;
-    if (!pf2eFlags.rulesSelections) pf2eFlags.rulesSelections = {};
+    pf2eFlags.rulesSelections ??= {};
     (pf2eFlags.rulesSelections as Record<string, unknown>)[context.flag || "choice"] = selected.value;
 
     debugLog(
@@ -185,15 +197,17 @@ export class ChoiceSetHandler {
   }
 
   private matchSkillSlugs(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
-    const allSkillSlugs = this.currentEngines
-      .filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug)
-      .map((e) => e.args?.slug as string);
+    const allSkillSlugs = new Set(
+      this.currentEngines
+        .filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug)
+        .map((e) => e.args?.slug as string)
+    );
 
-    debugLog(`[ChoiceSet match] Strategy 1 - skill slugs: [${allSkillSlugs.join(", ")}]`);
+    debugLog(`[ChoiceSet match] Strategy 1 - skill slugs: [${Array.from(allSkillSlugs).join(", ")}]`);
 
     for (const choice of choices) {
       const val = typeof choice.value === "string" ? choice.value : "";
-      if (allSkillSlugs.includes(val)) return choice;
+      if (allSkillSlugs.has(val)) return choice;
     }
     return null;
   }
@@ -223,11 +237,9 @@ export class ChoiceSetHandler {
           (e.args.sourceRow as string)?.includes(itemSlug))
     );
 
-    debugLog(
-      `[ChoiceSet match] custom-selection lore engines${itemName ? ` for "${itemName}"` : ""}: [${loreEngines
-        .map((e) => String(e.args?.name))
-        .join(", ")}]`
-    );
+    const scoped = itemName ? ` for "${itemName}"` : "";
+    const engineNames = loreEngines.map((e) => String(e.args?.name)).join(", ");
+    debugLog(`[ChoiceSet match] custom-selection lore engines${scoped}: [${engineNames}]`);
 
     for (const eng of loreEngines) {
       const target = this.toChoiceSlug(eng.args!.name as string);
@@ -240,15 +252,19 @@ export class ChoiceSetHandler {
   }
 
   private matchAllSlugs(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
-    const allSlugs = this.currentEngines
-      .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)
-      .map((e) => toFoundrySlug(e.args?.slug as string));
+    const allSlugs = new Set(
+      this.currentEngines
+        .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)
+        .map((e) => toFoundrySlug(e.args?.slug as string))
+    );
 
-    debugLog(`[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${allSlugs.slice(0, 20).join(", ")}]`);
+    debugLog(
+      `[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`
+    );
 
     for (const choice of choices) {
       const val = typeof choice.value === "string" ? choice.value : "";
-      if (allSlugs.includes(val)) return choice;
+      if (allSlugs.has(val)) return choice;
     }
     return null;
   }
@@ -416,24 +432,21 @@ export class ChoiceSetHandler {
 
     for (const rule of system.rules) {
       if (rule.key !== "ChoiceSet") continue;
+      const flagText = typeof rule.flag === "string" ? (rule.flag as string) : "choice";
       const selection = await this.findChoiceSelection(demiplaneSlug, rule);
       if (selection !== null) {
-        debugLog(
-          `[ChoiceSet] presetChoiceSelections resolved: flag=${String(rule.flag || "choice")}, selection=${String(selection)}`
-        );
+        debugLog(`[ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`);
         rule.selection = selection;
         // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
-        const flag = (rule.flag as string) || "choice";
+        const flag = flagText;
         const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
-        if (!flags.pf2e) flags.pf2e = {};
-        const rulesSelections = (flags.pf2e.rulesSelections || {}) as Record<string, unknown>;
+        flags.pf2e ??= {};
+        const rulesSelections = (flags.pf2e.rulesSelections ?? {}) as Record<string, unknown>;
         rulesSelections[flag] = selection;
         flags.pf2e.rulesSelections = rulesSelections;
         itemData.flags = flags;
       } else {
-        debugLog(
-          `[ChoiceSet] presetChoiceSelections: no match for flag=${String(rule.flag || "choice")} on slug=${demiplaneSlug}`
-        );
+        debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
       }
     }
   }

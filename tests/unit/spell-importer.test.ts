@@ -98,7 +98,7 @@ describe("applySpells", () => {
     const entries = actor.createEmbeddedDocuments.mock.calls.filter(
       (c: unknown[]) => (c[1] as Array<Record<string, unknown>>)[0].type === "spellcastingEntry"
     );
-    expect(entries.length).toBe(1);
+    expect(entries).toHaveLength(1);
     const entryData = (entries[0][1] as Array<Record<string, unknown>>)[0];
     expect((entryData.system as Record<string, Record<string, unknown>>).prepared.value).toBe("innate");
   });
@@ -141,7 +141,7 @@ describe("applySpells", () => {
       const spellItems = (spellCalls[0][1] as Array<Record<string, unknown>>).filter(
         (i) => i.type !== "spellcastingEntry"
       );
-      expect(spellItems.length).toBe(1); // Only one electric arc
+      expect(spellItems).toHaveLength(1); // Only one electric arc
     }
   });
 
@@ -187,15 +187,15 @@ describe("applySpells", () => {
     expect(entry).toBeDefined();
 
     const slots = (entry!.system as Record<string, Record<string, { prepared: Array<{ id: string | null }> }>>).slots;
-    expect(slots.slot0.prepared.length).toBe(5);
-    expect(slots.slot1.prepared.length).toBe(2);
+    expect(slots.slot0.prepared).toHaveLength(5);
+    expect(slots.slot1.prepared).toHaveLength(2);
 
     const allIds = [...slots.slot0.prepared, ...slots.slot1.prepared].map((p) => p.id);
     expect(allIds.every((id) => id !== null)).toBe(true);
 
     // Spells should also exist as items in the actor
     const spellItems = (actor.items as unknown as Array<Record<string, unknown>>).filter((i) => i.type === "spell");
-    expect(spellItems.length).toBe(7);
+    expect(spellItems).toHaveLength(7);
   });
 
   it("creates Divine Font entry with heal x4", async () => {
@@ -215,7 +215,7 @@ describe("applySpells", () => {
     );
 
     const slots = (entry!.system as Record<string, Record<string, { prepared: Array<{ id: string | null }> }>>).slots;
-    expect(slots.slot1.prepared.length).toBe(4);
+    expect(slots.slot1.prepared).toHaveLength(4);
     const healIds = slots.slot1.prepared.map((p) => p.id);
     expect(healIds.every((id) => id !== null)).toBe(true);
     expect(new Set(healIds).size).toBe(1); // single Heal item referenced 4x

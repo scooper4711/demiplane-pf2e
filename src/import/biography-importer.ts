@@ -58,7 +58,7 @@ export async function applyBiography(
 function applyBackstory(updates: Record<string, unknown>, backstory: string | undefined): void {
   if (backstory)
     updates["system.details.biography.backstory"] =
-      `<p>${backstory.replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>")}</p>`;
+      `<p>${backstory.replaceAll("\n\n", "</p><p>").replaceAll("\n", "<br>")}</p>`;
 }
 
 function applyListField(updates: Record<string, unknown>, value: string | undefined, path: string): void {
@@ -73,8 +73,8 @@ function applyOrganizedPlayId(updates: Record<string, unknown>, orgPlayId: strin
   if (!orgPlayId) return;
   const lastDash = orgPlayId.lastIndexOf("-");
   if (lastDash > 0) {
-    updates["system.pfs.playerNumber"] = parseInt(orgPlayId.slice(0, lastDash), 10) || null;
-    updates["system.pfs.characterNumber"] = parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
+    updates["system.pfs.playerNumber"] = Number.parseInt(orgPlayId.slice(0, lastDash), 10) || null;
+    updates["system.pfs.characterNumber"] = Number.parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
   }
 }
 

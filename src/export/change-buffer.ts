@@ -218,6 +218,13 @@ export class ChangeBuffer {
     return changes !== undefined && changes.size > 0;
   }
 
+  /** Whether a character has any buffered field or item changes to push. */
+  hasPendingWork(characterId: string): boolean {
+    const changes = this.pendingChanges.get(characterId);
+    const itemChanges = this.pendingItemChanges.get(characterId);
+    return (changes !== undefined && changes.size > 0) || (itemChanges !== undefined && itemChanges.size > 0);
+  }
+
   isWithinRateLimit(characterId: string): boolean {
     const timestamps = this.apiCallTimestamps.get(characterId) ?? [];
     const now = Date.now();

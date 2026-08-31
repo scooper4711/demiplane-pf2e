@@ -13,7 +13,7 @@ export function toFoundrySlug(slug: string): string {
  */
 export function getSlug(eng: DemiplaneEngineEntry): string | null {
   if (eng.args?.slug) return eng.args.slug as string;
-  const match = eng.name.match(/\/([^/]+)\.eng$/);
+  const match = /\/([^/]+)\.eng$/.exec(eng.name);
   return match?.[1] ?? null;
 }
 
@@ -26,10 +26,10 @@ export function parseFeatSlot(sourceRow: string): {
 } {
   if (!sourceRow) return { location: null, taken: null };
 
-  const levelMatch = sourceRow.match(/^(\w+)-feats?-level-(\d+)/);
+  const levelMatch = /^(\w+)-feats?-level-(\d+)/.exec(sourceRow);
   if (levelMatch) {
     const prefix = levelMatch[1] ?? "";
-    const level = parseInt(levelMatch[2] ?? "0", 10);
+    const level = Number.parseInt(levelMatch[2] ?? "0", 10);
     let type = "class";
     if (prefix === "ancestry") type = "ancestry";
     else if (prefix === "skill") type = "skill";

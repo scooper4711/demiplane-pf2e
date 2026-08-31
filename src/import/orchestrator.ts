@@ -37,7 +37,7 @@ import {
 export { collectLoreNames } from "./phases.js";
 
 export class ImportOrchestrator {
-  private choiceSetHandler = new ChoiceSetHandler();
+  private readonly choiceSetHandler = new ChoiceSetHandler();
 
   async importCharacter(actor: Actor, characterId: string, options: ImportOptions = {}): Promise<ImportSummary> {
     const { token } = options;

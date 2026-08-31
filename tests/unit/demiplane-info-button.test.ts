@@ -141,7 +141,7 @@ describe("registerDemiplaneInfoButton gating", () => {
     registerDemiplaneInfoButton(importFn, exportFn);
     const buttons: Array<{ class?: string }> = [];
     capturedCallback()({ actor: linkedActor(false) }, buttons);
-    expect(buttons.length).toBe(1);
+    expect(buttons).toHaveLength(1);
     expect(buttons[0].class).toBe("demiplane-info-btn");
   });
 
@@ -150,7 +150,7 @@ describe("registerDemiplaneInfoButton gating", () => {
     registerDemiplaneInfoButton(importFn, exportFn);
     const buttons: Array<{ class?: string }> = [];
     capturedCallback()({ actor: linkedActor(true) }, buttons);
-    expect(buttons.length).toBe(1);
+    expect(buttons).toHaveLength(1);
     expect(buttons[0].class).toBe("demiplane-info-btn");
   });
 
@@ -159,6 +159,6 @@ describe("registerDemiplaneInfoButton gating", () => {
     registerDemiplaneInfoButton(importFn, exportFn);
     const buttons: Array<{ class?: string }> = [];
     capturedCallback()({ actor: linkedActor(false) }, buttons);
-    expect(buttons.length).toBe(0);
+    expect(buttons).toHaveLength(0);
   });
 });

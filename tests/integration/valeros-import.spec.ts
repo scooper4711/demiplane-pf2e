@@ -1,17 +1,14 @@
 import { test, expect } from "@playwright/test";
-import {
-  loginAsGamemaster,
-  deleteActorByName,
-  createAndImportCharacter,
-  type ImportResult,
-} from "./helpers.js";
+import { loginAsGamemaster, deleteActorByName, createAndImportCharacter, type ImportResult } from "./helpers.js";
 
-const VALEROS_UUID =
-  process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
+const VALEROS_UUID = process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";
 const ACTOR_NAME = "Valeros Import Test";
 
 test.describe("Valeros Level 5 Import", () => {
+  // This integration suite hits the live Demiplane API and therefore requires a real
+  // token. It is intentionally skipped (not removed) when DEMIPLANE_TOKEN is unset in
+  // CI/local runs, so the Playwright suite stays green without network credentials.
   test.skip(!DEMIPLANE_TOKEN, "DEMIPLANE_TOKEN env var required");
 
   // Import once, share result across all tests in this suite
@@ -21,12 +18,7 @@ test.describe("Valeros Level 5 Import", () => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
     await deleteActorByName(page, ACTOR_NAME);
-    result = await createAndImportCharacter(
-      page,
-      ACTOR_NAME,
-      VALEROS_UUID,
-      DEMIPLANE_TOKEN,
-    );
+    result = await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
     await page.close();
   });
 
@@ -56,61 +48,41 @@ test.describe("Valeros Level 5 Import", () => {
 
   test("class feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find((f) => f.name === "Double Slice")?.location).toBe(
-      "class-1",
-    );
+    expect(feats.find((f) => f.name === "Double Slice")?.location).toBe("class-1");
     expect(feats.find((f) => f.name === "Double Slice")?.taken).toBe(1);
-    expect(feats.find((f) => f.name === "Aggressive Block")?.location).toBe(
-      "class-2",
-    );
+    expect(feats.find((f) => f.name === "Aggressive Block")?.location).toBe("class-2");
     expect(feats.find((f) => f.name === "Aggressive Block")?.taken).toBe(2);
-    expect(feats.find((f) => f.name === "Powerful Shove")?.location).toBe(
-      "class-4",
-    );
+    expect(feats.find((f) => f.name === "Powerful Shove")?.location).toBe("class-4");
     expect(feats.find((f) => f.name === "Powerful Shove")?.taken).toBe(4);
   });
 
   test("ancestry feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find((f) => f.name === "Natural Ambition")?.location).toBe(
-      "ancestry-1",
-    );
+    expect(feats.find((f) => f.name === "Natural Ambition")?.location).toBe("ancestry-1");
     expect(feats.find((f) => f.name === "Natural Ambition")?.taken).toBe(1);
-    expect(feats.find((f) => f.name === "Haughty Obstinacy")?.location).toBe(
-      "ancestry-5",
-    );
+    expect(feats.find((f) => f.name === "Haughty Obstinacy")?.location).toBe("ancestry-5");
     expect(feats.find((f) => f.name === "Haughty Obstinacy")?.taken).toBe(5);
   });
 
   test("skill and general feats in correct slots", () => {
     const feats = result.feats;
-    expect(feats.find((f) => f.name === "Combat Climber")?.location).toBe(
-      "skill-2",
-    );
+    expect(feats.find((f) => f.name === "Combat Climber")?.location).toBe("skill-2");
     expect(feats.find((f) => f.name === "Combat Climber")?.taken).toBe(2);
-    expect(feats.find((f) => f.name === "Powerful Leap")?.location).toBe(
-      "skill-4",
-    );
+    expect(feats.find((f) => f.name === "Powerful Leap")?.location).toBe("skill-4");
     expect(feats.find((f) => f.name === "Powerful Leap")?.taken).toBe(4);
-    expect(feats.find((f) => f.name === "Toughness")?.location).toBe(
-      "general-3",
-    );
+    expect(feats.find((f) => f.name === "Toughness")?.location).toBe("general-3");
     expect(feats.find((f) => f.name === "Toughness")?.taken).toBe(3);
   });
 
   test("grants Reactive Shield via Natural Ambition ChoiceSet", () => {
-    expect(
-      result.feats.find((f) => f.name === "Reactive Shield"),
-    ).toBeDefined();
+    expect(result.feats.find((f) => f.name === "Reactive Shield")).toBeDefined();
   });
 
   test("auto-grants class features via Grant Chain", () => {
     const feats = result.feats;
     expect(feats.find((f) => f.name === "Reactive Strike")).toBeDefined();
     expect(feats.find((f) => f.name === "Bravery")).toBeDefined();
-    expect(
-      feats.find((f) => f.name === "Fighter Weapon Mastery"),
-    ).toBeDefined();
+    expect(feats.find((f) => f.name === "Fighter Weapon Mastery")).toBeDefined();
   });
   test("applies correct languages", () => {
     expect(result.languages).toContain("common");
@@ -186,16 +158,12 @@ test.describe("Valeros Level 5 Import", () => {
   });
 
   test("imports invested items", () => {
-    const doublingRings = result.equipment.find(
-      (e) => e.name === "Doubling Rings",
-    );
+    const doublingRings = result.equipment.find((e) => e.name === "Doubling Rings");
     expect(doublingRings).toBeDefined();
     expect(doublingRings!.carryType).toBe("worn");
     expect(doublingRings!.invested).toBe(true);
 
-    const pendant = result.equipment.find(
-      (e) => e.name === "Pendant of the Occult",
-    );
+    const pendant = result.equipment.find((e) => e.name === "Pendant of the Occult");
     expect(pendant).toBeDefined();
     expect(pendant!.carryType).toBe("worn");
     expect(pendant!.invested).toBe(true);

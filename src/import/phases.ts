@@ -84,10 +84,10 @@ export class LoreItemsPhase implements ImportPhase {
     const loreNames = collectLoreNames(ctx.engines, backgroundLores);
     if (loreNames.length === 0) return;
 
-    const existingLores = actor.items
-      .filter((i: { type: string }) => i.type === "lore")
-      .map((i: { name: string }) => i.name);
-    const newLores = loreNames.filter((n) => !existingLores.includes(n));
+    const existingLores = new Set(
+      actor.items.filter((i: { type: string }) => i.type === "lore").map((i: { name: string }) => i.name)
+    );
+    const newLores = loreNames.filter((n) => !existingLores.has(n));
 
     if (newLores.length > 0) {
       const loreItems = newLores.map((name: string) => ({
@@ -283,11 +283,7 @@ export class BatchItemsPhase implements ImportPhase {
             const { location, taken } = parseFeatSlot(eng.args.sourceRow as string);
             const system = (itemData as Record<string, unknown>).system as Record<string, unknown>;
             if (location) system.location = location;
-            if (taken !== null)
-              system.level = {
-                ...((system.level as Record<string, unknown>) || {}),
-                taken,
-              };
+            if (taken !== null) system.level = { ...(system.level as Record<string, unknown>), taken };
           }
           batchItems.push(stampImported(itemData, eng._slug));
           ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);

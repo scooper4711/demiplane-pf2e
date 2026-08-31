@@ -71,11 +71,11 @@ function collectProfKnowledge(engines: DemiplaneEngineEntry[]): ProfKnowledge {
   const overriddenFlags = new Set<string>();
   for (const eng of engines) {
     if (eng.type !== "CustomDemiplaneEngine") continue;
-    const overriddenMatch = eng.name.match(/^character_(.+)_prof--overridden$/);
+    const overriddenMatch = /^character_(.+)_prof--overridden$/.exec(eng.name);
     if (overriddenMatch?.[1] && eng.value === 1) {
       overriddenFlags.add(overriddenMatch[1]);
     }
-    const profMatch = eng.name.match(/^character_(.+)_prof$/);
+    const profMatch = /^character_(.+)_prof$/.exec(eng.name);
     if (profMatch?.[1] && typeof eng.value === "number") {
       profOverrides[profMatch[1]] = eng.value as number;
     }
@@ -107,7 +107,7 @@ function computeSkillRanks(
     const sourceRow = (eng.args.sourceRow as string) || "";
 
     if (!isSkillSlug(slug)) continue;
-    if (sourceRow.includes("select-skill-") && sourceRow.match(/heritage|human-rm/)) continue;
+    if (sourceRow.includes("select-skill-") && /heritage|human-rm/.exec(sourceRow)) continue;
     if (slug in activeOverrides) continue;
 
     const isIncrease = sourceRow.includes("skill-increase");
@@ -254,10 +254,10 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
     } else if (sourceRow === "background-boosts") {
       backgroundBoosts.push(slug);
     } else {
-      const levelMatch = sourceRow.match(/attribute-boosts-level-(\d+)/);
+      const levelMatch = /attribute-boosts-level-(\d+)/.exec(sourceRow);
       if (levelMatch) {
         const level = levelMatch[1] ?? "";
-        if (!levelBoosts[level]) levelBoosts[level] = [];
+        levelBoosts[level] ??= [];
         levelBoosts[level]?.push(slug);
       }
     }
@@ -291,9 +291,8 @@ async function applyLevelBoosts(
     updates[`system.build.attributes.boosts.${level}`] = boosts;
   }
   await actor.update(updates);
-  summary.log.push(
-    `+ boosts: levels [${Object.entries(levelBoosts)
-      .map(([l, b]) => `L${l}:${b.join(",")}`)
-      .join("; ")}]`
-  );
+  const perLevel = Object.entries(levelBoosts)
+    .map(([l, b]) => `L${l}:${b.join(",")}`)
+    .join("; ");
+  summary.log.push(`+ boosts: levels [${perLevel}]`);
 }

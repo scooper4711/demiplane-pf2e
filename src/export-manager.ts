@@ -5,20 +5,15 @@ import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
 import { isClientElectedWriter } from "./sync-election.js";
-import {
-  ChangeBuffer,
-  type EquippedState,
-  type ItemChangeType,
-  type PendingChange,
-  type PendingItemChange,
-} from "./export/change-buffer.js";
+import { ChangeBuffer, type EquippedState, type ItemChangeType, type PendingChange } from "./export/change-buffer.js";
 import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
 import { ConflictResolver } from "./export/conflict-resolver.js";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
-export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange, FetchedCharacter };
+export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
+export type { FetchedCharacter } from "./export/push-payload-builder.js";
 
 export interface ExportResult {
   success: boolean;
@@ -116,80 +111,26 @@ export class ExportManager {
 
   async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
-
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
     }
 
-    // When an auto-push is coordinated across multiple connected clients, only the
-    // single elected writer may push — otherwise every client duplicates the write.
-    // Drop our own pending changes if we are not the elected writer; the elected
-    // client will push the authoritative state.
-    if (opts.enforceElection && !isClientElectedWriter(actor)) {
-      debugLog(`[push] not the elected writer for ${characterId}; skipping auto-push`);
-      this.changeBuffer.clear(characterId);
-      return { success: true };
-    }
-
-    // If another client is importing/pushing this character, defer our flush
-    // rather than racing it into a conflict. Re-arm the timer so the pending
-    // changes are pushed once the remote sync settles.
-    if (isRemoteSyncActive(actor)) {
-      debugLog(`[push] remote sync in progress for ${characterId}; deferring flush`);
-      this.changeBuffer.rearmFlush(actor, characterId);
-      return { success: true };
-    }
+    const blocked = this.checkFlushBlocked(actor, characterId, opts);
+    if (blocked) return blocked;
 
     this.changeBuffer.clearDebounceTimer(characterId);
 
-    const { changes, itemChanges } = this.changeBuffer.peek(characterId);
-    if ((!changes || changes.size === 0) && (!itemChanges || itemChanges.size === 0)) {
+    if (!this.changeBuffer.hasPendingWork(characterId)) {
       return { success: true };
     }
 
-    if (!this.changeBuffer.isWithinRateLimit(characterId)) {
-      const error = "Rate limit exceeded: maximum 30 API calls per 60 seconds";
-      addExportIssue(actor, error);
-      return {
-        success: false,
-        error,
-      };
-    }
+    const readinessError = this.checkPushReadiness(actor, characterId);
+    if (readinessError) return { success: false, error: readinessError };
 
-    if (!this.client.isAuthenticated()) {
-      const error = "No Demiplane token configured. Ask your GM to set it in module settings.";
-      addExportIssue(actor, error);
-      this.notifyFailure(error);
-      return { success: false, error };
-    }
+    const conflict = await this.checkForConflict(actor, characterId);
+    if (conflict) return conflict;
 
-    // Optimistic concurrency: check if Demiplane has been updated since last import
-    const conflict = await this.conflictResolver.checkConflict(characterId, actor);
-    if (conflict.status === "conflict") {
-      // Clear pending changes so we don't retry the stale push
-      this.changeBuffer.clear(characterId);
-      // Trigger conflict recovery (re-import) without blocking the flush return
-      if (this.onConflictHandler) {
-        void this.onConflictHandler(actor);
-      }
-      return { success: false, error: conflict.error, conflict: true };
-    }
-
-    // Keep session alive
-    try {
-      await this.client.updateLastAccess();
-      debugLog(`[push] updateLastAccess succeeded`);
-    } catch (error) {
-      debugLog(`[push] updateLastAccess failed: ${String(error)}`);
-      // Non-critical: ignore failure to update last access
-    }
-
-    const fetched = await this.payloadBuilder.buildUpdatedCharacterData(
-      characterId,
-      actor,
-      changes ?? new Map(),
-      itemChanges ?? new Map()
-    );
+    const fetched = await this.buildPushPayload(characterId, actor);
     if (!fetched) {
       const error = "Failed to fetch character data";
       addExportIssue(actor, error);
@@ -199,8 +140,95 @@ export class ExportManager {
     debugLog(`[push] starting push`);
     const result = await this.pushWithRetry(characterId, fetched);
     await this.handlePushResult(result, characterId, actor);
-    debugLog(`[push] push resolved ${result.success ? "success" : "failure"}`);
+    debugLog(`[push] push resolved with success=${result.success}`);
     return result;
+  }
+
+  /**
+   * Guard clauses that abort a flush before any work is done: this client must be
+   * the elected writer when enforced, and no other client may be mid-sync for the
+   * same character. Returns null when the flush may proceed.
+   */
+  private checkFlushBlocked(
+    actor: Actor,
+    characterId: string,
+    opts: { enforceElection?: boolean }
+  ): ExportResult | null {
+    // Only the single elected writer may push a coordinated auto-push; otherwise
+    // every client duplicates the write. Drop our own pending changes if we are
+    // not elected — the elected client pushes the authoritative state.
+    if (opts.enforceElection && !isClientElectedWriter(actor)) {
+      debugLog(`[push] not the elected writer for ${characterId}; skipping auto-push`);
+      this.changeBuffer.clear(characterId);
+      return { success: true };
+    }
+
+    // Defer rather than race another client importing/pushing this character, then
+    // re-arm the timer so the pending changes are pushed once the remote sync settles.
+    if (isRemoteSyncActive(actor)) {
+      debugLog(`[push] remote sync in progress for ${characterId}; deferring flush`);
+      this.changeBuffer.rearmFlush(actor, characterId);
+      return { success: true };
+    }
+
+    return null;
+  }
+
+  /** Combines the rate-limit and authentication gates into a single error string (or null). */
+  private checkPushReadiness(actor: Actor, characterId: string): string | null {
+    const rateLimitError = this.checkRateLimit(actor, characterId);
+    if (rateLimitError) return rateLimitError;
+    return this.checkAuthentication(actor);
+  }
+
+  private checkRateLimit(actor: Actor, characterId: string): string | null {
+    if (this.changeBuffer.isWithinRateLimit(characterId)) return null;
+    const error = "Rate limit exceeded: maximum 30 API calls per 60 seconds";
+    addExportIssue(actor, error);
+    return error;
+  }
+
+  private checkAuthentication(actor: Actor): string | null {
+    if (this.client.isAuthenticated()) return null;
+    const error = "No Demiplane token configured. Ask your GM to set it in module settings.";
+    addExportIssue(actor, error);
+    this.notifyFailure(error);
+    return error;
+  }
+
+  /**
+   * Optimistic concurrency: if Demiplane has been updated since the last import,
+   * clears the stale pending changes and triggers conflict recovery (re-import).
+   * Returns a failed `ExportResult` on conflict, or null when the push may proceed.
+   */
+  private async checkForConflict(actor: Actor, characterId: string): Promise<ExportResult | null> {
+    const conflict = await this.conflictResolver.checkConflict(characterId, actor);
+    if (conflict.status !== "conflict") return null;
+    this.changeBuffer.clear(characterId);
+    if (this.onConflictHandler) {
+      void this.onConflictHandler(actor);
+    }
+    return { success: false, error: conflict.error, conflict: true };
+  }
+
+  /**
+   * Keeps the session alive and assembles the Demiplane payload for the buffered
+   * changes. Returns null if the character data could not be fetched.
+   */
+  private async buildPushPayload(characterId: string, actor: Actor): Promise<FetchedCharacter | null> {
+    try {
+      await this.client.updateLastAccess();
+      debugLog(`[push] updateLastAccess succeeded`);
+    } catch (error) {
+      debugLog(`[push] updateLastAccess failed: ${String(error)}`);
+    }
+    const { changes, itemChanges } = this.changeBuffer.peek(characterId);
+    return this.payloadBuilder.buildUpdatedCharacterData(
+      characterId,
+      actor,
+      changes ?? new Map(),
+      itemChanges ?? new Map()
+    );
   }
 
   getPendingChanges(characterId: string): PendingChange[] {
