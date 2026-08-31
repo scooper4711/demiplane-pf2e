@@ -14,6 +14,24 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
   "system.attributes.hp.temp": "character_hit-points_temp",
   "system.resources.heroPoints.value": "character_hero-points",
+  "system.details.gender.value": "character_appearance_gender",
+  "system.details.age.value": "character_appearance_age",
+  "system.details.ethnicity.value": "character_appearance_ethnicity",
+  "system.details.nationality.value": "character_appearance_nationality",
+  "system.details.height.value": "character_appearance_height",
+  "system.details.weight.value": "character_appearance_weight",
+  "system.details.biography.birthPlace": "character_appearance_birthplace",
+  "system.details.biography.appearance": "character_appearance_appearance",
+  "system.details.biography.catchphrases": "character_personality_catchphrases",
+  "system.details.biography.attitude": "character_personality_attitude",
+  "system.details.biography.likes": "character_personality_likes",
+  "system.details.biography.dislikes": "character_personality_dislikes",
+  "system.details.biography.allies": "character_campaign_allies",
+  "system.details.biography.enemies": "character_campaign_enemies",
+  "system.details.biography.organizations": "character_campaign_organizations",
+  "system.details.biography.backstory": "character_campaign_other",
+  "system.details.biography.edicts": "character_personality_edicts",
+  "system.details.biography.anathema": "character_personality_anathema",
 };
 
 const TREASURE_ITEM_MAP: Record<string, string> = {
@@ -159,7 +177,13 @@ export class HookManager {
 
     for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
       const value = this.getChangeValue(changes, actorPath);
-      if (value !== undefined && typeof value === "number") {
+      if (value === undefined || value === null) continue;
+
+      // Array fields (edicts, anathema) are stored as arrays in Foundry but as
+      // semicolon-separated strings in Demiplane.
+      if (Array.isArray(value)) {
+        this.exportManager.queueChange(actor, storeName, value.join("; "));
+      } else if (typeof value === "number" || typeof value === "string") {
         this.exportManager.queueChange(actor, storeName, value);
       }
     }

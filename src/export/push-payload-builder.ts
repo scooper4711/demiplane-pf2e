@@ -89,7 +89,7 @@ export class PushPayloadBuilder {
     return engines;
   }
 
-  private createOverrideEngine(name: string, value: number): CustomEngine {
+  private createOverrideEngine(name: string, value: number | string): CustomEngine {
     return {
       id: `custom_${name}`,
       name,

@@ -281,6 +281,96 @@ describe("HookManager", () => {
     });
   });
 
+  describe("updateActor hook — biography fields", () => {
+    it("queues string biography fields", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = {
+        system: {
+          details: {
+            gender: { value: "He/him" },
+            age: { value: "28" },
+            height: { value: "5' 8\"" },
+            weight: { value: "190 lbs" },
+            biography: {
+              birthPlace: "Andoran",
+              appearance: "Scruffy-looking",
+              attitude: "Cocky",
+              likes: "Beer",
+              dislikes: "Being sober",
+              allies: "Ezren, Seoni, Kyra",
+              enemies: "Aspis Consortium",
+              organizations: "Pathfinder Society",
+              catchphrases: "Noble at heart",
+              backstory: "Born on a quiet farm",
+            },
+          },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_gender", "He/him");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_age", "28");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_height", "5' 8\"");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_weight", "190 lbs");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_birthplace", "Andoran");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_appearance_appearance",
+        "Scruffy-looking"
+      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_attitude", "Cocky");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_likes", "Beer");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_dislikes", "Being sober");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_campaign_allies", "Ezren, Seoni, Kyra");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_campaign_enemies", "Aspis Consortium");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_campaign_organizations",
+        "Pathfinder Society"
+      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_personality_catchphrases",
+        "Noble at heart"
+      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_campaign_other", "Born on a quiet farm");
+    });
+
+    it("joins array fields with semicolons for edicts and anathema", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = {
+        system: {
+          details: {
+            biography: {
+              edicts: ["Be brave", "Help others", "Stay true"],
+              anathema: ["leave friends in danger", "break promises"],
+            },
+          },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_personality_edicts",
+        "Be brave; Help others; Stay true"
+      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_personality_anathema",
+        "leave friends in danger; break promises"
+      );
+    });
+  });
+
   describe("updateActor hook — currency changes", () => {
     it("does not queue currency changes via updateActor (currency uses updateItem)", () => {
       const manager = new HookManager(exportManager as never);
@@ -350,14 +440,14 @@ describe("HookManager", () => {
   });
 
   describe("updateActor hook — non-numeric values", () => {
-    it("does not call queueChange for non-numeric values", () => {
+    it("does not call queueChange for null or undefined values", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
       const changes = {
         system: {
-          attributes: { hp: { value: "not-a-number" } },
+          attributes: { hp: { value: undefined } },
         },
       };
 

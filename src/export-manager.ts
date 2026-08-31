@@ -81,7 +81,7 @@ export class ExportManager {
     this.changeBuffer.resume(characterId);
   }
 
-  queueChange(actor: Actor, field: string, value: number): void {
+  queueChange(actor: Actor, field: string, value: number | string): void {
     this.changeBuffer.queueChange(actor, field, value);
   }
 

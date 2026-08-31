@@ -6,7 +6,7 @@ const RATE_LIMIT_MAX_CALLS = 30;
 
 export interface PendingChange {
   field: string;
-  value: number;
+  value: number | string;
   timestamp: number;
 }
 
@@ -85,7 +85,7 @@ export class ChangeBuffer {
     return actor.getFlag(MODULE_ID, "characterId") as string | undefined;
   }
 
-  queueChange(actor: Actor, field: string, value: number): void {
+  queueChange(actor: Actor, field: string, value: number | string): void {
     const characterId = this.resolveCharacterId(actor);
     if (!characterId) return;
     if (this.isSuspended(characterId)) return;
