@@ -35,6 +35,7 @@ function createMockExportManager() {
     queueChange: vi.fn(),
     queueItemChange: vi.fn(),
     queueItemDelete: vi.fn(),
+    exportCampaignNotes: vi.fn(),
   };
 }
 
@@ -307,7 +308,7 @@ describe("HookManager", () => {
               enemies: "Aspis Consortium",
               organizations: "Pathfinder Society",
               catchphrases: "Noble at heart",
-              backstory: "Born on a quiet farm",
+              campaignNotes: "Notes about the ongoing campaign",
             },
           },
         },
@@ -340,7 +341,7 @@ describe("HookManager", () => {
         "character_personality_catchphrases",
         "Noble at heart"
       );
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_campaign_other", "Born on a quiet farm");
+      expect(exportManager.exportCampaignNotes).toHaveBeenCalledWith(actor, "Notes about the ongoing campaign");
     });
 
     it("joins array fields with semicolons for edicts and anathema", () => {
@@ -424,6 +425,48 @@ describe("HookManager", () => {
       triggerHook("updateActor", actor, changes);
 
       expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character_organizedplayid", expect.anything());
+    });
+  });
+
+  describe("updateActor hook — campaign notes journal export", () => {
+    it("calls exportCampaignNotes when campaignNotes changes", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = {
+        system: {
+          details: {
+            biography: {
+              campaignNotes: "The party rescued the village",
+            },
+          },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.exportCampaignNotes).toHaveBeenCalledWith(actor, "The party rescued the village");
+    });
+
+    it("does not call exportCampaignNotes when campaignNotes is not a string", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = {
+        system: {
+          details: {
+            biography: {
+              campaignNotes: 123,
+            },
+          },
+        },
+      };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.exportCampaignNotes).not.toHaveBeenCalled();
     });
   });
 

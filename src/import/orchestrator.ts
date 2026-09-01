@@ -15,6 +15,7 @@
  * pipeline of `ImportPhase` objects (see ./phases.js) inside the try/finally.
  */
 
+import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types.js";
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
@@ -34,20 +35,35 @@ import {
   type ImportPhase,
 } from "./phases.js";
 
+/** Journal title that maps to the Foundry Campaign Notes biography field. */
+const CAMPAIGN_JOURNAL_TITLE = "Campaign";
+
+/**
+ * Foundry path for the Campaign "Notes" field (Biography tab → Campaign
+ * section). This is distinct from `biography.backstory`, which is the
+ * Personality-tab backstory fed by the `character_campaign_other` engine.
+ */
+const CAMPAIGN_NOTES_PATH = "system.details.biography.campaignNotes";
+
 export { collectLoreNames } from "./phases.js";
 
 export class ImportOrchestrator {
   private readonly choiceSetHandler = new ChoiceSetHandler();
+  private readonly client: DemiplaneClient | undefined;
+
+  /**
+   * @param client - The Demiplane API client used for journal import. Optional
+   *   so tests (and any caller that doesn't need journal sync) can construct an
+   *   orchestrator without wiring a client; when absent, journal import is
+   *   skipped.
+   */
+  constructor(client?: DemiplaneClient) {
+    this.client = client;
+  }
 
   async importCharacter(actor: Actor, characterId: string, options: ImportOptions = {}): Promise<ImportSummary> {
     const { token } = options;
-    const summary: ImportSummary = {
-      itemsImported: 0,
-      itemsSkipped: 0,
-      unmapped: [],
-      errors: [],
-      log: [],
-    };
+    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
 
     const fetched = await this.fetchCharacterEngines(characterId, token, summary);
     if (!fetched) return summary;
@@ -67,7 +83,6 @@ export class ImportOrchestrator {
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
 
     this.choiceSetHandler.setEngines(engines);
-
     const selectionData = buildSelectionData(engines);
     const categorized = categorizeEngines(engines);
     const ctx: ImportContext = {
@@ -88,8 +103,6 @@ export class ImportOrchestrator {
 
     try {
       this.choiceSetHandler.enable();
-      // Ordered pipeline. Lore MUST be created before ancestry/background/class
-      // so feats referencing lore skills resolve silently.
       for (const phase of this.buildPipeline()) {
         await phase.run(actor, ctx);
       }
@@ -99,6 +112,7 @@ export class ImportOrchestrator {
     }
 
     await actor.setFlag(MODULE_ID, "lastImportTimestamp", Date.now());
+    await this.importJournals(actor, characterId);
     return summary;
   }
 
@@ -165,6 +179,32 @@ export class ImportOrchestrator {
     } catch (error) {
       summary.errors.push(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;
+    }
+  }
+
+  /**
+   * Imports the "Campaign" journal entry into the actor's Campaign Notes field
+   * (`biography.campaignNotes`). Journal sync is best-effort: any failure is
+   * logged and swallowed so it never aborts the surrounding character import.
+   *
+   * The journal body lives in the `description` field (the server mirrors the
+   * `content` write into it), so that is what we read into Campaign Notes.
+   */
+  private async importJournals(actor: Actor, characterId: string): Promise<void> {
+    if (!this.client) {
+      debugLog(`[import] no API client configured; skipping journal import`);
+      return;
+    }
+    try {
+      const journals = await this.client.fetchCharacterJournals(characterId);
+      const campaign = journals.find((journal) => journal.title === CAMPAIGN_JOURNAL_TITLE);
+      const notes = campaign?.description ?? "";
+      if (notes.length === 0) return;
+
+      await actor.update({ [CAMPAIGN_NOTES_PATH]: notes } as Record<string, unknown>);
+      debugLog(`[import] imported Campaign journal → ${CAMPAIGN_NOTES_PATH} (${notes.length} chars)`);
+    } catch (error) {
+      debugLog(`[import] journal import failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

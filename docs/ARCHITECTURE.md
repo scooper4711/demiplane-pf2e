@@ -138,8 +138,10 @@ classDiagram
 
     class ImportOrchestrator {
         -choiceSetHandler: ChoiceSetHandler
+        -client: DemiplaneClient
         +importCharacter(actor, characterId, options): Promise~ImportSummary~
         -fetchCharacterEngines(characterId, token, summary): Promise~(engines, updated)|null~
+        -importJournals(actor, characterId): Promise~void~
         -buildPipeline(): ImportPhase[]
     }
 
@@ -194,6 +196,7 @@ classDiagram
         +queueChange(actor, field, value): void
         +queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType?, edited?): void
         +queueItemDelete(actor, slot): void
+        +exportCampaignNotes(actor, notes): Promise~void~
         +flush(actor): Promise~ExportResult~
         +suspend(characterId): void
         +resume(characterId): void
@@ -478,10 +481,17 @@ sequenceDiagram
     HM->>HM: Check: is linked character?
     HM->>HM: Map Foundry path → store name
 
-    alt Mapped field changed
+    alt Mapped engine field changed
         HM->>EM: queueChange(actor, storeName, value)
         EM->>EM: Store in pendingChanges map
         EM->>EM: Reset 2s debounce timer
+    else Campaign Notes changed
+        HM->>EM: exportCampaignNotes(actor, notes)
+        Note over EM: Runs under the sync pause and skips if a remote client is mid-sync
+        EM->>DC: fetchCharacterJournals(characterId)
+        DC-->>EM: Existing journals
+        EM->>DC: create or update the Campaign journal
+        DC->>API: slsCreateCharacterJournal or slsUpdateCharacterJournal
     end
 
     Note over EM: 2 seconds of inactivity...
@@ -604,6 +614,7 @@ graph TD
 | 8     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                         |
 | 9     | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                                    |
 | 10    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                          |
+| 11    | `ImportOrchestrator`    | Import "Campaign" journal → `biography.campaignNotes` (needs no monkey-patch; runs after uninstall)       |
 
 The `ImportPhase` pipeline steps (3–8) are implemented in `src/import/phases.ts`
 and driven in order by `ImportOrchestrator.importCharacter` inside its
