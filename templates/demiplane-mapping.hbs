@@ -1,4 +1,4 @@
-<section class="demiplane-mapping">
+<section class="demiplane-mapping inventory">
   <p class="hint">
     Demiplane names that could not be matched to a Foundry item. Open the browser for a section, then drag
     an item onto a row to map it. Mappings apply to every character on the next import.
@@ -6,64 +6,58 @@
 
   {{#if hasRows}}
     {{#each sections}}
-      <table class="pf2e mapping-table">
-        <thead>
-          <tr class="section-header">
-            <th colspan="4">
-              <span class="kind-label">{{label}}</span>
-              {{#if canBrowse}}
-                <a class="browse" data-action="browse" data-kind="{{kind}}"
-                   data-tooltip="Open the compendium browser for {{label}}">
-                  <i class="fa-solid fa-magnifying-glass fa-fw"></i>
-                </a>
-              {{/if}}
-            </th>
-          </tr>
-          <tr class="column-labels">
-            <th class="col-icon"></th>
-            <th class="col-foundry">Foundry Item</th>
-            <th class="col-demiplane">Demiplane Name</th>
-            <th class="col-actions"></th>
-          </tr>
-        </thead>
+      <section class="inventory-list directory-list">
+        <header>
+          <h3 class="item-name kind-label">{{label}}</h3>
+          <span class="col-demiplane-label">Demiplane Name</span>
+          <div class="item-controls">
+            {{#if canBrowse}}
+              <a data-action="browse" data-kind="{{kind}}"
+                 data-tooltip="Open the compendium browser for {{label}}">
+                <i class="fa-solid fa-magnifying-glass fa-fw"></i>
+              </a>
+            {{/if}}
+          </div>
+        </header>
 
-        <tbody>
+        <ul class="items">
           {{#each rows}}
-            <tr class="mapping-row{{#if mappedName}} mapped{{/if}}{{#if mappingMissing}} broken{{/if}}"
+            <li class="mapping-row{{#if mappedName}} mapped{{/if}}{{#if mappingMissing}} broken{{/if}}"
                 data-slug="{{slug}}" data-kind="{{kind}}">
-              <td class="col-icon">
-                <span class="item-image framed">
-                  <img class="item-icon" src="{{icon}}" alt="" />
+              <div class="data">
+                <div class="item-name">
+                  <span class="item-image framed">
+                    <img class="item-icon" src="{{icon}}" alt="" />
+                  </span>
+                  <h4>
+                    {{#if mappingMissing}}
+                      <span class="unknown">{{mappedName}} <em>(missing)</em></span>
+                    {{else if mappedName}}
+                      <span class="foundry-name">{{mappedName}}</span>
+                    {{else}}
+                      <span class="unknown">Unknown Item</span>
+                    {{/if}}
+                  </h4>
+                </div>
+
+                <span class="col-demiplane">
+                  <span class="demiplane-name">{{slug}}</span>
+                  {{#if characters}}<span class="characters">{{characters}}</span>{{/if}}
                 </span>
-              </td>
 
-              <td class="col-foundry">
-                {{#if mappingMissing}}
-                  <span class="unknown">{{mappedName}} <em>(missing)</em></span>
-                {{else if mappedName}}
-                  <span class="foundry-name">{{mappedName}}</span>
-                {{else}}
-                  <span class="unknown">Unknown Item</span>
-                {{/if}}
-              </td>
-
-              <td class="col-demiplane">
-                <span class="demiplane-name">{{slug}}</span>
-                {{#if characters}}<span class="characters">{{characters}}</span>{{/if}}
-              </td>
-
-              <td class="col-actions">
-                {{#if mappedName}}
-                  <a data-action="clear" data-kind="{{kind}}" data-slug="{{slug}}"
-                     data-tooltip="Clear this mapping">
-                    <i class="fa-solid fa-trash fa-fw"></i>
-                  </a>
-                {{/if}}
-              </td>
-            </tr>
+                <div class="item-controls">
+                  {{#if mappedName}}
+                    <a data-action="clear" data-kind="{{kind}}" data-slug="{{slug}}"
+                       data-tooltip="Clear this mapping">
+                      <i class="fa-solid fa-trash fa-fw"></i>
+                    </a>
+                  {{/if}}
+                </div>
+              </div>
+            </li>
           {{/each}}
-        </tbody>
-      </table>
+        </ul>
+      </section>
     {{/each}}
   {{else}}
     <p class="empty">Nothing to map — every name from the last import resolved to a Foundry item.</p>
