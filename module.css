@@ -60,11 +60,15 @@
 /* ------------------------------------------------------------------------- */
 /*  Demiplane Mapping screen                                                  */
 /*                                                                           */
-/*  Styled to match the PF2e actor window: the parchment background comes     */
-/*  from PF2e's own `crb-style sheet` rule, and colours are taken from PF2e's */
-/*  `--color-pf-*` variables so the screen follows the system's palette.      */
-/*  The app opts into `themed theme-light` (as actor sheets do), so the       */
-/*  parchment reads correctly whichever Foundry theme is active.              */
+/*  The screen reuses PF2e's inventory markup and CSS: the root carries the   */
+/*  `inventory` class, sections are `.inventory-list` with a `header` band,   */
+/*  and rows are `ul.items > li` with the same `.item-name` / `.item-image    */
+/*  framed` structure. That means the header band, the single outer list      */
+/*  border, the flush-stacked icons, the alternating row tint and the icon    */
+/*  framing all come from PF2e's own `_inventory.scss` and `_index.scss` —    */
+/*  we only set the pieces PF2e can't know about: our column widths and the   */
+/*  Demiplane-name / character / unmapped text. Parchment + palette come from */
+/*  the `crb-style sheet themed theme-light` classes on the app window.       */
 /* ------------------------------------------------------------------------- */
 
 .demiplane-mapping.sheet .window-content {
@@ -85,83 +89,107 @@
   font-style: italic;
 }
 
-.demiplane-mapping table.mapping-table {
-  border: 1px solid var(--color-pf-alternate);
-  border-collapse: collapse;
+/* --- Inventory layout, reproduced in our scope ---------------------------- */
+/* PF2e's `.inventory` rules live inside `.actor.sheet section.window-content`,
+   so they don't reach this standalone app. We reproduce the pieces we use here,
+   mirroring `_inventory.scss` and `_index.scss`, so the flex list, header band,
+   list border, alternating rows and framed icon behave exactly as they do on
+   the actor sheet. */
+
+.demiplane-mapping .inventory-list {
+  display: flex;
+  flex-direction: column;
   margin-bottom: var(--space-12, 0.75rem);
   width: 100%;
 }
 
-/* Section header: same treatment as the actor sheet's inventory header. */
-.demiplane-mapping table.mapping-table thead tr.section-header th {
+/* Section header band: identical treatment to `.inventory-list > header`. */
+.demiplane-mapping .inventory-list > header {
+  align-items: center;
   background-color: var(--color-pf-inventory-header-bg);
   box-shadow:
     inset 0 0 0 1px rgb(0 0 0 / 30%),
     inset 0 0 0 2px rgb(255 255 255 / 20%);
   color: var(--color-pf-inventory-header-text);
+  display: flex;
   font-family: var(--sans-serif);
-  font-size: var(--font-size-14, 0.875rem);
+  font-size: var(--font-size-10, 0.625rem);
+  justify-content: end;
   letter-spacing: 0.05em;
-  padding: var(--space-4, 0.25rem) var(--space-8, 0.5rem);
-  text-align: left;
+  line-height: 1;
+  padding: var(--space-4, 0.25rem) 0;
   text-transform: uppercase;
+  width: 100%;
 }
 
-.demiplane-mapping .section-header .kind-label {
-  text-shadow: 0 0 2px rgb(0 0 0 / 75%);
+.demiplane-mapping .inventory-list > header .item-name {
+  padding-left: var(--space-8, 0.5rem);
 }
 
-/* The per-section magnifying glass lives in the header. */
-.demiplane-mapping .section-header .browse {
+/* Section title: title case, size 14, matching the inventory header's h3.
+   `border`, `color` and `line-height` are pinned to override Foundry's default
+   heading styling, which otherwise renders the h3 larger, in black, with a
+   bottom border. The color matches the band's other text (the column label). */
+.demiplane-mapping .inventory-list > header h3.kind-label {
+  border: none;
   color: var(--color-pf-inventory-header-text);
-  cursor: pointer;
-  float: right;
-  padding: 0 var(--space-4, 0.25rem);
+  font-size: var(--font-size-14, 0.875rem);
+  line-height: 1;
+  margin: 2px 0;
+  text-shadow: 0 0 2px rgb(0 0 0 / 75%);
+  text-transform: capitalize;
 }
 
-.demiplane-mapping .section-header .browse:hover {
+.demiplane-mapping .inventory-list > header .item-controls {
+  padding-right: var(--space-4, 0.25rem);
+}
+
+.demiplane-mapping .inventory-list > header .item-controls a {
+  color: var(--color-pf-inventory-header-text);
+}
+
+.demiplane-mapping .inventory-list > header .item-controls a:hover {
   text-shadow: 0 0 8px var(--color-pf-tertiary);
 }
 
-.demiplane-mapping table.mapping-table thead tr.column-labels th {
-  background-color: rgb(0 0 0 / 12%);
-  color: var(--text-dark);
-  font-family: var(--sans-serif);
-  font-size: var(--font-size-10, 0.625rem);
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  padding: var(--space-2, 0.125rem) var(--space-8, 0.5rem);
-  text-transform: uppercase;
+/* Row list: single outer border, no internal lines, alternating row tint. */
+.demiplane-mapping ul.items {
+  border: 1px solid var(--color-pf-inventory-header-bg);
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 
-.demiplane-mapping table.mapping-table td {
-  border-top: 1px solid var(--color-border-light-tertiary, var(--color-pf-alternate));
-  font-size: var(--font-size-12, 0.75rem);
-  padding: var(--space-4, 0.25rem) var(--space-8, 0.5rem);
-  vertical-align: middle;
+.demiplane-mapping ul.items > li {
+  width: 100%;
 }
 
-.demiplane-mapping table.mapping-table tbody tr:nth-child(even) {
+.demiplane-mapping ul.items > li:nth-of-type(even) {
   background-color: rgb(120 100 82 / 10%); /* --color-pf-alternate at 10% */
 }
 
-.demiplane-mapping table.mapping-table tbody tr.mapping-row:hover,
-.demiplane-mapping table.mapping-table tbody tr.mapping-row.drop-target {
-  background-color: rgb(233 215 161 / 45%); /* --color-pf-tertiary */
+.demiplane-mapping ul.items > li > .data {
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--font-size-12, 0.75rem);
+  justify-content: start;
+  width: 100%;
 }
 
-.demiplane-mapping table.mapping-table tbody tr.broken td {
-  color: var(--color-pf-primary);
-}
-
-.demiplane-mapping .col-icon {
-  text-align: center;
-  width: 2.5rem;
-}
-
-/* Icon frame copied from PF2e's `.item-image.framed`, whose rules only apply
-   inside actor sheets. */
+/* Framed icon, copied from PF2e's `.item-image.framed`. Block-level `flex`
+   (not `inline-flex`) so there is no text baseline beneath the icon: that
+   baseline gap is what left a hairline between stacked icons. */
 .demiplane-mapping .item-image {
+  display: flex;
+  flex: 0 0 1.5rem;
+  height: 1.5rem;
+  position: relative;
+  width: 1.5rem;
+}
+
+.demiplane-mapping .item-image.framed {
   background-color: var(--tertiary);
   border: none;
   border-radius: 2px;
@@ -169,11 +197,6 @@
     0 0 0 1px var(--tertiary),
     0 0 0 2px #9f725b,
     inset 0 0 0.25rem rgb(0 0 0 / 50%);
-  display: inline-flex;
-  flex: 0 0 1.5rem;
-  height: 1.5rem;
-  position: relative;
-  width: 1.5rem;
 }
 
 .demiplane-mapping .item-image .item-icon {
@@ -184,8 +207,77 @@
   width: 100%;
 }
 
-.demiplane-mapping .foundry-name {
+/* --- Column sizing -------------------------------------------------------- */
+/* Our rows have two flexible text columns (the Foundry item name and the
+   Demiplane name) instead of the inventory's fixed price/quantity/bulk. The
+   name column holds the icon and gets the inventory's tight gap; the Demiplane
+   column takes the rest, so the header labels line up over the row values. */
+.demiplane-mapping .item-name {
+  align-items: center;
+  display: flex;
+  flex: 2;
   font-weight: 500;
+  gap: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* The Foundry item name. PF2e renders it in `.item-name h4` at weight 500 in
+   the heading font (`--body-serif`, Gelasio). Pin the family because outside a
+   character sheet `--font-primary` may not be remapped to the serif, and pin
+   the size/border because Foundry's core `foundry2.css` sizes headings larger
+   and adds a bottom border that would otherwise win here. */
+.demiplane-mapping .item-name h4 {
+  border: none;
+  font-family: var(--body-serif, var(--serif, Georgia, serif));
+  font-size: var(--font-size-12, 0.75rem);
+  font-weight: 500;
+  line-height: var(--font-size-12, 0.75rem);
+  margin: auto auto auto 0;
+  padding: var(--space-2, 0.125rem);
+}
+
+.demiplane-mapping .col-demiplane-label {
+  align-items: center;
+  display: flex;
+  flex: 3;
+}
+
+/* Column layout so the slug sits on the first line and the affected character
+   names stack beneath it, rather than abutting the slug on the same row. */
+.demiplane-mapping .col-demiplane {
+  display: flex;
+  flex: 3;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* The header's Demiplane label. Left-aligned over the Demiplane-name column and
+   shown as written ("Demiplane Name") rather than uppercased by the band's
+   `text-transform`. Sized to match the section title (`--font-size-14`) so the
+   Foundry and Demiplane columns read as equal peers, unlike the subordinate
+   QUANTITY/BULK labels in the inventory. */
+.demiplane-mapping .inventory-list > header .col-demiplane-label {
+  font-size: var(--font-size-14, 0.875rem);
+  justify-content: flex-start;
+  text-transform: none;
+}
+
+/* The clear action column, narrow like the inventory's read-only controls. */
+.demiplane-mapping .inventory-list .item-controls {
+  flex-basis: 2rem;
+}
+
+/* Highlight a row while dragging an item over it or on hover, using PF2e's
+   tertiary parchment tint. */
+.demiplane-mapping ul.items > li.mapping-row:hover,
+.demiplane-mapping ul.items > li.mapping-row.drop-target {
+  background-color: rgb(233 215 161 / 45%); /* --color-pf-tertiary */
+}
+
+/* A mapping whose target item no longer resolves. */
+.demiplane-mapping ul.items > li.broken .foundry-name,
+.demiplane-mapping ul.items > li.broken .unknown {
+  color: var(--color-pf-primary);
 }
 
 .demiplane-mapping .unknown {
@@ -204,17 +296,12 @@
   font-size: var(--font-size-10, 0.625rem);
 }
 
-.demiplane-mapping .col-actions {
-  text-align: end;
-  width: 2rem;
-}
-
-.demiplane-mapping .col-actions a {
+.demiplane-mapping .item-controls a {
   color: var(--text-dark);
   cursor: pointer;
 }
 
-.demiplane-mapping .col-actions a:hover {
+.demiplane-mapping .item-controls a:hover {
   color: var(--color-pf-primary);
   text-shadow: 0 0 8px var(--color-shadow-primary, rgb(0 0 0 / 50%));
 }
