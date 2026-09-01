@@ -49,8 +49,8 @@ const KIND_TABS: Partial<Record<SlugKind, "equipment" | "feat" | "spell">> = {
 
 /**
  * Ancestry, heritage, background and class have no Compendium Browser tab, so
- * those sections fall back to the Compendium sidebar. v14 exposes no public way
- * to open a single pack's own window, so this is as close as we can get.
+ * those sections open the individual compendium pack window instead (see
+ * `openCompendiumPack`).
  */
 const KIND_PACKS: Partial<Record<SlugKind, string>> = {
   ancestry: "pf2e.ancestries",
@@ -265,12 +265,33 @@ async function openFinder(kind: SlugKind): Promise<void> {
   }
 
   const packKey = KIND_PACKS[kind];
-  if (packKey && game.packs.get(packKey)) {
-    ui.compendium?.render(true);
+  const pack = packKey ? game.packs.get(packKey) : undefined;
+  if (pack) {
+    openCompendiumPack(pack);
     return;
   }
 
   ui.notifications.warn(`No compendium source found for ${KIND_LABELS[kind]} slugs.`);
+}
+
+/**
+ * Opens a single compendium pack's own window. Mirrors what the sidebar does on
+ * click: instantiate the pack's `applicationClass` and render it. `pack.render`
+ * only re-renders windows already in `pack.apps`, so it silently does nothing
+ * when the pack has never been opened — hence the explicit instantiation.
+ *
+ * Typed through a minimal local shape because the pack's `applicationClass` is a
+ * v1/v2 union with abstract constructors that isn't directly newable.
+ */
+function openCompendiumPack(pack: unknown): void {
+  const { applicationClass } = pack as CompendiumPack;
+  new applicationClass({ collection: pack }).render({ force: true });
+}
+
+interface CompendiumPack {
+  applicationClass: new (options: { collection: unknown }) => {
+    render: (options: { force: boolean }) => unknown;
+  };
 }
 
 interface BrowserLike {
@@ -338,4 +359,4 @@ export function registerDemiplaneMappingTemplates(): void {
 }
 
 export type { SlugRow, SlugSection };
-export { collectSections, EXPECTED_TYPES, KIND_LABELS };
+export { collectSections, EXPECTED_TYPES, KIND_LABELS, openFinder };

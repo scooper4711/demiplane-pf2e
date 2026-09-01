@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { collectSections, EXPECTED_TYPES, isAcceptedType } from "../../src/demiplane-mapping-app.js";
+import { collectSections, EXPECTED_TYPES, isAcceptedType, openFinder } from "../../src/demiplane-mapping-app.js";
 import { registerSlugMappingSettings, setMapping } from "../../src/slug-mapping.js";
 import type { UnmappedSlug } from "../../src/import/types.js";
 
@@ -79,6 +79,56 @@ describe("collectSections", () => {
     (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [unlinked] as never;
 
     expect(await collectSections()).toEqual([]);
+  });
+});
+
+describe("openFinder", () => {
+  /** Access the mutable game global the mocks install. */
+  const gameGlobal = () => globalThis as unknown as { game: Record<string, unknown> };
+
+  beforeEach(() => {
+    installFoundryMocks();
+  });
+
+  it("opens the individual compendium pack window for a kind without a browser tab", async () => {
+    const render = vi.fn();
+    const applicationClass = vi.fn().mockImplementation(() => ({ render }));
+    const classesPack = { applicationClass };
+    gameGlobal().game.packs = { get: vi.fn().mockReturnValue(classesPack) };
+
+    await openFinder("class");
+
+    // Mirrors the sidebar: instantiate the pack's own application, then render.
+    expect(applicationClass).toHaveBeenCalledWith({ collection: classesPack });
+    expect(render).toHaveBeenCalledWith({ force: true });
+  });
+
+  it("warns when a kind has no compendium source", async () => {
+    gameGlobal().game.packs = { get: vi.fn().mockReturnValue(null) };
+    gameGlobal().game.pf2e = undefined;
+
+    await openFinder("class");
+
+    expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("No compendium source"));
+  });
+
+  it("opens the PF2e Compendium Browser tab for a browsable kind", async () => {
+    const open = vi.fn().mockResolvedValue(undefined);
+    const getFilterData = vi.fn().mockResolvedValue({});
+    gameGlobal().game.pf2e = { compendiumBrowser: { tabs: { equipment: { getFilterData, open } } } };
+
+    await openFinder("equipment");
+
+    expect(getFilterData).toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith({ filter: {} });
+  });
+
+  it("warns when the browser tab is unavailable", async () => {
+    gameGlobal().game.pf2e = undefined;
+
+    await openFinder("equipment");
+
+    expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Compendium Browser is not available"));
   });
 });
 
