@@ -31,6 +31,7 @@ import {
   fetchEngineDefinitions,
   fetchAttributeMapping,
   buildReadableCharacter,
+  fetchCharacterJournals,
 } from "./demiplane-api.mjs";
 
 // ── MCP Server ───────────────────────────────────────────────────────────────
@@ -112,6 +113,24 @@ server.registerTool("dump_character_readable", {
     const engineDefs = await fetchEngineDefinitions(engineIds, token);
     const readable = buildReadableCharacter(character, engineDefs);
     return { content: [{ type: "text", text: JSON.stringify(readable, null, 2) }] };
+  } catch (error) {
+    return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
+  }
+});
+
+// Tool 5: Character journal entries
+server.registerTool("dump_character_journals", {
+  title: "Dump Character Journals",
+  description:
+    "Fetches all journal entries (notes) for a Demiplane character. Each entry has a title, description, and objectID.",
+  inputSchema: {
+    character_id: z.string().describe("The UUID of the Demiplane character"),
+  },
+  annotations: { readOnlyHint: true, openWorldHint: false },
+}, async ({ character_id }) => {
+  try {
+    const journals = await fetchCharacterJournals(character_id, token);
+    return { content: [{ type: "text", text: JSON.stringify(journals, null, 2) }] };
   } catch (error) {
     return { content: [{ type: "text", text: `Error: ${error.message}` }], isError: true };
   }
