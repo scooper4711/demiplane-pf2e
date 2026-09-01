@@ -3,7 +3,7 @@ import { debugLog } from "./import/debug-log.js";
 import { addExportIssue } from "./sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
-import { isRemoteSyncActive } from "./sync-pause.js";
+import { beginSyncPause, endSyncPause, isRemoteSyncActive } from "./sync-pause.js";
 import { isClientElectedWriter } from "./sync-election.js";
 import { ChangeBuffer, type EquippedState, type ItemChangeType, type PendingChange } from "./export/change-buffer.js";
 import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
@@ -107,6 +107,52 @@ export class ExportManager {
    */
   queueItemDelete(actor: Actor, slot: string): void {
     this.changeBuffer.queueItemDelete(actor, slot);
+  }
+
+  /**
+   * Exports a Campaign Notes change (biography.campaignNotes) as a Demiplane
+   * "Campaign" journal entry. Finds the existing journal and updates it, or
+   * creates one when none exists.
+   *
+   * Runs inside the cross-client concurrency lock (beginSyncPause/endSyncPause)
+   * like every other push, so the journal write cannot race a concurrent import
+   * or push into an optimistic-concurrency conflict. If a *different* client is
+   * already mid-sync, we skip rather than pile on.
+   */
+  async exportCampaignNotes(actor: Actor, notes: string): Promise<void> {
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+    if (!characterId) return;
+    if (!this.client.isAuthenticated()) return;
+
+    // Defer to a sync already in progress on another client; that client's
+    // import/push is authoritative and would otherwise conflict with our write.
+    if (isRemoteSyncActive(actor)) {
+      debugLog(`[push] remote sync in progress for ${characterId}; skipping Campaign journal export`);
+      return;
+    }
+
+    await beginSyncPause(actor);
+    try {
+      await this.writeCampaignJournal(characterId, notes);
+    } catch (error) {
+      debugLog(`[push] journal export failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      await endSyncPause(actor);
+    }
+  }
+
+  /** Creates or updates the "Campaign" journal entry with the given body. */
+  private async writeCampaignJournal(characterId: string, notes: string): Promise<void> {
+    const journals = await this.client.fetchCharacterJournals(characterId);
+    const existing = journals.find((journal) => journal.title === "Campaign");
+
+    if (existing) {
+      await this.client.updateCharacterJournal(existing.objectID, characterId, "Campaign", notes);
+      debugLog(`[push] updated Campaign journal entry`);
+    } else {
+      await this.client.createCharacterJournal(characterId, "Campaign", notes);
+      debugLog(`[push] created Campaign journal entry`);
+    }
   }
 
   async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {

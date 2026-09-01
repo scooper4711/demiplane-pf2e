@@ -14,6 +14,7 @@ This document describes the two Demiplane APIs consumed by this module: the **Gr
   - [Query: Fetch Character Data](#query-fetch-character-data)
   - [Query: Fetch Character Version](#query-fetch-character-version)
   - [Mutation: Update Character](#mutation-update-character)
+  - [Character Journals](#character-journals)
   - [Session State Store Names](#session-state-store-names)
 - [Stream-Engines API](#stream-engines-api)
   - [Endpoint](#stream-engines-endpoint)
@@ -23,6 +24,7 @@ This document describes the two Demiplane APIs consumed by this module: the **Gr
   - [Modifier Types](#modifier-types)
 - [Engine Name Conventions](#engine-name-conventions)
 - [Slug Conventions](#slug-conventions)
+- [API Access Layering (and Known Bypasses)](#api-access-layering-and-known-bypasses)
 
 ---
 
@@ -201,6 +203,100 @@ mutation updateCharacterV2(
 **Variables:** The `data` field is the full `{ engines, engineCacheIdsBySource }` object.
 
 **Response:** `{ success: boolean, message: string }`
+
+### Character Journals
+
+Journal entries are freeform character notes (a `title` plus a body). They are
+separate from the engines array and are addressed by their own `objectID`. By
+default a character has no journal entries; they are created on demand.
+
+This module maps the Foundry Campaign **Notes** field
+(`system.details.biography.campaignNotes`, the Biography tab → Campaign section)
+to a journal entry titled **"Campaign"**: importing copies the Campaign journal
+body into Campaign Notes, and editing Campaign Notes creates or updates the
+Campaign journal.
+
+> **Do not confuse this with `biography.backstory`.** That is the separate
+> Personality-tab backstory, populated from the `character_campaign_other`
+> engine value — not from a journal. Mapping the journal to `backstory` causes
+> the two importers to fight over the same field.
+
+> **Critical schema gotcha — `data` is a scalar.**
+> On all three journal operations the `data` field is a **scalar JSON blob**,
+> not a GraphQL object. Requesting a subselection such as `data { items { ... } }`
+> or `data { item { ... } }` fails validation with:
+>
+> ```
+> unexpected subselection set for non-object field
+> ```
+>
+> Always select `data` as a bare scalar and read `items` / `item` from the
+> parsed JSON in code.
+
+> **Body field gotcha — read `description`, write `content`.**
+> The mutations take a `content` variable, and the server mirrors that value
+> into **both** the `content` and `description` fields on the stored entry.
+> Reads should use `description` (the stored body); older entries created by
+> other paths may have an empty `content` but a populated `description`.
+
+#### Query: Fetch Character Journals
+
+```graphql
+query slsGetCharacterJournals($characterId: String!, $search: String!, $ranking: String!) {
+  slsGetCharacterJournals(characterId: $characterId, search: $search, ranking: $ranking) {
+    data # scalar JSON: { items: CharacterJournal[] }
+    error
+    message
+    success
+  }
+}
+```
+
+**Variables:** `{ "characterId": "<uuid>", "search": "", "ranking": "desc(lastModified)" }`
+
+#### Mutation: Create Character Journal
+
+```graphql
+mutation slsCreateCharacterJournal($characterId: String!, $title: String!, $content: String!) {
+  slsCreateCharacterJournal(characterId: $characterId, title: $title, content: $content) {
+    data # scalar JSON: { item: CharacterJournal }
+    error
+    message
+    success
+  }
+}
+```
+
+#### Mutation: Update Character Journal
+
+```graphql
+mutation slsUpdateCharacterJournal($objectID: String!, $characterId: String!, $title: String!, $content: String!) {
+  slsUpdateCharacterJournal(objectID: $objectID, characterId: $characterId, title: $title, content: $content) {
+    data # scalar JSON: { item: CharacterJournal }
+    error
+    message
+    success
+  }
+}
+```
+
+**CharacterJournal shape:**
+
+```typescript
+{
+  objectID: string; // journal entry UUID
+  characterId: string;
+  title: string; // e.g. "Campaign"
+  content: string; // body (mirror of description)
+  description: string; // body — read this
+  createdDate: string; // ISO timestamp
+  lastModified: string; // ISO timestamp
+}
+```
+
+These operations are exposed by `@scooper4711/demiplane-api` as
+`DemiplaneClient.fetchCharacterJournals`, `createCharacterJournal`, and
+`updateCharacterJournal`.
 
 ### Session State Store Names
 
@@ -479,6 +575,64 @@ When a simple strip doesn't match, the module generates candidate slugs:
 3. Add `bloodline-` prefix for sorcerer bloodline features
 
 ---
+
+## API Access Layering (and Known Bypasses)
+
+The intended architecture is that **all** Demiplane GraphQL access goes through
+the `@scooper4711/demiplane-api` `DemiplaneClient`. The client centralizes the
+endpoint, auth token, UUID validation, error handling, and the schema quirks
+documented above (notably the scalar-`data` journal gotcha). Several call sites
+still talk to Demiplane directly with raw `fetch`; these are technical debt to
+be migrated onto the client.
+
+### GraphQL bypasses (should move to `DemiplaneClient`)
+
+| Location                                               | What it does                                                                             | Client method to use instead                                                               | Notes                                                                                                                                 |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/import/orchestrator.ts` → `fetchCharacterEngines` | Raw GraphQL query for `demiplane_user_character.data`/`updated` to get the engines array | `DemiplaneClient.fetchCharacterData` (returns `CharacterData` incl. `engines` + `updated`) | Duplicates the fetch-character query and its response typing. The orchestrator now holds a `client`, so this can be swapped directly. |
+| `src/import/orchestrator.ts` → `importJournals`        | (migrated) previously a raw journal query                                                | `DemiplaneClient.fetchCharacterJournals`                                                   | Already converted — listed for completeness.                                                                                          |
+
+### Parallel re-implementation in `scripts/`
+
+`scripts/demiplane-api.mjs` is a **second, independent implementation** of the
+Demiplane GraphQL + stream-engines calls, used by the MCP server
+(`scripts/demiplane-mcp.mjs`) and CLI tooling. It duplicates:
+
+- `fetchCharacter` (≈ `fetchCharacterData`)
+- `fetchAttributeMapping` (≈ `fetchAttributeMapping`)
+- `fetchCharacterJournals` / `createCharacterJournal` / `updateCharacterJournal`
+  (≈ the client's journal methods)
+- `fetchEngineDefinitions` (stream-engines — see below)
+
+All three journal operations here now select `data` as a scalar (matching the
+schema gotcha above); the earlier `data { item { ... } }` subselection in the
+create/update mutations has been corrected.
+
+This `.mjs` layer cannot import the TypeScript client directly today (it is a
+standalone ESM script bundle with its own token loading from `.env`). Options
+for cleanup: (a) build the client to a form the scripts can import, or (b) at
+minimum share the corrected query strings so the two implementations cannot
+drift.
+
+### Stream-Engines API — intentionally not on the client (for now)
+
+`src/import/stream-engines.ts` (`postStreamEngines`) POSTs to
+`https://character.demiplane.com/stream-engines`, a **different host** and a
+**non-GraphQL, NDJSON** protocol. `DemiplaneClient` does not currently model
+this endpoint, so this is not a bypass of an existing method — it is a gap. If
+the goal is "one client for all Demiplane access," stream-engines support would
+need to be added to the client first. Until then this is the sanctioned place
+for stream-engines access; the resolvers
+(`spell-slot-resolver.ts`, `item-spell-resolver.ts`, `feature-spell-resolver.ts`)
+correctly funnel through it rather than calling `fetch` themselves.
+
+### Summary for cleanup
+
+1. Swap `orchestrator.ts` `fetchCharacterEngines` → `client.fetchCharacterData`.
+2. Decide on a strategy to de-duplicate `scripts/demiplane-api.mjs` against the
+   TypeScript client.
+3. (Optional) Add stream-engines support to `DemiplaneClient` and route
+   `stream-engines.ts` through it.
 
 ## Rate Limits and Error Handling
 

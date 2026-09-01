@@ -29,7 +29,6 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.biography.allies": "character_campaign_allies",
   "system.details.biography.enemies": "character_campaign_enemies",
   "system.details.biography.organizations": "character_campaign_organizations",
-  "system.details.biography.backstory": "character_campaign_other",
   "system.details.biography.edicts": "character_personality_edicts",
   "system.details.biography.anathema": "character_personality_anathema",
 };
@@ -191,6 +190,9 @@ export class HookManager {
     // Organized play ID is a single Demiplane field ("123456-2001") that maps
     // to two Foundry fields (playerNumber + characterNumber).
     this.queueOrganizedPlayChange(actor, changes);
+
+    // Campaign Notes maps to a "Campaign" journal entry, not an engine override.
+    this.queueCampaignNotesChange(actor, changes);
   }
 
   private queueOrganizedPlayChange(actor: Actor, changes: Record<string, unknown>): void {
@@ -206,6 +208,12 @@ export class HookManager {
     if (typeof player === "number" && typeof character === "number") {
       this.exportManager.queueChange(actor, "character_organizedplayid", `${player}-${character}`);
     }
+  }
+
+  private queueCampaignNotesChange(actor: Actor, changes: Record<string, unknown>): void {
+    const notes = this.getChangeValue(changes, "system.details.biography.campaignNotes");
+    if (typeof notes !== "string") return;
+    void this.exportManager.exportCampaignNotes(actor, notes);
   }
 
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {

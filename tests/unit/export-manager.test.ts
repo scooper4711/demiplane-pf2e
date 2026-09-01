@@ -13,6 +13,8 @@ vi.stubGlobal("ui", {
 
 import { ExportManager } from "../../src/export-manager.js";
 import { computeEngineSig } from "../../src/engine-sig.js";
+import { isSyncActive } from "../../src/sync-pause.js";
+import { MODULE_ID } from "../../src/import/types.js";
 
 function createMockActor(characterId = "char-123", lastUpdated?: string) {
   return {
@@ -73,6 +75,9 @@ function createMockClient(overrides = {}) {
     fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T00:00:00.000Z"),
     updateLastAccess: vi.fn().mockResolvedValue(true),
     isAuthenticated: vi.fn().mockReturnValue(true),
+    fetchCharacterJournals: vi.fn().mockResolvedValue([]),
+    createCharacterJournal: vi.fn().mockResolvedValue({ objectID: "journal-1", title: "Campaign" }),
+    updateCharacterJournal: vi.fn().mockResolvedValue({ objectID: "journal-1", title: "Campaign" }),
     ...overrides,
   };
 }
@@ -1232,6 +1237,94 @@ describe("ExportManager", () => {
       manager.queueItemDelete(actor as never, "");
 
       expect(vi.mocked(client.updateCharacter)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("exportCampaignNotes", () => {
+    it("creates a Campaign journal when none exists", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+
+      await manager.exportCampaignNotes(actor as never, "new notes");
+
+      expect(vi.mocked(client.createCharacterJournal)).toHaveBeenCalledWith("char-123", "Campaign", "new notes");
+      expect(vi.mocked(client.updateCharacterJournal)).not.toHaveBeenCalled();
+    });
+
+    it("updates the existing Campaign journal when one exists", async () => {
+      const client = createMockClient({
+        fetchCharacterJournals: vi.fn().mockResolvedValue([{ objectID: "j-existing", title: "Campaign" }]),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+
+      await manager.exportCampaignNotes(actor as never, "edited notes");
+
+      expect(vi.mocked(client.updateCharacterJournal)).toHaveBeenCalledWith(
+        "j-existing",
+        "char-123",
+        "Campaign",
+        "edited notes"
+      );
+      expect(vi.mocked(client.createCharacterJournal)).not.toHaveBeenCalled();
+    });
+
+    it("runs the journal write inside the concurrency lock", async () => {
+      // Assert the sync pause is held while the write is in flight and released
+      // afterward, so the journal update cannot race a concurrent import/push.
+      let lockHeldDuringWrite = false;
+      const actor = createFlagTrackingActor();
+      const client = createMockClient({
+        fetchCharacterJournals: vi.fn().mockImplementation(() => {
+          lockHeldDuringWrite = isSyncActive(actor as never);
+          return Promise.resolve([]);
+        }),
+      });
+      const manager = new ExportManager(client as never);
+
+      await manager.exportCampaignNotes(actor as never, "notes");
+
+      expect(lockHeldDuringWrite).toBe(true);
+      // Lock released after the write completes.
+      expect(isSyncActive(actor as never)).toBe(false);
+    });
+
+    it("skips the write when a different client is mid-sync", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+      // Simulate a remote client's in-flight sync: a token this client did not set.
+      await actor.setFlag(MODULE_ID, "syncActiveTokens", ["remote-client-token"]);
+
+      await manager.exportCampaignNotes(actor as never, "notes");
+
+      expect(vi.mocked(client.fetchCharacterJournals)).not.toHaveBeenCalled();
+      expect(vi.mocked(client.createCharacterJournal)).not.toHaveBeenCalled();
+      expect(vi.mocked(client.updateCharacterJournal)).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when the client is unauthenticated", async () => {
+      const client = createMockClient({ isAuthenticated: vi.fn().mockReturnValue(false) });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+
+      await manager.exportCampaignNotes(actor as never, "notes");
+
+      expect(vi.mocked(client.fetchCharacterJournals)).not.toHaveBeenCalled();
+    });
+
+    it("releases the lock even when the journal write throws", async () => {
+      const client = createMockClient({
+        fetchCharacterJournals: vi.fn().mockRejectedValue(new Error("boom")),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+
+      await manager.exportCampaignNotes(actor as never, "notes");
+
+      // Error is swallowed (best-effort) and the lock is released.
+      expect(isSyncActive(actor as never)).toBe(false);
     });
   });
 });

@@ -43,7 +43,7 @@ async function initializeModule(): Promise<void> {
     client.setToken(storedToken);
   }
 
-  importOrchestrator = new ImportOrchestrator();
+  importOrchestrator = new ImportOrchestrator(client);
   exportManager = new ExportManager(client);
   exportManager.setOnConflictHandler((actor) => reimportActorOnConflict(actor));
   hookManager = new HookManager(exportManager);
