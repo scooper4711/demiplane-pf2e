@@ -175,6 +175,92 @@ export async function fetchAttributeMapping(nexusId, token) {
   };
 }
 
+// ── Journal entries (character notes) ────────────────────────────────────────
+
+const CHARACTER_JOURNALS_QUERY = `query slsGetCharacterJournals($characterId: String!, $search: String!, $ranking: String!) {
+  slsGetCharacterJournals(characterId: $characterId, search: $search, ranking: $ranking) {
+    data
+    error
+    message
+    success
+  }
+}`;
+
+export async function fetchCharacterJournals(characterId, token) {
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      operationName: "slsGetCharacterJournals",
+      query: CHARACTER_JOURNALS_QUERY,
+      variables: { characterId, search: "", ranking: "desc(lastModified)" },
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  const json = await response.json();
+  if (!json.data?.slsGetCharacterJournals?.success) {
+    throw new Error(json.data?.slsGetCharacterJournals?.message ?? "Failed to fetch journals");
+  }
+  return json.data.slsGetCharacterJournals.data.items ?? [];
+}
+
+export async function createCharacterJournal(characterId, title, content, token) {
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query: `mutation slsCreateCharacterJournal($characterId: String!, $title: String!, $content: String!) {
+        slsCreateCharacterJournal(characterId: $characterId, title: $title, content: $content) {
+          data
+          error
+          message
+          success
+        }
+      }`,
+      variables: { characterId, title, content },
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  const json = await response.json();
+  if (!json.data?.slsCreateCharacterJournal?.success) {
+    throw new Error(json.data?.slsCreateCharacterJournal?.message ?? "Failed to create journal");
+  }
+  return json.data.slsCreateCharacterJournal.data.item;
+}
+
+export async function updateCharacterJournal(objectID, characterId, title, content, token) {
+  const response = await fetch(GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      query: `mutation slsUpdateCharacterJournal($objectID: String!, $characterId: String!, $title: String!, $content: String!) {
+        slsUpdateCharacterJournal(objectID: $objectID, characterId: $characterId, title: $title, content: $content) {
+          data
+          error
+          message
+          success
+        }
+      }`,
+      variables: { objectID, characterId, title, content },
+    }),
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+  const json = await response.json();
+  if (!json.data?.slsUpdateCharacterJournal?.success) {
+    throw new Error(json.data?.slsUpdateCharacterJournal?.message ?? "Failed to update journal");
+  }
+  return json.data.slsUpdateCharacterJournal.data.item;
+}
+
 // ── Human-readable character builder ─────────────────────────────────────────
 
 function slugToTitle(slug) {
@@ -216,7 +302,8 @@ function categorizeEngine(name) {
   if (name.startsWith("custom_") && name.includes("_prof")) return "skillChoice";
   if (name.startsWith("custom_") && name.includes("-rune")) return "equipment";
   if (name === "character-languages-user") return "language";
-  if (name === "getting-started-current" || name === "tab-spells--display" || name.includes("is-selected")) return "uiState";
+  if (name === "getting-started-current" || name === "tab-spells--display" || name.includes("is-selected"))
+    return "uiState";
   if (name === "selected-pregen-id" || name === "view-permission" || name === "edit-permission") return "meta";
   if (name.endsWith("--quantity") || name.endsWith("-container") || name.endsWith("-is-equipped")) return "equipment";
   if (name.endsWith("-rune")) return "equipment";
@@ -242,7 +329,14 @@ export function buildReadableCharacter(character, engineDefs) {
     const entry = {
       id: eng.id,
       name: eng.name,
-      displayName: def?.name ?? slugToTitle(eng.name?.split("/").pop()?.replace(/\.eng$/, "")),
+      displayName:
+        def?.name ??
+        slugToTitle(
+          eng.name
+            ?.split("/")
+            .pop()
+            ?.replace(/\.eng$/, "")
+        ),
     };
 
     if (eng.type === "CustomDemiplaneEngine" && eng.value !== undefined) {
