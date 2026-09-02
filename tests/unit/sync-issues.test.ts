@@ -3,6 +3,9 @@ import {
   getImportIssues,
   getExportIssues,
   hasActiveIssues,
+  shouldShowIndicator,
+  acknowledgeIssues,
+  setUnmappedSlugs,
   resetImportIssues,
   clearExportIssues,
   clearAllIssues,
@@ -104,5 +107,70 @@ describe("sync-issues", () => {
     clearAllIssues(actor);
 
     expect(hooks.map((h) => h.event)).toContain(ISSUES_CHANGED_EVENT);
+  });
+});
+
+describe("sync-issues indicator (acknowledgement)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("Hooks", { on: vi.fn(), callAll: vi.fn() });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the indicator for a fresh, unacknowledged issue", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    addImportIssue(actor, "boom");
+    expect(shouldShowIndicator(actor)).toBe(true);
+  });
+
+  it("shows the indicator for unmapped-only imports", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnmappedSlugs(actor, [{ slug: "goblin-blade", kind: "equipment" }]);
+    expect(shouldShowIndicator(actor)).toBe(true);
+  });
+
+  it("hides the indicator after acknowledgement but keeps the issue data", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    addImportIssue(actor, "boom");
+    setUnmappedSlugs(actor, [{ slug: "goblin-blade", kind: "equipment" }]);
+
+    acknowledgeIssues(actor);
+
+    expect(shouldShowIndicator(actor)).toBe(false);
+    // The data is still there for the dialog and the mapping editor.
+    expect(hasActiveIssues(actor)).toBe(true);
+    expect(getImportIssues(actor).has("boom")).toBe(true);
+  });
+
+  it("relights the indicator when a new issue arrives after acknowledgement", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    addImportIssue(actor, "first");
+    acknowledgeIssues(actor);
+    expect(shouldShowIndicator(actor)).toBe(false);
+
+    addExportIssue(actor, "later push failure");
+
+    expect(shouldShowIndicator(actor)).toBe(true);
+  });
+
+  it("clears the indicator once a fresh import resolves everything", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    addImportIssue(actor, "boom");
+    acknowledgeIssues(actor);
+
+    // A new import starts by resetting the import set and unmapped slugs.
+    resetImportIssues(actor);
+    setUnmappedSlugs(actor, []);
+
+    expect(hasActiveIssues(actor)).toBe(false);
+    expect(shouldShowIndicator(actor)).toBe(false);
+  });
+
+  it("does not show the indicator for empty unmapped records", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnmappedSlugs(actor, []);
+    expect(shouldShowIndicator(actor)).toBe(false);
   });
 });

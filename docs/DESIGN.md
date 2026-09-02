@@ -27,6 +27,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Slug Mapping Storage](#19-slug-mapping-storage--one-setting-per-kind)
 - [Mapping Precedence](#20-mapping-precedence--mappings-win)
 - [Mapping Screen Interaction Model](#21-mapping-screen-interaction-model)
+- [Recorded Resolutions and the Full Mapping List](#22-recorded-resolutions-and-the-full-mapping-list)
 
 ---
 
@@ -216,14 +217,14 @@ Combining these into a single function would create a 500+ line monolith with de
 
 **Class-spellcasting module layout:** the `spell-importer` resolver is itself split into focused modules so the top-level file stays an orchestrator:
 
-| Module                 | Responsibility                                                              |
-| ---------------------- | --------------------------------------------------------------------------- |
-| `spell-importer.ts`    | Orchestration: group → per-group/curriculum/innate import, entry naming     |
-| `spell-grouping.ts`    | Sorts spell engines into main / innate / divine-font groups; class config table |
-| `spellcasting-entry.ts`| Creates spellcasting entries and a shared resolve-and-stamp spell-item helper |
-| `prepared-spells.ts`   | Prepared-slot placement, missing-item backfill, signature marking           |
-| `divine-font.ts`       | Cleric Divine Font entry and its slot placement                             |
-| `spell-slots.ts`       | Slot-maximum resolution (via `spell-slot-resolver`) and character-level lookup |
+| Module                  | Responsibility                                                                  |
+| ----------------------- | ------------------------------------------------------------------------------- |
+| `spell-importer.ts`     | Orchestration: group → per-group/curriculum/innate import, entry naming         |
+| `spell-grouping.ts`     | Sorts spell engines into main / innate / divine-font groups; class config table |
+| `spellcasting-entry.ts` | Creates spellcasting entries and a shared resolve-and-stamp spell-item helper   |
+| `prepared-spells.ts`    | Prepared-slot placement, missing-item backfill, signature marking               |
+| `divine-font.ts`        | Cleric Divine Font entry and its slot placement                                 |
+| `spell-slots.ts`        | Slot-maximum resolution (via `spell-slot-resolver`) and character-level lookup  |
 
 The shared resolve-and-stamp helper in `spellcasting-entry.ts` (`resolveSpellItems`) consolidates the previously-duplicated "resolve slug → stamp imported → set location" pattern used by the regular, prepared, and divine-font paths. `getCharacterLevel` lives in `spell-slots.ts` and is reused by `feature-spell-resolver` rather than duplicated.
 
@@ -455,7 +456,7 @@ Full requirements and design: [REQUIREMENTS-slug-mapping.md](./REQUIREMENTS-slug
 
 **Rationale:** This lets a GM override both a missed match and a _wrong-but-successful_ one, including built-in normalizations such as `magic-scroll-*-rank` → `scroll-of-2nd-rank-spell`. Equipment is checked before normalization so the key matches the raw Demiplane slug the GM mapped. A mapping whose target has since disappeared returns `null`, so the import falls back to the normal lookup and re-records the slug as unmapped rather than breaking.
 
-**Tradeoff:** A bad mapping can override good content. Accepted deliberately — the GM has the final say, and a later phase is expected to surface automatic mappings so they can be overridden.
+**Tradeoff:** A bad mapping can override good content. Accepted deliberately — the GM has the final say. The automatic mappings this anticipated are now surfaced too: every successful resolution is recorded as a mapping the GM can see and correct (see [§22](#22-recorded-resolutions-and-the-full-mapping-list)).
 
 ---
 
@@ -467,4 +468,42 @@ Full requirements and design: [REQUIREMENTS-slug-mapping.md](./REQUIREMENTS-slug
 
 **Consequences:** No search seeding is needed (one browser serves many rows, and the browser clears its own search text on close). A dropped item whose type doesn't match the slug's kind is blocked with an explanatory dialog. Ancestry, heritage, background and class have no Compendium Browser tab, so those sections fall back to the Compendium sidebar — acceptable because the glass is a convenience, not a required control.
 
-**Aggregation:** The list is derived by scanning linked actors on open rather than kept in a world registry, so it self-corrects with no pruning: once a slug resolves it simply stops being reported.
+**Aggregation:** The list is built on open from two sources: the unmapped slugs still reported by linked actors, and the recorded mappings ([§22](#22-recorded-resolutions-and-the-full-mapping-list)). A resolved slug therefore stays visible as a mapped row the GM can review or correct, rather than disappearing. The "Show only unmapped items" filter collapses the list back to just the rows that still need attention, and defaults on whenever anything is unmapped.
+---
+
+## 22. Recorded Resolutions and the Full Mapping List
+
+**Decision:** Every successful slug resolution is recorded into the same per-kind mapping store the GM edits, so subsequent lookups consult the recorded mapping first and the mapping screen can show _all_ mappings, not just unresolved slugs. The list is filterable down to only the unmapped rows.
+
+**Rationale:** Previously only two things were persistent: GM overrides and still-unmapped slugs. Auto-resolutions (a plain compendium slug match) were invisible — a wrong-but-successful match could only be discovered by inspecting the imported actor. Recording each resolution makes mappings first-class: the GM sees what every Demiplane name resolved to and can correct a bad automatic match the same way they fix an unmapped one (drag a replacement, or clear it). This is the "surface automatic mappings" phase anticipated in [§20](#20-mapping-precedence--mappings-win).
+
+A useful side effect: the store doubles as a resolution cache. Because a mapping is checked before the compendium scan ([§20](#20-mapping-precedence--mappings-win)), a recorded slug skips the multi-pack index search on the next import.
+
+**Mechanism:**
+
+- `recordResolvedMapping(kind, slug, mapping)` in `slug-mapping.ts` writes an entry only when none exists for that slug/kind. It is called on the compendium-fallback success path of both resolvers in `import/compendium-resolver.ts` (`resolveCompendiumItem` and the shared spell `findSpellDocument`), _after_ `resolveMappedItem` has already returned null — so recording never overwrites a deliberate GM override, and never re-records within a run.
+- The slug key is the raw Demiplane slug (the same key `resolveMappedItem` looks up), and the target is the compendium UUID that matched.
+- Self-healing is unchanged: a recorded mapping whose target later disappears resolves to null, so the import falls back to a fresh lookup and the row is flagged as missing in the editor.
+
+**Non-clobbering, so precedence is preserved:**
+
+| State before resolution | After recording                                                              |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| No entry                | Auto-resolution recorded                                                     |
+| GM override present     | Untouched (override wins, as in [§20](#20-mapping-precedence--mappings-win)) |
+| Prior auto-resolution   | Untouched (idempotent)                                                       |
+
+**UI consequences (mapping screen):**
+
+- Rows now include resolved mappings, so the list grows to the full set of imported names. Section headers are sticky and an always-visible toolbar holds the intro text and the filter, so the list stays navigable when long.
+- **Show only unmapped items** filters every section to the rows without a mapping. It defaults **on** when anything is unmapped (the actionable case) and **off** when everything resolved; the GM can toggle it freely, and the choice persists for the life of the open window.
+
+**Tradeoffs considered:**
+
+| Approach                                      | Pros                                                                | Cons                                                                                                 |
+| --------------------------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Record on resolution **(chosen)**             | Mappings are first-class and correctable; doubles as a lookup cache | Store grows to all imported slugs; a stale cached UUID can serve until its target is missing         |
+| Derive the full list from imported item flags | No new persistence                                                  | Only some import paths stamp the source slug; spells/grants omit it, so the list would be incomplete |
+| Keep showing only unresolved slugs            | Smallest list                                                       | A wrong automatic match stays invisible and uncorrectable                                            |
+
+**Boy-scout note:** the store is now a superset — GM overrides plus recorded auto-resolutions — rather than overrides only ([§19](#19-slug-mapping-storage--one-setting-per-kind) still describes the storage shape, which is unchanged).

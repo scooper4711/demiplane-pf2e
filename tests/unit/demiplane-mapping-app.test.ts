@@ -71,6 +71,36 @@ describe("collectSections", () => {
     expect(row?.mappingMissing).toBe(true);
   });
 
+  it("marks mapped rows as not unmapped and reports the section as fully mapped", async () => {
+    await setMapping("equipment", "resolved", { uuid: HALF_PLATE, name: "Half Plate" });
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [] as never;
+
+    const equipment = (await collectSections()).find((s) => s.kind === "equipment");
+    expect(equipment?.rows[0]?.unmapped).toBe(false);
+    expect(equipment?.hasUnmapped).toBe(false);
+  });
+
+  it("flags an unmapped slug and its section as having unmapped rows", async () => {
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [
+      linkedActor("Kyra", [{ slug: "not-in-compendium", kind: "equipment" }]),
+    ] as never;
+
+    const equipment = (await collectSections()).find((s) => s.kind === "equipment");
+    expect(equipment?.rows[0]?.unmapped).toBe(true);
+    expect(equipment?.hasUnmapped).toBe(true);
+  });
+
+  it("keeps a section marked unmapped when it mixes mapped and unmapped rows", async () => {
+    await setMapping("equipment", "resolved", { uuid: HALF_PLATE, name: "Half Plate" });
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [
+      linkedActor("Kyra", [{ slug: "not-in-compendium", kind: "equipment" }]),
+    ] as never;
+
+    const equipment = (await collectSections()).find((s) => s.kind === "equipment");
+    expect(equipment?.rows).toHaveLength(2);
+    expect(equipment?.hasUnmapped).toBe(true);
+  });
+
   it("ignores actors that aren't linked to a Demiplane character", async () => {
     const unlinked = createMockActor({ name: "Homemade" });
     unlinked.getFlag = vi.fn((_module: string, key: string) =>

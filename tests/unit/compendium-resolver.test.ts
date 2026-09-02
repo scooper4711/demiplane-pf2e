@@ -5,7 +5,7 @@ import {
   resolveSlugToUuid,
   resolveSpellFromCompendium,
 } from "../../src/import/compendium-resolver.js";
-import { registerSlugMappingSettings, setMapping } from "../../src/slug-mapping.js";
+import { registerSlugMappingSettings, setMapping, getMapping } from "../../src/slug-mapping.js";
 
 describe("resolveCompendiumItem", () => {
   beforeEach(() => {
@@ -51,6 +51,45 @@ describe("resolveCompendiumItem", () => {
   it("returns null for unknown slug", async () => {
     const result = await resolveCompendiumItem("nonexistent-feat-rm", "feat");
     expect(result).toBeNull();
+  });
+});
+
+describe("recording auto-resolved mappings", () => {
+  beforeEach(() => {
+    installFoundryMocks({
+      "pf2e.feats-srd": createMockPack([{ _id: "feat1", name: "Power Attack", system: { slug: "power-attack" } }]),
+      "pf2e.spells-srd": createMockPack([{ _id: "sp1", name: "Heal", system: { slug: "heal" } }]),
+    });
+    registerSlugMappingSettings();
+  });
+
+  it("records a compendium resolution so it becomes a first-class mapping", async () => {
+    expect(getMapping("feat", "power-attack-rm")).toBeUndefined();
+
+    await resolveCompendiumItem("power-attack-rm", "feat");
+
+    // Keyed by the raw Demiplane slug (what resolveMappedItem looks up), and
+    // pointed at the compendium item it matched.
+    expect(getMapping("feat", "power-attack-rm")?.uuid).toBe("Compendium.pf2e.feats-srd.Item.feat1");
+  });
+
+  it("records under the raw slug so a later lookup hits the mapping first", async () => {
+    await resolveSpellFromCompendium("heal-rm");
+    expect(getMapping("spell", "heal-rm")?.uuid).toBe("Compendium.pf2e.spells-srd.Item.sp1");
+  });
+
+  it("does not overwrite an existing GM override with the auto-resolution", async () => {
+    await setMapping("feat", "power-attack-rm", { uuid: "Compendium.pf2e.feats-srd.Item.feat1", name: "Overridden" });
+
+    await resolveCompendiumItem("power-attack-rm", "feat");
+
+    // The deliberate name the GM set is preserved, not clobbered by recording.
+    expect(getMapping("feat", "power-attack-rm")?.name).toBe("Overridden");
+  });
+
+  it("records nothing when the slug does not resolve", async () => {
+    await resolveCompendiumItem("nonexistent-feat-rm", "feat");
+    expect(getMapping("feat", "nonexistent-feat-rm")).toBeUndefined();
   });
 });
 
