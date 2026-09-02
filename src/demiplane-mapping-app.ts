@@ -402,6 +402,22 @@ function refresh(): void {
   void app?.render({ force: true });
 }
 
+/** Prefix shared by every per-kind mapping setting key (`slugMappingsFeat`, …). */
+const MAPPING_SETTING_PREFIX = `${MODULE_ID}.slugMappings`;
+
+/**
+ * Keeps an open mapping editor current when the mappings change on *another*
+ * client. `setMapping`/`clearMapping` write a world setting, which Foundry
+ * replicates and announces via `updateSetting` on every client; the local
+ * client already refreshes inline, but a second GM's editor would otherwise
+ * show stale data until reopened.
+ */
+export function registerMappingSyncHook(): void {
+  Hooks.on("updateSetting", (setting: { key?: string }) => {
+    if (setting.key?.startsWith(MAPPING_SETTING_PREFIX)) refresh();
+  });
+}
+
 export function registerDemiplaneMappingTemplates(): void {
   foundry.applications.handlebars.loadTemplates([TEMPLATE_PATH]);
 }

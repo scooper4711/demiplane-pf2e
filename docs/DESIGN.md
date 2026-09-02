@@ -506,4 +506,6 @@ A useful side effect: the store doubles as a resolution cache. Because a mapping
 | Derive the full list from imported item flags | No new persistence                                                  | Only some import paths stamp the source slug; spells/grants omit it, so the list would be incomplete |
 | Keep showing only unresolved slugs            | Smallest list                                                       | A wrong automatic match stays invisible and uncorrectable                                            |
 
+**Live across clients:** mappings are world settings, so a change made on one client (e.g. an assistant GM's editor) replicates and fires Foundry's `updateSetting` on every client. `registerMappingSyncHook` listens for changes to any `slugMappings*` key and re-renders an open editor, so a second GM sees the update immediately instead of stale data. The client that made the change still refreshes inline; the hook covers the other clients.
+
 **Boy-scout note:** the store is now a superset — GM overrides plus recorded auto-resolutions — rather than overrides only ([§19](#19-slug-mapping-storage--one-setting-per-kind) still describes the storage shape, which is unchanged).
