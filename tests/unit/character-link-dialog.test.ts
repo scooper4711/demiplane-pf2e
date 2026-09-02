@@ -15,6 +15,7 @@ function makeWait(clickedAction: string) {
 describe("CharacterLinkDialog", () => {
   let client: { fetchCharacterVersion: ReturnType<typeof vi.fn>; setToken: ReturnType<typeof vi.fn> };
   let actor: {
+    id: string;
     getFlag: ReturnType<typeof vi.fn>;
     setFlag: ReturnType<typeof vi.fn>;
     unsetFlag: ReturnType<typeof vi.fn>;
@@ -28,6 +29,7 @@ describe("CharacterLinkDialog", () => {
       fetchCharacterVersion: vi.fn().mockResolvedValue({ version: 1 }),
     };
     actor = {
+      id: "self",
       getFlag: vi.fn().mockImplementation((_m: string, key: string) => (key === "characterId" ? undefined : undefined)),
       setFlag: vi.fn().mockResolvedValue(undefined),
       unsetFlag: vi.fn().mockResolvedValue(undefined),
@@ -82,5 +84,25 @@ describe("CharacterLinkDialog", () => {
     await dlg.open(actor as never);
     expect(actor.unsetFlag).toHaveBeenCalledWith("demiplane-pf2e", "characterId");
     expect(ui.notifications.info).toHaveBeenCalledWith("Character unlinked.");
+  });
+
+  it("refuses to link a character already linked to another actor", async () => {
+    (globalThis as unknown as { game: unknown }).game = {
+      actors: {
+        contents: [
+          {
+            id: "other",
+            name: "Other Actor",
+            getFlag: (_m: string, key: string) => (key === "characterId" ? DEMI_UUID : undefined),
+          },
+        ],
+      },
+    };
+    const dlg = new CharacterLinkDialog(client as never);
+    await dlg.open(actor as never);
+    expect(actor.setFlag).not.toHaveBeenCalled();
+    expect(client.fetchCharacterVersion).not.toHaveBeenCalled();
+    expect(ui.notifications.error).toHaveBeenCalled();
+    delete (globalThis as unknown as { game?: unknown }).game;
   });
 });
