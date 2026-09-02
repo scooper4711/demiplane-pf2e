@@ -305,3 +305,23 @@
   color: var(--color-pf-primary);
   text-shadow: 0 0 8px var(--color-shadow-primary, rgb(0 0 0 / 50%));
 }
+
+/* ------------------------------------------------------------------------- */
+/*  Demiplane sync badge in the Actors sidebar                               */
+/*                                                                           */
+/*  A small Demiplane logo shown on the row of any character linked to        */
+/*  Demiplane. It is appended to the flex row after `.entry-name`, which      */
+/*  grows to fill the row and pushes this icon to the right edge — sharing    */
+/*  the trailing space with icons from other modules (e.g. Permissions        */
+/*  Viewer). Height is pinned to 1em so it matches the name's text height;    */
+/*  `flex: 0 0 auto` keeps it from stretching or shrinking. Injected by       */
+/*  src/directory-icon.ts.                                                    */
+/* ------------------------------------------------------------------------- */
+.directory-item.actor > .demiplane-directory-icon {
+  align-self: center;
+  flex: 0 0 auto;
+  height: 1em;
+  width: auto;
+  margin-left: 0.25em;
+  object-fit: contain;
+}
