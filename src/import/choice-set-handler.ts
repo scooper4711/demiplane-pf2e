@@ -2,32 +2,9 @@ import type { DemiplaneEngineEntry } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { resolveSlugToUuid } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
-
-interface ChoiceSetContext {
-  choices: Array<{ value: unknown; label: string }>;
-  selection: unknown;
-  item: {
-    flags: Record<string, unknown>;
-    getRollOptions: (s: string) => string[];
-    rules: Array<{ ignored: boolean }>;
-    name: string;
-  };
-  actor: { getRollOptions: () => string[] };
-  resolveInjectedProperties: (p: unknown) => {
-    test: (r: Set<string>) => boolean;
-  };
-  predicate: unknown;
-  prompt?: unknown;
-  inflateChoices: (r: Set<string>, t: unknown) => Promise<Array<{ value: unknown; label: string }>>;
-  flag: string;
-  rollOption: string;
-}
-
-interface PreCreateParams {
-  ruleSource: Record<string, unknown>;
-  itemSource: { name: string } & Record<string, unknown>;
-  tempItems: unknown;
-}
+import { toChoiceSlug } from "./choice-slug.js";
+import { findMatchInChoices } from "./choice-matchers.js";
+import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
 
 /**
  * Manages ChoiceSet auto-resolution during import.
@@ -59,8 +36,14 @@ export class ChoiceSetHandler {
     };
   }
 
-  private description(selection: unknown): string {
-    return typeof selection === "string" ? selection : JSON.stringify(selection);
+  disable(): void {
+    this.importMode = false;
+    if (this.originalPreCreate) {
+      const ChoiceSetRE = this.getChoiceSetPrototype();
+      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
+      this.originalPreCreate = null;
+    }
+    debugLog("[ChoiceSet] Monkey-patch disabled, import mode off");
   }
 
   private async handlePreCreate(context: ChoiceSetContext, params: PreCreateParams): Promise<void> {
@@ -68,25 +51,8 @@ export class ChoiceSetHandler {
       return this.originalPreCreate!.call(context, params) as Promise<void>;
     }
 
-    if (context.selection !== null) {
-      // A selection was pre-set (e.g. by PF2e's native grant resolution). If it
-      // doesn't correspond to a real available choice, it's a bad placeholder
-      // (e.g. the generic "lore" slug instead of the actual "forest-lore" skill)
-      // and would pop the grant UI. Re-resolve it below instead of passing through.
-      const valid = await this.isPreSetSelectionValid(context, params);
-      if (valid) {
-        debugLog(
-          `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
-            this.description(context.selection)
-          )}, item=${params.itemSource.name}`
-        );
-        return this.originalPreCreate!.call(context, params) as Promise<void>;
-      }
-      debugLog(
-        `[ChoiceSet] preCreate: pre-set selection ${this.description(
-          context.selection
-        )} is not a valid choice; re-resolving, item=${params.itemSource.name}`
-      );
+    if (await this.shouldPassThroughPreSetSelection(context, params)) {
+      return this.originalPreCreate!.call(context, params) as Promise<void>;
     }
 
     debugLog(
@@ -95,7 +61,7 @@ export class ChoiceSetHandler {
       )}, choices=${this.describeChoiceQuery(context.choices)}`
     );
 
-    const rollOptions = new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
+    const rollOptions = this.collectRollOptions(context);
     const predicate = context.resolveInjectedProperties(context.predicate);
     if (!predicate.test(rollOptions)) return;
 
@@ -107,41 +73,53 @@ export class ChoiceSetHandler {
 
     debugLog(`ChoiceSet presented choices: ${this.describeChoices(context.choices)}`);
 
-    const matched = this.findMatchInChoices(context.choices, context.item.name);
+    const matched = findMatchInChoices(context.choices, this.currentEngines, context.item.name);
     const selected = matched ?? context.choices[0];
     if (selected) {
       this.applySelectedChoice(context, params, selected, matched !== null);
     }
   }
 
-  disable(): void {
-    this.importMode = false;
-    if (this.originalPreCreate) {
-      const ChoiceSetRE = this.getChoiceSetPrototype();
-      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
-      this.originalPreCreate = null;
+  /**
+   * A pre-set `selection` (e.g. from PF2e's native grant resolution) should pass
+   * straight through when it's a real available choice. When it isn't — such as
+   * the generic "lore" slug instead of the actual "forest-lore" skill — it would
+   * pop the grant UI, so the caller re-resolves it via the matching strategies.
+   */
+  private async shouldPassThroughPreSetSelection(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
+    if (context.selection === null) return false;
+
+    if (await this.isPreSetSelectionValid(context, params)) {
+      debugLog(
+        `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
+          this.description(context.selection)
+        )}, item=${params.itemSource.name}`
+      );
+      return true;
     }
-    debugLog("[ChoiceSet] Monkey-patch disabled, import mode off");
+
+    debugLog(
+      `[ChoiceSet] preCreate: pre-set selection ${this.description(
+        context.selection
+      )} is not a valid choice; re-resolving, item=${params.itemSource.name}`
+    );
+    return false;
   }
 
-  /**
-   * Determines whether a ChoiceSet's already-present `selection` is one of the
-   * choices PF2e would actually offer. A pre-set selection that isn't a valid
-   * choice (e.g. the generic "lore" slug rather than "forest-lore") would
-   * otherwise cause the grant UI to pop; in that case the caller should
-   * re-resolve the selection via the normal matching strategies.
-   */
   private async isPreSetSelectionValid(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
     if (context.selection === null) return true;
-    const rollOptions = new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
-    const choices = await context.inflateChoices(rollOptions, params.tempItems);
+    const choices = await context.inflateChoices(this.collectRollOptions(context), params.tempItems);
     return Array.isArray(choices) && choices.some((c) => c.value === context.selection);
+  }
+
+  private collectRollOptions(context: ChoiceSetContext): Set<string> {
+    return new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
   }
 
   private applySelectedChoice(
     context: ChoiceSetContext,
     params: PreCreateParams,
-    selected: { value: unknown; label: string },
+    selected: Choice,
     matched: boolean
   ): void {
     debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
@@ -179,224 +157,8 @@ export class ChoiceSetHandler {
     return builtin;
   }
 
-  private findMatchInChoices(
-    choices: Array<{ value: unknown; label: string }>,
-    itemName?: string
-  ): { value: unknown; label: string } | null {
-    const match =
-      this.matchSkillSlugs(choices) ??
-      this.matchCustomSelectionLore(choices, itemName) ??
-      this.matchAllSlugs(choices) ??
-      this.matchClassFeatures(choices) ??
-      this.matchGenericFeatures(choices) ??
-      this.matchFeatSlugs(choices) ??
-      this.matchGenericChoice(choices, itemName);
-
-    if (!match) debugLog("[ChoiceSet match] No match found across all strategies");
-    return match;
-  }
-
-  private matchSkillSlugs(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
-    const allSkillSlugs = new Set(
-      this.currentEngines
-        .filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug)
-        .map((e) => e.args?.slug as string)
-    );
-
-    debugLog(`[ChoiceSet match] Strategy 1 - skill slugs: [${Array.from(allSkillSlugs).join(", ")}]`);
-
-    for (const choice of choices) {
-      const val = typeof choice.value === "string" ? choice.value : "";
-      if (allSkillSlugs.has(val)) return choice;
-    }
-    return null;
-  }
-
-  /**
-   * Matches a ChoiceSet (e.g. the skill choice on the Assurance feat) to a Lore
-   * skill selected via a `core/selection/skill/custom-selection/index.eng` engine
-   * (the "additional Lore" granted by ancestry/background features). The engine's
-   * `args.name` holds the Lore name (e.g. "Forest Lore"); we slugify it and match
-   * against the available skill choices so the grant resolves silently instead of
-   * prompting the user.
-   *
-   * Scoped to the originating feat via the engine `sourceRow` when an item name is
-   * known, so it doesn't mis-target unrelated skill choices.
-   */
-  private matchCustomSelectionLore(
-    choices: Array<{ value: unknown; label: string }>,
-    itemName?: string
-  ): { value: unknown; label: string } | null {
-    const itemSlug = itemName ? this.toChoiceSlug(itemName) : "";
-    const loreEngines = this.currentEngines.filter(
-      (e) =>
-        e.name === "core/selection/skill/custom-selection/index.eng" &&
-        e.args?.name &&
-        (itemSlug === "" ||
-          (e.args.sourceRow as string)?.includes(`${itemSlug}-rm`) ||
-          (e.args.sourceRow as string)?.includes(itemSlug))
-    );
-
-    const scoped = itemName ? ` for "${itemName}"` : "";
-    const engineNames = loreEngines.map((e) => String(e.args?.name)).join(", ");
-    debugLog(`[ChoiceSet match] custom-selection lore engines${scoped}: [${engineNames}]`);
-
-    for (const eng of loreEngines) {
-      const target = this.toChoiceSlug(eng.args!.name as string);
-      for (const choice of choices) {
-        const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
-        if (val === target || this.toChoiceSlug(choice.label) === target) return choice;
-      }
-    }
-    return null;
-  }
-
-  private matchAllSlugs(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
-    const allSlugs = new Set(
-      this.currentEngines
-        .filter((e) => e.type === "DemiplaneEngine" && e.args?.slug)
-        .map((e) => toFoundrySlug(e.args?.slug as string))
-    );
-
-    debugLog(
-      `[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`
-    );
-
-    for (const choice of choices) {
-      const val = typeof choice.value === "string" ? choice.value : "";
-      if (allSlugs.has(val)) return choice;
-    }
-    return null;
-  }
-
-  private matchClassFeatures(
-    choices: Array<{ value: unknown; label: string }>
-  ): { value: unknown; label: string } | null {
-    const classFeatureSlugs = this.currentEngines
-      .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/class-feature/") && e.args?.slug)
-      .map((e) => toFoundrySlug(e.args?.slug as string));
-
-    debugLog(`[ChoiceSet match] Strategy 3 - class feature slugs: [${classFeatureSlugs.join(", ")}]`);
-    debugLog(
-      `[ChoiceSet match] Choice labels for Strategy 3: [${choices
-        .slice(0, 5)
-        .map((c) => `${c.label}→${this.toChoiceSlug(c.label)}`)
-        .join(", ")}...]`
-    );
-
-    for (const choice of choices) {
-      const labelSlug = this.toChoiceSlug(choice.label);
-      if (classFeatureSlugs.some((slug) => labelSlug === slug || labelSlug.endsWith(`-${slug}`))) {
-        return choice;
-      }
-    }
-    return null;
-  }
-
-  private matchGenericFeatures(
-    choices: Array<{ value: unknown; label: string }>
-  ): { value: unknown; label: string } | null {
-    const genericFeatureSlugs = this.currentEngines
-      .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-feature/") && e.args?.slug)
-      .map((e) => toFoundrySlug(e.args?.slug as string));
-
-    debugLog(`[ChoiceSet match] Strategy 4 - generic feature slugs: [${genericFeatureSlugs.join(", ")}]`);
-
-    for (const choice of choices) {
-      const val = typeof choice.value === "string" ? choice.value : "";
-      if (!val || val.includes("Compendium")) continue;
-      for (const slug of genericFeatureSlugs) {
-        if (slug.includes(val)) return choice;
-      }
-    }
-    return null;
-  }
-
-  private matchFeatSlugs(choices: Array<{ value: unknown; label: string }>): { value: unknown; label: string } | null {
-    const featSlugs = this.currentEngines
-      .filter((e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug)
-      .map((e) => toFoundrySlug(e.args.slug as string));
-
-    debugLog(`[ChoiceSet match] Strategy 5 - feat slugs: [${featSlugs.join(", ")}]`);
-
-    for (const choice of choices) {
-      if (typeof choice.value === "string" && choice.value.includes("Compendium")) {
-        const label = choice.label
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "-")
-          .replace(/-+/g, "-");
-        for (const featSlug of featSlugs) {
-          if (label === featSlug || label.includes(featSlug)) return choice;
-        }
-      }
-    }
-    return null;
-  }
-
-  // Strategy 6: generic-choice engines (e.g. "canny-acumen-save-option-will").
-  // Extract the trailing keyword from the slug and match against choice values/labels.
-  private matchGenericChoice(
-    choices: Array<{ value: unknown; label: string }>,
-    itemName?: string
-  ): { value: unknown; label: string } | null {
-    const genericChoiceEngines = this.currentEngines.filter(
-      (e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-choice/") && e.args?.slug
-    );
-
-    const matchScoped = (
-      engines: DemiplaneEngineEntry[],
-      label: (keywords: string[]) => string
-    ): { value: unknown; label: string } | null => {
-      if (engines.length === 0) return null;
-      const keywords = this.genericChoiceKeywords(engines);
-      debugLog(label(keywords));
-      return this.matchByKeyword(choices, keywords);
-    };
-
-    return (
-      matchScoped(
-        genericChoiceEngines,
-        (k) => `[ChoiceSet match] Strategy 6 - generic choice keywords: [${k.join(", ")}]`
-      ) ??
-      (itemName
-        ? matchScoped(
-            genericChoiceEngines.filter(
-              (e) => e.args?.slug && toFoundrySlug(e.args.slug as string).startsWith(this.toChoiceSlug(itemName))
-            ),
-            (k) => `[ChoiceSet match] Strategy 6 - generic choice for "${itemName}": keywords=[${k.join(", ")}]`
-          )
-        : null)
-    );
-  }
-
-  private genericChoiceKeywords(engines: DemiplaneEngineEntry[]): string[] {
-    return engines.map((e) => {
-      const slug = toFoundrySlug(e.args?.slug as string);
-      return slug.split("-").pop() || "";
-    });
-  }
-
-  private matchByKeyword(
-    choices: Array<{ value: unknown; label: string }>,
-    keywords: string[]
-  ): { value: unknown; label: string } | null {
-    for (const choice of choices) {
-      const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
-      const label = choice.label.toLowerCase();
-      for (const keyword of keywords) {
-        if (keyword && (val.includes(keyword) || label === keyword)) return choice;
-      }
-    }
-    return null;
-  }
-
-  private toChoiceSlug(label: string): string {
-    const name = label.split(":").pop() || label;
-    return name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+  private description(selection: unknown): string {
+    return typeof selection === "string" ? selection : JSON.stringify(selection);
   }
 
   private describeChoiceQuery(choices: unknown): string {
@@ -408,11 +170,11 @@ export class ChoiceSetHandler {
     }
   }
 
-  private describeChoices(choices: Array<{ value: unknown; label: string }>): string {
+  private describeChoices(choices: Choice[]): string {
     return choices.map((choice) => this.describeChoice(choice)).join(", ");
   }
 
-  private describeChoice(choice: { value: unknown; label: string }): string {
+  private describeChoice(choice: Choice): string {
     return `${choice.label} [${String(choice.value)}]`;
   }
 
@@ -432,23 +194,32 @@ export class ChoiceSetHandler {
 
     for (const rule of system.rules) {
       if (rule.key !== "ChoiceSet") continue;
-      const flagText = typeof rule.flag === "string" ? (rule.flag as string) : "choice";
-      const selection = await this.findChoiceSelection(demiplaneSlug, rule);
-      if (selection !== null) {
-        debugLog(`[ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`);
-        rule.selection = selection;
-        // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
-        const flag = flagText;
-        const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
-        flags.pf2e ??= {};
-        const rulesSelections = (flags.pf2e.rulesSelections ?? {}) as Record<string, unknown>;
-        rulesSelections[flag] = selection;
-        flags.pf2e.rulesSelections = rulesSelections;
-        itemData.flags = flags;
-      } else {
-        debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
-      }
+      await this.presetSingleRule(itemData, rule, demiplaneSlug);
     }
+  }
+
+  private async presetSingleRule(
+    itemData: Record<string, unknown>,
+    rule: Record<string, unknown>,
+    demiplaneSlug: string
+  ): Promise<void> {
+    const flagText = typeof rule.flag === "string" ? (rule.flag as string) : "choice";
+    const selection = await this.findChoiceSelection(demiplaneSlug, rule);
+    if (selection === null) {
+      debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
+      return;
+    }
+
+    debugLog(`[ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`);
+    rule.selection = selection;
+
+    // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
+    const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
+    flags.pf2e ??= {};
+    const rulesSelections = (flags.pf2e.rulesSelections ?? {}) as Record<string, unknown>;
+    rulesSelections[flagText] = selection;
+    flags.pf2e.rulesSelections = rulesSelections;
+    itemData.flags = flags;
   }
 
   private async findChoiceSelection(parentSlug: string, rule: Record<string, unknown>): Promise<string | null> {
@@ -460,9 +231,9 @@ export class ChoiceSetHandler {
     ];
 
     for (const eng of this.currentEngines) {
-      const sr = (eng.args?.sourceRow as string) || "";
+      const sourceRow = (eng.args?.sourceRow as string) || "";
       for (const pattern of patterns) {
-        if (sr.includes(pattern) && eng.args?.slug) {
+        if (sourceRow.includes(pattern) && eng.args?.slug) {
           return this.resolveChildSlug(eng.args.slug as string, rule, eng);
         }
       }
@@ -471,8 +242,8 @@ export class ChoiceSetHandler {
     // Strategy 2: child class-feature whose sourceRow matches the parent slug directly
     const strippedParent = parentSlug.replace(/-rm$/, "") + "-rm";
     for (const eng of this.currentEngines) {
-      const sr = (eng.args?.sourceRow as string) || "";
-      if (sr === strippedParent && eng.args?.slug && eng.name.includes("/class-feature/")) {
+      const sourceRow = (eng.args?.sourceRow as string) || "";
+      if (sourceRow === strippedParent && eng.args?.slug && eng.name.includes("/class-feature/")) {
         return this.resolveChildSlug(eng.args.slug as string, rule);
       }
     }
@@ -498,7 +269,7 @@ export class ChoiceSetHandler {
     // args.slug is the generic "lore" placeholder while args.name holds the real
     // skill ("Forest Lore"). Derive the specific skill slug so the grant resolves.
     if (eng?.name === "core/selection/skill/custom-selection/index.eng" && eng.args?.name) {
-      return this.toChoiceSlug(eng.args.name as string);
+      return toChoiceSlug(eng.args.name as string);
     }
     return childSlug;
   }

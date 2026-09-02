@@ -9,6 +9,7 @@ import {
   type DomainEngineData,
 } from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
+import { getCharacterLevel } from "./spell-slots.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
 export interface GrantedSpell {
@@ -253,11 +254,6 @@ async function addGrantedSpellsToEntry(
     await actor.createEmbeddedDocuments("Item", spellItems as never);
     summary.log.push(`+ ${label}: ${String(spellItems.length)} spells added`);
   }
-}
-
-function getCharacterLevel(engines: DemiplaneEngineEntry[]): number {
-  const levelEngine = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
-  return Number(levelEngine?.value) || 1;
 }
 
 /**

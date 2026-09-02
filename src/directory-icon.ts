@@ -2,6 +2,22 @@ import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import { showDemiplaneInfoDialog } from "./demiplane-info-button.js";
 
+// Foundry v14 fires `activate{Document}Directory` when a sidebar tab is
+// switched to, but fvtt-types only generates render/close/context hooks for
+// ApplicationV2 sidebar tabs — not `activate*` — so the hook name is missing
+// from HookConfig. Declare it here so `Hooks.on("activateActorDirectory", …)`
+// type-checks against the real callback shape (the directory application).
+declare module "fvtt-types/configuration" {
+  // The `namespace` is required: fvtt-types nests HookConfig inside a `Hooks`
+  // namespace, and merging into it is the only way to augment the hook registry.
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Hooks {
+    interface HookConfig {
+      activateActorDirectory: (app: foundry.applications.sidebar.tabs.ActorDirectory.Any) => void;
+    }
+  }
+}
+
 type ImportCharacterFn = (
   actor: Actor,
   characterId: string,
