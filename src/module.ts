@@ -10,6 +10,7 @@ import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
+import { registerDirectoryIcon } from "./directory-icon.js";
 import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
 import { registerDemiplaneMappingTemplates } from "./demiplane-mapping-app.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
@@ -52,6 +53,7 @@ async function initializeModule(): Promise<void> {
   hookManager.register();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
   registerTitlebarDot();
+  registerDirectoryIcon();
 
   // Recover from a previous session that crashed mid-sync, which would otherwise
   // leave a stale sync mark blocking all pushes for the affected character.
