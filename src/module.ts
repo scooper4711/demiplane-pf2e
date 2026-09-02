@@ -53,7 +53,7 @@ async function initializeModule(): Promise<void> {
   hookManager.register();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
   registerTitlebarDot();
-  registerDirectoryIcon();
+  registerDirectoryIcon(importLinkedCharacter, exportLinkedCharacter);
 
   // Recover from a previous session that crashed mid-sync, which would otherwise
   // leave a stale sync mark blocking all pushes for the affected character.

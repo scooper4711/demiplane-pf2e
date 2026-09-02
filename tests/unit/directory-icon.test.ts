@@ -1,6 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
 import { registerDirectoryIcon } from "../../src/directory-icon.js";
+import { showDemiplaneInfoDialog } from "../../src/demiplane-info-button.js";
+
+// The click handler delegates to the shared info dialog; mock it so tests can
+// assert the delegation without exercising the real DialogV2 machinery.
+vi.mock("../../src/demiplane-info-button.js", () => ({
+  showDemiplaneInfoDialog: vi.fn().mockResolvedValue(undefined),
+}));
+
+const importCharacter = vi.fn();
+const exportCharacter = vi.fn();
+
+function register(): void {
+  registerDirectoryIcon(importCharacter, exportCharacter);
+}
 
 /** Returns the callback registered for a given Foundry hook, if any. */
 function hookCallback(event: string): ((...args: unknown[]) => void) | undefined {
@@ -10,10 +24,40 @@ function hookCallback(event: string): ((...args: unknown[]) => void) | undefined
   return calls.find((c) => c[0] === event)?.[1];
 }
 
-/**
- * Minimal fake of a sidebar entry `<li>`. `entry-name` is the growing element;
- * `children` collects appended icons so tests can assert on placement.
- */
+interface FakeIcon {
+  className: string;
+  src: string;
+  alt: string;
+  title: string;
+  loading: string;
+  classList: { add: (c: string) => void; has: (c: string) => boolean };
+  listeners: Record<string, (event: FakeEvent) => void>;
+  addEventListener: (type: string, handler: (event: FakeEvent) => void) => void;
+}
+
+interface FakeEvent {
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}
+
+function makeIcon(): FakeIcon {
+  const classes = new Set<string>();
+  const icon: FakeIcon = {
+    className: "",
+    src: "",
+    alt: "",
+    title: "",
+    loading: "",
+    classList: { add: (c: string) => void classes.add(c), has: (c: string) => classes.has(c) },
+    listeners: {},
+    addEventListener(type, handler) {
+      this.listeners[type] = handler;
+    },
+  };
+  return icon;
+}
+
+/** Minimal fake of a sidebar entry `<li>` collecting appended icons. */
 interface FakeEntry {
   dataset: { entryId?: string };
   children: FakeIcon[];
@@ -22,16 +66,8 @@ interface FakeEntry {
   append: (child: FakeIcon) => void;
 }
 
-interface FakeIcon {
-  className: string;
-  src: string;
-  alt: string;
-  title: string;
-  loading: string;
-}
-
 function makeEntry(entryId: string | undefined): FakeEntry {
-  const entry: FakeEntry = {
+  return {
     dataset: entryId === undefined ? {} : { entryId },
     children: [],
     appended: [],
@@ -46,7 +82,6 @@ function makeEntry(entryId: string | undefined): FakeEntry {
       this.appended.push(child);
     },
   };
-  return entry;
 }
 
 /**
@@ -63,39 +98,53 @@ function makeRoot(entries: FakeEntry[]): HTMLElement {
   return root as unknown as HTMLElement;
 }
 
-/** Registers a synced/unsynced actor in the mocked `game.actors`. */
-function stubActor(id: string, characterId: string | undefined): void {
+/** Registers a synced/unsynced actor whose owner permission is configurable. */
+function stubActor(id: string, characterId: string | undefined, isOwner = true): void {
   const actors = (globalThis as unknown as { game: { actors: { get: ReturnType<typeof vi.fn> } } }).game.actors;
   actors.get.mockImplementation((wanted: string) =>
-    wanted === id ? { getFlag: (_m: string, key: string) => (key === "characterId" ? characterId : undefined) } : null
+    wanted === id
+      ? {
+          getFlag: (_m: string, key: string) => (key === "characterId" ? characterId : undefined),
+          testUserPermission: () => isOwner,
+        }
+      : null
   );
+}
+
+/** Sets the current user's GM status for the permission gate. */
+function stubUser(isGM: boolean): void {
+  (globalThis as unknown as { game: { user: unknown } }).game.user = { isGM };
 }
 
 describe("directory icon", () => {
   beforeEach(() => {
     installFoundryMocks();
+    vi.mocked(showDemiplaneInfoDialog).mockClear();
     (globalThis as unknown as { HTMLElement: typeof FakeHTMLElement }).HTMLElement = FakeHTMLElement;
-    // A tiny `document` so buildIcon() can create an <img> in the Node env.
-    (globalThis as unknown as { document: { createElement: () => FakeIcon } }).document = {
-      createElement: () => ({ className: "", src: "", alt: "", title: "", loading: "" }),
+    (globalThis as unknown as { CONST: { DOCUMENT_OWNERSHIP_LEVELS: { OWNER: number } } }).CONST = {
+      DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 },
     };
-    // No live directory at registration time unless a test opts in.
+    (globalThis as unknown as { document: { createElement: () => FakeIcon } }).document = {
+      createElement: () => makeIcon(),
+    };
     (globalThis as unknown as { ui: Record<string, unknown> }).ui = { notifications: {} };
+    stubUser(true);
   });
 
   afterEach(() => {
     delete (globalThis as unknown as Record<string, unknown>).document;
     delete (globalThis as unknown as Record<string, unknown>).HTMLElement;
+    delete (globalThis as unknown as Record<string, unknown>).CONST;
   });
 
   it("registers render and activate hooks for the actor directory", () => {
-    registerDirectoryIcon();
+    register();
     expect(typeof hookCallback("renderActorDirectory")).toBe("function");
     expect(typeof hookCallback("activateActorDirectory")).toBe("function");
   });
 
   it("adds the icon to a synced actor's row via the render hook", () => {
-    registerDirectoryIcon();
+    register();
     stubActor("synced", "demiplane-uuid");
     const entry = makeEntry("synced");
 
@@ -108,7 +157,7 @@ describe("directory icon", () => {
   });
 
   it("does not add the icon to an actor without a characterId flag", () => {
-    registerDirectoryIcon();
+    register();
     stubActor("plain", undefined);
     const entry = makeEntry("plain");
 
@@ -118,7 +167,7 @@ describe("directory icon", () => {
   });
 
   it("skips entries with no entry id", () => {
-    registerDirectoryIcon();
+    register();
     stubActor("synced", "demiplane-uuid");
     const entry = makeEntry(undefined);
 
@@ -128,7 +177,7 @@ describe("directory icon", () => {
   });
 
   it("skips actors that are not in the world collection", () => {
-    registerDirectoryIcon();
+    register();
     const actors = (globalThis as unknown as { game: { actors: { get: ReturnType<typeof vi.fn> } } }).game.actors;
     actors.get.mockReturnValue(null);
     const entry = makeEntry("missing");
@@ -139,7 +188,7 @@ describe("directory icon", () => {
   });
 
   it("does not add a second icon when the row is already decorated", () => {
-    registerDirectoryIcon();
+    register();
     stubActor("synced", "demiplane-uuid");
     const entry = makeEntry("synced");
 
@@ -151,10 +200,9 @@ describe("directory icon", () => {
   });
 
   it("ignores a render payload that is not an element", () => {
-    registerDirectoryIcon();
+    register();
     stubActor("synced", "demiplane-uuid");
 
-    // Should neither throw nor decorate anything.
     expect(() => hookCallback("renderActorDirectory")?.(undefined, "not-an-element")).not.toThrow();
   });
 
@@ -163,7 +211,7 @@ describe("directory icon", () => {
     const entry = makeEntry("synced");
     const app = { element: makeRoot([entry]) };
 
-    registerDirectoryIcon();
+    register();
     hookCallback("activateActorDirectory")?.(app);
 
     expect(entry.appended).toHaveLength(1);
@@ -176,8 +224,70 @@ describe("directory icon", () => {
       actors: { element: makeRoot([entry]) },
     };
 
-    registerDirectoryIcon();
+    register();
 
     expect(entry.appended).toHaveLength(1);
+  });
+
+  it("opens the Demiplane dialog when a GM clicks the icon", () => {
+    register();
+    stubUser(true);
+    stubActor("synced", "demiplane-uuid");
+    const entry = makeEntry("synced");
+
+    hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
+    const icon = entry.appended[0];
+    expect(icon.classList.has("clickable")).toBe(true);
+
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    icon.listeners.click?.({ preventDefault, stopPropagation });
+
+    expect(preventDefault).toHaveBeenCalled();
+    expect(stopPropagation).toHaveBeenCalled();
+    expect(showDemiplaneInfoDialog).toHaveBeenCalledWith(
+      expect.anything(),
+      "demiplane-uuid",
+      importCharacter,
+      exportCharacter
+    );
+  });
+
+  it("opens the dialog for a non-GM owner", () => {
+    register();
+    stubUser(false);
+    stubActor("synced", "demiplane-uuid", true);
+    const entry = makeEntry("synced");
+
+    hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
+    entry.appended[0].listeners.click?.({ preventDefault: vi.fn(), stopPropagation: vi.fn() });
+
+    expect(showDemiplaneInfoDialog).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the icon passive for a non-GM non-owner", () => {
+    register();
+    stubUser(false);
+    stubActor("synced", "demiplane-uuid", false);
+    const entry = makeEntry("synced");
+
+    hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
+    const icon = entry.appended[0];
+
+    expect(icon.classList.has("clickable")).toBe(false);
+    expect(icon.listeners.click).toBeUndefined();
+  });
+
+  it("leaves the icon passive when there is no current user", () => {
+    register();
+    (globalThis as unknown as { game: { user: unknown } }).game.user = null;
+    stubActor("synced", "demiplane-uuid");
+    const entry = makeEntry("synced");
+
+    hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
+    const icon = entry.appended[0];
+
+    expect(icon.classList.has("clickable")).toBe(false);
+    expect(icon.listeners.click).toBeUndefined();
   });
 });
