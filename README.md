@@ -82,6 +82,22 @@ Once the actor exists and the player has ownership:
 
 That's it. The module fetches the latest version and applies the diff.
 
+### Mapping Unknown Items (GM Only)
+
+Demiplane and Foundry don't always use the same name for the same thing, and Demiplane sometimes carries content the PF2e compendium lists under a different slug. When the importer can't find a match, it skips the item and records it as an unresolved item rather than guessing. The **Demiplane Mapping** screen lets a GM teach the module those matches once, and every future import for every player picks them up automatically.
+
+Open it from **Settings > Module Settings > Demiplane PF2e Sync > Demiplane Mapping** (visible to GMs only). You'll see the unresolved Demiplane names grouped by kind — equipment, feats, spells, ancestry, heritage, background, and class — along with which characters each one affects.
+
+To create a mapping:
+
+1. Click a row's browse action. For equipment, feats, and spells this opens the PF2e Compendium Browser on the matching tab; for ancestry, heritage, background, and class it opens the relevant compendium pack.
+2. Find the correct Foundry item.
+3. Drag it onto the row. The module remembers the match and the row updates to show the mapped item.
+
+Once mapped, the Demiplane name resolves on its own from then on — no need to remap it per character or per import.
+
+**Quickly adopt new classes and sourcebooks:** this is the fast path when a new class, ancestry, or sourcebook lands. Rather than waiting for the module to catch up, a GM can map the new Demiplane content onto the corresponding Foundry compendium entries once, and the whole table can import those characters right away. It's also how you bridge homebrew or renamed items that Foundry already has under a different name.
+
 ### Linking a Character
 
 The module needs to know which Demiplane character maps to which Foundry actor. You link them by providing either:
@@ -129,7 +145,7 @@ The token is stored as a world setting so players can import characters they own
 
 **"No Demiplane token configured"** — Ask the GM to configure the authorization token. See the [Getting the Demiplane Token](#getting-the-demiplane-token) section above.
 
-**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. A red dot appears on the linked actor's titlebar while such sync issues are outstanding.
+**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. A red dot appears on the linked actor's titlebar while such sync issues are outstanding. A GM can also resolve them for everyone using the [Demiplane Mapping](#mapping-unknown-items-gm-only) screen so future imports pick them up automatically.
 
 ## Pre-Release Notice
 
