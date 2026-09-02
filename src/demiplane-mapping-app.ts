@@ -271,7 +271,7 @@ async function openFinder(kind: SlugKind): Promise<void> {
     return;
   }
 
-  ui.notifications.warn(`No compendium source found for ${KIND_LABELS[kind]} slugs.`);
+  ui.notifications.warn(`No compendium source found for ${KIND_LABELS[kind]} items.`);
 }
 
 /**
@@ -340,7 +340,7 @@ async function showMismatchDialog(
 ): Promise<void> {
   await foundry.applications.api.DialogV2.prompt({
     window: { title: "That item doesn't match" },
-    content: `<p>“${slug}” is a <strong>${KIND_LABELS[kind]}</strong> slug, but you dropped
+    content: `<p>“${slug}” is a <strong>${KIND_LABELS[kind]}</strong>, but you dropped
       <strong>${droppedName}</strong>, which is a <strong>${droppedType}</strong>.</p>
       <p>Map it in the ${KIND_LABELS[kind]} section instead, or pick a different item.</p>`,
     ok: { label: "Close" },
