@@ -17,14 +17,14 @@ const DEMIPLANE_ICON_SRC = `modules/${MODULE_ID}/assets/demiplane.ico`;
 const DIRECTORY_ICON_CLASS = "demiplane-directory-icon";
 
 /**
- * Shows the Demiplane logo on every linked character's row in the Actors
- * sidebar, right-justified at the end of the row alongside any icons other
- * modules add. Clicking it opens the same Demiplane info dialog as the actor
- * sheet's "Demiplane" header button, for users who could use that button
- * (GMs and owners); for everyone else it stays a passive sync indicator.
+ * Shows the Demiplane logo on a linked character's row in the Actors sidebar,
+ * right-justified at the end of the row alongside any icons other modules add.
+ * Clicking it opens the same Demiplane info dialog as the actor sheet's
+ * "Demiplane" header button.
  *
  * The icon is only added for actors that are synced with Demiplane (they carry
- * a `characterId` flag) and is sized in CSS (`module.css`) to match the name's
+ * a `characterId` flag) and only for users who could use that header button
+ * (GMs and owners). It is sized in CSS (`module.css`) to match the name's
  * height, so the visual tweaking lives alongside the module's other styles.
  *
  * In Foundry v14 the sidebar is an ApplicationV2. Its `render*` hook only fires
@@ -66,14 +66,16 @@ function decorateEntry(
   const characterId = actor?.getFlag(MODULE_ID, "characterId") as string | undefined;
   if (!actor || characterId == null) return;
 
+  // The icon is only shown to users who can open the sync dialog (GMs and
+  // owners), matching who sees the actor sheet's Demiplane header button.
+  if (!canOpenDialog(actor)) return;
+
   // Append to the row itself (not inside `.entry-name`), so the icon shares the
   // flex row with the name and any icons other modules add (e.g. Permissions
   // Viewer). `.entry-name` grows to fill the row, pushing trailing icons to the
   // right, which keeps ours right-justified without disturbing the others.
   const icon = buildIcon();
-  if (canOpenDialog(actor)) {
-    makeClickable(icon, actor, characterId, importCharacter, exportCharacter);
-  }
+  makeClickable(icon, actor, characterId, importCharacter, exportCharacter);
   entry.append(icon);
 }
 
@@ -91,7 +93,6 @@ function makeClickable(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn
 ): void {
-  icon.classList.add("clickable");
   icon.title = "Open Demiplane sync";
   icon.addEventListener("click", (event) => {
     // The row's own click activates/opens the actor; keep the icon's action
