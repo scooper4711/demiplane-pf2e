@@ -12,7 +12,7 @@ import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
 import { registerTitlebarDot } from "./titlebar-dot.js";
 import { registerDirectoryIcon } from "./directory-icon.js";
 import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
-import { registerDemiplaneMappingTemplates } from "./demiplane-mapping-app.js";
+import { registerDemiplaneMappingTemplates, registerMappingSyncHook } from "./demiplane-mapping-app.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
 import { findActorLinkedTo, reconcileDuplicateLink } from "./actor-link.js";
 
@@ -62,6 +62,7 @@ async function initializeModule(): Promise<void> {
   recoverStaleSyncPauses();
 
   registerTokenSyncHooks();
+  registerMappingSyncHook();
   registerModuleApi();
 
   debugLog(`API registered`);

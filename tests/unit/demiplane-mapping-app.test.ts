@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { collectSections, EXPECTED_TYPES, isAcceptedType, openFinder } from "../../src/demiplane-mapping-app.js";
+import {
+  collectSections,
+  EXPECTED_TYPES,
+  isAcceptedType,
+  openFinder,
+  registerMappingSyncHook,
+} from "../../src/demiplane-mapping-app.js";
 import { registerSlugMappingSettings, setMapping } from "../../src/slug-mapping.js";
 import type { UnmappedSlug } from "../../src/import/types.js";
 
@@ -179,5 +185,36 @@ describe("isAcceptedType", () => {
     expect(isAcceptedType("feat", "feat")).toBe(true);
     expect(isAcceptedType("feat", "class")).toBe(false);
     expect(isAcceptedType("class", "class")).toBe(true);
+  });
+});
+
+describe("registerMappingSyncHook", () => {
+  /** Renders through the open-instance lookup, so capture what refresh() drives. */
+  let render: ReturnType<typeof vi.fn>;
+
+  function updateSettingCallback(): (setting: { key?: string }) => void {
+    const hooks = globalThis as unknown as { Hooks: { on: ReturnType<typeof vi.fn> } };
+    const calls = hooks.Hooks.on.mock.calls as Array<[string, (setting: { key?: string }) => void]>;
+    return calls.find((call) => call[0] === "updateSetting")![1];
+  }
+
+  beforeEach(() => {
+    installFoundryMocks();
+    render = vi.fn();
+    const foundryGlobal = globalThis as unknown as {
+      foundry: { applications: { instances: { get: ReturnType<typeof vi.fn> } } };
+    };
+    foundryGlobal.foundry.applications.instances = { get: vi.fn().mockReturnValue({ render }) };
+    registerMappingSyncHook();
+  });
+
+  it("re-renders the open editor when a mapping setting changes on another client", () => {
+    updateSettingCallback()({ key: "demiplane-pf2e.slugMappingsFeat" });
+    expect(render).toHaveBeenCalledWith({ force: true });
+  });
+
+  it("ignores unrelated setting changes", () => {
+    updateSettingCallback()({ key: "demiplane-pf2e.demiplaneToken" });
+    expect(render).not.toHaveBeenCalled();
   });
 });
