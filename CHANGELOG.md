@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.7] - 2026-09-02
+
+### Added
+
+- Show the sidebar Demiplane icon only to GMs and owners
+- Open the Demiplane dialog from the sidebar icon
+- Show Demiplane icon on linked actors in sidebar
+- Add dump_character_journals MCP tool
+- Sync biography Campaign Notes with Demiplane journal
+- two-way sync for organized play ID
+- export biography fields from Foundry to Demiplane
+- add semicolon as list separator for languages, edicts, and anathema
+- add Demiplane MCP server and CLI utility
+- added a mapping editor for demiplane slugs
+- add GM slug mapping screen
+- resolve GM-defined slug mappings ahead of the compendium
+
+### Fixed
+
+- Prevent two actors linking the same Demiplane character
+- Open compendium pack window for browserless mapping kinds
+- resolve SonarCloud issues across sources and tests
+
+### Changed
+
+- Drop the word "slug" from user-facing text
+- Document GM-only Demiplane item mapping
+- Cover the Actors sidebar Demiplane icon
+- Match Demiplane Mapping screen to PF2e inventory
+- Enforce 80% coverage on push
+- fold slug mapping decisions into DESIGN.md
+- store unmapped slugs as structured records
+
+[0.2.0-beta.7]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.7
+
 ## [0.2.0-beta.6] - 2026-08-30
 
 ### Added
