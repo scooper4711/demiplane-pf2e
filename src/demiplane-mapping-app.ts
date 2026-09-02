@@ -1,7 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import type { SlugKind } from "./import/types.js";
 import { getUnmappedSlugs } from "./sync-issues.js";
-import { getAllMappings, setMapping, clearMapping, isMappingResolvable } from "./slug-mapping.js";
+import { getAllMappings, setMapping, clearMapping } from "./slug-mapping.js";
 import type { SlugMapping } from "./slug-mapping.js";
 
 const TEMPLATE_PATH = `modules/${MODULE_ID}/templates/demiplane-mapping.hbs`;
@@ -132,16 +132,44 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
      */
     #onlyUnmapped: boolean | undefined = undefined;
 
+    /**
+     * Cached section data. `undefined` means "not computed yet" — the window
+     * paints a loading state immediately and computes in the background so it
+     * opens instantly instead of blocking on a store-wide `fromUuid` sweep.
+     * `#reload` triggers a recompute after a change.
+     */
+    #sections: SlugSection[] | undefined = undefined;
+
     protected override async _prepareContext(_options: unknown): Promise<Record<string, unknown>> {
-      const sections = await collectSections();
+      // First paint (or after a change): show the shell now, load in the
+      // background, then re-render with the results.
+      if (!this.#sections) {
+        void this.#computeSections();
+        return { loading: true };
+      }
+
+      const sections = this.#sections;
       const anyUnmapped = sections.some((section) => section.hasUnmapped);
       this.#onlyUnmapped ??= anyUnmapped;
       return {
+        loading: false,
         sections,
         hasRows: sections.some((section) => section.rows.length > 0),
         anyUnmapped,
         onlyUnmapped: this.#onlyUnmapped,
       };
+    }
+
+    /** Computes sections off the render path, then re-renders to show them. */
+    async #computeSections(): Promise<void> {
+      this.#sections = await collectSections();
+      void this.render({ force: true });
+    }
+
+    /** Discards cached sections and re-renders, so a change recomputes the list. */
+    reload(): void {
+      this.#sections = undefined;
+      void this.render({ force: true });
     }
 
     protected override _attachPartListeners(_partId: string, html: HTMLElement, _options: unknown): void {
@@ -254,16 +282,20 @@ async function collectSections(): Promise<SlugSection[]> {
   }
 
   // Include existing mappings so a GM can see and fix them, including ones whose
-  // target has since disappeared.
-  for (const kind of KIND_ORDER) {
-    for (const [slug, mapping] of Object.entries(getAllMappings(kind))) {
-      const row = ensure(kind, slug);
-      row.mappedName = mapping.name;
-      row.unmapped = false;
-      row.mappingMissing = !(await isMappingResolvable(mapping));
-      row.icon = await iconFor(mapping);
-    }
-  }
+  // target has since disappeared. Each mapping needs one `fromUuid` to learn
+  // whether its target still resolves and to pick up its icon; resolve them all
+  // in parallel (one lookup per mapping, not two) so a large store doesn't turn
+  // into a long sequential chain of awaits.
+  await Promise.all(
+    KIND_ORDER.flatMap((kind) =>
+      Object.entries(getAllMappings(kind)).map(async ([slug, mapping]) => {
+        const row = ensure(kind, slug);
+        row.mappedName = mapping.name;
+        row.unmapped = false;
+        await applyMappingTarget(row, mapping);
+      })
+    )
+  );
 
   return KIND_ORDER.map((kind) => {
     const rows = [...rowsByKind.get(kind)!.values()].sort((a, b) => a.slug.localeCompare(b.slug));
@@ -284,10 +316,16 @@ function appendCharacter(existing: string, name: string): string {
   return [...names].join(", ");
 }
 
-async function iconFor(mapping: SlugMapping): Promise<string> {
+/**
+ * Fills in a mapped row's target-derived fields from a single `fromUuid`:
+ * whether the target still resolves and, if so, its icon. Combining the two
+ * halves the compendium lookups a full list of mappings costs.
+ */
+async function applyMappingTarget(row: SlugRow, mapping: SlugMapping): Promise<void> {
   const doc = await fromUuid(mapping.uuid);
+  row.mappingMissing = doc === null;
   const img = (doc as { img?: string } | null)?.img;
-  return typeof img === "string" && img ? img : UNKNOWN_ITEM_ICON;
+  row.icon = typeof img === "string" && img ? img : UNKNOWN_ITEM_ICON;
 }
 
 // ─── Compendium browser ─────────────────────────────────────────────────────
@@ -395,11 +433,14 @@ async function showMismatchDialog(
   });
 }
 
-/** Re-render any open instance so a change is visible immediately. */
+/**
+ * Recompute and re-render any open instance so a change is visible immediately.
+ * Goes through `reload` (not a plain render) so the cached section data is
+ * discarded and rebuilt — a bare render would repaint the stale list.
+ */
 function refresh(): void {
-  const app = foundry.applications.instances.get("demiplane-mapping") as
-    { render: (options?: { force?: boolean }) => Promise<unknown> } | undefined;
-  void app?.render({ force: true });
+  const app = foundry.applications.instances.get("demiplane-mapping") as { reload: () => void } | undefined;
+  app?.reload();
 }
 
 /** Prefix shared by every per-kind mapping setting key (`slugMappingsFeat`, …). */
