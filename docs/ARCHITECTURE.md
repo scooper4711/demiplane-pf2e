@@ -288,14 +288,14 @@ classDiagram
         +presetChoiceSelections(itemData): void
         +enable(): void
         +disable(): void
-        -matchSkillSlugs(choices): string|undefined
-        -matchCustomSelectionLore(choices): string|undefined
-        -matchAllSlugs(choices): string|undefined
-        -matchClassFeatures(choices): string|undefined
-        -matchGenericFeatures(choices): string|undefined
-        -matchFeatSlugs(choices): string|undefined
-        -matchGenericChoice(choices): string|undefined
-        -matchByKeyword(choices): string|undefined
+        -handlePreCreate(context, params): Promise~void~
+        -findChoiceSelection(parentSlug, rule): Promise~string|null~
+        -resolveChildSlug(rawSlug, rule, eng?): Promise~string|null~
+    }
+
+    class ChoiceMatchers {
+        <<module>>
+        +findMatchInChoices(choices, engines, itemName?): Choice|null
     }
 
     class SpellSlotResolver {
@@ -312,6 +312,7 @@ classDiagram
 
     ImportOrchestrator --> DemiplaneClient : fetches data
     ImportOrchestrator --> ChoiceSetHandler : auto-resolves choices
+    ChoiceSetHandler --> ChoiceMatchers : delegates strategy matching
     ImportOrchestrator --> SpellSlotResolver : spell slots
     ImportOrchestrator --> FeatureSpellResolver : focus/innate
     ImportOrchestrator --> ItemSpellResolver : staff/wand
@@ -547,10 +548,18 @@ src/
 │   ├── phases.ts                  ImportPhase interface, ImportContext, and phase implementations
 │   ├── slug-utils.ts              Slug transformation and categorization
 │   ├── compendium-resolver.ts     Slug → compendium UUID resolution
-│   ├── choice-set-handler.ts      ChoiceSet monkey-patch with 6 strategies
+│   ├── choice-set-handler.ts      ChoiceSet monkey-patch lifecycle + preset selections
+│   ├── choice-matchers.ts         The 7 ChoiceSet match strategies (pure functions)
+│   ├── choice-set-types.ts        ChoiceSet context/param interfaces
+│   ├── choice-slug.ts             Shared label → slug normalization
 │   ├── debug-log.ts               Conditional debug logging
 │   │
-│   ├── spell-importer.ts          Class spellcasting entries + spell placement
+│   ├── spell-importer.ts          Class spellcasting orchestration (grouping → entries → placement)
+│   ├── spell-grouping.ts          Sorts spell engines into main/innate/font groups + class config
+│   ├── spellcasting-entry.ts      Entry creation + shared resolve-and-stamp spell-item helper
+│   ├── prepared-spells.ts         Prepared-slot placement + signature spell marking
+│   ├── divine-font.ts             Cleric Divine Font spellcasting entry
+│   ├── spell-slots.ts             Slot-maximum resolution + character level lookup
 │   ├── spell-engines.ts           Spell engine identification helpers
 │   ├── spell-slot-resolver.ts     Fetches slot progression from stream-engines
 │   ├── feature-spell-resolver.ts  Focus/innate spells from class features
@@ -581,8 +590,13 @@ graph TD
     CR --> |"search packs"| COMP[Compendium Packs]
 
     PH --> |"4a. spells"| SI[spell-importer]
-    SI --> |"slot counts"| SSR[spell-slot-resolver]
-    SI --> CR
+    SI --> |"group engines"| SG[spell-grouping]
+    SI --> |"create entries + items"| SCE[spellcasting-entry]
+    SI --> |"prepared + signature"| PS[prepared-spells]
+    SI --> |"divine font"| DF[divine-font]
+    SI --> |"slot maximums"| SL[spell-slots]
+    SL --> |"slot counts"| SSR[spell-slot-resolver]
+    SCE --> CR
     SSR --> |"POST"| SE[Stream-Engines API]
 
     PH --> |"4b. feature spells"| FSR[feature-spell-resolver]
@@ -691,18 +705,21 @@ The resolver accepts a target pack parameter to search a specific pack, or searc
 
 When items are added to a PF2e actor, the system's `ChoiceSetRuleElement` normally presents an interactive dialog for player choices (e.g., "choose a skill to increase"). During automated import, these must be resolved without user interaction.
 
-The `ChoiceSetHandler` monkey-patches `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option using 6 strategies (tried in priority order):
+The `ChoiceSetHandler` monkey-patches `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. The strategies live in `choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
 
 | Priority | Strategy                | Matches Against                                                    |
 | -------- | ----------------------- | ------------------------------------------------------------------ |
 | 1        | Skill slugs             | `core/selection/skill/increase` engine slugs                       |
-| 2        | All engine slugs        | Any DemiplaneEngine `args.slug`                                    |
-| 3        | Class feature slugs     | Choice labels slugified against class feature engines              |
-| 4        | Generic feature slugs   | Partial match of `generic-feature` engine slugs                    |
-| 5        | Feat UUID slugs         | Choice labels against feat engines with `select-feat-` sourceRow   |
-| 6        | Generic choice keywords | Last segment of `generic-choice` engine slug against choice values |
+| 2        | Custom-selection lore   | `core/selection/skill/custom-selection` engine name (e.g. "Forest Lore") |
+| 3        | All engine slugs        | Any DemiplaneEngine `args.slug`                                    |
+| 4        | Class feature slugs     | Choice labels slugified against class feature engines              |
+| 5        | Generic feature slugs   | Partial match of `generic-feature` engine slugs                    |
+| 6        | Feat UUID slugs         | Choice labels against feat engines with `select-feat-` sourceRow   |
+| 7        | Generic choice keywords | Last segment of `generic-choice` engine slug against choice values |
 
 **Fallback:** If no strategy matches, selects `choices[0]`.
+
+The `ChoiceSetHandler` owns the monkey-patch lifecycle (`enable`/`disable`), the `preCreate` interception, and pre-setting selections on item data (`presetChoiceSelections`). The strategy matching itself is delegated to `choice-matchers.ts`, keeping the handler focused on patching and the matchers independently testable.
 
 The monkey-patch is installed before import begins and uninstalled after import completes, so normal interactive behavior is restored for manual character editing.
 
