@@ -162,16 +162,19 @@ After the four sequential core items, feats and equipment are safe to batch beca
 
 **Rationale:** The PF2e system's ChoiceSet rule element presents interactive dialogs when items with choices are added (e.g., "choose a skill to increase", "pick a bloodline"). During automated import, there is no user to answer these prompts. The choices are already recorded in the Demiplane character data as engine entries, so the module can match them programmatically.
 
-**Six matching strategies (priority order):**
+**Seven matching strategies (priority order):**
 
 1. **Skill slugs** — Direct match of `core/selection/skill/increase` engines against choice options.
-2. **All engine slugs** — Broadest match: any DemiplaneEngine's `args.slug` against choice values.
-3. **Class feature slugs** — Slugified choice labels matched against class feature engine names.
-4. **Generic feature slugs** — Partial match of `generic-feature` engine slug segments.
-5. **Feat UUID slugs** — Choice labels matched against feat engines with `select-feat-` sourceRow.
-6. **Generic choice keywords** — Last path segment of `generic-choice` engines against choice values/labels.
+2. **Custom-selection lore** — `core/selection/skill/custom-selection` engine name (e.g. "Forest Lore") slugified against choice options, scoped to the originating feat.
+3. **All engine slugs** — Broadest match: any DemiplaneEngine's `args.slug` against choice values.
+4. **Class feature slugs** — Slugified choice labels matched against class feature engine names.
+5. **Generic feature slugs** — Partial match of `generic-feature` engine slug segments.
+6. **Feat UUID slugs** — Choice labels matched against feat engines with `select-feat-` sourceRow.
+7. **Generic choice keywords** — Last path segment of `generic-choice` engines against choice values/labels.
 
 **Fallback:** `choices[0]` if no strategy matches.
+
+**Module layout:** `ChoiceSetHandler` (`src/import/choice-set-handler.ts`) owns the monkey-patch lifecycle, the `preCreate` interception, and pre-setting selections on item data. The seven strategies are pure functions in `src/import/choice-matchers.ts`, composed in priority order by `findMatchInChoices`, so they can be understood and tested independently of the patching machinery.
 
 **Why monkey-patching instead of alternatives:**
 
@@ -210,6 +213,19 @@ Combining these into a single function would create a 500+ line monolith with de
 - **Spontaneous casters** get signature spells marked via `markSignatureSpells()`.
 - **Wizard curriculum** gets a separate spellcasting entry for school-specific spells (filtered by `isCurriculumSpell()` which checks for `wizard-school-spellbook-slot` in the `spellSlot` arg).
 - **Slot maximums** are set by calling the stream-engines API to compute the progression at the character's level.
+
+**Class-spellcasting module layout:** the `spell-importer` resolver is itself split into focused modules so the top-level file stays an orchestrator:
+
+| Module                 | Responsibility                                                              |
+| ---------------------- | --------------------------------------------------------------------------- |
+| `spell-importer.ts`    | Orchestration: group → per-group/curriculum/innate import, entry naming     |
+| `spell-grouping.ts`    | Sorts spell engines into main / innate / divine-font groups; class config table |
+| `spellcasting-entry.ts`| Creates spellcasting entries and a shared resolve-and-stamp spell-item helper |
+| `prepared-spells.ts`   | Prepared-slot placement, missing-item backfill, signature marking           |
+| `divine-font.ts`       | Cleric Divine Font entry and its slot placement                             |
+| `spell-slots.ts`       | Slot-maximum resolution (via `spell-slot-resolver`) and character-level lookup |
+
+The shared resolve-and-stamp helper in `spellcasting-entry.ts` (`resolveSpellItems`) consolidates the previously-duplicated "resolve slug → stamp imported → set location" pattern used by the regular, prepared, and divine-font paths. `getCharacterLevel` lives in `spell-slots.ts` and is reused by `feature-spell-resolver` rather than duplicated.
 
 ---
 
