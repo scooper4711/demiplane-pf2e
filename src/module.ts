@@ -14,6 +14,7 @@ import { registerDirectoryIcon } from "./directory-icon.js";
 import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
 import { registerDemiplaneMappingTemplates } from "./demiplane-mapping-app.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
+import { findActorLinkedTo, reconcileDuplicateLink } from "./actor-link.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -51,6 +52,7 @@ async function initializeModule(): Promise<void> {
   new CharacterLinkDialog(client);
 
   hookManager.register();
+  registerDuplicateLinkGuard();
   registerDemiplaneInfoButton(importLinkedCharacter, exportLinkedCharacter);
   registerTitlebarDot();
   registerDirectoryIcon(importLinkedCharacter, exportLinkedCharacter);
@@ -69,6 +71,27 @@ async function initializeModule(): Promise<void> {
  * Keeps the client token in sync when the setting changes, and re-shows the
  * pre-release warning whenever auto-sync is switched on.
  */
+/**
+ * Backstop for the duplicate-link problem: native Foundry operations (JSON
+ * import, Duplicate, copy/paste, compendium import, backup restore) copy the
+ * `characterId` flag onto a second actor without running the module's link code.
+ * These hooks detect that and unlink the arriving copy so two actors never push
+ * to the same Demiplane character. createActor/updateActor fire on the GM
+ * client, so the repair runs once, there.
+ */
+function registerDuplicateLinkGuard(): void {
+  Hooks.on("createActor", (actor: Actor) => {
+    void reconcileDuplicateLink(actor);
+  });
+  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+    // Only react when the module's flags were part of the update, so we don't
+    // scan on every unrelated actor edit.
+    const flags = changes.flags as Record<string, unknown> | undefined;
+    if (!flags || !(MODULE_ID in flags)) return;
+    void reconcileDuplicateLink(actor);
+  });
+}
+
 function registerTokenSyncHooks(): void {
   Hooks.on("updateSetting", (setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
@@ -141,6 +164,15 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
     const characterId = extractCharacterId(result.characterRef.trim());
     if (!characterId) {
       ui.notifications?.error("Invalid Demiplane character UUID or URL.");
+      return;
+    }
+
+    const alreadyLinked = findActorLinkedTo(characterId);
+    if (alreadyLinked) {
+      ui.notifications?.error(
+        `That Demiplane character is already linked to "${alreadyLinked.name}". ` +
+          `Use "Update from Demiplane" on that actor instead of importing again.`
+      );
       return;
     }
 

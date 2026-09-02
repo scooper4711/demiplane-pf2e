@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
+import { findActorLinkedTo } from "./actor-link.js";
 
 /**
  * Renders and manages the per-actor dialog for linking a Demiplane character.
@@ -82,6 +83,15 @@ export class CharacterLinkDialog {
     }
 
     const uuid = parseResult.uuid;
+
+    const existing = findActorLinkedTo(uuid, actor.id);
+    if (existing) {
+      ui.notifications.error(
+        `That Demiplane character is already linked to "${existing.name}". ` +
+          `Unlink it there first, or import to a new character.`
+      );
+      return;
+    }
 
     try {
       await this.client.fetchCharacterVersion(uuid);
