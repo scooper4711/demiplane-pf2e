@@ -325,8 +325,8 @@ classDiagram
 
     SyncIssues ..> ExportManager : export issues
     SyncIssues ..> ImportOrchestrator : import issues
-    DemiplaneInfoDialog --> SyncIssues : lists/dismisses
-    TitlebarDot --> SyncIssues : reads active issues
+    DemiplaneInfoDialog --> SyncIssues : lists/acknowledges
+    TitlebarDot --> SyncIssues : reads unacknowledged state
     TitlebarDot --> DemiplaneInfoDialog : opens on click
     CharacterLinkDialog --> DemiplaneClient : validates UUID
 ```
@@ -535,9 +535,9 @@ src/
 │   ├── push-payload-builder.ts    Builds the Demiplane character payload from buffered changes
 │   └── conflict-resolver.ts       Optimistic-concurrency check (fetchCharacterUpdated + engineSig)
 ├── sync-pause.ts                  Cross-client sync coordination (pauses pushes during import/push)
-├── sync-issues.ts                Import/export sync-issue sets on linked actors
-├── titlebar-dot.ts               Red indicator on actor sheet titlebars for open issues
-├── demiplane-info-button.ts      Header button + Demiplane dialog (lists issues, dismissable)
+├── sync-issues.ts                Import/export issue sets + unmapped slugs, with an acknowledged flag driving the indicator
+├── titlebar-dot.ts               Red indicator on actor sheet titlebars for unacknowledged sync issues
+├── demiplane-info-button.ts      Header button + Demiplane dialog (Sync issues vs Unmapped items; dismiss acknowledges)
 ├── character-link-dialog.ts       Dialog for linking/unlinking UUID to actor
 ├── character-link-input.ts        Parses UUID or Demiplane URL
 │
@@ -668,21 +668,29 @@ All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e
 
 ## Compendium Resolution
 
-The `compendium-resolver` module searches PF2e compendium packs by `system.slug` to find the Foundry item UUID for a given Demiplane slug.
+The `compendium-resolver` module resolves a Demiplane slug to a Foundry item, checking the GM/recorded mapping first and otherwise searching PF2e compendium packs by `system.slug`.
 
 ### Resolution Algorithm
 
 ```
 Input: Demiplane slug (e.g., "weapon-specialization-fighter-rm")
 
+0. Mapping first: resolveMappedItem() returns the recorded/GM mapping if present
+   (a mapping whose target is gone returns null, so resolution falls through).
 1. Transform: toFoundrySlug() strips "-rm" suffix → "weapon-specialization-fighter"
 2. Generate candidates:
    a. Exact: "weapon-specialization-fighter"
    b. Strip class suffix: "weapon-specialization"
    c. Bloodline prefix: "bloodline-weapon-specialization-fighter" (if applicable)
 3. For each candidate, search target pack(s) by system.slug
-4. Return first match, or undefined if none found
+4. On match: record it via recordResolvedMapping() so the next lookup hits the
+   mapping first and the editor can show it, then return the item.
+5. Return null if no candidate matches (slug recorded as unmapped).
 ```
+
+Recording is non-clobbering — an existing GM override or prior recording is left
+as-is — so it never changes what resolves, only caches the outcome. See
+[DESIGN §22](./DESIGN.md#22-recorded-resolutions-and-the-full-mapping-list).
 
 ### Pack Search Order
 
@@ -707,15 +715,15 @@ When items are added to a PF2e actor, the system's `ChoiceSetRuleElement` normal
 
 The `ChoiceSetHandler` monkey-patches `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. The strategies live in `choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
 
-| Priority | Strategy                | Matches Against                                                    |
-| -------- | ----------------------- | ------------------------------------------------------------------ |
-| 1        | Skill slugs             | `core/selection/skill/increase` engine slugs                       |
+| Priority | Strategy                | Matches Against                                                          |
+| -------- | ----------------------- | ------------------------------------------------------------------------ |
+| 1        | Skill slugs             | `core/selection/skill/increase` engine slugs                             |
 | 2        | Custom-selection lore   | `core/selection/skill/custom-selection` engine name (e.g. "Forest Lore") |
-| 3        | All engine slugs        | Any DemiplaneEngine `args.slug`                                    |
-| 4        | Class feature slugs     | Choice labels slugified against class feature engines              |
-| 5        | Generic feature slugs   | Partial match of `generic-feature` engine slugs                    |
-| 6        | Feat UUID slugs         | Choice labels against feat engines with `select-feat-` sourceRow   |
-| 7        | Generic choice keywords | Last segment of `generic-choice` engine slug against choice values |
+| 3        | All engine slugs        | Any DemiplaneEngine `args.slug`                                          |
+| 4        | Class feature slugs     | Choice labels slugified against class feature engines                    |
+| 5        | Generic feature slugs   | Partial match of `generic-feature` engine slugs                          |
+| 6        | Feat UUID slugs         | Choice labels against feat engines with `select-feat-` sourceRow         |
+| 7        | Generic choice keywords | Last segment of `generic-choice` engine slug against choice values       |
 
 **Fallback:** If no strategy matches, selects `choices[0]`.
 

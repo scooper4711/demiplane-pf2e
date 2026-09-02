@@ -159,6 +159,12 @@ interface DemiplaneActorFlags {
    * wholesale each import — see `sync-issues.ts`.
    */
   unmappedSlugs?: UnmappedSlug[];
+  /**
+   * Whether the current batch of sync issues has been seen (dialog dismissed).
+   * Drives the red indicator without deleting the issue data — see
+   * `sync-issues.ts`.
+   */
+  issuesAcknowledged?: boolean;
   /** Tokens for in-flight imports/pushes, replicated across clients to coordinate sync pauses. */
   syncActiveTokens?: string[];
 }

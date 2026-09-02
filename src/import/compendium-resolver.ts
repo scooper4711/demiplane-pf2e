@@ -2,7 +2,7 @@ import { PACKS } from "./types.js";
 import type { SlugKind } from "./types.js";
 import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
 import { SPELLS_PACK } from "../config.js";
-import { resolveMappedItem } from "../slug-mapping.js";
+import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
 
 type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
 
@@ -31,7 +31,11 @@ async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
-  return doc ? (doc as unknown as SpellDocument) : null;
+  if (!doc) return null;
+
+  const name = (doc as { name?: string }).name ?? slug;
+  await recordResolvedMapping("spell", slug, { uuid: `Compendium.${SPELLS_PACK}.Item.${match._id}`, name });
+  return doc as unknown as SpellDocument;
 }
 
 /**
@@ -76,8 +80,12 @@ export async function resolveCompendiumItem(
       const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
       const match = index.find((i) => i.system?.slug === slug);
       if (match) {
-        const doc = await fromUuid(`Compendium.${packKey}.Item.${match._id}`);
-        return doc ? (doc as { toObject: () => Record<string, unknown> }).toObject() : null;
+        const uuid = `Compendium.${packKey}.Item.${match._id}`;
+        const doc = await fromUuid(uuid);
+        if (!doc) return null;
+        const name = (doc as { name?: string }).name ?? demiplaneSlug;
+        await recordResolvedMapping(kind, demiplaneSlug, { uuid, name });
+        return (doc as { toObject: () => Record<string, unknown> }).toObject();
       }
     }
   }

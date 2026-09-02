@@ -1,6 +1,13 @@
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
-import { getExportIssues, getImportIssues, getUnmappedSlugs, clearAllIssues } from "./sync-issues.js";
+import {
+  getExportIssues,
+  getImportIssues,
+  getUnmappedSlugs,
+  acknowledgeIssues,
+  shouldShowIndicator,
+} from "./sync-issues.js";
+import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
 
 type ImportCharacterFn = (
@@ -49,12 +56,18 @@ export async function showDemiplaneInfoDialog(
   const lastImportDisplay = lastImport ? new Date(lastImport).toLocaleString() : "Never";
   const lastExportDisplay = lastExport ? new Date(lastExport).toLocaleString() : "Never";
 
-  // Unmapped slugs are stored as structured records; their display text is
-  // derived here rather than persisted, so there is only ever one source of truth.
-  const importIssues = [...getUnmappedSlugs(actor).map(formatUnmapped), ...getImportIssues(actor)];
-  const exportIssues = [...getExportIssues(actor)];
-  const hasIssues = importIssues.length + exportIssues.length > 0;
-  const issuesSection = buildIssuesSection(importIssues, exportIssues);
+  // Sync issues are genuine failures the user can't fix themselves (invalid
+  // token, rate limits, failed pushes). Unmapped items are Demiplane names that
+  // didn't resolve to a compendium item — routine and fixable via the mapping
+  // editor — so they are shown separately and never flagged as an error.
+  const syncIssues = [...getImportIssues(actor), ...getExportIssues(actor)];
+  const unmappedItems = getUnmappedSlugs(actor).map(formatUnmapped);
+  // The dot reflects unacknowledged issues; the sections render whenever the
+  // data exists, so a second open still shows everything.
+  const indicatorActive = shouldShowIndicator(actor);
+
+  const syncIssuesSection = buildSyncIssuesSection(syncIssues);
+  const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
   const manualItems = actor.items.filter((item) => {
     const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
@@ -66,15 +79,29 @@ export async function showDemiplaneInfoDialog(
     sheetUrl,
     lastImportDisplay,
     lastExportDisplay,
-    issuesSection,
+    syncIssuesSection,
+    unmappedItemsSection,
     manualItemsSection,
   });
 
   await foundry.applications.api.DialogV2.wait({
     window: { title: `Demiplane — ${actor.name}` },
-    classes: hasIssues ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
+    classes: indicatorActive ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
     content,
-    buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, hasIssues),
+    buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, indicatorActive),
+    render: attachMappingEditorButton,
+  });
+}
+
+/**
+ * Wires the "Open mapping editor" button (GM view of the unmapped-items
+ * section) to open the mapping app. Done in the dialog's render callback
+ * because DialogV2 content is static HTML with no per-element handlers.
+ */
+function attachMappingEditorButton(_event: Event, dialog: foundry.applications.api.DialogV2): void {
+  const button = dialog.element.querySelector<HTMLButtonElement>(".demiplane-open-mapping");
+  button?.addEventListener("click", () => {
+    void new (getDemiplaneMappingAppClass())().render({ force: true });
   });
 }
 
@@ -83,7 +110,7 @@ function buildDialogButtons(
   characterId: string,
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn,
-  hasIssues: boolean
+  indicatorActive: boolean
 ): Array<foundry.applications.api.DialogV2.Button> {
   return [
     {
@@ -100,12 +127,14 @@ function buildDialogButtons(
     },
     {
       // Deliberately not "close": DialogV2 treats that action as a plain
-      // dismissal and never invokes the callback, so the issues stayed set.
+      // dismissal and never invokes the callback, so the dot would stay lit.
+      // Acknowledging clears the dot but keeps the issues, so the user can
+      // reopen the dialog and the mapping editor still has the unmapped slugs.
       action: "dismiss",
-      label: hasIssues ? "Dismiss" : "Close",
+      label: indicatorActive ? "Dismiss" : "Close",
       default: true,
       callback: () => {
-        if (hasIssues) clearAllIssues(actor);
+        if (indicatorActive) acknowledgeIssues(actor);
       },
     },
   ];
@@ -115,7 +144,8 @@ interface DialogContentOptions {
   sheetUrl: string;
   lastImportDisplay: string;
   lastExportDisplay: string;
-  issuesSection: string;
+  syncIssuesSection: string;
+  unmappedItemsSection: string;
   manualItemsSection: string;
 }
 
@@ -127,7 +157,8 @@ function buildDialogContent(opts: DialogContentOptions): string {
         <p><strong>Last push to Demiplane:</strong> ${opts.lastExportDisplay}</p>
         <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
-      ${opts.issuesSection}
+      ${opts.syncIssuesSection}
+      ${opts.unmappedItemsSection}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -141,20 +172,49 @@ function buildDialogContent(opts: DialogContentOptions): string {
     </div>`;
 }
 
-function buildIssuesSection(importIssues: string[], exportIssues: string[]): string {
-  if (importIssues.length === 0 && exportIssues.length === 0) return "";
-  const rows = [
-    ...importIssues.map((m) => ({ kind: "Import", message: m })),
-    ...exportIssues.map((m) => ({ kind: "Export", message: m })),
-  ];
-  const list = rows.map((r) => `<li><span class="kind-tag">${r.kind}</span> ${escapeHtml(r.message)}</li>`).join("\n");
+/**
+ * Genuine sync failures the user usually can't resolve on their own: an invalid
+ * or missing token, rate limits, or a push that failed. These carry the red
+ * indicator and clear on dismiss.
+ */
+function buildSyncIssuesSection(issues: string[]): string {
+  if (issues.length === 0) return "";
+  const list = issues.map((message) => `<li>${escapeHtml(message)}</li>`).join("\n");
   return `
     <hr>
     <section>
-      <p><strong class="sync-issues-heading">Sync issues</strong> (${String(rows.length)}):</p>
+      <p><strong class="sync-issues-heading">Sync issues</strong> (${String(issues.length)}):</p>
       <ul class="demiplane-sync-issues">${list}</ul>
-      <p class="hint">The red indicator clears once you dismiss this dialog. Foundry-only items are listed below.</p>
+      <p class="hint">The red indicator clears once you dismiss this dialog.</p>
     </section>`;
+}
+
+/**
+ * Demiplane names that didn't resolve to a compendium item. These are routine
+ * and fixable through the mapping editor, so they are never flagged as an
+ * error. A GM gets a button to open the editor directly; everyone else is told
+ * their GM can fix the mapping.
+ */
+function buildUnmappedItemsSection(items: string[]): string {
+  if (items.length === 0) return "";
+  const list = items.map((message) => `<li>${escapeHtml(message)}</li>`).join("\n");
+  return `
+    <hr>
+    <section>
+      <p><strong>Unmapped items</strong> (${String(items.length)}):</p>
+      <ul class="demiplane-unmapped-items">${list}</ul>
+      ${buildUnmappedItemsAction()}
+    </section>`;
+}
+
+function buildUnmappedItemsAction(): string {
+  if (game.user?.isGM) {
+    return `
+      <button type="button" class="demiplane-open-mapping">
+        <i class="fa-solid fa-link" inert></i> Open mapping editor
+      </button>`;
+  }
+  return `<p class="hint">Your GM can map these to Foundry items so they import next time.</p>`;
 }
 
 function escapeHtml(value: string): string {

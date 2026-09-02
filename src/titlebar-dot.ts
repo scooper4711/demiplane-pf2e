@@ -1,17 +1,19 @@
 import { MODULE_ID } from "./import/types.js";
-import { ISSUES_CHANGED_EVENT, hasActiveIssues } from "./sync-issues.js";
+import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "./sync-issues.js";
 
 export const SYNC_ISSUES_CLASS = "has-sync-errors";
 
 /**
- * Shows a red notification dot on linked actor sheet titlebars whenever the
- * actor has outstanding sync issues (import or export).
+ * Shows a red notification dot on linked actor sheet titlebars when the most
+ * recent sync produced issues no one has acknowledged yet. Dismissing the sync
+ * dialog acknowledges them and clears the dot; the issues themselves stay
+ * available (see `shouldShowIndicator`).
  *
  * The dot is rendered as a CSS `::after` pseudo-element on the Demiplane header
- * button: the button carries no extra class when issues are clear and the
- * `has-sync-errors` class when there are active issues. All placement (before /
- * after / superscript) is controlled purely by CSS in `module.css`, so tweaking
- * the indicator never requires touching the DOM logic.
+ * button: the button carries no extra class when there is nothing to flag and
+ * the `has-sync-errors` class when there is. All placement (before / after /
+ * superscript) is controlled purely by CSS in `module.css`, so tweaking the
+ * indicator never requires touching the DOM logic.
  */
 export function registerTitlebarDot(): void {
   Hooks.on("renderActorSheet", (sheet: ActorSheet) => {
@@ -32,7 +34,7 @@ export function registerTitlebarDot(): void {
 }
 
 function applyIndicator(button: HTMLElement, actor: Actor): void {
-  button.classList.toggle(SYNC_ISSUES_CLASS, hasActiveIssues(actor));
+  button.classList.toggle(SYNC_ISSUES_CLASS, shouldShowIndicator(actor));
 }
 
 function findDemiplaneButton(sheet: ActorSheet): HTMLElement | undefined {

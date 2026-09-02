@@ -7,6 +7,7 @@ import {
   clearMapping,
   resolveMappedItem,
   isMappingResolvable,
+  recordResolvedMapping,
 } from "../../src/slug-mapping.js";
 
 const EQUIPMENT_UUID = "Compendium.pf2e.equipment-srd.Item.hp1";
@@ -73,5 +74,17 @@ describe("slug-mapping", () => {
 
     expect(await isMappingResolvable(getMapping("equipment", "good")!)).toBe(true);
     expect(await isMappingResolvable(getMapping("equipment", "bad")!)).toBe(false);
+  });
+
+  it("records a resolution when the slug is new", async () => {
+    await recordResolvedMapping("equipment", "auto-resolved", { uuid: EQUIPMENT_UUID, name: "Half Plate" });
+    expect(getMapping("equipment", "auto-resolved")).toEqual({ uuid: EQUIPMENT_UUID, name: "Half Plate" });
+  });
+
+  it("leaves an existing mapping untouched when recording", async () => {
+    await setMapping("equipment", "already", { uuid: EQUIPMENT_UUID, name: "GM Choice" });
+    await recordResolvedMapping("equipment", "already", { uuid: SPELL_UUID, name: "Auto" });
+    // The deliberate entry wins; recording never clobbers it.
+    expect(getMapping("equipment", "already")).toEqual({ uuid: EQUIPMENT_UUID, name: "GM Choice" });
   });
 });

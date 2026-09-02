@@ -57,6 +57,14 @@
   pointer-events: none;
 }
 
+/* "Open mapping editor" button in the unmapped-items section of the dialog.
+   Unmapped items are routine and fixable, so the button is sized as a normal
+   inline action rather than a full-width form button. */
+.demiplane-info-dialog .demiplane-open-mapping {
+  width: auto;
+  margin-top: 4px;
+}
+
 /* ------------------------------------------------------------------------- */
 /*  Demiplane Mapping screen                                                  */
 /*                                                                           */
@@ -75,6 +83,55 @@
   color: var(--text-dark);
   font-family: var(--sans-serif);
   padding: var(--space-8, 0.5rem);
+}
+
+/* Part root fills the fixed-height window as a flex column so the toolbar stays
+   put and only the list below it scrolls. */
+#demiplane-mapping .window-content > .demiplane-mapping {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The always-visible toolbar: intro text plus the unmapped-only filter. It sits
+   outside the scroll region so it never scrolls away. */
+#demiplane-mapping .mapping-toolbar {
+  flex: 0 0 auto;
+}
+
+.demiplane-mapping .only-unmapped-filter {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-size: var(--font-size-12, 0.75rem);
+  gap: var(--space-4, 0.25rem);
+  padding: 0 var(--space-4, 0.25rem) var(--space-8, 0.5rem);
+}
+
+/* The scroll region holds every kind section. `min-height: 0` lets this flex
+   child shrink below its content height, which is what enables the scrollbar. */
+#demiplane-mapping .mapping-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Section headers stick to the top of the scroll region while their rows are in
+   view, then scroll off once the last row leaves. */
+.demiplane-mapping .mapping-scroll .inventory-list > header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Filter: hide mapped rows, and hide any section with no unmapped rows left, so
+   the list collapses to just what still needs attention. */
+.demiplane-mapping .mapping-scroll.only-unmapped .mapping-row.mapped {
+  display: none;
+}
+
+.demiplane-mapping .mapping-scroll.only-unmapped .inventory-list:not([data-has-unmapped]) {
+  display: none;
 }
 
 .demiplane-mapping .hint,

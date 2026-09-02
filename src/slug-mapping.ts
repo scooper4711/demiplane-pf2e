@@ -52,6 +52,23 @@ export async function setMapping(kind: SlugKind, slug: string, mapping: SlugMapp
   await game.settings.set(MODULE_ID, settingKey(kind), { ...getAllMappings(kind), [slug]: mapping });
 }
 
+/**
+ * Records a resolution discovered by a strategy other than the mapping table
+ * (e.g. a compendium slug match) so subsequent lookups of the same slug hit the
+ * mapping first. Makes every resolved slug a first-class mapping the GM can see
+ * and correct in the editor.
+ *
+ * Idempotent and non-clobbering: an existing entry (including a GM override) is
+ * left untouched, so recording an auto-resolution never overwrites a deliberate
+ * choice. Callers only reach here after `resolveMappedItem` returned null, so in
+ * practice the slug is genuinely new.
+ */
+export async function recordResolvedMapping(kind: SlugKind, slug: string, mapping: SlugMapping): Promise<void> {
+  if (getMapping(kind, slug)) return;
+  await setMapping(kind, slug, mapping);
+  debugLog(`[slug-mapping] recorded auto-resolved ${kind} "${slug}" → ${mapping.uuid}`);
+}
+
 export async function clearMapping(kind: SlugKind, slug: string): Promise<void> {
   const remaining = { ...getAllMappings(kind) };
   delete remaining[slug];

@@ -27,6 +27,7 @@ describe("demiplane-info-button", () => {
         if (k === "characterId") return DEMI_UUID;
         if (k === "importIssues") return ["imp issue"];
         if (k === "exportIssues") return ["exp issue"];
+        if (k === "unmappedSlugs") return [{ slug: "goblin-blade", kind: "equipment" }];
         return undefined;
       }),
       setFlag: vi.fn().mockResolvedValue(undefined),
@@ -42,6 +43,7 @@ describe("demiplane-info-button", () => {
       ],
     };
     (globalThis as unknown as { game: unknown }).game = {
+      user: { isGM: false },
       settings: { get: vi.fn((_m: string, k: string) => (k === "demiplaneToken" ? "tok" : undefined)) },
     };
     (globalThis as unknown as { foundry: { applications: { api: { DialogV2: { wait: unknown } } } } }).foundry = {
@@ -66,6 +68,49 @@ describe("demiplane-info-button", () => {
     expect(opts.content).toContain("Manual Cloak");
     expect(opts.content).toContain("(equipment)");
     expect(opts.content).not.toContain("Imported Sword");
+  });
+
+  it("separates unmapped items from sync issues", async () => {
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).toContain("Sync issues");
+    expect(opts.content).toContain("Unmapped items");
+    // The unmapped slug is rendered through formatUnmapped, not listed as a sync issue.
+    expect(opts.content).toContain("goblin-blade");
+  });
+
+  it("tells non-GM users their GM can fix the mapping", async () => {
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).toContain("Your GM can map these");
+    expect(opts.content).not.toContain("demiplane-open-mapping");
+  });
+
+  it("gives GMs a button to open the mapping editor", async () => {
+    (globalThis as unknown as { game: { user: { isGM: boolean } } }).game.user.isGM = true;
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).toContain("demiplane-open-mapping");
+    expect(opts.content).not.toContain("Your GM can map these");
+  });
+
+  it("flags the dialog when the latest sync has unacknowledged issues", async () => {
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const withIssues = wait.mock.calls[0][0] as { classes: string[] };
+    expect(withIssues.classes).toContain("has-sync-errors");
+  });
+
+  it("flags the dialog when only unmapped items exist and are unacknowledged", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "unmappedSlugs") return [{ slug: "goblin-blade", kind: "equipment" }];
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { classes: string[]; content: string };
+    expect(opts.classes).toContain("has-sync-errors");
+    expect(opts.content).toContain("Unmapped items");
+    expect(opts.content).not.toContain("Sync issues");
   });
 
   it("pushes to Demiplane when the push button is clicked", async () => {
@@ -99,10 +144,42 @@ describe("demiplane-info-button", () => {
     expect(opts.content).not.toContain("<script>x</script>");
   });
 
-  it("clears issues on dismiss when issues are present", async () => {
+  it("acknowledges issues on dismiss without deleting them", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     await clickAction("dismiss");
-    expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "importIssues", expect.anything());
+    // Dismiss only sets the acknowledged flag; it must not wipe the issue sets,
+    // so the mapping editor still has the unmapped slugs on the next open.
+    expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "issuesAcknowledged", true);
+    expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "importIssues", expect.anything());
+    expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "unmappedSlugs", expect.anything());
+  });
+
+  it("does not acknowledge when the indicator is already clear", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "issuesAcknowledged") return true;
+      if (k === "importIssues") return ["imp issue"];
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    await clickAction("dismiss");
+    expect(actor.setFlag).not.toHaveBeenCalledWith("demiplane-pf2e", "issuesAcknowledged", expect.anything());
+  });
+
+  it("does not flag the dialog once the issues are acknowledged", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "issuesAcknowledged") return true;
+      if (k === "importIssues") return ["imp issue"];
+      if (k === "unmappedSlugs") return [{ slug: "goblin-blade", kind: "equipment" }];
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { classes: string[]; content: string };
+    // The dot is gone, but the issues are still shown on this second open.
+    expect(opts.classes).not.toContain("has-sync-errors");
+    expect(opts.content).toContain("imp issue");
+    expect(opts.content).toContain("goblin-blade");
   });
 });
 

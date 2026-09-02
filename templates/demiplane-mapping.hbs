@@ -1,65 +1,75 @@
 <section class="demiplane-mapping inventory">
-  <p class="hint">
-    Demiplane names that could not be matched to a Foundry item. Open the browser for a section, then drag
-    an item onto a row to map it. Mappings apply to every character on the next import.
-  </p>
+  <div class="mapping-toolbar">
+    <p class="hint">
+      Every Demiplane name and the Foundry item it resolved to. Drag an item onto a row to change a mapping,
+      or open a section's browser to find one. Mappings apply to every character on the next import.
+    </p>
+    {{#if anyUnmapped}}
+      <label class="only-unmapped-filter">
+        <input type="checkbox" class="only-unmapped-toggle" {{#if onlyUnmapped}}checked{{/if}} />
+        Show only unmapped items
+      </label>
+    {{/if}}
+  </div>
 
-  {{#if hasRows}}
-    {{#each sections}}
-      <section class="inventory-list directory-list">
-        <header>
-          <h3 class="item-name kind-label">{{label}}</h3>
-          <span class="col-demiplane-label">Demiplane Name</span>
-          <div class="item-controls">
-            {{#if canBrowse}}
-              <a data-action="browse" data-kind="{{kind}}"
-                 data-tooltip="Open the compendium browser for {{label}}">
-                <i class="fa-solid fa-magnifying-glass fa-fw"></i>
-              </a>
-            {{/if}}
-          </div>
-        </header>
+  <div class="mapping-scroll">
+    {{#if hasRows}}
+      {{#each sections}}
+        <section class="inventory-list directory-list" {{#if hasUnmapped}}data-has-unmapped="true"{{/if}}>
+          <header>
+            <h3 class="item-name kind-label">{{label}}</h3>
+            <span class="col-demiplane-label">Demiplane Name</span>
+            <div class="item-controls">
+              {{#if canBrowse}}
+                <a data-action="browse" data-kind="{{kind}}"
+                   data-tooltip="Open the compendium browser for {{label}}">
+                  <i class="fa-solid fa-magnifying-glass fa-fw"></i>
+                </a>
+              {{/if}}
+            </div>
+          </header>
 
-        <ul class="items">
-          {{#each rows}}
-            <li class="mapping-row{{#if mappedName}} mapped{{/if}}{{#if mappingMissing}} broken{{/if}}"
-                data-slug="{{slug}}" data-kind="{{kind}}">
-              <div class="data">
-                <div class="item-name">
-                  <span class="item-image framed">
-                    <img class="item-icon" src="{{icon}}" alt="" />
+          <ul class="items">
+            {{#each rows}}
+              <li class="mapping-row{{#if mappedName}} mapped{{/if}}{{#if unmapped}} unmapped{{/if}}{{#if mappingMissing}} broken{{/if}}"
+                  data-slug="{{slug}}" data-kind="{{kind}}">
+                <div class="data">
+                  <div class="item-name">
+                    <span class="item-image framed">
+                      <img class="item-icon" src="{{icon}}" alt="" />
+                    </span>
+                    <h4>
+                      {{#if mappingMissing}}
+                        <span class="unknown">{{mappedName}} <em>(missing)</em></span>
+                      {{else if mappedName}}
+                        <span class="foundry-name">{{mappedName}}</span>
+                      {{else}}
+                        <span class="unknown">Unknown Item</span>
+                      {{/if}}
+                    </h4>
+                  </div>
+
+                  <span class="col-demiplane">
+                    <span class="demiplane-name">{{slug}}</span>
+                    {{#if characters}}<span class="characters">{{characters}}</span>{{/if}}
                   </span>
-                  <h4>
-                    {{#if mappingMissing}}
-                      <span class="unknown">{{mappedName}} <em>(missing)</em></span>
-                    {{else if mappedName}}
-                      <span class="foundry-name">{{mappedName}}</span>
-                    {{else}}
-                      <span class="unknown">Unknown Item</span>
+
+                  <div class="item-controls">
+                    {{#if mappedName}}
+                      <a data-action="clear" data-kind="{{kind}}" data-slug="{{slug}}"
+                         data-tooltip="Clear this mapping">
+                        <i class="fa-solid fa-trash fa-fw"></i>
+                      </a>
                     {{/if}}
-                  </h4>
+                  </div>
                 </div>
-
-                <span class="col-demiplane">
-                  <span class="demiplane-name">{{slug}}</span>
-                  {{#if characters}}<span class="characters">{{characters}}</span>{{/if}}
-                </span>
-
-                <div class="item-controls">
-                  {{#if mappedName}}
-                    <a data-action="clear" data-kind="{{kind}}" data-slug="{{slug}}"
-                       data-tooltip="Clear this mapping">
-                      <i class="fa-solid fa-trash fa-fw"></i>
-                    </a>
-                  {{/if}}
-                </div>
-              </div>
-            </li>
-          {{/each}}
-        </ul>
-      </section>
-    {{/each}}
-  {{else}}
-    <p class="empty">Nothing to map — every name from the last import resolved to a Foundry item.</p>
-  {{/if}}
+              </li>
+            {{/each}}
+          </ul>
+        </section>
+      {{/each}}
+    {{else}}
+      <p class="empty">Nothing to map — no Demiplane names have been imported yet.</p>
+    {{/if}}
+  </div>
 </section>

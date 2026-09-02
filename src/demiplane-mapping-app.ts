@@ -12,6 +12,8 @@ interface SlugRow {
   /** Comma-separated names of the characters this slug affects. */
   characters: string;
   mappedName: string | null;
+  /** True when the slug has no mapping yet — the filter keys off this. */
+  unmapped: boolean;
   /** True when a mapping exists but its target is no longer resolvable. */
   mappingMissing: boolean;
   icon: string;
@@ -21,6 +23,8 @@ interface SlugSection {
   kind: SlugKind;
   label: string;
   rows: SlugRow[];
+  /** True when the section has at least one unmapped row; hidden by the filter otherwise. */
+  hasUnmapped: boolean;
   /** False when there is no way to open a browser for this kind. */
   canBrowse: boolean;
 }
@@ -116,13 +120,28 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
     static override PARTS = {
       list: {
         template: TEMPLATE_PATH,
-        scrollable: [".demiplane-mapping"],
+        scrollable: [".mapping-scroll"],
       },
     };
 
+    /**
+     * The filter state persists for the life of the open window. It is
+     * `undefined` until the first render, when it defaults to "on" if anything
+     * is unmapped (else "off"); after that the user's toggle is preserved across
+     * the re-renders that follow each drop or clear.
+     */
+    #onlyUnmapped: boolean | undefined = undefined;
+
     protected override async _prepareContext(_options: unknown): Promise<Record<string, unknown>> {
       const sections = await collectSections();
-      return { sections, hasRows: sections.some((s) => s.rows.length > 0) };
+      const anyUnmapped = sections.some((section) => section.hasUnmapped);
+      this.#onlyUnmapped ??= anyUnmapped;
+      return {
+        sections,
+        hasRows: sections.some((section) => section.rows.length > 0),
+        anyUnmapped,
+        onlyUnmapped: this.#onlyUnmapped,
+      };
     }
 
     protected override _attachPartListeners(_partId: string, html: HTMLElement, _options: unknown): void {
@@ -134,6 +153,25 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
         row.addEventListener("dragleave", () => row.classList.remove("drop-target"));
         row.addEventListener("drop", (event: DragEvent) => void this.#onDrop(event, row));
       }
+
+      this.#attachFilterToggle(html);
+    }
+
+    /**
+     * The filter is a pure show/hide, so it toggles a class on the list rather
+     * than re-rendering — that keeps scroll position and avoids rebuilding every
+     * row on each click. `_prepareContext` sets the initial checked state.
+     */
+    #attachFilterToggle(html: HTMLElement): void {
+      const checkbox = html.querySelector<HTMLInputElement>(".only-unmapped-toggle");
+      const list = html.querySelector<HTMLElement>(".mapping-scroll");
+      if (!checkbox || !list) return;
+
+      list.classList.toggle("only-unmapped", checkbox.checked);
+      checkbox.addEventListener("change", () => {
+        this.#onlyUnmapped = checkbox.checked;
+        list.classList.toggle("only-unmapped", checkbox.checked);
+      });
     }
 
     static async #onClickBrowse(_event: PointerEvent, button: HTMLElement): Promise<void> {
@@ -192,7 +230,15 @@ async function collectSections(): Promise<SlugSection[]> {
     const bySlug = rowsByKind.get(kind)!;
     let row = bySlug.get(slug);
     if (!row) {
-      row = { slug, kind, characters: "", mappedName: null, mappingMissing: false, icon: UNKNOWN_ITEM_ICON };
+      row = {
+        slug,
+        kind,
+        characters: "",
+        mappedName: null,
+        unmapped: true,
+        mappingMissing: false,
+        icon: UNKNOWN_ITEM_ICON,
+      };
       bySlug.set(slug, row);
     }
     return row;
@@ -213,6 +259,7 @@ async function collectSections(): Promise<SlugSection[]> {
     for (const [slug, mapping] of Object.entries(getAllMappings(kind))) {
       const row = ensure(kind, slug);
       row.mappedName = mapping.name;
+      row.unmapped = false;
       row.mappingMissing = !(await isMappingResolvable(mapping));
       row.icon = await iconFor(mapping);
     }
@@ -224,6 +271,7 @@ async function collectSections(): Promise<SlugSection[]> {
       kind,
       label: KIND_LABELS[kind],
       rows,
+      hasUnmapped: rows.some((row) => row.unmapped),
       canBrowse: kind in KIND_TABS || (KIND_PACKS[kind] !== undefined && game.packs.get(KIND_PACKS[kind]!) != null),
     };
   }).filter((section) => section.rows.length > 0);
