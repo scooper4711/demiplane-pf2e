@@ -189,8 +189,8 @@ describe("isAcceptedType", () => {
 });
 
 describe("registerMappingSyncHook", () => {
-  /** Renders through the open-instance lookup, so capture what refresh() drives. */
-  let render: ReturnType<typeof vi.fn>;
+  /** refresh() drives reload() on the open instance; capture it. */
+  let reload: ReturnType<typeof vi.fn>;
 
   function updateSettingCallback(): (setting: { key?: string }) => void {
     const hooks = globalThis as unknown as { Hooks: { on: ReturnType<typeof vi.fn> } };
@@ -200,21 +200,21 @@ describe("registerMappingSyncHook", () => {
 
   beforeEach(() => {
     installFoundryMocks();
-    render = vi.fn();
+    reload = vi.fn();
     const foundryGlobal = globalThis as unknown as {
       foundry: { applications: { instances: { get: ReturnType<typeof vi.fn> } } };
     };
-    foundryGlobal.foundry.applications.instances = { get: vi.fn().mockReturnValue({ render }) };
+    foundryGlobal.foundry.applications.instances = { get: vi.fn().mockReturnValue({ reload }) };
     registerMappingSyncHook();
   });
 
-  it("re-renders the open editor when a mapping setting changes on another client", () => {
+  it("reloads the open editor when a mapping setting changes on another client", () => {
     updateSettingCallback()({ key: "demiplane-pf2e.slugMappingsFeat" });
-    expect(render).toHaveBeenCalledWith({ force: true });
+    expect(reload).toHaveBeenCalled();
   });
 
   it("ignores unrelated setting changes", () => {
     updateSettingCallback()({ key: "demiplane-pf2e.demiplaneToken" });
-    expect(render).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
   });
 });
