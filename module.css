@@ -317,8 +317,11 @@
 /*  `flex: 0 0 auto` keeps it from stretching or shrinking. Injected by       */
 /*  src/directory-icon.ts.                                                    */
 /* ------------------------------------------------------------------------- */
+/* The icon is only rendered for GMs and owners, and always opens the sync
+   dialog, so it is styled as an actionable control. */
 .directory-item.actor > .demiplane-directory-icon {
   align-self: center;
+  cursor: pointer;
   flex: 0 0 auto;
   height: 1em;
   width: auto;
@@ -326,11 +329,6 @@
   object-fit: contain;
 }
 
-/* For users who can open the sync dialog, the icon is an actionable control. */
-.directory-item.actor > .demiplane-directory-icon.clickable {
-  cursor: pointer;
-}
-
-.directory-item.actor > .demiplane-directory-icon.clickable:hover {
+.directory-item.actor > .demiplane-directory-icon:hover {
   filter: drop-shadow(0 0 3px var(--color-shadow-primary, rgb(0 0 0 / 50%)));
 }

@@ -237,7 +237,6 @@ describe("directory icon", () => {
 
     hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
     const icon = entry.appended[0];
-    expect(icon.classList.has("clickable")).toBe(true);
 
     const preventDefault = vi.fn();
     const stopPropagation = vi.fn();
@@ -253,7 +252,7 @@ describe("directory icon", () => {
     );
   });
 
-  it("opens the dialog for a non-GM owner", () => {
+  it("shows a clickable icon for a non-GM owner", () => {
     register();
     stubUser(false);
     stubActor("synced", "demiplane-uuid", true);
@@ -265,29 +264,25 @@ describe("directory icon", () => {
     expect(showDemiplaneInfoDialog).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves the icon passive for a non-GM non-owner", () => {
+  it("does not show the icon for a non-GM non-owner", () => {
     register();
     stubUser(false);
     stubActor("synced", "demiplane-uuid", false);
     const entry = makeEntry("synced");
 
     hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
-    const icon = entry.appended[0];
 
-    expect(icon.classList.has("clickable")).toBe(false);
-    expect(icon.listeners.click).toBeUndefined();
+    expect(entry.appended).toHaveLength(0);
   });
 
-  it("leaves the icon passive when there is no current user", () => {
+  it("does not show the icon when there is no current user", () => {
     register();
     (globalThis as unknown as { game: { user: unknown } }).game.user = null;
     stubActor("synced", "demiplane-uuid");
     const entry = makeEntry("synced");
 
     hookCallback("renderActorDirectory")?.(undefined, makeRoot([entry]));
-    const icon = entry.appended[0];
 
-    expect(icon.classList.has("clickable")).toBe(false);
-    expect(icon.listeners.click).toBeUndefined();
+    expect(entry.appended).toHaveLength(0);
   });
 });
