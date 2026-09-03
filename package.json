@@ -40,6 +40,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@dfreds/foundry-types": "^14.366.1",
     "@eslint/js": "^9.30.0",
     "@mermaid-js/mermaid-cli": "^11.16.0",
     "@playwright/test": "^1.62.1",
@@ -51,7 +52,6 @@
     "dotenv": "^17.4.2",
     "eslint": "^9.30.0",
     "fast-check": "^4.9.0",
-    "fvtt-types": "npm:@league-of-foundry-developers/foundry-vtt-types@14.366.0-beta.20260824132140",
     "husky": "^9.1.7",
     "jscpd": "^5.0.16",
     "prettier": "^3.5.0",

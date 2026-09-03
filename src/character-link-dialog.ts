@@ -44,7 +44,11 @@ export class CharacterLinkDialog {
           label: "Link Character",
           icon: "fas fa-link",
           default: true,
-          callback: (_event, _button, dialog) => {
+          callback: (
+            _event: PointerEvent | SubmitEvent,
+            _button: HTMLButtonElement,
+            dialog: foundry.applications.api.DialogV2
+          ) => {
             const input = dialog.element.querySelector<HTMLInputElement>("#demiplane-character-input");
             return input?.value ?? "";
           },

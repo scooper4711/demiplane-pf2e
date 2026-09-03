@@ -59,7 +59,7 @@ async function placeFontSlots(
 
   const entry = actor.items.get(entryId);
   if (entry) {
-    await entry.update({ system: { slots: slotsUpdate } } as never);
+    await entry.update({ system: { slots: slotsUpdate } });
     summary.log.push(`+ divine font: ${String(count)} ${FONT_ENTRY_NAME} slots`);
   }
 }

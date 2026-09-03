@@ -97,7 +97,9 @@ async function applyDeity(
   }
   const deityDoc = await deityPack.getDocument(match._id);
   if (deityDoc) {
-    await actor.createEmbeddedDocuments("Item", [stampImported(deityDoc.toObject())] as never);
+    // Source data is a system-specific shape; convert to plain data for stamping.
+    const deityData = deityDoc.toObject() as unknown as Record<string, unknown>;
+    await actor.createEmbeddedDocuments("Item", [stampImported(deityData)]);
     summary.log.push(`+ deity: ${deityName}`);
   }
 }

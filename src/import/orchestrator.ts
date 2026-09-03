@@ -95,12 +95,15 @@ export class ImportOrchestrator {
       grantResolvedSlugs: new Set(),
     };
 
+    // `updateSource` stamps the flag before persistence without triggering a
+    // second round of hooks. It exists at runtime but is not in the published
+    // types, hence the narrow cast (not a blanket `as never`).
     const importHookId = Hooks.on("preCreateItem", ((item: Item) => {
       if (item.parent?.id !== actor.id) return;
-      (item as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
+      (item as unknown as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
         [`flags.${MODULE_ID}.imported`]: true,
       });
-    }) as never);
+    }) as (...args: unknown[]) => void);
 
     try {
       this.choiceSetHandler.enable();

@@ -131,9 +131,11 @@ async function createItemSpellcastingEntry(
         showSlotlessLevels: { value: false },
       },
     }),
-  ] as never);
+  ]);
 
-  const entryId = (created[0] as { id: string }).id;
+  const first = created[0];
+  if (!first) throw new Error(`Failed to create spellcasting entry for "${source.itemName}"`);
+  const entryId = first.id;
 
   const spellItems: Record<string, unknown>[] = [];
   const seen = new Set<string>();
@@ -155,7 +157,7 @@ async function createItemSpellcastingEntry(
   }
 
   if (spellItems.length > 0) {
-    await actor.createEmbeddedDocuments("Item", spellItems as never);
+    await actor.createEmbeddedDocuments("Item", spellItems);
     summary.log.push(`+ item-spells: ${source.itemName} (${String(spellItems.length)} spells)`);
   }
 }

@@ -10,6 +10,7 @@ import {
 } from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 import { getCharacterLevel } from "./spell-slots.js";
+import { itemSystem } from "../pf2e-types.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
 export interface GrantedSpell {
@@ -220,8 +221,10 @@ async function createFeatureEntry(
         showSlotlessLevels: { value: false },
       },
     }),
-  ] as never);
-  return (created[0] as { id: string }).id;
+  ]);
+  const first = created[0];
+  if (!first) throw new Error(`Failed to create spellcasting entry "${name}"`);
+  return first.id;
 }
 
 async function addGrantedSpellsToEntry(
@@ -251,7 +254,7 @@ async function addGrantedSpellsToEntry(
   }
 
   if (spellItems.length > 0) {
-    await actor.createEmbeddedDocuments("Item", spellItems as never);
+    await actor.createEmbeddedDocuments("Item", spellItems);
     summary.log.push(`+ ${label}: ${String(spellItems.length)} spells added`);
   }
 }
@@ -288,7 +291,7 @@ async function collectDomainFocusSpells(domainData: DomainEngineData[], maxSpell
 async function getSpellRank(slug: string): Promise<number> {
   const spellData = await resolveSpellFromCompendium(slug);
   if (!spellData) return 0;
-  return (spellData as { system?: { level?: { value?: number } } }).system?.level?.value ?? 0;
+  return itemSystem(spellData).level?.value ?? 0;
 }
 
 interface SpellcastingEntryLike {
@@ -296,10 +299,10 @@ interface SpellcastingEntryLike {
 }
 
 function getSpellcastingEntries(actor: Actor): SpellcastingEntryLike[] {
-  return (
-    (actor as unknown as { itemTypes?: { spellcastingEntry?: SpellcastingEntryLike[] } }).itemTypes
-      ?.spellcastingEntry ?? []
-  );
+  // Entries are items of that type; read slots through the PF2e item shape.
+  return Array.from(actor.items)
+    .filter((item) => item.type === "spellcastingEntry")
+    .map((item) => ({ system: itemSystem(item) }));
 }
 
 /**
