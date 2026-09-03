@@ -10,7 +10,22 @@ function hookCallback(event: string): ((...args: unknown[]) => void) | undefined
   return calls.find((c) => c[0] === event)?.[1];
 }
 
-describe("titlebar dot", () => {
+function syncedActor(
+  id: string,
+  issues?: { importIssues?: string[]; exportIssues?: string[] }
+): Record<string, unknown> {
+  return {
+    id,
+    getFlag: (_m: string, key: string) => {
+      if (key === "characterId") return "uuid";
+      if (key === "importIssues") return issues?.importIssues;
+      if (key === "exportIssues") return issues?.exportIssues;
+      return undefined;
+    },
+  };
+}
+
+describe("titlebar demiplane icon state", () => {
   beforeEach(() => {
     installFoundryMocks();
     (globalThis as unknown as { ui: { windows: Record<string, unknown>; notifications: unknown } }).ui = {
@@ -19,51 +34,69 @@ describe("titlebar dot", () => {
     };
   });
 
-  it("registers a renderActorSheet hook and an issues-changed hook", () => {
+  it("registers render, issues-changed, and updateActor hooks", () => {
     registerTitlebarDot();
     expect(typeof hookCallback("renderActorSheet")).toBe("function");
     expect(typeof hookCallback(ISSUES_CHANGED_EVENT)).toBe("function");
+    expect(typeof hookCallback("updateActor")).toBe("function");
   });
 
-  it("toggles the indicator off when the character has no issues", () => {
+  it("clears the error class when the character has no issues", () => {
     registerTitlebarDot();
     const button = { classList: { toggle: vi.fn() } };
-    const actor: Record<string, unknown> = {
-      getFlag: (_m: string, key: string) => (key === "characterId" ? "uuid" : undefined),
-    };
-    const sheet = { actor, element: [{ querySelector: () => button }] };
+    const sheet = { actor: syncedActor("a1"), element: [{ querySelector: () => button }] };
+
     hookCallback("renderActorSheet")?.(sheet);
+
     expect(button.classList.toggle).toHaveBeenCalledWith(SYNC_ISSUES_CLASS, false);
   });
 
-  it("toggles the indicator on when the character has active import issues", () => {
+  it("sets the error class when the character has active import issues", () => {
     registerTitlebarDot();
     const button = { classList: { toggle: vi.fn() } };
-    const actor: Record<string, unknown> = {
-      getFlag: (_m: string, key: string) =>
-        key === "characterId" ? "uuid" : key === "importIssues" ? ["boom"] : undefined,
-    };
-    const sheet = { actor, element: [{ querySelector: () => button }] };
+    const sheet = { actor: syncedActor("a1", { importIssues: ["boom"] }), element: [{ querySelector: () => button }] };
+
     hookCallback("renderActorSheet")?.(sheet);
+
     expect(button.classList.toggle).toHaveBeenCalledWith(SYNC_ISSUES_CLASS, true);
   });
 
   it("refreshes open sheets when issues change", () => {
     registerTitlebarDot();
     const button = { classList: { toggle: vi.fn() } };
-    const actor: Record<string, unknown> = {
-      id: "a1",
-      getFlag: (_m: string, key: string) =>
-        key === "characterId" ? "uuid" : key === "exportIssues" ? ["x"] : undefined,
-    };
+    const actor = syncedActor("a1", { exportIssues: ["x"] });
     (globalThis as unknown as { ui: { windows: Record<string, unknown> } }).ui.windows = {
-      "1": {
-        rendered: true,
-        object: { id: "a1" },
-        element: [{ querySelector: () => button }],
-      },
+      "1": { rendered: true, object: { id: "a1" }, element: [{ querySelector: () => button }] },
     };
+
     hookCallback(ISSUES_CHANGED_EVENT)?.(actor);
+
     expect(button.classList.toggle).toHaveBeenCalledWith(SYNC_ISSUES_CLASS, true);
+  });
+
+  it("refreshes open sheets on an updateActor that touches module flags", () => {
+    registerTitlebarDot();
+    const button = { classList: { toggle: vi.fn() } };
+    const actor = syncedActor("a1", { exportIssues: ["x"] });
+    (globalThis as unknown as { ui: { windows: Record<string, unknown> } }).ui.windows = {
+      "1": { rendered: true, object: { id: "a1" }, element: [{ querySelector: () => button }] },
+    };
+
+    hookCallback("updateActor")?.(actor, { flags: { "demiplane-pf2e": {} } });
+
+    expect(button.classList.toggle).toHaveBeenCalledWith(SYNC_ISSUES_CLASS, true);
+  });
+
+  it("ignores an updateActor that does not touch module flags", () => {
+    registerTitlebarDot();
+    const button = { classList: { toggle: vi.fn() } };
+    const actor = syncedActor("a1", { exportIssues: ["x"] });
+    (globalThis as unknown as { ui: { windows: Record<string, unknown> } }).ui.windows = {
+      "1": { rendered: true, object: { id: "a1" }, element: [{ querySelector: () => button }] },
+    };
+
+    hookCallback("updateActor")?.(actor, { name: "renamed" });
+
+    expect(button.classList.toggle).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,8 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import { showDemiplaneInfoDialog } from "./demiplane-info-button.js";
+import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "./sync-issues.js";
+import { DEMIPLANE_ICON_SRC, DEMIPLANE_ERROR_ICON_SRC } from "./config.js";
 
 // Foundry v14 fires `activate{Document}Directory` when a sidebar tab is
 // switched to, but fvtt-types only generates render/close/context hooks for
@@ -25,9 +27,6 @@ type ImportCharacterFn = (
   options?: { wipe?: boolean }
 ) => Promise<ImportSummary>;
 type ExportCharacterFn = (actor: Actor) => Promise<unknown>;
-
-/** Path (served by Foundry from the module root) to the Demiplane favicon. */
-const DEMIPLANE_ICON_SRC = `modules/${MODULE_ID}/assets/demiplane.ico`;
 
 /** Marker class so an entry is only decorated once and can be found again. */
 const DIRECTORY_ICON_CLASS = "demiplane-directory-icon";
@@ -65,6 +64,19 @@ export function registerDirectoryIcon(importCharacter: ImportCharacterFn, export
     decorateAll(elementOf(app));
   });
 
+  // Keep the badge colour live. The issues-changed event fires synchronously
+  // right after a fire-and-forget `setFlag`, so `shouldShowIndicator` can still
+  // read the pre-write value here. `updateActor` fires once the flag write has
+  // landed (on every client), so it is the authoritative refresh; the event is
+  // kept as a fast-path best effort.
+  Hooks.on(ISSUES_CHANGED_EVENT, (actor: Actor) => {
+    refreshEntryIcon(actor);
+  });
+
+  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+    if (moduleFlagsChanged(changes)) refreshEntryIcon(actor);
+  });
+
   decorateAll(currentDirectoryRoot());
 }
 
@@ -73,8 +85,6 @@ function decorateEntry(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn
 ): void {
-  if (entry.querySelector(`:scope > .${DIRECTORY_ICON_CLASS}`)) return;
-
   const actorId = entry.dataset.entryId;
   if (!actorId) return;
 
@@ -86,13 +96,42 @@ function decorateEntry(
   // owners), matching who sees the actor sheet's Demiplane header button.
   if (!canOpenDialog(actor)) return;
 
+  // On a directory re-render the row's DOM is replaced, but this function may
+  // also run against a row we already decorated. If the icon is present, just
+  // refresh its colour to the current sync-issue state rather than adding a
+  // second one — this is what keeps the badge in step after an import.
+  const existing = entry.querySelector<HTMLImageElement>(`:scope > .${DIRECTORY_ICON_CLASS}`);
+  if (existing) {
+    applyIconVariant(existing, actor);
+    return;
+  }
+
   // Append to the row itself (not inside `.entry-name`), so the icon shares the
   // flex row with the name and any icons other modules add (e.g. Permissions
   // Viewer). `.entry-name` grows to fill the row, pushing trailing icons to the
   // right, which keeps ours right-justified without disturbing the others.
-  const icon = buildIcon();
+  const icon = buildIcon(actor);
   makeClickable(icon, actor, characterId, importCharacter, exportCharacter);
   entry.append(icon);
+}
+
+/**
+ * Updates the actor's already-rendered directory badge to the normal or error
+ * variant after its sync-issue state changes. No-op if the row isn't decorated
+ * (directory not rendered, or actor not linked/visible to this user).
+ */
+function refreshEntryIcon(actor: Actor): void {
+  const root = currentDirectoryRoot();
+  const icon = root?.querySelector<HTMLImageElement>(
+    `li.directory-item.actor[data-entry-id="${actor.id}"] > .${DIRECTORY_ICON_CLASS}`
+  );
+  if (icon) applyIconVariant(icon, actor);
+}
+
+/** True when an actor update touched this module's flags (the badge's inputs). */
+function moduleFlagsChanged(changes: Record<string, unknown>): boolean {
+  const flags = changes.flags as Record<string, unknown> | undefined;
+  return flags != null && MODULE_ID in flags;
 }
 
 /** Mirrors the header button's gate: only GMs and owners open the dialog. */
@@ -109,7 +148,6 @@ function makeClickable(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn
 ): void {
-  icon.title = "Open Demiplane sync";
   icon.addEventListener("click", (event) => {
     // The row's own click activates/opens the actor; keep the icon's action
     // separate so it only opens the Demiplane dialog.
@@ -135,12 +173,22 @@ function elementOf(app: unknown): HTMLElement | undefined {
   return element instanceof HTMLElement ? element : undefined;
 }
 
-function buildIcon(): HTMLImageElement {
+function buildIcon(actor: Actor): HTMLImageElement {
   const icon = document.createElement("img");
   icon.className = DIRECTORY_ICON_CLASS;
-  icon.src = DEMIPLANE_ICON_SRC;
-  icon.alt = "Synced with Demiplane";
-  icon.title = "Synced with Demiplane";
   icon.loading = "lazy";
+  applyIconVariant(icon, actor);
   return icon;
+}
+
+/**
+ * Points the badge at the red error icon when the actor has unacknowledged sync
+ * issues, and the normal blue icon otherwise, keeping the tooltip/alt in step.
+ */
+function applyIconVariant(icon: HTMLImageElement, actor: Actor): void {
+  const hasIssues = shouldShowIndicator(actor);
+  icon.src = hasIssues ? DEMIPLANE_ERROR_ICON_SRC : DEMIPLANE_ICON_SRC;
+  const label = hasIssues ? "Demiplane sync issues — click to review" : "Synced with Demiplane";
+  icon.alt = label;
+  icon.title = label;
 }
