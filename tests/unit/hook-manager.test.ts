@@ -605,6 +605,20 @@ describe("HookManager", () => {
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
+
+    it("logs a calm note that nothing is pushed when autoSync is off", () => {
+      autoSyncEnabled = false;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+      triggerHook("updateActor", createMockActor(), { "system.attributes.hp.value": 20 });
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        `${MODULE_ID} | [debug] "Test Actor" changed, but auto-sync is off — nothing pushed to Demiplane.`
+      );
+      warnSpy.mockRestore();
+    });
   });
 
   describe("updateItem hook — currency via treasure items", () => {
