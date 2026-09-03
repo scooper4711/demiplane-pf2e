@@ -176,7 +176,7 @@ export class ExportManager {
     const conflict = await this.checkForConflict(actor, characterId);
     if (conflict) return conflict;
 
-    const fetched = await this.buildPushPayload(characterId, actor);
+    const fetched = await this.buildPushPayload(characterId);
     if (!fetched) {
       const error = "Failed to fetch character data";
       addExportIssue(actor, error);
@@ -261,7 +261,7 @@ export class ExportManager {
    * Keeps the session alive and assembles the Demiplane payload for the buffered
    * changes. Returns null if the character data could not be fetched.
    */
-  private async buildPushPayload(characterId: string, actor: Actor): Promise<FetchedCharacter | null> {
+  private async buildPushPayload(characterId: string): Promise<FetchedCharacter | null> {
     try {
       await this.client.updateLastAccess();
       debugLog(`[push] updateLastAccess succeeded`);
@@ -269,12 +269,7 @@ export class ExportManager {
       debugLog(`[push] updateLastAccess failed: ${String(error)}`);
     }
     const { changes, itemChanges } = this.changeBuffer.peek(characterId);
-    return this.payloadBuilder.buildUpdatedCharacterData(
-      characterId,
-      actor,
-      changes ?? new Map(),
-      itemChanges ?? new Map()
-    );
+    return this.payloadBuilder.buildUpdatedCharacterData(characterId, changes ?? new Map(), itemChanges ?? new Map());
   }
 
   getPendingChanges(characterId: string): PendingChange[] {

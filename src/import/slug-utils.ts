@@ -116,7 +116,7 @@ const EQUIPMENT_SLUG_NORMALIZATIONS: Record<string, string> = {
  */
 const RANKED_CONSUMABLE_RE = /^magic-(scroll|wand)-(\d+(?:st|nd|rd|th))-rank$/;
 
-export interface RankedConsumable {
+interface RankedConsumable {
   kind: "scroll" | "wand";
   /** Ordinal as written by Demiplane, e.g. "2nd". */
   ordinal: string;

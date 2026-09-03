@@ -17,6 +17,7 @@ import {
   compendiumSource,
   toPlainData,
 } from "../pf2e-types.js";
+import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
@@ -350,7 +351,7 @@ export class PostProcessingPhase implements ImportPhase {
     await actor.update({
       "system.attributes.hp.value": Math.min(currentHp, maxHp),
       "system.attributes.hp.temp": tempHp,
-      "system.resources.heroPoints.value": Math.min(heroPoints, 3),
+      "system.resources.heroPoints.value": Math.min(heroPoints, MAX_HERO_POINTS),
     });
   }
 

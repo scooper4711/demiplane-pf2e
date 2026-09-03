@@ -1,11 +1,11 @@
 import { debugLog } from "./debug-log.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
-export const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
+const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
 
 /** Source key and nexus slug sent to stream-engines for PF2e v2 characters. */
-export const ENGINE_SOURCE = "pathfinder2e-v2";
-export const NEXUS_SLUG = "pathfinder2e";
+const ENGINE_SOURCE = "pathfinder2e-v2";
+const NEXUS_SLUG = "pathfinder2e";
 
 /** A single spell-slot entry inside a `v2-add-spell-slots` modifier. */
 export interface DemiplaneSlotEntry {

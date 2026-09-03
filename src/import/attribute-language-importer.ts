@@ -1,5 +1,6 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { characterSystem, pf2eLanguages } from "../pf2e-types.js";
+import { PROFICIENCY_TRAINED, PROFICIENCY_EXPERT } from "./pf2e-ranks.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
 export const VALID_ATTRIBUTES: readonly string[] = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -112,7 +113,7 @@ function computeSkillRanks(
     if (slug in activeOverrides) continue;
 
     const isIncrease = sourceRow.includes("skill-increase");
-    const rank = isIncrease ? 2 : 1;
+    const rank = isIncrease ? PROFICIENCY_EXPERT : PROFICIENCY_TRAINED;
     ranks[slug] = Math.max(ranks[slug] || 0, rank);
   }
   return ranks;

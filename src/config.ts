@@ -19,6 +19,3 @@ export const DEMIPLANE_GRAPHQL_URL = "https://apiv4.demiplane.com/v1/graphql";
 export const SPELLS_PACK = "pf2e.spells-srd";
 export const EQUIPMENT_PACK = "pf2e.equipment-srd";
 export const DEITIES_PACK = "pf2e.deities";
-
-/** Re-export so every external endpoint lives in one module. */
-export { STREAM_ENGINES_URL } from "./import/stream-engines.js";

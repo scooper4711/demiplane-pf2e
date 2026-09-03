@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { ImportOrchestrator, collectLoreNames } from "../../src/import/orchestrator.js";
+import { ImportOrchestrator } from "../../src/import/orchestrator.js";
+import { collectLoreNames } from "../../src/import/phases.js";
 
 describe("ImportOrchestrator", () => {
   beforeEach(() => {
