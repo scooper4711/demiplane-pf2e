@@ -15,12 +15,6 @@ Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.co
 
 Level up on Demiplane, click update in Foundry, and you're good to go.
 
-## Demo
-
-<p align="center" width="100%">
-<video src="https://github.com/scooper4711/demiplane-pf2e/raw/refs/heads/main/docs/Demiplane%20Import%20Demo.mp4" width="80%" controls></video>
-</p>
-
 ## Why You Want This
 
 **Players:** You already love Demiplane's character builder. Now you can use it _and_ play on Foundry without rebuilding your character by hand. Import once, and future updates are a single click.
