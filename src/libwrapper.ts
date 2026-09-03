@@ -38,6 +38,7 @@ export function getLibWrapper(): LibWrapperApi | null {
   const active = game.modules.get("lib-wrapper")?.active === true;
   if (!active) return null;
 
+  // eslint-disable-next-line no-restricted-syntax -- optional third-party global with no published type; isolated here
   const api = (globalThis as unknown as { libWrapper?: LibWrapperApi }).libWrapper;
   return api ?? null;
 }

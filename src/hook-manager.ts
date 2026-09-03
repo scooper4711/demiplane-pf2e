@@ -87,6 +87,7 @@ export function queueAllItemChanges(exportManager: ExportManager, actor: Actor):
   // `actor.items` is typed as the common base collection, but at runtime (and
   // in the PF2e system) every entry is a client Item. Narrow once here so the
   // PF2e field reads below type-check.
+  // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
   const items = Array.from(actor.items) as unknown as Item[];
   for (const item of items) {
     const system = itemSystem(item);

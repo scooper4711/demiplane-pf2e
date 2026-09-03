@@ -100,6 +100,7 @@ export class ImportOrchestrator {
     // types, hence the narrow cast (not a blanket `as never`).
     const importHookId = Hooks.on("preCreateItem", ((item: Item) => {
       if (item.parent?.id !== actor.id) return;
+      // eslint-disable-next-line no-restricted-syntax -- `updateSource` exists at runtime but is not in the published Item type
       (item as unknown as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
         [`flags.${MODULE_ID}.imported`]: true,
       });

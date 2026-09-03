@@ -373,6 +373,7 @@ export class PostProcessingPhase implements ImportPhase {
 
 export class RemoveDuplicatesPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
+    // eslint-disable-next-line no-restricted-syntax -- reading created items as plain source records for dedup comparison
     const items = Array.from(actor.items) as unknown as Array<Record<string, unknown>>;
     const seen = new Map<string, Record<string, unknown>>();
     const toDelete: string[] = [];

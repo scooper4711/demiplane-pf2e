@@ -213,6 +213,7 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
     }
   }
 
+  // eslint-disable-next-line no-restricted-syntax -- coercing the ApplicationV2 subclass to its settings-menu constructor shape; single site
   AppClass = DemiplaneMappingApp as unknown as DemiplaneMappingAppConstructor;
   return AppClass;
 }
@@ -387,6 +388,7 @@ async function openFinder(kind: SlugKind): Promise<void> {
   const tabName = KIND_TABS[kind];
   if (tabName) {
     // game.pf2e is only assigned on ready, and only exists with the PF2e system.
+    // eslint-disable-next-line no-restricted-syntax -- PF2e Compendium Browser has a rich, UI-specific shape used only here
     const browser = (game as unknown as { pf2e?: { compendiumBrowser?: BrowserLike } }).pf2e?.compendiumBrowser;
     const tab = browser?.tabs?.[tabName];
     if (!tab) {
