@@ -12,6 +12,16 @@ import { ConflictResolver } from "./export/conflict-resolver.js";
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
+/**
+ * The master write switch. When "Auto-sync on Actor Update" is off, the module
+ * must never write to Demiplane through any path — automatic hooks or the manual
+ * push button alike. Every Demiplane write funnels through `flush` or
+ * `exportCampaignNotes`, so both consult this.
+ */
+function isWritingEnabled(): boolean {
+  return game.settings.get(MODULE_ID, "autoSync") === true;
+}
+
 export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
 export type { FetchedCharacter } from "./export/push-payload-builder.js";
 
@@ -120,6 +130,13 @@ export class ExportManager {
    * already mid-sync, we skip rather than pile on.
    */
   async exportCampaignNotes(actor: Actor, notes: string): Promise<void> {
+    // Master write switch — see flush(). Campaign Notes is a separate journal
+    // write, so it needs the same guard.
+    if (!isWritingEnabled()) {
+      debugLog(`[push] auto-sync disabled; skipping Campaign journal export`);
+      return;
+    }
+
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
     if (!this.client.isAuthenticated()) return;
@@ -156,6 +173,14 @@ export class ExportManager {
   }
 
   async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
+    // Auto-sync is the master write switch: when it is off, no path — neither the
+    // debounced hooks nor the manual "Update to Demiplane" button — may write to
+    // Demiplane. Guarding here (and in exportCampaignNotes) covers every writer.
+    if (!isWritingEnabled()) {
+      debugLog(`[push] auto-sync disabled; skipping flush`);
+      return { success: true };
+    }
+
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
