@@ -16,12 +16,7 @@ Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.co
 Level up on Demiplane, click update in Foundry, and you're good to go.
 
 ## Demo
-[Watch Demo](./docs/Demiplane-PF2e-Demo.mp4)
-
-<video width="320" height="240" controls>
-  <source src="https://raw.githubusercontent.com/scooper4711/demiplane-pf2e/main/docs/Demiplane-PF2e-Demo.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+[Watch Demo]([./docs/Demiplane-PF2e-Demo.mp4](https://raw.githubusercontent.com/scooper4711/demiplane-pf2e/main/docs/Demiplane-PF2e-Demo.mp4))
 
 ## Why You Want This
 
