@@ -12,7 +12,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Rate Limiting](#4-rate-limit-30-api-calls-per-60-seconds)
 - [Conflict Detection](#5-version-based-conflict-detection)
 - [Grant Chain Sequencing](#6-sequential-createembeddeddocuments-for-core-items)
-- [ChoiceSet Monkey-Patching](#7-choiceset-monkey-patching)
+- [ChoiceSet Wrapping (libWrapper When Available)](#7-choiceset-wrapping-libwrapper-when-available)
 - [Spell Import Architecture](#8-three-resolver-spell-architecture)
 - [Stream-Engines NDJSON Parsing](#9-stream-engines-ndjson-double-parse)
 - [Equipment Container Hierarchy](#10-equipment-container-hierarchy)
@@ -157,9 +157,9 @@ After the four sequential core items, feats and equipment are safe to batch beca
 
 ---
 
-## 7. ChoiceSet Monkey-Patching
+## 7. ChoiceSet Wrapping (libWrapper When Available)
 
-**Decision:** The module monkey-patches `ChoiceSetRuleElement.prototype.preCreate` to auto-select choices during import, then restores the original after import completes.
+**Decision:** The module wraps `ChoiceSetRuleElement.prototype.preCreate` to auto-select choices during import, then removes the wrap after import completes. When the community **libWrapper** module is active the wrap is registered through it; otherwise the module falls back to a direct prototype patch. libWrapper is declared as a `recommended` relationship in `module.json`, never a requirement.
 
 **Rationale:** The PF2e system's ChoiceSet rule element presents interactive dialogs when items with choices are added (e.g., "choose a skill to increase", "pick a bloodline"). During automated import, there is no user to answer these prompts. The choices are already recorded in the Demiplane character data as engine entries, so the module can match them programmatically.
 
@@ -177,16 +177,32 @@ After the four sequential core items, feats and equipment are safe to batch beca
 
 **Module layout:** `ChoiceSetHandler` (`src/import/choice-set-handler.ts`) owns the monkey-patch lifecycle, the `preCreate` interception, and pre-setting selections on item data. The seven strategies are pure functions in `src/import/choice-matchers.ts`, composed in priority order by `findMatchInChoices`, so they can be understood and tested independently of the patching machinery.
 
-**Why monkey-patching instead of alternatives:**
+**Why wrapping `preCreate` instead of alternatives:**
 
 | Approach                              | Pros                                                  | Cons                                                                                  |
 | ------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Monkey-patch preCreate                | Works with any ChoiceSet; no PF2e code changes needed | Fragile if PF2e internals change; must install/uninstall carefully                    |
+| Wrap preCreate                        | Works with any ChoiceSet; no PF2e code changes needed | Fragile if PF2e internals change; must install/uninstall carefully                    |
 | Override via subclass                 | Cleaner separation                                    | ChoiceSet is instantiated internally by PF2e; can't inject subclass                   |
 | Pre-fill rule selections in item data | No runtime patching                                   | ChoiceSet evaluates choices dynamically; pre-fill doesn't work for UUID-based choices |
 | Disable ChoiceSet entirely            | Simplest                                              | Character would be missing critical selections                                        |
 
-The patch is scoped to the import duration only — normal interactive behavior is fully restored after `disable()`.
+The wrap is scoped to the import duration only — normal interactive behavior is fully restored after `disable()`.
+
+**Why libWrapper-when-available rather than always-manual or hard-dependency:**
+
+The module will not be the only one active in a given world, and other modules may wrap the same PF2e method. A raw prototype assignment risks two cross-module failures: another module's wrapper being silently discarded when we restore, and no diagnostic when two modules fight over the method.
+
+| Approach                             | Pros                                                                      | Cons                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| libWrapper when present **(chosen)** | Chains politely with other wrappers; libWrapper reports conflicts by name | Two code paths to maintain and test                                            |
+| Always manual prototype patch        | No external surface; one code path                                        | Can clobber another module's wrapper; no conflict reporting                    |
+| Hard-require libWrapper              | Single, well-behaved path                                                 | Forces users to install a second module for one short-lived, import-only patch |
+
+The wrap is only live during a user-initiated import, so a hard dependency is disproportionate; the fallback keeps the module fully functional when libWrapper is absent. Both paths are gated by the same `importMode` flag and share the auto-selection logic in `handlePreCreate`.
+
+**Defensive fallback restore:** On the manual path, `disable()` restores the original `preCreate` only when our patch is still the live method. If another module wrapped `preCreate` after us, we leave the newer wrapper in place rather than overwriting it — so we never silently delete another module's wrapper. libWrapper handles this ordering itself when it owns the wrap.
+
+**Module layout:** `src/libwrapper.ts` isolates the untyped libWrapper global behind `getLibWrapper()` / `registerWrapper()` / `unregisterWrapper()`. `ChoiceSetHandler` (`src/import/choice-set-handler.ts`) chooses the path in `enable()` and owns both the libWrapper registration and the defensive prototype restore.
 
 ---
 

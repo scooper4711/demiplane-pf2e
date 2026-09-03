@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
 import { ChoiceSetHandler } from "../../src/import/choice-set-handler.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
@@ -248,5 +248,114 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     handler.enable();
     handler.disable();
     expect(builtin.ChoiceSet.prototype.preCreate).toHaveBeenCalledTimes(0);
+  });
+
+  it("does not clobber a wrapper another module installed after enable()", () => {
+    const builtin = installChoiceSetPrototype();
+    const original = builtin.ChoiceSet.prototype.preCreate;
+    const handler = new ChoiceSetHandler();
+    handler.enable();
+
+    // A different module wraps preCreate after us.
+    const otherModuleWrapper = vi.fn().mockResolvedValue(undefined);
+    builtin.ChoiceSet.prototype.preCreate = otherModuleWrapper;
+
+    handler.disable();
+
+    // Our restore must leave the newer wrapper in place, not the original.
+    expect(builtin.ChoiceSet.prototype.preCreate).toBe(otherModuleWrapper);
+    expect(builtin.ChoiceSet.prototype.preCreate).not.toBe(original);
+  });
+});
+
+describe("ChoiceSetHandler with libWrapper active", () => {
+  afterEach(() => {
+    delete (globalThis as unknown as { libWrapper?: unknown }).libWrapper;
+  });
+
+  function activateLibWrapper() {
+    const wrappers = new Map<string, (this: unknown, wrapped: unknown, ...args: unknown[]) => unknown>();
+    const register = vi.fn(
+      (_pkg: string, target: string, fn: (this: unknown, wrapped: unknown, ...args: unknown[]) => unknown) => {
+        wrappers.set(target, fn);
+        return 1;
+      }
+    );
+    const unregister = vi.fn((_pkg: string, target: string) => {
+      wrappers.delete(target);
+    });
+
+    (globalThis as unknown as { libWrapper: unknown }).libWrapper = { register, unregister };
+    const g = (globalThis as unknown as { game: { modules: { get: ReturnType<typeof vi.fn> } } }).game;
+    g.modules.get = vi.fn().mockImplementation((id: string) => (id === "lib-wrapper" ? { active: true } : undefined));
+
+    return { register, unregister, wrappers };
+  }
+
+  it("registers a MIXED wrapper through libWrapper instead of patching the prototype", () => {
+    installFoundryMocks();
+    const builtin = installChoiceSetPrototype();
+    const untouched = builtin.ChoiceSet.prototype.preCreate;
+    const { register } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    handler.enable();
+
+    expect(register).toHaveBeenCalledWith(
+      "demiplane-pf2e",
+      "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate",
+      expect.any(Function),
+      "MIXED"
+    );
+    // The prototype method itself is left for libWrapper to manage.
+    expect(builtin.ChoiceSet.prototype.preCreate).toBe(untouched);
+  });
+
+  it("unregisters through libWrapper on disable()", () => {
+    installFoundryMocks();
+    installChoiceSetPrototype();
+    const { unregister } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    handler.enable();
+    handler.disable();
+
+    expect(unregister).toHaveBeenCalledWith(
+      "demiplane-pf2e",
+      "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate"
+    );
+  });
+
+  it("auto-selects through the libWrapper-registered wrapper", async () => {
+    installFoundryMocks();
+    installChoiceSetPrototype();
+    const { wrappers } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.enable();
+
+    const choices = [
+      { value: "society", label: "Society" },
+      { value: "crafting", label: "Crafting" },
+    ];
+    const ctx = {
+      selection: null as unknown,
+      choices,
+      item: { flags: {}, getRollOptions: () => [], rules: [{ ignored: true }], name: "Test Feat" },
+      actor: { getRollOptions: () => [] },
+      resolveInjectedProperties: () => ({ test: () => true }),
+      predicate: {},
+      inflateChoices: async () => choices,
+      flag: "choice",
+      rollOption: "foo",
+      prompt: undefined,
+    };
+
+    const wrapper = wrappers.get("game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate");
+    const wrapped = vi.fn().mockResolvedValue(undefined);
+    await wrapper!.call(ctx, wrapped, { ruleSource: {}, itemSource: { name: "Test Feat" } });
+
+    expect(ctx.selection).toBe("society");
   });
 });

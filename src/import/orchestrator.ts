@@ -3,7 +3,8 @@
  *
  * Key architecture decisions:
  * - Items are resolved from compendium via slug matching (strip -rm suffix)
- * - ChoiceSet prompts are suppressed by monkey-patching preCreate during import
+ * - ChoiceSet prompts are suppressed by wrapping preCreate during import (via
+ *   libWrapper when available, otherwise a direct prototype patch)
  * - Feats get system.location and system.level.taken set from Demiplane sourceRow
  * - Feats granted by other feats' ChoiceSets are skipped (deduplication)
  * - Feats granted by GrantItem rules (e.g. background → Assurance) are detected and skipped
