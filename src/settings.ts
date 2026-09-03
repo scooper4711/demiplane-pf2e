@@ -12,7 +12,7 @@ export function registerSettings(): void {
 
   game.settings.register(MODULE_ID, "autoSync", {
     name: "Auto-sync on Actor Update",
-    hint: "Automatically push current HP, temporary HP, and hero points back to Demiplane",
+    hint: "Automatically push edits back to Demiplane as you make them: HP and hero points, currency, item quantity and equipped state, deity, languages, and biography/appearance details.",
     scope: "world",
     config: true,
     type: Boolean,
