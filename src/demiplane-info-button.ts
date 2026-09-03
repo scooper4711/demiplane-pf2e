@@ -37,7 +37,10 @@ export function registerDemiplaneInfoButton(
     buttons.unshift({
       label: "Demiplane",
       class: "demiplane-info-btn",
-      icon: "fa-solid fa-link",
+      // The Demiplane logo is drawn by CSS as a `::before` on `.demiplane-info-btn`
+      // (blue, or red when `titlebar-dot.ts` adds `has-sync-errors`). No Font
+      // Awesome glyph, so the icon field is left empty.
+      icon: "",
       tooltip: "Linked to Demiplane",
       onclick: () => showDemiplaneInfoDialog(actor, characterId, importCharacter, exportCharacter),
     });
@@ -96,7 +99,9 @@ export async function showDemiplaneInfoDialog(
 /**
  * Wires the "Open mapping editor" button (GM view of the unmapped-items
  * section) to open the mapping app. Done in the dialog's render callback
- * because DialogV2 content is static HTML with no per-element handlers.
+ * because DialogV2 content is static HTML with no per-element handlers. The
+ * title-bar logo is drawn by CSS (`::before` on `.window-title`), driven by the
+ * dialog's `has-sync-errors` class, so no DOM injection is needed here.
  */
 function attachMappingEditorButton(_event: Event, dialog: foundry.applications.api.DialogV2): void {
   const button = dialog.element.querySelector<HTMLButtonElement>(".demiplane-open-mapping");

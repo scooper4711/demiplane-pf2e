@@ -1,60 +1,70 @@
 /*
  * Demiplane PF2e Sync — module styles.
  *
- * The sync-issue indicator is a red dot rendered as a pseudo-element. It appears:
- *  - before the "Demiplane" header button on linked actor sheets (via the
- *    `has-sync-errors` class on the `.demiplane-info-btn` button);
- *  - before the "Sync issues" heading inside the Demiplane dialog; and
- *  - in the title bar of the Demiplane pop-up dialog (via the
- *    `has-sync-errors` class on the dialog's `.demiplane-sync-dialog` element).
- *
- * All placement is controlled here — switch pseudo-elements and flip the margin
- * to move a dot, or adjust vertical-alignment / sizing as needed.
+ * The sync-issue indicator is the Demiplane logo shown blue normally and red
+ * (a separate icon file) when the latest sync produced unacknowledged issues.
+ * It appears as an `<img>` in three places, each sized here:
+ *  - on the "Demiplane" actor sheet header button (swapped by titlebar-dot.ts);
+ *  - in the title bar of the Demiplane pop-up dialog; and
+ *  - before the "Sync issues" heading inside that dialog (always the red icon).
+ * The sidebar directory badge is styled separately, further down.
  */
 
-/* Red dot on the actor sheet header button, placed before "Demiplane". */
-.demiplane-info-btn.has-sync-errors::before {
+/* The logo is drawn as a `::before` background image rather than an injected
+   `<img>`. A pseudo-element flows inline with the text, so it sits to the left
+   of the label instead of wrapping onto its own line the way an `<img>` flex
+   item did inside Foundry's flex header/title. Blue is the default; the red
+   variant is selected by a state class (the button/dialog gains
+   `has-sync-errors` when there are unacknowledged issues). */
+
+/* Demiplane logo on the actor sheet header button, before the "Demiplane" label. */
+.demiplane-info-btn::before {
   content: "";
   display: inline-block;
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: #e53935;
-  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
-  vertical-align: super;
-  pointer-events: none;
+  width: 16px;
+  height: 16px;
+  vertical-align: middle;
+  background-image: url("assets/demiplane.ico");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-/* Red dot before the "Sync issues" heading inside the Demiplane dialog. */
+.demiplane-info-btn.has-sync-errors::before {
+  background-image: url("assets/demiplane-error.ico");
+}
+
+/* Demiplane logo before the "Sync issues" heading inside the Demiplane dialog.
+   This heading always uses the red variant. */
 .sync-issues-heading::before {
   content: "";
   display: inline-block;
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
+  width: 16px;
+  height: 16px;
   margin-right: 5px;
-  border-radius: 50%;
-  background: #e53935;
-  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
-  vertical-align: middle;
-  pointer-events: none;
+  vertical-align: text-bottom;
+  background-image: url("assets/demiplane-error.ico");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-/* Red dot in the title bar of the Demiplane pop-up dialog. */
-.demiplane-sync-dialog.has-sync-errors .window-title::before {
+/* Demiplane logo in the title bar of the Demiplane pop-up dialog. */
+.demiplane-sync-dialog .window-title::before {
   content: "";
   display: inline-block;
-  box-sizing: border-box;
-  width: 8px;
-  height: 8px;
-  margin-right: 5px;
-  border-radius: 50%;
-  background: #e53935;
-  box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.25);
-  vertical-align: super;
-  pointer-events: none;
+  width: 18px;
+  height: 18px;
+  margin-right: 6px;
+  vertical-align: middle;
+  background-image: url("assets/demiplane.ico");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.demiplane-sync-dialog.has-sync-errors .window-title::before {
+  background-image: url("assets/demiplane-error.ico");
 }
 
 /* "Open mapping editor" button in the unmapped-items section of the dialog.
@@ -378,9 +388,10 @@
 /*  Demiplane. It is appended to the flex row after `.entry-name`, which      */
 /*  grows to fill the row and pushes this icon to the right edge — sharing    */
 /*  the trailing space with icons from other modules (e.g. Permissions        */
-/*  Viewer). Height is pinned to 1em so it matches the name's text height;    */
-/*  `flex: 0 0 auto` keeps it from stretching or shrinking. Injected by       */
-/*  src/directory-icon.ts.                                                    */
+/*  Viewer). Height is set to 1.5em so it reads a little larger than the      */
+/*  name text; `flex: 0 0 auto` keeps it from stretching or shrinking. A       */
+/*  right margin insets it from the row edge, with no left margin so it sits   */
+/*  tight against whatever precedes it. Injected by src/directory-icon.ts.     */
 /* ------------------------------------------------------------------------- */
 /* The icon is only rendered for GMs and owners, and always opens the sync
    dialog, so it is styled as an actionable control. */
@@ -388,9 +399,10 @@
   align-self: center;
   cursor: pointer;
   flex: 0 0 auto;
-  height: 1em;
+  height: 1.5em;
   width: auto;
-  margin-left: 0.25em;
+  margin-left: 0;
+  margin-right: 0.5em;
   object-fit: contain;
 }
 
