@@ -271,7 +271,7 @@ export class HookManager {
 
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {
     if (!this.isLinkedCharacterActor(actor)) return;
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     // While any client is importing or pushing this character, actor updates are
     // just the sync echoing to other clients — don't queue them back to Demiplane.
     if (isSyncActive(actor)) return;
@@ -338,7 +338,7 @@ export class HookManager {
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
 
     const slug = itemSystem(item).slug ?? undefined;
@@ -396,10 +396,9 @@ export class HookManager {
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
-
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
     this.queueDeityChange(item, actor);
   }
 
@@ -439,7 +438,7 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
 
     const itemType = (item as { type?: string })?.type;
@@ -472,6 +471,17 @@ export class HookManager {
     if (actor.type !== "character") return false;
     const characterId = actor.getFlag(MODULE_ID, "characterId");
     return characterId !== undefined && characterId !== null;
+  }
+
+  /**
+   * Whether auto-sync is on. When it is off, logs a calm, reassuring note (so a
+   * reader of the console sees the change was noticed and deliberately not
+   * pushed) rather than staying silent or hinting at a push that never happens.
+   */
+  private autoSyncEnabled(actorName: string | null | undefined): boolean {
+    if (game.settings.get(MODULE_ID, "autoSync")) return true;
+    debugLog(`"${actorName ?? "character"}" changed, but auto-sync is off — nothing pushed to Demiplane.`);
+    return false;
   }
 
   private getChangeValue(changes: Record<string, unknown>, path: string): unknown {

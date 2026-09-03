@@ -133,7 +133,7 @@ export class ExportManager {
     // Master write switch — see flush(). Campaign Notes is a separate journal
     // write, so it needs the same guard.
     if (!isWritingEnabled()) {
-      debugLog(`[push] auto-sync disabled; skipping Campaign journal export`);
+      debugLog(`[push] auto-sync is off — Campaign notes not pushed to Demiplane.`);
       return;
     }
 
@@ -177,7 +177,7 @@ export class ExportManager {
     // debounced hooks nor the manual "Update to Demiplane" button — may write to
     // Demiplane. Guarding here (and in exportCampaignNotes) covers every writer.
     if (!isWritingEnabled()) {
-      debugLog(`[push] auto-sync disabled; skipping flush`);
+      debugLog(`[push] auto-sync is off — nothing pushed to Demiplane.`);
       return { success: true };
     }
 
