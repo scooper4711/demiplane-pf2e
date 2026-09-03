@@ -296,8 +296,8 @@ export class HookManager {
         const flags = (item.flags?.pf2e as { rulesSelections?: Record<string, unknown> } | undefined)?.rulesSelections;
         const selection = flags && Object.hasOwn(flags, flag) ? flags[flag] : rule.selection;
         const isNullish = selection === null || selection === undefined;
-        const selectionText =
-          typeof selection === "string" ? selection : isNullish ? "none" : JSON.stringify(selection);
+        const defaultSelectionText = isNullish ? "none" : JSON.stringify(selection);
+        const selectionText = typeof selection === "string" ? selection : defaultSelectionText;
         return `${flag}=${selectionText}`;
       });
 

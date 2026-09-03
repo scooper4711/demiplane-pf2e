@@ -98,7 +98,7 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
   const base = foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2);
 
   class DemiplaneMappingApp extends base {
-    static override DEFAULT_OPTIONS = {
+    static override readonly DEFAULT_OPTIONS = {
       id: "demiplane-mapping",
       // `crb-style sheet` picks up PF2e's parchment background; `themed
       // theme-light` matches the actor window, which keeps the parchment look
@@ -116,7 +116,7 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
       },
     };
 
-    static override PARTS = {
+    static override readonly PARTS = {
       list: {
         template: TEMPLATE_PATH,
         scrollable: [".mapping-scroll"],
