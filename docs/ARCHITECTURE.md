@@ -534,6 +534,7 @@ src/
 │   ├── change-buffer.ts           Per-character pending change buffer: queue, debounce, rate limit, suspend
 │   ├── push-payload-builder.ts    Builds the Demiplane character payload from buffered changes
 │   └── conflict-resolver.ts       Optimistic-concurrency check (fetchCharacterUpdated + engineSig)
+├── libwrapper.ts                  Optional libWrapper adapter (detect + register/unregister)
 ├── sync-pause.ts                  Cross-client sync coordination (pauses pushes during import/push)
 ├── sync-issues.ts                Import/export issue sets + unmapped slugs, with an acknowledged flag driving the indicator
 ├── titlebar-dot.ts               Red indicator on actor sheet titlebars for unacknowledged sync issues
@@ -548,7 +549,7 @@ src/
 │   ├── phases.ts                  ImportPhase interface, ImportContext, and phase implementations
 │   ├── slug-utils.ts              Slug transformation and categorization
 │   ├── compendium-resolver.ts     Slug → compendium UUID resolution
-│   ├── choice-set-handler.ts      ChoiceSet monkey-patch lifecycle + preset selections
+│   ├── choice-set-handler.ts      ChoiceSet wrap lifecycle (libWrapper or fallback patch) + preset selections
 │   ├── choice-matchers.ts         The 7 ChoiceSet match strategies (pure functions)
 │   ├── choice-set-types.ts        ChoiceSet context/param interfaces
 │   ├── choice-slug.ts             Shared label → slug normalization
@@ -713,7 +714,7 @@ The resolver accepts a target pack parameter to search a specific pack, or searc
 
 When items are added to a PF2e actor, the system's `ChoiceSetRuleElement` normally presents an interactive dialog for player choices (e.g., "choose a skill to increase"). During automated import, these must be resolved without user interaction.
 
-The `ChoiceSetHandler` monkey-patches `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. The strategies live in `choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
+The `ChoiceSetHandler` wraps `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. When the community **libWrapper** module is active the wrap is registered through it (`src/libwrapper.ts`); otherwise the handler falls back to a direct prototype patch whose `disable()` restores the original only if our patch is still the live method (so a wrapper another module installed later is never clobbered). See [DESIGN §7](./DESIGN.md#7-choiceset-wrapping-libwrapper-when-available). The strategies live in `choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
 
 | Priority | Strategy                | Matches Against                                                          |
 | -------- | ----------------------- | ------------------------------------------------------------------------ |
@@ -729,7 +730,7 @@ The `ChoiceSetHandler` monkey-patches `ChoiceSet.preCreate` to intercept choice 
 
 The `ChoiceSetHandler` owns the monkey-patch lifecycle (`enable`/`disable`), the `preCreate` interception, and pre-setting selections on item data (`presetChoiceSelections`). The strategy matching itself is delegated to `choice-matchers.ts`, keeping the handler focused on patching and the matchers independently testable.
 
-The monkey-patch is installed before import begins and uninstalled after import completes, so normal interactive behavior is restored for manual character editing.
+The wrap is installed before import begins and removed after import completes, so normal interactive behavior is restored for manual character editing.
 
 ---
 

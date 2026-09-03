@@ -24,6 +24,13 @@
         "id": "pf2e",
         "type": "system"
       }
+    ],
+    "recommended": [
+      {
+        "id": "lib-wrapper",
+        "type": "module",
+        "reason": "Used when present to wrap the PF2e ChoiceSet rule element politely alongside other modules; not required."
+      }
     ]
   }
 }

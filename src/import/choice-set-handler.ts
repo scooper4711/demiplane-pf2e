@@ -5,14 +5,25 @@ import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
+import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
+
+/** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
+const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";
 
 /**
  * Manages ChoiceSet auto-resolution during import.
- * Monkey-patches ChoiceSetRuleElement.preCreate to suppress dialogs
- * and auto-select based on Demiplane data.
+ *
+ * Wraps `ChoiceSetRuleElement.preCreate` to suppress dialogs and auto-select
+ * based on Demiplane data. When the community libWrapper module is active the
+ * wrap is registered through it (so this module chains cleanly with any other
+ * module wrapping the same method); otherwise it falls back to a direct
+ * prototype patch. Either way the wrap is installed only for the duration of an
+ * import and removed afterwards.
  */
 export class ChoiceSetHandler {
   private originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private usingLibWrapper = false;
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
 
@@ -22,37 +33,85 @@ export class ChoiceSetHandler {
 
   enable(): void {
     this.importMode = true;
-    if (this.originalPreCreate) {
-      debugLog("[ChoiceSet] Monkey-patch already enabled; skipping re-install");
+    if (this.usingLibWrapper || this.originalPreCreate) {
+      debugLog("[ChoiceSet] Wrap already enabled; skipping re-install");
       return;
     }
-    const ChoiceSetRE = this.getChoiceSetPrototype();
-    this.originalPreCreate = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
-    debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");
 
-    const patch = this.handlePreCreate.bind(this);
-    ChoiceSetRE.prototype.preCreate = async function (this: ChoiceSetContext, params: PreCreateParams) {
-      await patch(this, params);
-    };
+    if (getLibWrapper()) {
+      this.enableViaLibWrapper();
+    } else {
+      this.enableViaPrototypePatch();
+    }
   }
 
   disable(): void {
     this.importMode = false;
-    if (this.originalPreCreate) {
-      const ChoiceSetRE = this.getChoiceSetPrototype();
-      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
-      this.originalPreCreate = null;
+    if (this.usingLibWrapper) {
+      unregisterWrapper(CHOICE_SET_TARGET);
+      this.usingLibWrapper = false;
+      debugLog("[ChoiceSet] libWrapper wrap removed, import mode off");
+      return;
     }
+
+    this.restorePrototypePatch();
     debugLog("[ChoiceSet] Monkey-patch disabled, import mode off");
   }
 
-  private async handlePreCreate(context: ChoiceSetContext, params: PreCreateParams): Promise<void> {
+  private enableViaLibWrapper(): void {
+    const handle = this.handlePreCreate.bind(this);
+    registerWrapper(CHOICE_SET_TARGET, function (this: unknown, wrapped: WrappedFn, ...args: unknown[]) {
+      const context = this as ChoiceSetContext;
+      const params = args[0] as PreCreateParams;
+      return handle(context, params, () => wrapped.call(context, params) as Promise<void>);
+    });
+    this.usingLibWrapper = true;
+    debugLog("[ChoiceSet] libWrapper wrap registered, import mode active");
+  }
+
+  private enableViaPrototypePatch(): void {
+    const ChoiceSetRE = this.getChoiceSetPrototype();
+    const original = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
+    this.originalPreCreate = original;
+
+    const handle = this.handlePreCreate.bind(this);
+    const patched = async function (this: ChoiceSetContext, params: PreCreateParams) {
+      await handle(this, params, () => original.call(this, params) as Promise<void>);
+    };
+    this.patchedPreCreate = patched as (...args: unknown[]) => Promise<void>;
+    ChoiceSetRE.prototype.preCreate = patched;
+    debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");
+  }
+
+  /**
+   * Restores the original `preCreate`, but only if our patch is still the live
+   * method. If another module wrapped `preCreate` after us, overwriting it here
+   * would silently delete their wrapper — so we leave the newer wrapper in place
+   * and just drop our reference.
+   */
+  private restorePrototypePatch(): void {
+    if (!this.originalPreCreate) return;
+    const ChoiceSetRE = this.getChoiceSetPrototype();
+    if (ChoiceSetRE.prototype.preCreate === this.patchedPreCreate) {
+      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
+    } else {
+      debugLog("[ChoiceSet] preCreate was re-wrapped by another module; leaving it in place");
+    }
+    this.originalPreCreate = null;
+    this.patchedPreCreate = null;
+  }
+
+  private async handlePreCreate(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    callOriginal: () => Promise<void>
+  ): Promise<void> {
     if (!this.importMode) {
-      return this.originalPreCreate!.call(context, params) as Promise<void>;
+      return callOriginal();
     }
 
     if (await this.shouldPassThroughPreSetSelection(context, params)) {
-      return this.originalPreCreate!.call(context, params) as Promise<void>;
+      return callOriginal();
     }
 
     debugLog(
