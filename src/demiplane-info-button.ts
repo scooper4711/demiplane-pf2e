@@ -154,6 +154,22 @@ interface DialogContentOptions {
   manualItemsSection: string;
 }
 
+/**
+ * Wraps the sync-issues and unmapped-items sections in a single scrollable
+ * region so that, together, they stay bounded: a long combination of issues
+ * and unmapped names scrolls as one panel between the dividers rather than
+ * stretching the dialog. Renders nothing when both sections are empty.
+ */
+function buildScrollableIssues(syncIssuesSection: string, unmappedItemsSection: string): string {
+  if (syncIssuesSection === "" && unmappedItemsSection === "") return "";
+  return `
+    <hr>
+    <div class="demiplane-scroll-region">
+      ${syncIssuesSection}
+      ${unmappedItemsSection}
+    </div>`;
+}
+
 function buildDialogContent(opts: DialogContentOptions): string {
   return `
     <div class="demiplane-info-dialog">
@@ -162,8 +178,7 @@ function buildDialogContent(opts: DialogContentOptions): string {
         <p><strong>Last push to Demiplane:</strong> ${opts.lastExportDisplay}</p>
         <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
-      ${opts.syncIssuesSection}
-      ${opts.unmappedItemsSection}
+      ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -186,7 +201,6 @@ function buildSyncIssuesSection(issues: string[]): string {
   if (issues.length === 0) return "";
   const list = issues.map((message) => `<li>${escapeHtml(message)}</li>`).join("\n");
   return `
-    <hr>
     <section>
       <p><strong class="sync-issues-heading">Sync issues</strong> (${String(issues.length)}):</p>
       <ul class="demiplane-sync-issues">${list}</ul>
@@ -204,7 +218,6 @@ function buildUnmappedItemsSection(items: string[]): string {
   if (items.length === 0) return "";
   const list = items.map((message) => `<li>${escapeHtml(message)}</li>`).join("\n");
   return `
-    <hr>
     <section>
       <p><strong>Unmapped items</strong> (${String(items.length)}):</p>
       <ul class="demiplane-unmapped-items">${list}</ul>
