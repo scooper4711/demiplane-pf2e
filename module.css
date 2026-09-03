@@ -67,6 +67,24 @@
   background-image: url("assets/demiplane-error.ico");
 }
 
+/* Cap the dialog width so long issue text can't stretch the window across the
+   screen. Height is left to the content, with only the issue list scrolling
+   (below), so the heading and hint around it stay put. */
+.demiplane-sync-dialog {
+  max-width: 50vw;
+}
+
+/* The sync-issues and unmapped-items sections share one scrollable region: from
+   the "Sync issues" heading down to the divider before the next section. A long
+   combination of issues and unmapped names scrolls together as a bounded panel
+   rather than growing the dialog. Everything outside this region (header info,
+   manual items, Ko-fi) stays fixed. */
+.demiplane-info-dialog .demiplane-scroll-region {
+  max-height: 40vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
 /* "Open mapping editor" button in the unmapped-items section of the dialog.
    Unmapped items are routine and fixable, so the button is sized as a normal
    inline action rather than a full-width form button. */
