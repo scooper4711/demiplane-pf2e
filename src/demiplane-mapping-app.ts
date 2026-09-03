@@ -2,7 +2,6 @@ import { MODULE_ID } from "./import/types.js";
 import type { SlugKind } from "./import/types.js";
 import { getUnmappedSlugs } from "./sync-issues.js";
 import { getAllMappings, setMapping, clearMapping } from "./slug-mapping.js";
-import type { SlugMapping } from "./slug-mapping.js";
 
 const TEMPLATE_PATH = `modules/${MODULE_ID}/templates/demiplane-mapping.hbs`;
 
@@ -132,44 +131,16 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
      */
     #onlyUnmapped: boolean | undefined = undefined;
 
-    /**
-     * Cached section data. `undefined` means "not computed yet" — the window
-     * paints a loading state immediately and computes in the background so it
-     * opens instantly instead of blocking on a store-wide `fromUuid` sweep.
-     * `#reload` triggers a recompute after a change.
-     */
-    #sections: SlugSection[] | undefined = undefined;
-
     protected override async _prepareContext(_options: unknown): Promise<Record<string, unknown>> {
-      // First paint (or after a change): show the shell now, load in the
-      // background, then re-render with the results.
-      if (!this.#sections) {
-        void this.#computeSections();
-        return { loading: true };
-      }
-
-      const sections = this.#sections;
+      const sections = await collectSections();
       const anyUnmapped = sections.some((section) => section.hasUnmapped);
       this.#onlyUnmapped ??= anyUnmapped;
       return {
-        loading: false,
         sections,
         hasRows: sections.some((section) => section.rows.length > 0),
         anyUnmapped,
         onlyUnmapped: this.#onlyUnmapped,
       };
-    }
-
-    /** Computes sections off the render path, then re-renders to show them. */
-    async #computeSections(): Promise<void> {
-      this.#sections = await collectSections();
-      void this.render({ force: true });
-    }
-
-    /** Discards cached sections and re-renders, so a change recomputes the list. */
-    reload(): void {
-      this.#sections = undefined;
-      void this.render({ force: true });
     }
 
     protected override _attachPartListeners(_partId: string, html: HTMLElement, _options: unknown): void {
@@ -282,20 +253,19 @@ async function collectSections(): Promise<SlugSection[]> {
   }
 
   // Include existing mappings so a GM can see and fix them, including ones whose
-  // target has since disappeared. Each mapping needs one `fromUuid` to learn
-  // whether its target still resolves and to pick up its icon; resolve them all
-  // in parallel (one lookup per mapping, not two) so a large store doesn't turn
-  // into a long sequential chain of awaits.
-  await Promise.all(
-    KIND_ORDER.flatMap((kind) =>
-      Object.entries(getAllMappings(kind)).map(async ([slug, mapping]) => {
-        const row = ensure(kind, slug);
-        row.mappedName = mapping.name;
-        row.unmapped = false;
-        await applyMappingTarget(row, mapping);
-      })
-    )
-  );
+  // target has since disappeared. Collect the rows first, then resolve their
+  // targets in one batched pass (see `applyMappingTargets`) rather than a
+  // `fromUuid` per mapping — that keeps a large store fast to open.
+  const mappedRows: Array<{ row: SlugRow; uuid: string }> = [];
+  for (const kind of KIND_ORDER) {
+    for (const [slug, mapping] of Object.entries(getAllMappings(kind))) {
+      const row = ensure(kind, slug);
+      row.mappedName = mapping.name;
+      row.unmapped = false;
+      mappedRows.push({ row, uuid: mapping.uuid });
+    }
+  }
+  await applyMappingTargets(mappedRows);
 
   return KIND_ORDER.map((kind) => {
     const rows = [...rowsByKind.get(kind)!.values()].sort((a, b) => a.slug.localeCompare(b.slug));
@@ -316,16 +286,87 @@ function appendCharacter(existing: string, name: string): string {
   return [...names].join(", ");
 }
 
+interface MappedRowTarget {
+  row: SlugRow;
+  uuid: string;
+}
+
+interface IndexEntry {
+  _id: string;
+  img?: string;
+}
+
 /**
- * Fills in a mapped row's target-derived fields from a single `fromUuid`:
- * whether the target still resolves and, if so, its icon. Combining the two
- * halves the compendium lookups a full list of mappings costs.
+ * Resolves every mapped row's icon and existence in one batched pass. Mappings
+ * point at compendium items, so instead of loading each item in full via
+ * `fromUuid` (hundreds of document deserializations on open), the targets are
+ * grouped by pack and each pack's cached index is read once. The index carries
+ * `img` and tells us whether the id still exists — the only two fields a row
+ * needs. Non-compendium UUIDs (rare) fall back to a direct `fromUuid`.
  */
-async function applyMappingTarget(row: SlugRow, mapping: SlugMapping): Promise<void> {
-  const doc = await fromUuid(mapping.uuid);
-  row.mappingMissing = doc === null;
-  const img = (doc as { img?: string } | null)?.img;
+async function applyMappingTargets(targets: MappedRowTarget[]): Promise<void> {
+  const byPack = new Map<string, MappedRowTarget[]>();
+  const fallback: MappedRowTarget[] = [];
+
+  for (const target of targets) {
+    const parsed = parseCompendiumUuid(target.uuid);
+    if (parsed) {
+      const group = byPack.get(parsed.packKey) ?? [];
+      group.push(target);
+      byPack.set(parsed.packKey, group);
+    } else {
+      fallback.push(target);
+    }
+  }
+
+  await Promise.all([
+    ...[...byPack.entries()].map(([packKey, group]) => applyPackTargets(packKey, group)),
+    ...fallback.map((target) => applyTargetViaDocument(target)),
+  ]);
+}
+
+/** Parses a compendium item UUID into its pack key and document id, or null. */
+function parseCompendiumUuid(uuid: string): { packKey: string; id: string } | null {
+  const parts = uuid.split(".");
+  // Compendium.<scope>.<pack>.<DocType>.<id>
+  if (parts.length < 5 || parts[0] !== "Compendium") return null;
+  return { packKey: `${parts[1]}.${parts[2]}`, id: parts[4] };
+}
+
+/** Resolves a whole pack's worth of rows from that pack's index in one read. */
+async function applyPackTargets(packKey: string, group: MappedRowTarget[]): Promise<void> {
+  const pack = game.packs.get(packKey);
+  if (!pack) {
+    for (const { row } of group) markTargetMissing(row);
+    return;
+  }
+
+  const index = (await pack.getIndex({ fields: ["img"] })) as unknown as IndexEntry[];
+  const byId = new Map(index.map((entry) => [entry._id, entry]));
+
+  for (const { row, uuid } of group) {
+    const id = parseCompendiumUuid(uuid)!.id;
+    const entry = byId.get(id);
+    if (entry) applyTargetIcon(row, entry.img);
+    else markTargetMissing(row);
+  }
+}
+
+/** Fallback for a non-compendium UUID: one direct document load. */
+async function applyTargetViaDocument(target: MappedRowTarget): Promise<void> {
+  const doc = await fromUuid(target.uuid);
+  if (doc) applyTargetIcon(target.row, (doc as { img?: string }).img);
+  else markTargetMissing(target.row);
+}
+
+function applyTargetIcon(row: SlugRow, img: string | undefined): void {
+  row.mappingMissing = false;
   row.icon = typeof img === "string" && img ? img : UNKNOWN_ITEM_ICON;
+}
+
+function markTargetMissing(row: SlugRow): void {
+  row.mappingMissing = true;
+  row.icon = UNKNOWN_ITEM_ICON;
 }
 
 // ─── Compendium browser ─────────────────────────────────────────────────────
@@ -433,14 +474,11 @@ async function showMismatchDialog(
   });
 }
 
-/**
- * Recompute and re-render any open instance so a change is visible immediately.
- * Goes through `reload` (not a plain render) so the cached section data is
- * discarded and rebuilt — a bare render would repaint the stale list.
- */
+/** Re-render any open instance so a change is visible immediately. */
 function refresh(): void {
-  const app = foundry.applications.instances.get("demiplane-mapping") as { reload: () => void } | undefined;
-  app?.reload();
+  const app = foundry.applications.instances.get("demiplane-mapping") as
+    { render: (options?: { force?: boolean }) => Promise<unknown> } | undefined;
+  void app?.render({ force: true });
 }
 
 /** Prefix shared by every per-kind mapping setting key (`slugMappingsFeat`, …). */

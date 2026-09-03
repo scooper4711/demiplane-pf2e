@@ -107,6 +107,52 @@ describe("collectSections", () => {
     expect(equipment?.hasUnmapped).toBe(true);
   });
 
+  it("reads the mapped item's icon from the pack index", async () => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        { _id: "hp1", name: "Half Plate", system: { slug: "half-plate" }, img: "icons/armor/half-plate.webp" },
+      ]),
+    });
+    registerSlugMappingSettings();
+    await setMapping("equipment", "resolved", { uuid: HALF_PLATE, name: "Half Plate" });
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [] as never;
+
+    const row = (await collectSections()).find((s) => s.kind === "equipment")?.rows[0];
+    expect(row?.icon).toBe("icons/armor/half-plate.webp");
+    expect(row?.mappingMissing).toBe(false);
+  });
+
+  it("resolves several mappings in one pack without a per-item document load", async () => {
+    const pack = createMockPack([
+      { _id: "hp1", name: "Half Plate", system: { slug: "half-plate" } },
+      { _id: "hp2", name: "Full Plate", system: { slug: "full-plate" } },
+    ]);
+    installFoundryMocks({ "pf2e.equipment-srd": pack });
+    registerSlugMappingSettings();
+    await setMapping("equipment", "one", { uuid: "Compendium.pf2e.equipment-srd.Item.hp1", name: "Half Plate" });
+    await setMapping("equipment", "two", { uuid: "Compendium.pf2e.equipment-srd.Item.hp2", name: "Full Plate" });
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [] as never;
+
+    const rows = (await collectSections()).find((s) => s.kind === "equipment")?.rows ?? [];
+    expect(rows.every((row) => !row.mappingMissing)).toBe(true);
+    // Resolved from the index, not by loading each item document.
+    expect(pack.getDocument).not.toHaveBeenCalled();
+    expect(pack.getIndex).toHaveBeenCalled();
+  });
+
+  it("flags every row when its pack is not installed", async () => {
+    installFoundryMocks(); // no packs registered
+    registerSlugMappingSettings();
+    await setMapping("equipment", "orphan", {
+      uuid: "Compendium.pf2e.equipment-srd.Item.hp1",
+      name: "Half Plate",
+    });
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [] as never;
+
+    const row = (await collectSections()).find((s) => s.kind === "equipment")?.rows[0];
+    expect(row?.mappingMissing).toBe(true);
+  });
+
   it("ignores actors that aren't linked to a Demiplane character", async () => {
     const unlinked = createMockActor({ name: "Homemade" });
     unlinked.getFlag = vi.fn((_module: string, key: string) =>
@@ -189,8 +235,8 @@ describe("isAcceptedType", () => {
 });
 
 describe("registerMappingSyncHook", () => {
-  /** refresh() drives reload() on the open instance; capture it. */
-  let reload: ReturnType<typeof vi.fn>;
+  /** refresh() re-renders the open instance; capture it. */
+  let render: ReturnType<typeof vi.fn>;
 
   function updateSettingCallback(): (setting: { key?: string }) => void {
     const hooks = globalThis as unknown as { Hooks: { on: ReturnType<typeof vi.fn> } };
@@ -200,21 +246,21 @@ describe("registerMappingSyncHook", () => {
 
   beforeEach(() => {
     installFoundryMocks();
-    reload = vi.fn();
+    render = vi.fn();
     const foundryGlobal = globalThis as unknown as {
       foundry: { applications: { instances: { get: ReturnType<typeof vi.fn> } } };
     };
-    foundryGlobal.foundry.applications.instances = { get: vi.fn().mockReturnValue({ reload }) };
+    foundryGlobal.foundry.applications.instances = { get: vi.fn().mockReturnValue({ render }) };
     registerMappingSyncHook();
   });
 
-  it("reloads the open editor when a mapping setting changes on another client", () => {
+  it("re-renders the open editor when a mapping setting changes on another client", () => {
     updateSettingCallback()({ key: "demiplane-pf2e.slugMappingsFeat" });
-    expect(reload).toHaveBeenCalled();
+    expect(render).toHaveBeenCalledWith({ force: true });
   });
 
   it("ignores unrelated setting changes", () => {
     updateSettingCallback()({ key: "demiplane-pf2e.demiplaneToken" });
-    expect(reload).not.toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
   });
 });
