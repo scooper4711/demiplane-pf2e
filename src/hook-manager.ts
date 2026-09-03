@@ -2,7 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import { isSyncActive } from "./sync-pause.js";
-import { characterSystem, itemSystem, pf2eLanguages } from "./pf2e-types.js";
+import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -171,17 +171,6 @@ export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor
   queueOrganizedPlayId(exportManager, actor);
   queueDeityName(exportManager, actor);
   queueAdditionalLanguages(exportManager, actor);
-  queueCampaignNotes(exportManager, actor);
-}
-
-/**
- * Exports Campaign Notes as a Demiplane journal entry (not an engine override),
- * matching the `updateActor` hook. Fire-and-forget: it runs its own API call
- * independent of the engine push.
- */
-function queueCampaignNotes(exportManager: ExportManager, actor: Actor): void {
-  const notes = characterSystem(actor).details.biography?.campaignNotes;
-  if (typeof notes === "string") void exportManager.exportCampaignNotes(actor, notes);
 }
 
 /** Queues each ACTOR_FIELD_MAPPINGS field from the actor's current value. */
@@ -235,8 +224,9 @@ function queueDeityName(exportManager: ExportManager, actor: Actor): void {
 export function queueAdditionalLanguages(exportManager: ExportManager, actor: Actor): void {
   const all = characterSystem(actor).details.languages?.value ?? [];
   const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
-  const labels = pf2eLanguages();
-  const additional = all.filter((slug) => !granted.has(slug)).map((slug) => labels[slug] ?? titleCaseSlug(slug));
+  const additional = all
+    .filter((slug) => !granted.has(slug))
+    .map((slug) => localizeLanguage(slug) ?? titleCaseSlug(slug));
   exportManager.queueChange(actor, LANGUAGES_STORE_NAME, additional.join(LANGUAGE_SEPARATOR));
 }
 

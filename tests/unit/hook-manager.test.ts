@@ -14,6 +14,18 @@ vi.stubGlobal("Hooks", {
   off: vi.fn(),
 });
 
+// Mirrors PF2e: CONFIG.PF2E.languages maps a slug to an i18n *key*, which
+// game.i18n.localize resolves to the display name.
+const LANGUAGE_LABELS: Record<string, string> = {
+  common: "Common",
+  draconic: "Draconic",
+  dwarven: "Dwarven",
+  halfling: "Halfling",
+  undercommon: "Undercommon",
+  sakvroth: "Sakvroth",
+  varisian: "Varisian",
+};
+
 vi.stubGlobal("game", {
   settings: {
     get: (_moduleId: string, key: string) => {
@@ -22,19 +34,19 @@ vi.stubGlobal("game", {
       return undefined;
     },
   },
+  i18n: {
+    localize: (key: string) => {
+      const slug = key.replace("PF2E.Actor.Creature.Language.", "");
+      return LANGUAGE_LABELS[slug] ?? key;
+    },
+  },
 });
 
 vi.stubGlobal("CONFIG", {
   PF2E: {
-    languages: {
-      common: "Common",
-      draconic: "Draconic",
-      dwarven: "Dwarven",
-      halfling: "Halfling",
-      undercommon: "Undercommon",
-      sakvroth: "Sakvroth",
-      varisian: "Varisian",
-    },
+    languages: Object.fromEntries(
+      Object.keys(LANGUAGE_LABELS).map((slug) => [slug, `PF2E.Actor.Creature.Language.${slug}`])
+    ),
   },
 });
 
@@ -903,7 +915,7 @@ describe("HookManager", () => {
       };
     }
 
-    it("queues mapped detail fields, org play ID, deity, languages, and campaign notes", () => {
+    it("queues mapped detail fields, org play ID, deity, and languages", () => {
       const actor = createDetailActor();
 
       queueAllDetailChanges(exportManager as never, actor as never);
@@ -911,7 +923,14 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_appearance", "Weathered");
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_organizedplayid", "123456-2001");
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character-languages-user", "Draconic");
-      expect(exportManager.exportCampaignNotes).toHaveBeenCalledWith(actor, "Session 1 notes");
+    });
+
+    it("does not export campaign notes (a separate journal push, not an engine change)", () => {
+      const actor = createDetailActor();
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.exportCampaignNotes).not.toHaveBeenCalled();
     });
 
     it("prefers the embedded deity item name over the deity text field", () => {

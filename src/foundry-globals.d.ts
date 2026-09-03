@@ -62,6 +62,10 @@ declare global {
     modules: {
       get(id: string): { active?: boolean; api?: unknown } | undefined;
     };
+    i18n: {
+      /** Returns the localized string for a key, or the key itself if unknown. */
+      localize(key: string): string;
+    };
     user: User | undefined;
     users:
       | {
