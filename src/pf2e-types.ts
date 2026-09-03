@@ -254,6 +254,17 @@ export function pf2eLanguages(): Record<string, string> {
   return fromGame ?? CONFIG.PF2E?.languages ?? {};
 }
 
+/**
+ * The human-readable display name for a language slug, or undefined if the slug
+ * is not a known PF2e language. `pf2eLanguages()` maps a slug to an i18n *key*
+ * (e.g. `PF2E.Actor.Creature.Language.draconic`), so the key is localized here
+ * to the label Foundry shows on the sheet (e.g. "Draconic").
+ */
+export function localizeLanguage(slug: string): string | undefined {
+  const key = pf2eLanguages()[slug];
+  return key ? game.i18n.localize(key) : undefined;
+}
+
 /** A builtin PF2e rule-element class (e.g. `ChoiceSet`) by name, or `undefined`. */
 export function builtinRuleElement(name: string): { prototype: Record<string, unknown> } | undefined {
   const builtin = game.pf2e?.RuleElements?.builtin?.[name];

@@ -5,7 +5,9 @@ import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { deleteImportedItems } from "./import/reconcile.js";
 import { ExportManager } from "./export-manager.js";
+import type { ExportResult } from "./export-manager.js";
 import { HookManager, queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
+import { characterSystem } from "./pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
@@ -269,8 +271,27 @@ async function importLinkedCharacter(
 }
 
 async function exportLinkedCharacter(actor: Actor) {
-  // Pause other clients' pushes for the duration of our push so we don't race a
-  // concurrent import/push into an optimistic-concurrency conflict.
+  const result = await pushCharacterEngines(actor);
+
+  // Campaign Notes is a Demiplane *journal* entry, not an engine value, so it is
+  // written through its own push (`exportCampaignNotes`), which opens its own
+  // sync pause. Run it *after* the engine push has released the pause — nesting
+  // the two pauses on one client would orphan the outer sync token and wedge the
+  // debounce timer in a defer/re-arm loop.
+  if (result.success) {
+    const notes = characterSystem(actor).details.biography?.campaignNotes;
+    if (typeof notes === "string") await exportManager.exportCampaignNotes(actor, notes);
+  }
+
+  return result;
+}
+
+/**
+ * Pushes every engine-backed field (combat resources, items, and character
+ * details) in a single flush, wrapped in the cross-client sync pause so it
+ * cannot race a concurrent import/push into an optimistic-concurrency conflict.
+ */
+async function pushCharacterEngines(actor: Actor): Promise<ExportResult> {
   await beginSyncPause(actor);
   try {
     queueCombatResourceChanges(exportManager, actor);
