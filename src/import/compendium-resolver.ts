@@ -34,6 +34,7 @@ async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
 
   const name = (doc as { name?: string }).name ?? slug;
   await recordResolvedMapping("spell", slug, { uuid: `Compendium.${SPELLS_PACK}.Item.${match._id}`, name });
+  // eslint-disable-next-line no-restricted-syntax -- compendium document → the minimal SpellDocument shape this resolver returns
   return doc as unknown as SpellDocument;
 }
 

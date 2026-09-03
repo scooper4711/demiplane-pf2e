@@ -86,6 +86,7 @@ function getOpenSheetsFor(actor: Actor): ActorSheet[] {
   const sheets: ActorSheet[] = [];
   for (const window of Object.values(ui.windows)) {
     const app = window as { rendered?: boolean; object?: { id?: string } } | undefined;
+    // eslint-disable-next-line no-restricted-syntax -- narrowing an untyped ui.windows entry to the sheet shape this module uses
     if (app && app.rendered && app.object?.id === actor.id) sheets.push(window as unknown as ActorSheet);
   }
   return sheets;

@@ -547,6 +547,8 @@ What `@dfreds/foundry-types` deliberately does not provide is the PF2e _system_ 
 
 **Rule for new code:** touching `Actor#system` / `Item#system`, a PF2e-specific document field (`_source`, `sourceId`, `_stats`), a compendium index, or a PF2e runtime global goes through a seam accessor. If the accessor you need doesn't exist, add it to the relevant seam (usually `pf2e-types.ts`) rather than writing `as unknown as { … }` at the call site. That keeps every system-shape assertion in one file with its rationale, and keeps call sites reading as intent (`characterSystem(actor).skills`, `sourceRules(item)`, `toPlainData(doc)`).
 
+**Enforcement:** an ESLint `no-restricted-syntax` rule (in `eslint.config.mjs`) makes `as unknown as` and `as never` hard errors. The genuinely-isolated exceptions below carry a targeted `eslint-disable-next-line` with a one-line justification, so every remaining double-cast is an explicit, reviewed decision rather than an unnoticed one — and any new one fails CI until it is either routed through a seam or justified the same way.
+
 **What legitimately stays inline (not everything routes through a seam):**
 
 - **Genuinely untyped globals reached once**, each already wrapped in a single dedicated function: `libWrapper` (`src/libwrapper.ts` — a `globalThis` lookup for an optional module), and the module API assignment in `module.ts`. An `as unknown as` here is the correct tool: there is no published type for the surface, and it is touched in exactly one place.

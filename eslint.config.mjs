@@ -33,6 +33,22 @@ export default defineConfig(
       'max-lines-per-function': ['warn', { max: 50, skipBlankLines: true, skipComments: true }],
       '@typescript-eslint/no-explicit-any': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
+
+      // Unsafe casts must go through a documented seam (see DESIGN.md §23).
+      // Any genuinely-isolated exception needs an explicit eslint-disable with a reason.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TSAsExpression > TSNeverKeyword',
+          message:
+            'Avoid `as never`: route document operations through a seam (foundry-doc-ops / pf2e-types). If genuinely unavoidable, add an eslint-disable with justification.',
+        },
+        {
+          selector: 'TSAsExpression > TSAsExpression > TSUnknownKeyword',
+          message:
+            'Avoid `as unknown as`: route through a typed seam (pf2e-types / pack-index). If genuinely unavoidable (e.g. an untyped global), add an eslint-disable with justification.',
+        },
+      ],
     },
   },
 

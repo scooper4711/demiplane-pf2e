@@ -117,6 +117,7 @@ function registerModuleApi(): void {
   const module = game.modules.get(MODULE_ID);
   if (!module) return;
 
+  // eslint-disable-next-line no-restricted-syntax -- attaching a module API surface Foundry's Module type doesn't model; single site
   (module as unknown as { api: Record<string, unknown> }).api = {
     importCharacter: async (actor: Actor, options?: { token?: string }) => {
       const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
