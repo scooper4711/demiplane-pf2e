@@ -40,6 +40,10 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.biography.organizations": "character_campaign_organizations",
   "system.details.biography.edicts": "character_personality_edicts",
   "system.details.biography.anathema": "character_personality_anathema",
+  // Text-only fallback: catches manual edits to the deity text field when the
+  // deity is not a compendium item. The compendium-item case is handled by the
+  // deity item create/delete hooks.
+  "system.details.deity.value": DEITY_STORE_NAME,
 };
 
 const TREASURE_ITEM_MAP: Record<string, string> = {
@@ -272,6 +276,23 @@ export class HookManager {
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
+
+    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    this.queueDeityChange(item, actor);
+  }
+
+  /**
+   * Queues a deity change when a deity item is added to or removed from a linked
+   * actor. Demiplane stores the deity as a name string in the
+   * `character_personality_beliefs` engine, so adding a deity item queues its
+   * name and removing one clears the field.
+   */
+  private queueDeityChange(item: Item, actor: Actor): void {
+    if ((item as { type?: string })?.type !== "deity") return;
+    const deityName = item.name;
+    if (typeof deityName !== "string" || deityName.length === 0) return;
+    debugLog(`Deity set on linked actor: ${deityName}`);
+    this.exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
   }
 
   private getGrantedChoiceLog(item: Item): string {
@@ -299,6 +320,14 @@ export class HookManager {
     if (isSyncActive(actor)) return;
 
     const itemType = (item as { type?: string })?.type;
+
+    if (itemType === "deity") {
+      if (!game.settings.get(MODULE_ID, "autoSync")) return;
+      debugLog(`Deity removed from linked actor: ${item.name}`);
+      this.exportManager.queueChange(actor, DEITY_STORE_NAME, "");
+      return;
+    }
+
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
       debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
       return;
