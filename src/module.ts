@@ -5,7 +5,7 @@ import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { deleteImportedItems } from "./import/reconcile.js";
 import { ExportManager } from "./export-manager.js";
-import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
+import { HookManager, queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
@@ -275,6 +275,7 @@ async function exportLinkedCharacter(actor: Actor) {
   try {
     queueCombatResourceChanges(exportManager, actor);
     queueAllItemChanges(exportManager, actor);
+    queueAllDetailChanges(exportManager, actor);
     const result = await exportManager.flush(actor);
     if (result.success) {
       ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);

@@ -160,6 +160,105 @@ function queueEquipped(
 }
 
 /**
+ * Queues every syncable character-detail field from a linked actor's current
+ * state: biography/appearance/personality/campaign fields, deity, languages,
+ * and organized play ID. This is the manual-push counterpart to the per-field
+ * `updateActor` hook — the hook reacts to individual edits, while this re-syncs
+ * the full detail state on demand (e.g. the "Update to Demiplane" button).
+ */
+export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor): void {
+  queueMappedDetailFields(exportManager, actor);
+  queueOrganizedPlayId(exportManager, actor);
+  queueDeityName(exportManager, actor);
+  queueAdditionalLanguages(exportManager, actor);
+  queueCampaignNotes(exportManager, actor);
+}
+
+/**
+ * Exports Campaign Notes as a Demiplane journal entry (not an engine override),
+ * matching the `updateActor` hook. Fire-and-forget: it runs its own API call
+ * independent of the engine push.
+ */
+function queueCampaignNotes(exportManager: ExportManager, actor: Actor): void {
+  const notes = characterSystem(actor).details.biography?.campaignNotes;
+  if (typeof notes === "string") void exportManager.exportCampaignNotes(actor, notes);
+}
+
+/** Queues each ACTOR_FIELD_MAPPINGS field from the actor's current value. */
+function queueMappedDetailFields(exportManager: ExportManager, actor: Actor): void {
+  for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
+    // The deity text field is handled by queueDeityName (which prefers the
+    // deity item), so skip it here to avoid clobbering a good value with "".
+    if (storeName === DEITY_STORE_NAME) continue;
+
+    const value = readActorPath(actor, actorPath);
+    if (value === undefined || value === null) continue;
+
+    if (Array.isArray(value)) {
+      exportManager.queueChange(actor, storeName, value.join("; "));
+    } else if (typeof value === "number" || typeof value === "string") {
+      exportManager.queueChange(actor, storeName, value);
+    }
+  }
+}
+
+/** Queues the combined organized play ID when both PFS numbers are present. */
+function queueOrganizedPlayId(exportManager: ExportManager, actor: Actor): void {
+  const pfs = characterSystem(actor).pfs;
+  if (typeof pfs?.playerNumber === "number" && typeof pfs?.characterNumber === "number") {
+    exportManager.queueChange(actor, "character_organizedplayid", `${pfs.playerNumber}-${pfs.characterNumber}`);
+  }
+}
+
+/**
+ * Queues the character's deity. Prefers the embedded deity item's name (the
+ * usual compendium case); falls back to the free-text `details.deity.value`.
+ */
+function queueDeityName(exportManager: ExportManager, actor: Actor): void {
+  // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
+  const items = Array.from(actor.items) as unknown as Item[];
+  const deityItem = items.find((item) => (item as { type?: string })?.type === "deity");
+  const deityName = deityItem?.name ?? characterSystem(actor).details.deity?.value;
+  if (typeof deityName === "string" && deityName.length > 0) {
+    exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
+  }
+}
+
+/**
+ * Queues the character's additional (user-added) languages as Demiplane display
+ * names: the actor's full language list minus the ancestry/heritage/feat grants.
+ *
+ * Foundry's `system.details.languages.value` merges granted and chosen languages,
+ * but Demiplane only stores the user-added ones, so the granted set — read from
+ * the derived `build.languages.granted` — is subtracted before pushing.
+ */
+export function queueAdditionalLanguages(exportManager: ExportManager, actor: Actor): void {
+  const all = characterSystem(actor).details.languages?.value ?? [];
+  const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
+  const labels = pf2eLanguages();
+  const additional = all.filter((slug) => !granted.has(slug)).map((slug) => labels[slug] ?? titleCaseSlug(slug));
+  exportManager.queueChange(actor, LANGUAGES_STORE_NAME, additional.join(LANGUAGE_SEPARATOR));
+}
+
+/** Falls back to a readable name for a language slug the PF2e config doesn't know. */
+function titleCaseSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+/** Reads a dotted `system.…` path off the live actor, returning undefined if absent. */
+function readActorPath(actor: Actor, path: string): unknown {
+  let current: unknown = actor;
+  for (const part of path.split(".")) {
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+/**
  * Manages Foundry hooks for detecting session state changes on linked actors
  * and queueing them for export to Demiplane.
  *
@@ -223,29 +322,7 @@ export class HookManager {
    */
   private queueLanguagesChange(actor: Actor, changes: Record<string, unknown>): void {
     if (this.getChangeValue(changes, LANGUAGES_PATH) === undefined) return;
-
-    const additional = this.additionalLanguageNames(actor);
-    this.exportManager.queueChange(actor, LANGUAGES_STORE_NAME, additional.join(LANGUAGE_SEPARATOR));
-  }
-
-  /**
-   * The user-added languages as Demiplane display names: the actor's full
-   * language list minus the ancestry/heritage/feat grants.
-   */
-  private additionalLanguageNames(actor: Actor): string[] {
-    const languages = characterSystem(actor).details.languages;
-    const all = languages?.value ?? [];
-    const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
-    const labels = pf2eLanguages();
-    return all.filter((slug) => !granted.has(slug)).map((slug) => labels[slug] ?? this.titleCase(slug));
-  }
-
-  /** Falls back to a readable name for a language slug the PF2e config doesn't know. */
-  private titleCase(slug: string): string {
-    return slug
-      .split("-")
-      .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
-      .join(" ");
+    queueAdditionalLanguages(this.exportManager, actor);
   }
 
   private queueOrganizedPlayChange(actor: Actor, changes: Record<string, unknown>): void {
