@@ -12,6 +12,16 @@ import { ConflictResolver } from "./export/conflict-resolver.js";
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
+/**
+ * The master write switch. When "Auto-sync on Actor Update" is off, the module
+ * must never write to Demiplane through any path — automatic hooks or the manual
+ * push button alike. Every Demiplane write funnels through `flush` or
+ * `exportCampaignNotes`, so both consult this.
+ */
+function isWritingEnabled(): boolean {
+  return game.settings.get(MODULE_ID, "autoSync") === true;
+}
+
 export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
 export type { FetchedCharacter } from "./export/push-payload-builder.js";
 
@@ -120,6 +130,13 @@ export class ExportManager {
    * already mid-sync, we skip rather than pile on.
    */
   async exportCampaignNotes(actor: Actor, notes: string): Promise<void> {
+    // Master write switch — see flush(). Campaign Notes is a separate journal
+    // write, so it needs the same guard.
+    if (!isWritingEnabled()) {
+      debugLog(`[push] auto-sync is off — Campaign notes not pushed to Demiplane.`);
+      return;
+    }
+
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
     if (!this.client.isAuthenticated()) return;
@@ -156,6 +173,14 @@ export class ExportManager {
   }
 
   async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
+    // Auto-sync is the master write switch: when it is off, no path — neither the
+    // debounced hooks nor the manual "Update to Demiplane" button — may write to
+    // Demiplane. Guarding here (and in exportCampaignNotes) covers every writer.
+    if (!isWritingEnabled()) {
+      debugLog(`[push] auto-sync is off — nothing pushed to Demiplane.`);
+      return { success: true };
+    }
+
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) {
       return { success: false, error: "Actor has no linked character ID" };
@@ -176,7 +201,7 @@ export class ExportManager {
     const conflict = await this.checkForConflict(actor, characterId);
     if (conflict) return conflict;
 
-    const fetched = await this.buildPushPayload(characterId, actor);
+    const fetched = await this.buildPushPayload(characterId);
     if (!fetched) {
       const error = "Failed to fetch character data";
       addExportIssue(actor, error);
@@ -261,7 +286,7 @@ export class ExportManager {
    * Keeps the session alive and assembles the Demiplane payload for the buffered
    * changes. Returns null if the character data could not be fetched.
    */
-  private async buildPushPayload(characterId: string, actor: Actor): Promise<FetchedCharacter | null> {
+  private async buildPushPayload(characterId: string): Promise<FetchedCharacter | null> {
     try {
       await this.client.updateLastAccess();
       debugLog(`[push] updateLastAccess succeeded`);
@@ -269,12 +294,7 @@ export class ExportManager {
       debugLog(`[push] updateLastAccess failed: ${String(error)}`);
     }
     const { changes, itemChanges } = this.changeBuffer.peek(characterId);
-    return this.payloadBuilder.buildUpdatedCharacterData(
-      characterId,
-      actor,
-      changes ?? new Map(),
-      itemChanges ?? new Map()
-    );
+    return this.payloadBuilder.buildUpdatedCharacterData(characterId, changes ?? new Map(), itemChanges ?? new Map());
   }
 
   getPendingChanges(characterId: string): PendingChange[] {

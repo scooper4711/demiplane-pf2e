@@ -7,6 +7,7 @@ describe("demiplane-info-button", () => {
   let wait: ReturnType<typeof vi.fn>;
   let importFn: ReturnType<typeof vi.fn>;
   let exportFn: ReturnType<typeof vi.fn>;
+  let autoSyncEnabled: boolean;
   let actor: {
     id: string;
     name: string;
@@ -42,9 +43,16 @@ describe("demiplane-info-button", () => {
         { id: "i2", name: "Manual Cloak", type: "equipment", flags: {} },
       ],
     };
+    autoSyncEnabled = true;
     (globalThis as unknown as { game: unknown }).game = {
       user: { isGM: false },
-      settings: { get: vi.fn((_m: string, k: string) => (k === "demiplaneToken" ? "tok" : undefined)) },
+      settings: {
+        get: vi.fn((_m: string, k: string) => {
+          if (k === "demiplaneToken") return "tok";
+          if (k === "autoSync") return autoSyncEnabled;
+          return undefined;
+        }),
+      },
     };
     (globalThis as unknown as { foundry: { applications: { api: { DialogV2: { wait: unknown } } } } }).foundry = {
       applications: { api: { DialogV2: { wait } } },
@@ -58,6 +66,11 @@ describe("demiplane-info-button", () => {
     const opts = wait.mock.calls[0][0] as { buttons: Array<{ action: string; callback: () => unknown }> };
     const btn = opts.buttons.find((b) => b.action === action);
     return Promise.resolve(btn?.callback());
+  }
+
+  function pushButton(): { disabled?: boolean; tooltip?: string } | undefined {
+    const opts = wait.mock.calls[0][0] as { buttons: Array<{ action: string; disabled?: boolean; tooltip?: string }> };
+    return opts.buttons.find((b) => b.action === "push");
   }
 
   it("builds a dialog listing issues and manual items", async () => {
@@ -117,6 +130,21 @@ describe("demiplane-info-button", () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     await clickAction("push");
     expect(exportFn).toHaveBeenCalledWith(actor);
+  });
+
+  it("enables the push button when auto-sync is on", async () => {
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const push = pushButton();
+    expect(push?.disabled).toBe(false);
+    expect(push?.tooltip).toBe("");
+  });
+
+  it("disables the push button with an explanatory tooltip when auto-sync is off", async () => {
+    autoSyncEnabled = false;
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const push = pushButton();
+    expect(push?.disabled).toBe(true);
+    expect(push?.tooltip).toContain("Auto-sync");
   });
 
   it("updates from Demiplane when the update button is clicked", async () => {

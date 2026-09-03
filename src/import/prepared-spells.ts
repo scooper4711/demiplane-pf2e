@@ -24,7 +24,7 @@ export async function placePreparedSpells(
 
   const entry = actor.items.get(entryId);
   if (entry) {
-    await entry.update({ system: { slots: slotsUpdate } } as never);
+    await entry.update({ system: { slots: slotsUpdate } });
     summary.log.push(`+ prepared: ${String(preparedEngines.length)} spells placed in slots`);
   }
 }
@@ -98,7 +98,7 @@ export async function markSignatureSpells(
   const updates = buildSignatureUpdates(signatureSlugs, slugToId);
   if (updates.length === 0) return;
 
-  await actor.updateEmbeddedDocuments("Item", updates as never);
+  await actor.updateEmbeddedDocuments("Item", updates);
   summary.log.push(`+ signature: ${String(updates.length)} spells marked as signature`);
   debugLog(`[signature] Marked ${String(updates.length)} signature spells`);
 }

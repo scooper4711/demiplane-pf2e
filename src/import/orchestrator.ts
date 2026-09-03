@@ -46,8 +46,6 @@ const CAMPAIGN_JOURNAL_TITLE = "Campaign";
  */
 const CAMPAIGN_NOTES_PATH = "system.details.biography.campaignNotes";
 
-export { collectLoreNames } from "./phases.js";
-
 export class ImportOrchestrator {
   private readonly choiceSetHandler = new ChoiceSetHandler();
   private readonly client: DemiplaneClient | undefined;
@@ -95,12 +93,16 @@ export class ImportOrchestrator {
       grantResolvedSlugs: new Set(),
     };
 
+    // `updateSource` stamps the flag before persistence without triggering a
+    // second round of hooks. It exists at runtime but is not in the published
+    // types, hence the narrow cast (not a blanket `as never`).
     const importHookId = Hooks.on("preCreateItem", ((item: Item) => {
       if (item.parent?.id !== actor.id) return;
-      (item as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
+      // eslint-disable-next-line no-restricted-syntax -- `updateSource` exists at runtime but is not in the published Item type
+      (item as unknown as { updateSource: (data: Record<string, unknown>) => void }).updateSource({
         [`flags.${MODULE_ID}.imported`]: true,
       });
-    }) as never);
+    }) as (...args: unknown[]) => void);
 
     try {
       this.choiceSetHandler.enable();

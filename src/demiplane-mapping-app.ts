@@ -82,8 +82,11 @@ export function isAcceptedType(kind: SlugKind, itemType: string): boolean {
  * The app class is built on first use rather than at import time: extending a
  * Foundry global requires that global to exist, and this module is imported
  * during setup when it may not yet be available.
+ *
+ * Typed as an ApplicationV2 constructor so it plugs directly into
+ * `game.settings.registerMenu` without casts.
  */
-type DemiplaneMappingAppConstructor = new () => { render: (options?: { force?: boolean }) => Promise<unknown> };
+type DemiplaneMappingAppConstructor = ConstructorOf<foundry.applications.api.ApplicationV2>;
 
 let AppClass: DemiplaneMappingAppConstructor | undefined;
 
@@ -210,6 +213,7 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
     }
   }
 
+  // eslint-disable-next-line no-restricted-syntax -- coercing the ApplicationV2 subclass to its settings-menu constructor shape; single site
   AppClass = DemiplaneMappingApp as unknown as DemiplaneMappingAppConstructor;
   return AppClass;
 }
@@ -291,11 +295,6 @@ interface MappedRowTarget {
   uuid: string;
 }
 
-interface IndexEntry {
-  _id: string;
-  img?: string;
-}
-
 /**
  * Resolves every mapped row's icon and existence in one batched pass. Mappings
  * point at compendium items, so instead of loading each item in full via
@@ -330,7 +329,11 @@ function parseCompendiumUuid(uuid: string): { packKey: string; id: string } | nu
   const parts = uuid.split(".");
   // Compendium.<scope>.<pack>.<DocType>.<id>
   if (parts.length < 5 || parts[0] !== "Compendium") return null;
-  return { packKey: `${parts[1]}.${parts[2]}`, id: parts[4] };
+  const scope = parts[1];
+  const pack = parts[2];
+  const id = parts[4];
+  if (!scope || !pack || !id) return null;
+  return { packKey: `${scope}.${pack}`, id };
 }
 
 /** Resolves a whole pack's worth of rows from that pack's index in one read. */
@@ -341,8 +344,10 @@ async function applyPackTargets(packKey: string, group: MappedRowTarget[]): Prom
     return;
   }
 
-  const index = (await pack.getIndex({ fields: ["img"] })) as unknown as IndexEntry[];
-  const byId = new Map(index.map((entry) => [entry._id, entry]));
+  // `getIndex` returns a Collection of index entries; `img` is requested
+  // explicitly above so every entry carries it.
+  const index = await pack.getIndex({ fields: ["img"] });
+  const byId = new Map(index.map((entry) => [entry._id, entry] as const));
 
   for (const { row, uuid } of group) {
     const id = parseCompendiumUuid(uuid)!.id;
@@ -355,8 +360,12 @@ async function applyPackTargets(packKey: string, group: MappedRowTarget[]): Prom
 /** Fallback for a non-compendium UUID: one direct document load. */
 async function applyTargetViaDocument(target: MappedRowTarget): Promise<void> {
   const doc = await fromUuid(target.uuid);
-  if (doc) applyTargetIcon(target.row, (doc as { img?: string }).img);
-  else markTargetMissing(target.row);
+  if (!doc) {
+    markTargetMissing(target.row);
+    return;
+  }
+  const img = "img" in doc && typeof doc.img === "string" ? doc.img : undefined;
+  applyTargetIcon(target.row, img);
 }
 
 function applyTargetIcon(row: SlugRow, img: string | undefined): void {
@@ -379,6 +388,7 @@ async function openFinder(kind: SlugKind): Promise<void> {
   const tabName = KIND_TABS[kind];
   if (tabName) {
     // game.pf2e is only assigned on ready, and only exists with the PF2e system.
+    // eslint-disable-next-line no-restricted-syntax -- PF2e Compendium Browser has a rich, UI-specific shape used only here
     const browser = (game as unknown as { pf2e?: { compendiumBrowser?: BrowserLike } }).pf2e?.compendiumBrowser;
     const tab = browser?.tabs?.[tabName];
     if (!tab) {
@@ -492,9 +502,9 @@ const MAPPING_SETTING_PREFIX = `${MODULE_ID}.slugMappings`;
  * show stale data until reopened.
  */
 export function registerMappingSyncHook(): void {
-  Hooks.on("updateSetting", (setting: { key?: string }) => {
+  Hooks.on("updateSetting", ((setting: { key?: string }) => {
     if (setting.key?.startsWith(MAPPING_SETTING_PREFIX)) refresh();
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 export function registerDemiplaneMappingTemplates(): void {

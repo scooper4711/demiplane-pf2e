@@ -13,25 +13,25 @@ export const SYNC_ISSUES_CLASS = "has-sync-errors";
  * available — see `shouldShowIndicator`).
  */
 export function registerTitlebarDot(): void {
-  Hooks.on("renderActorSheet", (sheet: ActorSheet) => {
+  Hooks.on("renderActorSheet", ((sheet: ActorSheet) => {
     const actor = sheet.actor;
     if (!actor) return;
     if (!actor.getFlag(MODULE_ID, "characterId")) return;
 
     applyToSheet(sheet, actor);
-  });
+  }) as (...args: unknown[]) => void);
 
-  Hooks.on(ISSUES_CHANGED_EVENT, (actor: Actor) => {
+  Hooks.on(ISSUES_CHANGED_EVENT, ((actor: Actor) => {
     for (const sheet of getOpenSheetsFor(actor)) applyToSheet(sheet, actor);
-  });
+  }) as (...args: unknown[]) => void);
 
   // `updateActor` fires once a flag write has landed, so `shouldShowIndicator`
   // reads the settled value — the authoritative refresh, mirroring the sidebar
   // badge. (The issues-changed event above is a synchronous best-effort path.)
-  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+  Hooks.on("updateActor", ((actor: Actor, changes: Record<string, unknown>) => {
     if (!moduleFlagsChanged(changes)) return;
     for (const sheet of getOpenSheetsFor(actor)) applyToSheet(sheet, actor);
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 function applyToSheet(sheet: ActorSheet, actor: Actor): void {
@@ -45,9 +45,40 @@ function moduleFlagsChanged(changes: Record<string, unknown>): boolean {
   return flags != null && MODULE_ID in flags;
 }
 
-function findDemiplaneButton(sheet: ActorSheet): HTMLElement | undefined {
-  const element = (sheet.element as JQuery<HTMLElement>)[0];
-  return element?.querySelector(".demiplane-info-btn") as HTMLElement | undefined;
+function findDemiplaneButton(sheet: ActorSheet): SyncToggleButton | undefined {
+  const element = sheet.element as Queryable | undefined;
+  // ApplicationV2 exposes the root element directly; ApplicationV1 (JQuery)
+  // wraps it at index 0. Probed structurally (no DOM globals) so this also
+  // runs outside the browser, e.g. in unit tests.
+  const root = element && typeof element.querySelector === "function" ? element : element?.[0];
+  if (!isQueryable(root)) return undefined;
+  const found = root.querySelector(".demiplane-info-btn");
+  return isToggleButton(found) ? found : undefined;
+}
+
+/** Anything with a `querySelector` (HTMLElement) or array-like wrapper (JQuery). */
+interface Queryable {
+  querySelector?: (selector: string) => unknown;
+  [0]?: unknown;
+}
+
+function isQueryable(value: unknown): value is { querySelector: (selector: string) => unknown } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { querySelector?: unknown }).querySelector === "function"
+  );
+}
+
+/** Minimal button surface this module toggles. */
+interface SyncToggleButton {
+  classList: { toggle: (name: string, force?: boolean) => void };
+}
+
+function isToggleButton(value: unknown): value is SyncToggleButton {
+  return (
+    typeof value === "object" && value !== null && typeof (value as { classList?: unknown }).classList === "object"
+  );
 }
 
 function getOpenSheetsFor(actor: Actor): ActorSheet[] {
@@ -55,6 +86,7 @@ function getOpenSheetsFor(actor: Actor): ActorSheet[] {
   const sheets: ActorSheet[] = [];
   for (const window of Object.values(ui.windows)) {
     const app = window as { rendered?: boolean; object?: { id?: string } } | undefined;
+    // eslint-disable-next-line no-restricted-syntax -- narrowing an untyped ui.windows entry to the sheet shape this module uses
     if (app && app.rendered && app.object?.id === actor.id) sheets.push(window as unknown as ActorSheet);
   }
   return sheets;

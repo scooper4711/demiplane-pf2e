@@ -1,4 +1,6 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
+import { characterSystem, pf2eLanguages } from "../pf2e-types.js";
+import { PROFICIENCY_TRAINED, PROFICIENCY_EXPERT } from "./pf2e-ranks.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
 export const VALID_ATTRIBUTES: readonly string[] = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -51,7 +53,7 @@ export async function applySkillProficiencies(
   const activeOverrides = computeActiveOverrides(overriddenFlags, profOverrides);
   const ranks = computeSkillRanks(skillEngines, activeOverrides);
 
-  const currentSkills = (actor.system as { skills: Record<string, { rank: number }> }).skills;
+  const currentSkills = characterSystem(actor).skills;
 
   const updates = buildSkillUpdates(currentSkills, ranks);
   if (Object.keys(updates).length > 0) {
@@ -111,7 +113,7 @@ function computeSkillRanks(
     if (slug in activeOverrides) continue;
 
     const isIncrease = sourceRow.includes("skill-increase");
-    const rank = isIncrease ? 2 : 1;
+    const rank = isIncrease ? PROFICIENCY_EXPERT : PROFICIENCY_TRAINED;
     ranks[slug] = Math.max(ranks[slug] || 0, rank);
   }
   return ranks;
@@ -173,12 +175,7 @@ export async function applyLanguages(
     .map((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
     .filter(Boolean);
 
-  const validLanguages = Object.keys(
-    (game as unknown as { pf2e: { system: { config: { PF2E: { languages: Record<string, string> } } } } }).pf2e?.system
-      ?.config?.PF2E?.languages ??
-      (CONFIG as unknown as { PF2E: { languages: Record<string, string> } }).PF2E?.languages ??
-      {}
-  );
+  const validLanguages = Object.keys(pf2eLanguages());
 
   const matched: string[] = [];
   const unmatched: string[] = [];
@@ -192,7 +189,7 @@ export async function applyLanguages(
   }
 
   if (matched.length > 0) {
-    const currentLangs = (actor.system as { details: { languages: { value: string[] } } }).details.languages.value;
+    const currentLangs = characterSystem(actor).details.languages.value;
     const newLangs = [...new Set([...currentLangs, ...matched])];
     const langUpdate: Record<string, unknown> = { "system.details.languages.value": newLangs };
     await actor.update(langUpdate);

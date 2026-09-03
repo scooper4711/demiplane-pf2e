@@ -6,6 +6,7 @@ import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
 import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
+import { builtinRuleElement } from "../pf2e-types.js";
 
 /** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
 const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";
@@ -203,15 +204,7 @@ export class ChoiceSetHandler {
   }
 
   private getChoiceSetPrototype(): { prototype: Record<string, unknown> } {
-    const builtin = (
-      game as unknown as {
-        pf2e: {
-          RuleElements: {
-            builtin: Record<string, { prototype: Record<string, unknown> } | undefined>;
-          };
-        };
-      }
-    ).pf2e.RuleElements.builtin.ChoiceSet;
+    const builtin = builtinRuleElement("ChoiceSet");
     if (!builtin) throw new Error("ChoiceSet RuleElement not found in game.pf2e.RuleElements.builtin");
     return builtin;
   }

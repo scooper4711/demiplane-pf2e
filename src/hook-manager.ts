@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import { isSyncActive } from "./sync-pause.js";
+import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -10,6 +11,29 @@ import { isSyncActive } from "./sync-pause.js";
  * to the `updateActor` hook. Values are the Demiplane Custom_Engine store
  * names used by ExportManager.queueChange.
  */
+/**
+ * Demiplane store name for the character's deity. In PF2e a deity is normally
+ * an embedded Item of type "deity"; the free-text `system.details.deity.value`
+ * is only the fallback used when the deity is not found in the compendium.
+ * Mirrors the import side (biography-importer.applyDeity).
+ */
+const DEITY_STORE_NAME = "character_personality_beliefs";
+
+/**
+ * Demiplane store name for the character's additional (user-added) languages.
+ * Demiplane persists only the languages the user typed in; ancestry/heritage
+ * grants are recomputed on its side and are not writable. So on export we push
+ * the character's full language list minus the ancestry/heritage/feat grants,
+ * mirroring how the import merges this field on top of the granted ones.
+ */
+const LANGUAGES_STORE_NAME = "character-languages-user";
+
+/** Separator Demiplane uses between languages in the free-text field. */
+const LANGUAGE_SEPARATOR = ", ";
+
+/** The Foundry actor path holding the character's full (merged) language list. */
+const LANGUAGES_PATH = "system.details.languages.value";
+
 const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
   "system.attributes.hp.temp": "character_hit-points_temp",
@@ -31,6 +55,10 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.biography.organizations": "character_campaign_organizations",
   "system.details.biography.edicts": "character_personality_edicts",
   "system.details.biography.anathema": "character_personality_anathema",
+  // Text-only fallback: catches manual edits to the deity text field when the
+  // deity is not a compendium item. The compendium-item case is handled by the
+  // deity item create/delete hooks.
+  "system.details.deity.value": DEITY_STORE_NAME,
 };
 
 const TREASURE_ITEM_MAP: Record<string, string> = {
@@ -63,14 +91,15 @@ const INVENTORY_ITEM_TYPES = new Set([
  * so they can be flushed immediately (manual push / exportNow).
  */
 export function queueCombatResourceChanges(exportManager: ExportManager, actor: Actor): void {
-  const hitPoints = actor.system.attributes?.hp;
+  // Callers only pass linked character actors (see exportLinkedCharacter).
+  const hitPoints = characterSystem(actor).attributes?.hp;
   if (typeof hitPoints?.value === "number") {
     exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
   }
   if (typeof hitPoints?.temp === "number") {
     exportManager.queueChange(actor, "character_hit-points_temp", hitPoints.temp);
   }
-  const heroPoints = actor.system.resources?.heroPoints?.value;
+  const heroPoints = characterSystem(actor).resources?.heroPoints?.value;
   if (typeof heroPoints === "number") {
     exportManager.queueChange(actor, "character_hero-points", heroPoints);
   }
@@ -82,12 +111,13 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
  * slots) rather than only combat resources.
  */
 export function queueAllItemChanges(exportManager: ExportManager, actor: Actor): void {
-  for (const item of actor.items) {
-    const system = item.system as {
-      slug?: string;
-      equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
-      quantity?: number;
-    };
+  // `actor.items` is typed as the common base collection, but at runtime (and
+  // in the PF2e system) every entry is a client Item. Narrow once here so the
+  // PF2e field reads below type-check.
+  // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
+  const items = Array.from(actor.items) as unknown as Item[];
+  for (const item of items) {
+    const system = itemSystem(item);
     const slug = system?.slug;
     if (typeof slug !== "string") continue;
 
@@ -129,11 +159,93 @@ function queueEquipped(
   );
 }
 
-type ActorSyncHook = "updateActor" | "updateItem" | "createItem" | "deleteItem";
+/**
+ * Queues every syncable character-detail field from a linked actor's current
+ * state: biography/appearance/personality/campaign fields, deity, languages,
+ * and organized play ID. This is the manual-push counterpart to the per-field
+ * `updateActor` hook — the hook reacts to individual edits, while this re-syncs
+ * the full detail state on demand (e.g. the "Update to Demiplane" button).
+ */
+export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor): void {
+  queueMappedDetailFields(exportManager, actor);
+  queueOrganizedPlayId(exportManager, actor);
+  queueDeityName(exportManager, actor);
+  queueAdditionalLanguages(exportManager, actor);
+}
 
-interface RegisteredHook {
-  event: ActorSyncHook;
-  id: number;
+/** Queues each ACTOR_FIELD_MAPPINGS field from the actor's current value. */
+function queueMappedDetailFields(exportManager: ExportManager, actor: Actor): void {
+  for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
+    // The deity text field is handled by queueDeityName (which prefers the
+    // deity item), so skip it here to avoid clobbering a good value with "".
+    if (storeName === DEITY_STORE_NAME) continue;
+
+    const value = readActorPath(actor, actorPath);
+    if (value === undefined || value === null) continue;
+
+    if (Array.isArray(value)) {
+      exportManager.queueChange(actor, storeName, value.join("; "));
+    } else if (typeof value === "number" || typeof value === "string") {
+      exportManager.queueChange(actor, storeName, value);
+    }
+  }
+}
+
+/** Queues the combined organized play ID when both PFS numbers are present. */
+function queueOrganizedPlayId(exportManager: ExportManager, actor: Actor): void {
+  const pfs = characterSystem(actor).pfs;
+  if (typeof pfs?.playerNumber === "number" && typeof pfs?.characterNumber === "number") {
+    exportManager.queueChange(actor, "character_organizedplayid", `${pfs.playerNumber}-${pfs.characterNumber}`);
+  }
+}
+
+/**
+ * Queues the character's deity. Prefers the embedded deity item's name (the
+ * usual compendium case); falls back to the free-text `details.deity.value`.
+ */
+function queueDeityName(exportManager: ExportManager, actor: Actor): void {
+  // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
+  const items = Array.from(actor.items) as unknown as Item[];
+  const deityItem = items.find((item) => (item as { type?: string })?.type === "deity");
+  const deityName = deityItem?.name ?? characterSystem(actor).details.deity?.value;
+  if (typeof deityName === "string" && deityName.length > 0) {
+    exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
+  }
+}
+
+/**
+ * Queues the character's additional (user-added) languages as Demiplane display
+ * names: the actor's full language list minus the ancestry/heritage/feat grants.
+ *
+ * Foundry's `system.details.languages.value` merges granted and chosen languages,
+ * but Demiplane only stores the user-added ones, so the granted set — read from
+ * the derived `build.languages.granted` — is subtracted before pushing.
+ */
+export function queueAdditionalLanguages(exportManager: ExportManager, actor: Actor): void {
+  const all = characterSystem(actor).details.languages?.value ?? [];
+  const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
+  const additional = all
+    .filter((slug) => !granted.has(slug))
+    .map((slug) => localizeLanguage(slug) ?? titleCaseSlug(slug));
+  exportManager.queueChange(actor, LANGUAGES_STORE_NAME, additional.join(LANGUAGE_SEPARATOR));
+}
+
+/** Falls back to a readable name for a language slug the PF2e config doesn't know. */
+function titleCaseSlug(slug: string): string {
+  return slug
+    .split("-")
+    .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
+    .join(" ");
+}
+
+/** Reads a dotted `system.…` path off the live actor, returning undefined if absent. */
+function readActorPath(actor: Actor, path: string): unknown {
+  let current: unknown = actor;
+  for (const part of path.split(".")) {
+    if (current === null || current === undefined || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
 }
 
 /**
@@ -145,31 +257,21 @@ interface RegisteredHook {
  */
 export class HookManager {
   private readonly exportManager: ExportManager;
-  private hooks: RegisteredHook[] = [];
 
   constructor(exportManager: ExportManager) {
     this.exportManager = exportManager;
   }
 
   register(): void {
-    this.hooks.push(
-      { event: "updateActor", id: Hooks.on("updateActor", this.onActorUpdate.bind(this)) },
-      { event: "updateItem", id: Hooks.on("updateItem", this.onItemUpdate.bind(this)) },
-      { event: "createItem", id: Hooks.on("createItem", this.onItemCreate.bind(this)) },
-      { event: "deleteItem", id: Hooks.on("deleteItem", this.onItemDelete.bind(this)) }
-    );
-  }
-
-  unregister(): void {
-    for (const hook of this.hooks) {
-      Hooks.off(hook.event, hook.id);
-    }
-    this.hooks = [];
+    Hooks.on("updateActor", this.onActorUpdate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("updateItem", this.onItemUpdate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("createItem", this.onItemCreate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("deleteItem", this.onItemDelete.bind(this) as (...args: unknown[]) => void);
   }
 
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {
     if (!this.isLinkedCharacterActor(actor)) return;
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     // While any client is importing or pushing this character, actor updates are
     // just the sync echoing to other clients — don't queue them back to Demiplane.
     if (isSyncActive(actor)) return;
@@ -193,6 +295,24 @@ export class HookManager {
 
     // Campaign Notes maps to a "Campaign" journal entry, not an engine override.
     this.queueCampaignNotesChange(actor, changes);
+
+    // Languages need the granted set subtracted, so they can't be a plain
+    // ACTOR_FIELD_MAPPINGS entry.
+    this.queueLanguagesChange(actor, changes);
+  }
+
+  /**
+   * Queues the character's additional languages when the language list changes.
+   *
+   * Foundry's `system.details.languages.value` is the full list (ancestry and
+   * feat grants merged with the user's picks), but Demiplane only stores the
+   * user-added languages. So we subtract the granted languages — read from the
+   * live actor's derived `build.languages.granted` — before pushing, and convert
+   * the remaining slugs to Demiplane's display-name, comma-separated format.
+   */
+  private queueLanguagesChange(actor: Actor, changes: Record<string, unknown>): void {
+    if (this.getChangeValue(changes, LANGUAGES_PATH) === undefined) return;
+    queueAdditionalLanguages(this.exportManager, actor);
   }
 
   private queueOrganizedPlayChange(actor: Actor, changes: Record<string, unknown>): void {
@@ -200,8 +320,7 @@ export class HookManager {
     const charNum = this.getChangeValue(changes, "system.pfs.characterNumber");
     if (pfs === undefined && charNum === undefined) return;
 
-    const system = (actor as { system?: { pfs?: { playerNumber?: number | null; characterNumber?: number | null } } })
-      .system;
+    const system = characterSystem(actor);
     const player = typeof pfs === "number" ? pfs : system?.pfs?.playerNumber;
     const character = typeof charNum === "number" ? charNum : system?.pfs?.characterNumber;
 
@@ -219,11 +338,11 @@ export class HookManager {
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!game.settings.get(MODULE_ID, "autoSync")) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
 
-    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
-    const dpFlags = (item as { flags?: Record<string, Record<string, unknown>> })?.flags?.["demiplane-pf2e"];
+    const slug = itemSystem(item).slug ?? undefined;
+    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
     const demiplaneSlug = typeof dpFlags?.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
 
     const quantity = this.getNestedValue(changes, "system.quantity");
@@ -253,11 +372,7 @@ export class HookManager {
     const itemType = (item as { type?: string })?.type;
     const changeCarryType = this.getNestedValue(changes, "system.equipped.carryType");
     const changeHandsHeld = this.getNestedValue(changes, "system.equipped.handsHeld");
-    const liveEquipped = (
-      item.system as unknown as {
-        equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
-      }
-    )?.equipped;
+    const liveEquipped = itemSystem(item)?.equipped;
     const effectiveCarryType =
       typeof changeCarryType === "string" ? changeCarryType : (liveEquipped?.carryType ?? "stowed");
     const effectiveHandsHeld =
@@ -281,12 +396,28 @@ export class HookManager {
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
+    this.queueDeityChange(item, actor);
+  }
+
+  /**
+   * Queues a deity change when a deity item is added to or removed from a linked
+   * actor. Demiplane stores the deity as a name string in the
+   * `character_personality_beliefs` engine, so adding a deity item queues its
+   * name and removing one clears the field.
+   */
+  private queueDeityChange(item: Item, actor: Actor): void {
+    if ((item as { type?: string })?.type !== "deity") return;
+    const deityName = item.name;
+    if (typeof deityName !== "string" || deityName.length === 0) return;
+    debugLog(`Deity set on linked actor: ${deityName}`);
+    this.exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
   }
 
   private getGrantedChoiceLog(item: Item): string {
-    const rules = (item.system as unknown as { rules?: unknown[] })?.rules ?? [];
+    const rules = itemSystem(item)?.rules ?? [];
     const selections = rules
       .filter((rule): rule is { key: string; flag?: string; selection?: unknown } => {
         return typeof rule === "object" && rule !== null && (rule as { key?: unknown }).key === "ChoiceSet";
@@ -307,15 +438,23 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
 
     const itemType = (item as { type?: string })?.type;
+
+    if (itemType === "deity") {
+      debugLog(`Deity removed from linked actor: ${item.name}`);
+      this.exportManager.queueChange(actor, DEITY_STORE_NAME, "");
+      return;
+    }
+
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
       debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
       return;
     }
 
-    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
+    const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
     const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
     const slot = demiplaneSlug ?? slug;
@@ -332,6 +471,17 @@ export class HookManager {
     if (actor.type !== "character") return false;
     const characterId = actor.getFlag(MODULE_ID, "characterId");
     return characterId !== undefined && characterId !== null;
+  }
+
+  /**
+   * Whether auto-sync is on. When it is off, logs a calm, reassuring note (so a
+   * reader of the console sees the change was noticed and deliberately not
+   * pushed) rather than staying silent or hinting at a push that never happens.
+   */
+  private autoSyncEnabled(actorName: string | null | undefined): boolean {
+    if (game.settings.get(MODULE_ID, "autoSync")) return true;
+    debugLog(`"${actorName ?? "character"}" changed, but auto-sync is off — nothing pushed to Demiplane.`);
+    return false;
   }
 
   private getChangeValue(changes: Record<string, unknown>, path: string): unknown {

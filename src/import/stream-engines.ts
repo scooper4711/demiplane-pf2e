@@ -1,11 +1,11 @@
 import { debugLog } from "./debug-log.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
-export const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
+const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
 
 /** Source key and nexus slug sent to stream-engines for PF2e v2 characters. */
-export const ENGINE_SOURCE = "pathfinder2e-v2";
-export const NEXUS_SLUG = "pathfinder2e";
+const ENGINE_SOURCE = "pathfinder2e-v2";
+const NEXUS_SLUG = "pathfinder2e";
 
 /** A single spell-slot entry inside a `v2-add-spell-slots` modifier. */
 export interface DemiplaneSlotEntry {
@@ -71,17 +71,23 @@ interface EngineNode {
 function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): EngineModifier[] {
   const results: EngineModifier[] = [];
   for (const mod of modifiers) {
+    // Parse boundary: `mod` is an untyped record from parsed NDJSON, narrowed to
+    // a union member by its discriminant `type`. Not a Foundry-type gap.
     switch (mod.type) {
       case "add-spell":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         if (typeof mod.addSpell === "string") results.push(mod as unknown as AddSpellModifier);
         break;
       case "add-staff-spells":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddStaffSpellsModifier);
         break;
       case "add-special-item-spell":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpecialItemSpellModifier);
         break;
       case "v2-add-spell-slots":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellSlotsModifier);
         break;
       default:

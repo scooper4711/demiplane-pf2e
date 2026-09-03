@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
-import {
-  findSpellEngines,
-  findSpellbookSpells,
-  findPreparedSpells,
-  isCurriculumSpell,
-} from "../../src/import/spell-engines.js";
+import { findSpellEngines, isCurriculumSpell } from "../../src/import/spell-engines.js";
 
 function engine(overrides: Partial<DemiplaneEngineEntry>): DemiplaneEngineEntry {
   return {
@@ -35,18 +30,6 @@ describe("spell-engines", () => {
     const found = findSpellEngines(spellEngines);
     expect(found).toHaveLength(2);
     expect(found.every((e) => e.name.startsWith("tabula/spell/"))).toBe(true);
-  });
-
-  it("findSpellbookSpells returns only base spellbook spells", () => {
-    const found = findSpellbookSpells(spellEngines);
-    expect(found).toHaveLength(1);
-    expect(found[0].name).toBe("tabula/spell/fireball-rm.eng");
-  });
-
-  it("findPreparedSpells returns only prepared spells", () => {
-    const found = findPreparedSpells(spellEngines);
-    expect(found).toHaveLength(1);
-    expect(found[0].name).toBe("tabula/spell/fireball-rm.eng");
   });
 
   it("isCurriculumSpell detects wizard school spellbook slot", () => {

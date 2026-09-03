@@ -37,7 +37,6 @@ export class PushPayloadBuilder {
 
   async buildUpdatedCharacterData(
     characterId: string,
-    actor: Actor,
     changes: Map<string, PendingChange>,
     itemChanges: Map<string, PendingItemChange>
   ): Promise<FetchedCharacter | null> {
@@ -52,7 +51,7 @@ export class PushPayloadBuilder {
 
     updatedEngines = this.applyFieldChanges(updatedEngines, changes);
     const resolved = this.resolveItemChanges(fetched, itemChanges);
-    updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved, actor);
+    updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved);
     updatedEngines = this.applyHandSlotAssignment(updatedEngines, resolved);
 
     return {
@@ -132,11 +131,7 @@ export class PushPayloadBuilder {
     return resolved;
   }
 
-  private applyItemChangeEngines(
-    updatedEngines: CustomEngine[],
-    resolved: ResolvedItemChange[],
-    _actor: Actor
-  ): CustomEngine[] {
+  private applyItemChangeEngines(updatedEngines: CustomEngine[], resolved: ResolvedItemChange[]): CustomEngine[] {
     let engines = updatedEngines;
     for (const { change: itemChange, demiplaneId } of resolved) {
       if (itemChange.changeType === "delete") {

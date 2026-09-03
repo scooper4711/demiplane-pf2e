@@ -3,8 +3,7 @@ import type { SlugKind } from "./types.js";
 import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
 import { SPELLS_PACK } from "../config.js";
 import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
-
-type PackIndex = Array<{ _id: string; system?: { slug?: string } }>;
+import { getPackIndex } from "./pack-index.js";
 
 function getPacks(): NonNullable<typeof game.packs> {
   if (!game.packs) throw new Error("game.packs unavailable — import called before ready");
@@ -27,7 +26,7 @@ async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
   const pack = getPacks().get(SPELLS_PACK);
   if (!pack) return null;
   const foundrySlug = toFoundrySlug(slug);
-  const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
+  const index = await getPackIndex(pack, ["system.slug"]);
   const match = index.find((i) => i.system?.slug === foundrySlug);
   if (!match) return null;
   const doc = await pack.getDocument(match._id);
@@ -35,6 +34,7 @@ async function findSpellDocument(slug: string): Promise<SpellDocument | null> {
 
   const name = (doc as { name?: string }).name ?? slug;
   await recordResolvedMapping("spell", slug, { uuid: `Compendium.${SPELLS_PACK}.Item.${match._id}`, name });
+  // eslint-disable-next-line no-restricted-syntax -- compendium document → the minimal SpellDocument shape this resolver returns
   return doc as unknown as SpellDocument;
 }
 
@@ -77,7 +77,7 @@ export async function resolveCompendiumItem(
     for (const packKey of PACKS) {
       const pack = packs.get(packKey);
       if (!pack) continue;
-      const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
+      const index = await getPackIndex(pack, ["system.slug"]);
       const match = index.find((i) => i.system?.slug === slug);
       if (match) {
         const uuid = `Compendium.${packKey}.Item.${match._id}`;
@@ -102,7 +102,7 @@ export async function resolveSlugToUuid(foundrySlug: string): Promise<string | n
     for (const packKey of PACKS) {
       const pack = packs.get(packKey);
       if (!pack) continue;
-      const index = (await pack.getIndex({ fields: ["system.slug"] })) as unknown as PackIndex;
+      const index = await getPackIndex(pack, ["system.slug"]);
       const match = index.find((i) => i.system?.slug === slug);
       if (match) return `Compendium.${packKey}.Item.${match._id}`;
     }

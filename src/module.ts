@@ -5,7 +5,9 @@ import { registerSettings } from "./settings.js";
 import { ImportOrchestrator } from "./import/index.js";
 import { deleteImportedItems } from "./import/reconcile.js";
 import { ExportManager } from "./export-manager.js";
-import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "./hook-manager.js";
+import type { ExportResult } from "./export-manager.js";
+import { HookManager, queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
+import { characterSystem } from "./pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
 import { CharacterLinkDialog } from "./character-link-dialog.js";
 import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
@@ -81,20 +83,20 @@ async function initializeModule(): Promise<void> {
  * client, so the repair runs once, there.
  */
 function registerDuplicateLinkGuard(): void {
-  Hooks.on("createActor", (actor: Actor) => {
+  Hooks.on("createActor", ((actor: Actor) => {
     void reconcileDuplicateLink(actor);
-  });
-  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+  }) as (...args: unknown[]) => void);
+  Hooks.on("updateActor", ((actor: Actor, changes: Record<string, unknown>) => {
     // Only react when the module's flags were part of the update, so we don't
     // scan on every unrelated actor edit.
     const flags = changes.flags as Record<string, unknown> | undefined;
     if (!flags || !(MODULE_ID in flags)) return;
     void reconcileDuplicateLink(actor);
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 function registerTokenSyncHooks(): void {
-  Hooks.on("updateSetting", (setting: { key: string }) => {
+  Hooks.on("updateSetting", ((setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
       const newToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
       if (newToken) {
@@ -107,7 +109,7 @@ function registerTokenSyncHooks(): void {
     if (setting.key === `${MODULE_ID}.autoSync` && game.settings.get(MODULE_ID, "autoSync")) {
       showPreReleaseWarning();
     }
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 /**
@@ -117,6 +119,7 @@ function registerModuleApi(): void {
   const module = game.modules.get(MODULE_ID);
   if (!module) return;
 
+  // eslint-disable-next-line no-restricted-syntax -- attaching a module API surface Foundry's Module type doesn't model; single site
   (module as unknown as { api: Record<string, unknown> }).api = {
     importCharacter: async (actor: Actor, options?: { token?: string }) => {
       const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
@@ -151,12 +154,10 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
   button.addEventListener("click", async () => {
     // DialogV2 wraps `content` in its own <form>, so only the fields are supplied
     // here and the submitted values come back already parsed.
-    const result = await foundry.applications.api.DialogV2.input({
+    const result = await foundry.applications.api.DialogV2.input<{ characterRef: string }>({
       window: { title: "Import Demiplane Character" },
       content: `<div class="form-group"><label>Demiplane Character UUID or URL</label>
-<input type="text" name="characterRef" placeholder="UUID or ${DEMIPLANE_SHEET_BASE}/..." autofocus /></div>` as foundry.applications.api.DialogV2.Content<{
-        characterRef: string;
-      }>,
+<input type="text" name="characterRef" placeholder="UUID or ${DEMIPLANE_SHEET_BASE}/..." autofocus /></div>`,
       ok: { label: "Import" },
     });
 
@@ -269,13 +270,43 @@ async function importLinkedCharacter(
   }
 }
 
-async function exportLinkedCharacter(actor: Actor) {
-  // Pause other clients' pushes for the duration of our push so we don't race a
-  // concurrent import/push into an optimistic-concurrency conflict.
+async function exportLinkedCharacter(actor: Actor): Promise<ExportResult> {
+  // Auto-sync is the master write switch. When it is off the push would be a
+  // no-op, so tell the user plainly rather than doing the work and reporting a
+  // misleading "pushed" success.
+  if (!game.settings.get(MODULE_ID, "autoSync")) {
+    ui.notifications.warn(
+      `Auto-sync is off, so nothing was pushed for "${actor.name}". Enable it in the module settings to sync to Demiplane.`
+    );
+    return { success: false, error: "Auto-sync is off" };
+  }
+
+  const result = await pushCharacterEngines(actor);
+
+  // Campaign Notes is a Demiplane *journal* entry, not an engine value, so it is
+  // written through its own push (`exportCampaignNotes`), which opens its own
+  // sync pause. Run it *after* the engine push has released the pause — nesting
+  // the two pauses on one client would orphan the outer sync token and wedge the
+  // debounce timer in a defer/re-arm loop.
+  if (result.success) {
+    const notes = characterSystem(actor).details.biography?.campaignNotes;
+    if (typeof notes === "string") await exportManager.exportCampaignNotes(actor, notes);
+  }
+
+  return result;
+}
+
+/**
+ * Pushes every engine-backed field (combat resources, items, and character
+ * details) in a single flush, wrapped in the cross-client sync pause so it
+ * cannot race a concurrent import/push into an optimistic-concurrency conflict.
+ */
+async function pushCharacterEngines(actor: Actor): Promise<ExportResult> {
   await beginSyncPause(actor);
   try {
     queueCombatResourceChanges(exportManager, actor);
     queueAllItemChanges(exportManager, actor);
+    queueAllDetailChanges(exportManager, actor);
     const result = await exportManager.flush(actor);
     if (result.success) {
       ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
@@ -310,11 +341,12 @@ async function reimportActorOnConflict(actor: Actor) {
 // Add "Update from Demiplane" to actor right-click context menu
 // Parameter types are inferred from the hook registry: v14 passes the directory
 // application (not its markup) plus the mutable context menu entries.
-Hooks.on("getActorContextOptions", (_directory, menuItems) => {
+Hooks.on("getActorContextOptions", ((_directory: unknown, menuItems: unknown) => {
+  if (!Array.isArray(menuItems)) return;
   menuItems.push({
     label: "Update from Demiplane",
     icon: `<i class="fas fa-sync"></i>`,
-    visible: (li) => {
+    visible: (li: HTMLElement) => {
       const actor = game.actors.get(li.dataset.entryId ?? "", { strict: false });
       if (!actor?.getFlag(MODULE_ID, "characterId")) return false;
       const user = game.user;
@@ -323,13 +355,13 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
       return user.isGM || actor.testUserPermission(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER);
     },
     // `onClick` receives (event, target) — the reverse of the deprecated `callback`.
-    onClick: async (_event, li) => {
+    onClick: async (_event: PointerEvent, li: HTMLElement) => {
       const actor = game.actors.get(li.dataset.entryId ?? "");
       const characterId = actor?.getFlag(MODULE_ID, "characterId");
-      if (!actor || !characterId) return;
+      if (!actor || typeof characterId !== "string") return;
 
       const token = game.settings.get(MODULE_ID, "demiplaneToken");
-      if (!token) {
+      if (typeof token !== "string" || !token) {
         ui.notifications.error("No Demiplane token configured.");
         return;
       }
@@ -350,4 +382,4 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
       }
     },
   });
-});
+}) as (...args: unknown[]) => void);

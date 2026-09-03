@@ -9,6 +9,15 @@
 
 import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
 import { stampImported } from "./types.js";
+import {
+  characterSystem,
+  itemSystem,
+  sourceRules,
+  itemSourceId,
+  compendiumSource,
+  toPlainData,
+} from "../pf2e-types.js";
+import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
@@ -90,14 +99,14 @@ export class LoreItemsPhase implements ImportPhase {
     const newLores = loreNames.filter((n) => !existingLores.has(n));
 
     if (newLores.length > 0) {
-      const loreItems = newLores.map((name: string) => ({
+      const loreItems: Record<string, unknown>[] = newLores.map((name: string) => ({
         name,
         type: "lore" as const,
         system: { proficient: { value: 1 } },
       }));
       await actor.createEmbeddedDocuments(
         "Item",
-        loreItems.map((i) => stampImported(i as Record<string, unknown>)) as never
+        loreItems.map((i) => stampImported(i))
       );
       ctx.summary.log.push(`+ lore: [${newLores.join(", ")}]`);
     }
@@ -111,8 +120,8 @@ export class LoreItemsPhase implements ImportPhase {
     const bgSlug = getSlug(bgEngine);
     if (!bgSlug) return [];
     const bgItem = await resolveCompendiumItem(bgSlug, "background");
-    const system = (bgItem as { system?: { trainedSkills?: { lore?: string[] } } } | null)?.system;
-    return system?.trainedSkills?.lore ?? [];
+    if (!bgItem) return [];
+    return itemSystem(bgItem).trainedSkills?.lore ?? [];
   }
 }
 
@@ -136,7 +145,7 @@ export class SequentialItemsPhase implements ImportPhase {
     const itemData = await resolveCompendiumItem(eng._slug, category);
     if (itemData) {
       await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)] as never);
+      await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)]);
       ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       ctx.summary.itemsImported++;
     } else {
@@ -188,9 +197,7 @@ export class ResolveGrantsPhase implements ImportPhase {
   private extractSourceRules(item: {
     system: { rules?: Array<Record<string, unknown>> };
   }): Array<Record<string, unknown>> {
-    const sourceSystem = (item as unknown as { _source?: { system?: { rules?: Array<Record<string, unknown>> } } })
-      ._source?.system;
-    return sourceSystem?.rules ?? item.system?.rules ?? [];
+    return sourceRules(item);
   }
 
   private async processGrantRule(
@@ -209,13 +216,12 @@ export class ResolveGrantsPhase implements ImportPhase {
       const doc = await fromUuid(uuid);
       if (!doc) return null;
 
-      const grantData = (doc as { toObject: () => Record<string, unknown> }).toObject();
-      await actor.createEmbeddedDocuments("Item", [stampImported(grantData)] as never);
-      ctx.summary.log.push(`+ granted: ${(grantData as { name: string }).name} (from ${itemName})`);
+      const grantData = toPlainData(doc);
+      await actor.createEmbeddedDocuments("Item", [stampImported(grantData)]);
+      ctx.summary.log.push(`+ granted: ${String(grantData.name)} (from ${itemName})`);
       ctx.summary.itemsImported++;
 
-      const system = grantData.system as { slug?: string } | undefined;
-      return system?.slug ?? null;
+      return itemSystem(grantData).slug ?? null;
     } catch {
       return null;
     }
@@ -250,13 +256,10 @@ export class ResolveGrantsPhase implements ImportPhase {
       const core = existing.flags?.core as { sourceId?: string } | undefined;
       if (core?.sourceId === uuid) return true;
 
-      if ((existing as unknown as { sourceId?: string }).sourceId === uuid) return true;
+      if (itemSourceId(existing) === uuid) return true;
 
       const pf2eFlags = existing.flags?.pf2e as { grantedBy?: { id?: string } } | undefined;
-      if (pf2eFlags?.grantedBy) {
-        const src = (existing as unknown as { _stats?: { compendiumSource?: string } })._stats?.compendiumSource;
-        if (src === uuid) return true;
-      }
+      if (pf2eFlags?.grantedBy && compendiumSource(existing) === uuid) return true;
 
       return false;
     });
@@ -275,7 +278,7 @@ export class BatchItemsPhase implements ImportPhase {
       }
     }
     if (batchItems.length > 0) {
-      await actor.createEmbeddedDocuments("Item", batchItems as never);
+      await actor.createEmbeddedDocuments("Item", batchItems);
     }
   }
 
@@ -340,7 +343,7 @@ export class PostProcessingPhase implements ImportPhase {
     const findCustomValue = (name: string) =>
       engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
 
-    const maxHp = (actor as unknown as { system: { attributes: { hp: { max: number } } } }).system.attributes.hp.max;
+    const maxHp = characterSystem(actor).attributes.hp.max;
     const currentHp = Number(findCustomValue("character_hit-points_current")?.value) || maxHp;
     const tempHp = Number(findCustomValue("character_hit-points_temp")?.value) || 0;
     const heroPoints = Number(findCustomValue("character_hero-points")?.value) || 1;
@@ -348,8 +351,8 @@ export class PostProcessingPhase implements ImportPhase {
     await actor.update({
       "system.attributes.hp.value": Math.min(currentHp, maxHp),
       "system.attributes.hp.temp": tempHp,
-      "system.resources.heroPoints.value": Math.min(heroPoints, 3),
-    } as never);
+      "system.resources.heroPoints.value": Math.min(heroPoints, MAX_HERO_POINTS),
+    });
   }
 
   private async setActorIdentity(actor: Actor, engines: DemiplaneEngineEntry[]): Promise<void> {
@@ -371,6 +374,7 @@ export class PostProcessingPhase implements ImportPhase {
 
 export class RemoveDuplicatesPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
+    // eslint-disable-next-line no-restricted-syntax -- reading created items as plain source records for dedup comparison
     const items = Array.from(actor.items) as unknown as Array<Record<string, unknown>>;
     const seen = new Map<string, Record<string, unknown>>();
     const toDelete: string[] = [];
@@ -407,7 +411,7 @@ export class RemoveDuplicatesPhase implements ImportPhase {
     }
 
     if (toDelete.length > 0) {
-      await actor.deleteEmbeddedDocuments("Item", toDelete as never);
+      await actor.deleteEmbeddedDocuments("Item", toDelete);
       ctx.summary.log.push(`- removed ${toDelete.length} duplicate item(s)`);
     }
   }

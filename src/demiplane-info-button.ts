@@ -1,3 +1,4 @@
+import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import {
@@ -26,7 +27,7 @@ export function registerDemiplaneInfoButton(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn
 ): void {
-  Hooks.on("getActorSheetHeaderButtons", (sheet: ActorSheet, buttons: Application.HeaderButton[]) => {
+  Hooks.on("getActorSheetHeaderButtons", ((sheet: ActorSheet, buttons: Application.HeaderButton[]) => {
     const actor = sheet.actor;
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
@@ -44,7 +45,7 @@ export function registerDemiplaneInfoButton(
       tooltip: "Linked to Demiplane",
       onclick: () => showDemiplaneInfoDialog(actor, characterId, importCharacter, exportCharacter),
     });
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 export async function showDemiplaneInfoDialog(
@@ -116,7 +117,7 @@ function buildDialogButtons(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn,
   indicatorActive: boolean
-): Array<foundry.applications.api.DialogV2.Button> {
+): Array<DialogV2Button> {
   return [
     {
       action: "update",
@@ -124,12 +125,7 @@ function buildDialogButtons(
       icon: "fa-solid fa-sync",
       callback: () => performUpdate(actor, characterId, importCharacter),
     },
-    {
-      action: "push",
-      label: "Push to Demiplane",
-      icon: "fa-solid fa-upload",
-      callback: () => exportCharacter(actor),
-    },
+    buildPushButton(actor, exportCharacter),
     {
       // Deliberately not "close": DialogV2 treats that action as a plain
       // dismissal and never invokes the callback, so the dot would stay lit.
@@ -143,6 +139,24 @@ function buildDialogButtons(
       },
     },
   ];
+}
+
+/**
+ * The "Push to Demiplane" button. Auto-sync is the master write switch, so when
+ * it is off the button is disabled with a tooltip explaining why — pushing would
+ * be a no-op, so it is better to prevent the click than to report a misleading
+ * "pushed" success.
+ */
+function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
+  const autoSyncOn = game.settings.get(MODULE_ID, "autoSync") === true;
+  return {
+    action: "push",
+    label: "Push to Demiplane",
+    icon: "fa-solid fa-upload",
+    disabled: !autoSyncOn,
+    tooltip: autoSyncOn ? "" : "Enable “Auto-sync on Actor Update” in the module settings to push to Demiplane.",
+    callback: () => exportCharacter(actor),
+  };
 }
 
 interface DialogContentOptions {
@@ -244,7 +258,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function buildManualItemsSection(items: Item[]): string {
+function buildManualItemsSection(items: Array<{ name: string; type: string }>): string {
   if (items.length === 0) return "";
 
   const itemList = items.map((item) => `<li>${item.name} <span class="type-tag">(${item.type})</span></li>`).join("\n");

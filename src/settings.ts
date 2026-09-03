@@ -12,7 +12,7 @@ export function registerSettings(): void {
 
   game.settings.register(MODULE_ID, "autoSync", {
     name: "Auto-sync on Actor Update",
-    hint: "Automatically push current HP, temporary HP, and hero points back to Demiplane",
+    hint: "Automatically push edits back to Demiplane as you make them: HP and hero points, currency, item quantity and equipped state, deity, languages, and biography/appearance details.",
     scope: "world",
     config: true,
     type: Boolean,
@@ -43,14 +43,14 @@ export function registerSettings(): void {
     label: "Demiplane Mapping",
     hint: "Match Demiplane names that don't resolve onto real Foundry items.",
     icon: "fa-solid fa-link",
-    type: getDemiplaneMappingAppClass() as never,
+    type: getDemiplaneMappingAppClass(),
     restricted: true,
   });
 
-  Hooks.on("renderSettingsConfig", (_app: unknown, html: SettingsHtml) => {
+  Hooks.on("renderSettingsConfig", ((_app: unknown, html: SettingsHtml) => {
     hideTokenSettingFromPlayers(html);
     addTokenValidationButton(html);
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 function hideTokenSettingFromPlayers(html: SettingsHtml): void {

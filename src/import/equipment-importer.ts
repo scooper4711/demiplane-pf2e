@@ -4,6 +4,9 @@ import { normalizeEquipmentSlug, parseRankedConsumable } from "./slug-utils.js";
 import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem } from "../slug-mapping.js";
+import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
+import { getPackIndex, type PackIndex } from "./pack-index.js";
+import { toPlainData } from "../pf2e-types.js";
 
 interface EquipmentState {
   primaryHandId: string | undefined;
@@ -121,22 +124,17 @@ function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemTy
   };
 }
 
-function findBySlug(
-  equipIndex: {
-    find: (fn: (e: { system?: { slug?: string } }) => boolean) => { _id: string } | undefined;
-  },
-  slug: string
-): { _id: string } | undefined {
-  const exact = equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === slug);
+function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | undefined {
+  const exact = equipIndex.find((e) => e.system?.slug === slug);
   if (exact) return exact;
 
   const plural = `${slug}s`;
-  const pluralMatch = equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === plural);
+  const pluralMatch = equipIndex.find((e) => e.system?.slug === plural);
   if (pluralMatch) return pluralMatch;
 
   const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
   if (fallbackSlug !== slug) {
-    return equipIndex.find((e: { system?: { slug?: string } }) => e.system?.slug === fallbackSlug);
+    return equipIndex.find((e) => e.system?.slug === fallbackSlug);
   }
   return undefined;
 }
@@ -146,8 +144,9 @@ async function createBackpackFirst(actor: Actor, items: PendingItem[], state: Eq
   if (backpackIdx < 0) return 0;
 
   const backpackEntry = items.splice(backpackIdx, 1)[0]!;
-  const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data] as never);
-  const backpackFoundryId = (created[0] as { id: string }).id;
+  const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data]);
+  const backpackFoundryId = created[0]?.id;
+  if (!backpackFoundryId) throw new Error("Failed to create backpack item");
 
   for (const item of items) {
     if (state.containerMap.get(item.demiplaneId) === backpackEntry.demiplaneId) {
@@ -167,27 +166,18 @@ export async function applyEquipment(
 
   const state = buildEquipmentState(engines);
 
-  const equipPack = game.packs!.get(EQUIPMENT_PACK);
+  const equipPack = game.packs.get(EQUIPMENT_PACK);
   if (!equipPack) {
     summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
     return;
   }
-  const equipIndex = (await equipPack.getIndex({
-    fields: ["system.slug"],
-  } as never)) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
+  const equipIndex = await getPackIndex(equipPack, ["system.slug"]);
 
   const items: PendingItem[] = [];
   const skipped: string[] = [];
 
   for (const eng of itemEngines) {
-    const pending = await buildEquipmentItem(
-      eng,
-      equipPack as unknown as EquipmentPack,
-      equipIndex as never,
-      state,
-      summary,
-      skipped
-    );
+    const pending = await buildEquipmentItem(eng, equipPack, equipIndex, state, summary, skipped);
     if (pending) items.push(pending);
   }
 
@@ -199,7 +189,10 @@ export async function applyEquipment(
   const backpackCount = await createBackpackFirst(actor, items, state);
 
   if (items.length > 0) {
-    await actor.createEmbeddedDocuments("Item", items.map((i) => i.data) as never);
+    await actor.createEmbeddedDocuments(
+      "Item",
+      items.map((i) => i.data)
+    );
   }
 
   summary.log.push(`+ equipment: ${backpackCount + items.length} items`);
@@ -208,15 +201,11 @@ export async function applyEquipment(
   }
 }
 
-interface EquipmentPack {
-  getDocument: (id: string) => Promise<unknown>;
-}
-
 /** Builds one equipment item from its engine, or records why it can't be imported. */
 async function buildEquipmentItem(
   eng: DemiplaneEngineEntry,
-  equipPack: EquipmentPack,
-  equipIndex: never,
+  equipPack: CompendiumCollection,
+  equipIndex: PackIndex,
   state: EquipmentState,
   summary: ImportSummary,
   skipped: string[]
@@ -242,7 +231,7 @@ async function buildEquipmentItem(
   const doc = await equipPack.getDocument(indexEntry._id);
   if (!doc) return null;
 
-  const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
+  const data = toPlainData(doc);
   const system = data.system as Record<string, unknown>;
   system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
@@ -301,11 +290,9 @@ export async function applyCurrency(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const equipPack = game.packs!.get(EQUIPMENT_PACK);
+  const equipPack = game.packs.get(EQUIPMENT_PACK);
   if (!equipPack) return;
-  const index = (await equipPack.getIndex({
-    fields: ["system.slug"],
-  } as never)) as unknown as Array<{ _id: string; system?: { slug?: string } }>;
+  const index = await getPackIndex(equipPack, ["system.slug"]);
 
   const coinItems: Record<string, unknown>[] = [];
   for (const { engine, slug } of CURRENCY_MAP) {
@@ -313,13 +300,13 @@ export async function applyCurrency(
     const amount = Number(eng?.value) || 0;
     if (amount <= 0) continue;
 
-    const entry = index.find((e: { system?: { slug?: string } }) => e.system?.slug === slug);
+    const entry = index.find((e) => e.system?.slug === slug);
     if (!entry) continue;
 
     const doc = await equipPack.getDocument(entry._id);
     if (!doc) continue;
 
-    const data = (doc as { toObject: () => Record<string, unknown> }).toObject();
+    const data = toPlainData(doc);
     const system = data.system as Record<string, unknown>;
     system.quantity = amount;
     system.equipped = { carryType: "worn", handsHeld: 0 };
@@ -327,7 +314,7 @@ export async function applyCurrency(
   }
 
   if (coinItems.length > 0) {
-    await actor.createEmbeddedDocuments("Item", coinItems as never);
+    await actor.createEmbeddedDocuments("Item", coinItems);
     const desc = coinItems.map((c) => `${(c.system as { quantity: number }).quantity} ${c.name}`).join(", ");
     summary.log.push(`+ currency: ${desc}`);
   }
