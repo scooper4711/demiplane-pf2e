@@ -38,7 +38,12 @@ vi.stubGlobal("CONFIG", {
   },
 });
 
-import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "../../src/hook-manager.js";
+import {
+  HookManager,
+  queueAllItemChanges,
+  queueAllDetailChanges,
+  queueCombatResourceChanges,
+} from "../../src/hook-manager.js";
 
 const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
@@ -877,6 +882,75 @@ describe("HookManager", () => {
         { carryType: "held", handsHeld: 1 },
         "weapon"
       );
+    });
+  });
+
+  describe("queueAllDetailChanges", () => {
+    function createDetailActor(overrides: Record<string, unknown> = {}) {
+      return {
+        ...createMockActor(),
+        items: [] as unknown[],
+        system: {
+          pfs: { playerNumber: 123456, characterNumber: 2001 },
+          details: {
+            deity: { value: "" },
+            languages: { value: ["common", "draconic"] },
+            biography: { appearance: "Weathered", campaignNotes: "Session 1 notes" },
+          },
+          build: { languages: { granted: [{ slug: "common", source: "Human" }] } },
+          ...overrides,
+        },
+      };
+    }
+
+    it("queues mapped detail fields, org play ID, deity, languages, and campaign notes", () => {
+      const actor = createDetailActor();
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_appearance", "Weathered");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_organizedplayid", "123456-2001");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character-languages-user", "Draconic");
+      expect(exportManager.exportCampaignNotes).toHaveBeenCalledWith(actor, "Session 1 notes");
+    });
+
+    it("prefers the embedded deity item name over the deity text field", () => {
+      const actor = createDetailActor();
+      actor.items = [{ type: "deity", name: "Sarenrae" }];
+      actor.system.details.deity.value = "stale-text";
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Sarenrae");
+    });
+
+    it("falls back to the deity text field when there is no deity item", () => {
+      const actor = createDetailActor();
+      actor.system.details.deity.value = "Gozreh";
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Gozreh");
+    });
+
+    it("does not queue a deity when neither an item nor text is present", () => {
+      const actor = createDetailActor();
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_personality_beliefs",
+        expect.anything()
+      );
+    });
+
+    it("does not queue organized play ID when only one PFS number is set", () => {
+      const actor = createDetailActor({ pfs: { playerNumber: 123456, characterNumber: null } });
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character_organizedplayid", expect.anything());
     });
   });
 
