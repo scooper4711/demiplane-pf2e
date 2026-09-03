@@ -56,7 +56,7 @@ async function writeSlotMaximums(
   const entry = actor.items.get(entryId);
   if (!entry) return;
 
-  await entry.update({ system: { slots: slotsUpdate } } as never);
+  await entry.update({ system: { slots: slotsUpdate } });
   summary.log.push(
     `+ spell-slots (${label}): cantrips=${String(progression.cantrips)}, ${Object.entries(progression.slots)
       .map(([rank, count]) => `rank${rank}=${String(count)}`)

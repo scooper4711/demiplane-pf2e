@@ -5,20 +5,11 @@ import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "./sync-issues.js";
 import { DEMIPLANE_ICON_SRC, DEMIPLANE_ERROR_ICON_SRC } from "./config.js";
 
 // Foundry v14 fires `activate{Document}Directory` when a sidebar tab is
-// switched to, but fvtt-types only generates render/close/context hooks for
-// ApplicationV2 sidebar tabs — not `activate*` — so the hook name is missing
-// from HookConfig. Declare it here so `Hooks.on("activateActorDirectory", …)`
-// type-checks against the real callback shape (the directory application).
-declare module "fvtt-types/configuration" {
-  // The `namespace` is required: fvtt-types nests HookConfig inside a `Hooks`
-  // namespace, and merging into it is the only way to augment the hook registry.
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Hooks {
-    interface HookConfig {
-      activateActorDirectory: (app: foundry.applications.sidebar.tabs.ActorDirectory.Any) => void;
-    }
-  }
-}
+// switched to. @dfreds/foundry-types only declares overloads for a fixed set
+// of hooks, so anything else (including `activate*` and this module's custom
+// events) falls through to the generic `HookParameters<string, unknown[]>`
+// overload whose callback takes `unknown[]`. The casts below adapt our typed
+// callbacks to that boundary; Foundry guarantees the runtime shapes.
 
 type ImportCharacterFn = (
   actor: Actor,
@@ -56,26 +47,26 @@ export function registerDirectoryIcon(importCharacter: ImportCharacterFn, export
     entries.forEach((entry) => decorateEntry(entry, importCharacter, exportCharacter));
   };
 
-  Hooks.on("renderActorDirectory", (_app: unknown, element: unknown) => {
+  Hooks.on("renderActorDirectory", ((_app: unknown, element: unknown) => {
     decorateAll(resolveRoot(element));
-  });
+  }) as (...args: unknown[]) => void);
 
-  Hooks.on("activateActorDirectory", (app: unknown) => {
+  Hooks.on("activateActorDirectory", ((app: unknown) => {
     decorateAll(elementOf(app));
-  });
+  }) as (...args: unknown[]) => void);
 
   // Keep the badge colour live. The issues-changed event fires synchronously
   // right after a fire-and-forget `setFlag`, so `shouldShowIndicator` can still
   // read the pre-write value here. `updateActor` fires once the flag write has
   // landed (on every client), so it is the authoritative refresh; the event is
   // kept as a fast-path best effort.
-  Hooks.on(ISSUES_CHANGED_EVENT, (actor: Actor) => {
+  Hooks.on(ISSUES_CHANGED_EVENT, ((actor: Actor) => {
     refreshEntryIcon(actor);
-  });
+  }) as (...args: unknown[]) => void);
 
-  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+  Hooks.on("updateActor", ((actor: Actor, changes: Record<string, unknown>) => {
     if (moduleFlagsChanged(changes)) refreshEntryIcon(actor);
-  });
+  }) as (...args: unknown[]) => void);
 
   decorateAll(currentDirectoryRoot());
 }

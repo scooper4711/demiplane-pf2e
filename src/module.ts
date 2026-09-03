@@ -81,20 +81,20 @@ async function initializeModule(): Promise<void> {
  * client, so the repair runs once, there.
  */
 function registerDuplicateLinkGuard(): void {
-  Hooks.on("createActor", (actor: Actor) => {
+  Hooks.on("createActor", ((actor: Actor) => {
     void reconcileDuplicateLink(actor);
-  });
-  Hooks.on("updateActor", (actor: Actor, changes: Record<string, unknown>) => {
+  }) as (...args: unknown[]) => void);
+  Hooks.on("updateActor", ((actor: Actor, changes: Record<string, unknown>) => {
     // Only react when the module's flags were part of the update, so we don't
     // scan on every unrelated actor edit.
     const flags = changes.flags as Record<string, unknown> | undefined;
     if (!flags || !(MODULE_ID in flags)) return;
     void reconcileDuplicateLink(actor);
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 function registerTokenSyncHooks(): void {
-  Hooks.on("updateSetting", (setting: { key: string }) => {
+  Hooks.on("updateSetting", ((setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
       const newToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
       if (newToken) {
@@ -107,7 +107,7 @@ function registerTokenSyncHooks(): void {
     if (setting.key === `${MODULE_ID}.autoSync` && game.settings.get(MODULE_ID, "autoSync")) {
       showPreReleaseWarning();
     }
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 /**
@@ -151,12 +151,10 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
   button.addEventListener("click", async () => {
     // DialogV2 wraps `content` in its own <form>, so only the fields are supplied
     // here and the submitted values come back already parsed.
-    const result = await foundry.applications.api.DialogV2.input({
+    const result = await foundry.applications.api.DialogV2.input<{ characterRef: string }>({
       window: { title: "Import Demiplane Character" },
       content: `<div class="form-group"><label>Demiplane Character UUID or URL</label>
-<input type="text" name="characterRef" placeholder="UUID or ${DEMIPLANE_SHEET_BASE}/..." autofocus /></div>` as foundry.applications.api.DialogV2.Content<{
-        characterRef: string;
-      }>,
+<input type="text" name="characterRef" placeholder="UUID or ${DEMIPLANE_SHEET_BASE}/..." autofocus /></div>`,
       ok: { label: "Import" },
     });
 
@@ -310,11 +308,12 @@ async function reimportActorOnConflict(actor: Actor) {
 // Add "Update from Demiplane" to actor right-click context menu
 // Parameter types are inferred from the hook registry: v14 passes the directory
 // application (not its markup) plus the mutable context menu entries.
-Hooks.on("getActorContextOptions", (_directory, menuItems) => {
+Hooks.on("getActorContextOptions", ((_directory: unknown, menuItems: unknown) => {
+  if (!Array.isArray(menuItems)) return;
   menuItems.push({
     label: "Update from Demiplane",
     icon: `<i class="fas fa-sync"></i>`,
-    visible: (li) => {
+    visible: (li: HTMLElement) => {
       const actor = game.actors.get(li.dataset.entryId ?? "", { strict: false });
       if (!actor?.getFlag(MODULE_ID, "characterId")) return false;
       const user = game.user;
@@ -323,13 +322,13 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
       return user.isGM || actor.testUserPermission(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER);
     },
     // `onClick` receives (event, target) — the reverse of the deprecated `callback`.
-    onClick: async (_event, li) => {
+    onClick: async (_event: PointerEvent, li: HTMLElement) => {
       const actor = game.actors.get(li.dataset.entryId ?? "");
       const characterId = actor?.getFlag(MODULE_ID, "characterId");
-      if (!actor || !characterId) return;
+      if (!actor || typeof characterId !== "string") return;
 
       const token = game.settings.get(MODULE_ID, "demiplaneToken");
-      if (!token) {
+      if (typeof token !== "string" || !token) {
         ui.notifications.error("No Demiplane token configured.");
         return;
       }
@@ -350,4 +349,4 @@ Hooks.on("getActorContextOptions", (_directory, menuItems) => {
       }
     },
   });
-});
+}) as (...args: unknown[]) => void);

@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import { isSyncActive } from "./sync-pause.js";
+import { characterSystem, itemSystem } from "./pf2e-types.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -63,14 +64,15 @@ const INVENTORY_ITEM_TYPES = new Set([
  * so they can be flushed immediately (manual push / exportNow).
  */
 export function queueCombatResourceChanges(exportManager: ExportManager, actor: Actor): void {
-  const hitPoints = actor.system.attributes?.hp;
+  // Callers only pass linked character actors (see exportLinkedCharacter).
+  const hitPoints = characterSystem(actor).attributes?.hp;
   if (typeof hitPoints?.value === "number") {
     exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
   }
   if (typeof hitPoints?.temp === "number") {
     exportManager.queueChange(actor, "character_hit-points_temp", hitPoints.temp);
   }
-  const heroPoints = actor.system.resources?.heroPoints?.value;
+  const heroPoints = characterSystem(actor).resources?.heroPoints?.value;
   if (typeof heroPoints === "number") {
     exportManager.queueChange(actor, "character_hero-points", heroPoints);
   }
@@ -82,12 +84,12 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
  * slots) rather than only combat resources.
  */
 export function queueAllItemChanges(exportManager: ExportManager, actor: Actor): void {
-  for (const item of actor.items) {
-    const system = item.system as {
-      slug?: string;
-      equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
-      quantity?: number;
-    };
+  // `actor.items` is typed as the common base collection, but at runtime (and
+  // in the PF2e system) every entry is a client Item. Narrow once here so the
+  // PF2e field reads below type-check.
+  const items = Array.from(actor.items) as unknown as Item[];
+  for (const item of items) {
+    const system = itemSystem(item);
     const slug = system?.slug;
     if (typeof slug !== "string") continue;
 
@@ -153,10 +155,13 @@ export class HookManager {
 
   register(): void {
     this.hooks.push(
-      { event: "updateActor", id: Hooks.on("updateActor", this.onActorUpdate.bind(this)) },
-      { event: "updateItem", id: Hooks.on("updateItem", this.onItemUpdate.bind(this)) },
-      { event: "createItem", id: Hooks.on("createItem", this.onItemCreate.bind(this)) },
-      { event: "deleteItem", id: Hooks.on("deleteItem", this.onItemDelete.bind(this)) }
+      {
+        event: "updateActor",
+        id: Hooks.on("updateActor", this.onActorUpdate.bind(this) as (...args: unknown[]) => void),
+      },
+      { event: "updateItem", id: Hooks.on("updateItem", this.onItemUpdate.bind(this) as (...args: unknown[]) => void) },
+      { event: "createItem", id: Hooks.on("createItem", this.onItemCreate.bind(this) as (...args: unknown[]) => void) },
+      { event: "deleteItem", id: Hooks.on("deleteItem", this.onItemDelete.bind(this) as (...args: unknown[]) => void) }
     );
   }
 
@@ -200,8 +205,7 @@ export class HookManager {
     const charNum = this.getChangeValue(changes, "system.pfs.characterNumber");
     if (pfs === undefined && charNum === undefined) return;
 
-    const system = (actor as { system?: { pfs?: { playerNumber?: number | null; characterNumber?: number | null } } })
-      .system;
+    const system = characterSystem(actor);
     const player = typeof pfs === "number" ? pfs : system?.pfs?.playerNumber;
     const character = typeof charNum === "number" ? charNum : system?.pfs?.characterNumber;
 
@@ -222,8 +226,8 @@ export class HookManager {
     if (!game.settings.get(MODULE_ID, "autoSync")) return;
     if (isSyncActive(actor)) return;
 
-    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
-    const dpFlags = (item as { flags?: Record<string, Record<string, unknown>> })?.flags?.["demiplane-pf2e"];
+    const slug = itemSystem(item).slug ?? undefined;
+    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
     const demiplaneSlug = typeof dpFlags?.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
 
     const quantity = this.getNestedValue(changes, "system.quantity");
@@ -253,11 +257,7 @@ export class HookManager {
     const itemType = (item as { type?: string })?.type;
     const changeCarryType = this.getNestedValue(changes, "system.equipped.carryType");
     const changeHandsHeld = this.getNestedValue(changes, "system.equipped.handsHeld");
-    const liveEquipped = (
-      item.system as unknown as {
-        equipped?: { carryType?: string; handsHeld?: number; inSlot?: boolean };
-      }
-    )?.equipped;
+    const liveEquipped = itemSystem(item)?.equipped;
     const effectiveCarryType =
       typeof changeCarryType === "string" ? changeCarryType : (liveEquipped?.carryType ?? "stowed");
     const effectiveHandsHeld =
@@ -286,7 +286,7 @@ export class HookManager {
   }
 
   private getGrantedChoiceLog(item: Item): string {
-    const rules = (item.system as unknown as { rules?: unknown[] })?.rules ?? [];
+    const rules = itemSystem(item)?.rules ?? [];
     const selections = rules
       .filter((rule): rule is { key: string; flag?: string; selection?: unknown } => {
         return typeof rule === "object" && rule !== null && (rule as { key?: unknown }).key === "ChoiceSet";
@@ -315,7 +315,7 @@ export class HookManager {
       return;
     }
 
-    const slug: string | undefined = (item as { system?: { slug?: string } })?.system?.slug;
+    const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
     const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
     const slot = demiplaneSlug ?? slug;

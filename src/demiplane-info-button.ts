@@ -1,3 +1,4 @@
+import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
 import {
@@ -26,7 +27,7 @@ export function registerDemiplaneInfoButton(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn
 ): void {
-  Hooks.on("getActorSheetHeaderButtons", (sheet: ActorSheet, buttons: Application.HeaderButton[]) => {
+  Hooks.on("getActorSheetHeaderButtons", ((sheet: ActorSheet, buttons: Application.HeaderButton[]) => {
     const actor = sheet.actor;
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
@@ -44,7 +45,7 @@ export function registerDemiplaneInfoButton(
       tooltip: "Linked to Demiplane",
       onclick: () => showDemiplaneInfoDialog(actor, characterId, importCharacter, exportCharacter),
     });
-  });
+  }) as (...args: unknown[]) => void);
 }
 
 export async function showDemiplaneInfoDialog(
@@ -116,7 +117,7 @@ function buildDialogButtons(
   importCharacter: ImportCharacterFn,
   exportCharacter: ExportCharacterFn,
   indicatorActive: boolean
-): Array<foundry.applications.api.DialogV2.Button> {
+): Array<DialogV2Button> {
   return [
     {
       action: "update",
@@ -244,7 +245,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function buildManualItemsSection(items: Item[]): string {
+function buildManualItemsSection(items: Array<{ name: string; type: string }>): string {
   if (items.length === 0) return "";
 
   const itemList = items.map((item) => `<li>${item.name} <span class="type-tag">(${item.type})</span></li>`).join("\n");

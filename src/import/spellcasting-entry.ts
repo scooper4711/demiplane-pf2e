@@ -2,6 +2,7 @@ import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
+import { documentSystem } from "../pf2e-types.js";
 
 const PROFICIENCY_TRAINED = 1;
 
@@ -30,8 +31,10 @@ export async function createEntry(
         showSlotlessLevels: { value: false },
       },
     }),
-  ] as never);
-  return (created[0] as { id: string }).id;
+  ]);
+  const first = created[0];
+  if (!first) throw new Error(`Failed to create spellcasting entry "${name}"`);
+  return first.id;
 }
 
 /**
@@ -81,12 +84,10 @@ export async function createSpellItems(actor: Actor, items: Record<string, unkno
   const slugToId = new Map<string, string>();
   if (items.length === 0) return slugToId;
 
-  const created = (await actor.createEmbeddedDocuments("Item", items as never)) as Array<{
-    id: string;
-    system: { slug: string };
-  }>;
-  for (const item of created) {
-    slugToId.set(item.system.slug, item.id);
+  const created = await actor.createEmbeddedDocuments("Item", items);
+  for (const doc of created) {
+    const slug = documentSystem(doc)?.slug;
+    if (typeof slug === "string") slugToId.set(slug, doc.id);
   }
   return slugToId;
 }

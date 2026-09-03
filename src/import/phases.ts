@@ -9,6 +9,7 @@
 
 import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
 import { stampImported } from "./types.js";
+import { characterSystem, itemSystem } from "../pf2e-types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
@@ -90,14 +91,14 @@ export class LoreItemsPhase implements ImportPhase {
     const newLores = loreNames.filter((n) => !existingLores.has(n));
 
     if (newLores.length > 0) {
-      const loreItems = newLores.map((name: string) => ({
+      const loreItems: Record<string, unknown>[] = newLores.map((name: string) => ({
         name,
         type: "lore" as const,
         system: { proficient: { value: 1 } },
       }));
       await actor.createEmbeddedDocuments(
         "Item",
-        loreItems.map((i) => stampImported(i as Record<string, unknown>)) as never
+        loreItems.map((i) => stampImported(i))
       );
       ctx.summary.log.push(`+ lore: [${newLores.join(", ")}]`);
     }
@@ -111,8 +112,8 @@ export class LoreItemsPhase implements ImportPhase {
     const bgSlug = getSlug(bgEngine);
     if (!bgSlug) return [];
     const bgItem = await resolveCompendiumItem(bgSlug, "background");
-    const system = (bgItem as { system?: { trainedSkills?: { lore?: string[] } } } | null)?.system;
-    return system?.trainedSkills?.lore ?? [];
+    if (!bgItem) return [];
+    return itemSystem(bgItem).trainedSkills?.lore ?? [];
   }
 }
 
@@ -136,7 +137,7 @@ export class SequentialItemsPhase implements ImportPhase {
     const itemData = await resolveCompendiumItem(eng._slug, category);
     if (itemData) {
       await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-      await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)] as never);
+      await actor.createEmbeddedDocuments("Item", [stampImported(itemData, eng._slug)]);
       ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
       ctx.summary.itemsImported++;
     } else {
@@ -209,13 +210,13 @@ export class ResolveGrantsPhase implements ImportPhase {
       const doc = await fromUuid(uuid);
       if (!doc) return null;
 
-      const grantData = (doc as { toObject: () => Record<string, unknown> }).toObject();
-      await actor.createEmbeddedDocuments("Item", [stampImported(grantData)] as never);
-      ctx.summary.log.push(`+ granted: ${(grantData as { name: string }).name} (from ${itemName})`);
+      // Source data is a system-specific shape; convert to plain data for stamping.
+      const grantData = doc.toObject() as unknown as Record<string, unknown>;
+      await actor.createEmbeddedDocuments("Item", [stampImported(grantData)]);
+      ctx.summary.log.push(`+ granted: ${String(grantData.name)} (from ${itemName})`);
       ctx.summary.itemsImported++;
 
-      const system = grantData.system as { slug?: string } | undefined;
-      return system?.slug ?? null;
+      return itemSystem(grantData).slug ?? null;
     } catch {
       return null;
     }
@@ -275,7 +276,7 @@ export class BatchItemsPhase implements ImportPhase {
       }
     }
     if (batchItems.length > 0) {
-      await actor.createEmbeddedDocuments("Item", batchItems as never);
+      await actor.createEmbeddedDocuments("Item", batchItems);
     }
   }
 
@@ -340,7 +341,7 @@ export class PostProcessingPhase implements ImportPhase {
     const findCustomValue = (name: string) =>
       engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name);
 
-    const maxHp = (actor as unknown as { system: { attributes: { hp: { max: number } } } }).system.attributes.hp.max;
+    const maxHp = characterSystem(actor).attributes.hp.max;
     const currentHp = Number(findCustomValue("character_hit-points_current")?.value) || maxHp;
     const tempHp = Number(findCustomValue("character_hit-points_temp")?.value) || 0;
     const heroPoints = Number(findCustomValue("character_hero-points")?.value) || 1;
@@ -349,7 +350,7 @@ export class PostProcessingPhase implements ImportPhase {
       "system.attributes.hp.value": Math.min(currentHp, maxHp),
       "system.attributes.hp.temp": tempHp,
       "system.resources.heroPoints.value": Math.min(heroPoints, 3),
-    } as never);
+    });
   }
 
   private async setActorIdentity(actor: Actor, engines: DemiplaneEngineEntry[]): Promise<void> {
@@ -407,7 +408,7 @@ export class RemoveDuplicatesPhase implements ImportPhase {
     }
 
     if (toDelete.length > 0) {
-      await actor.deleteEmbeddedDocuments("Item", toDelete as never);
+      await actor.deleteEmbeddedDocuments("Item", toDelete);
       ctx.summary.log.push(`- removed ${toDelete.length} duplicate item(s)`);
     }
   }
