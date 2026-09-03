@@ -270,33 +270,51 @@ export class BatchItemsPhase implements ImportPhase {
     const batchItems: Record<string, unknown>[] = [];
     for (const category of ["feat", "equipment"] as ItemCategory[]) {
       for (const eng of ctx.categorized[category]) {
-        const slug = toFoundrySlug(eng._slug);
-        if (ctx.selectionData.grantedFeatSlugs.has(slug)) {
-          ctx.summary.log.push(`~ ${category}: ${slug} (already granted)`);
-          continue;
-        }
-
-        const itemData = await resolveCompendiumItem(eng._slug, category);
-        if (itemData) {
-          await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
-          if ((itemData as { type: string }).type === "feat" && eng.args?.sourceRow) {
-            const { location, taken } = parseFeatSlot(eng.args.sourceRow as string);
-            const system = (itemData as Record<string, unknown>).system as Record<string, unknown>;
-            if (location) system.location = location;
-            if (taken !== null) system.level = { ...(system.level as Record<string, unknown>), taken };
-          }
-          batchItems.push(stampImported(itemData, eng._slug));
-          ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
-          ctx.summary.itemsImported++;
-        } else {
-          ctx.summary.log.push(`- ${category}: ${eng._slug} (not found)`);
-          ctx.summary.unmapped.push({ slug: eng._slug, kind: category });
-          ctx.summary.itemsSkipped++;
-        }
+        const itemOrNone = await this.processEngine(eng, category, ctx);
+        if (itemOrNone) batchItems.push(itemOrNone);
       }
     }
     if (batchItems.length > 0) {
-      await (actor as Actor).createEmbeddedDocuments("Item", batchItems as never);
+      await actor.createEmbeddedDocuments("Item", batchItems as never);
+    }
+  }
+
+  private async processEngine(
+    eng: DemiplaneEngineEntry & { _slug: string },
+    category: ItemCategory,
+    ctx: ImportContext
+  ): Promise<Record<string, unknown> | null> {
+    const slug = toFoundrySlug(eng._slug);
+    if (ctx.selectionData.grantedFeatSlugs.has(slug)) {
+      ctx.summary.log.push(`~ ${category}: ${slug} (already granted)`);
+      return null;
+    }
+
+    const itemData = await resolveCompendiumItem(eng._slug, category);
+    if (!itemData) {
+      ctx.summary.log.push(`- ${category}: ${eng._slug} (not found)`);
+      ctx.summary.unmapped.push({ slug: eng._slug, kind: category });
+      ctx.summary.itemsSkipped++;
+      return null;
+    }
+
+    await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
+    if ((itemData as { type: string }).type === "feat" && eng.args?.sourceRow) {
+      this.applyFeatSlot(itemData, eng.args.sourceRow as string);
+    }
+
+    const stamped = stampImported(itemData, eng._slug);
+    ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
+    ctx.summary.itemsImported++;
+    return stamped;
+  }
+
+  private applyFeatSlot(itemData: Record<string, unknown>, sourceRow: string): void {
+    const { location, taken } = parseFeatSlot(sourceRow);
+    const system = itemData.system as Record<string, unknown>;
+    if (location) system.location = location;
+    if (taken !== null) {
+      system.level = { ...(system.level as Record<string, unknown>), taken };
     }
   }
 }

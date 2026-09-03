@@ -58,41 +58,19 @@ describe("applyBiography", () => {
     );
   });
 
-  it("splits edicts on commas", async () => {
+  it.each([
+    ["Be brave, Help others, Stay true", ["Be brave", "Help others", "Stay true"]],
+    ["Be brave\nHelp others\nStay true", ["Be brave", "Help others", "Stay true"]],
+    ["Be brave; Help others; Stay true", ["Be brave", "Help others", "Stay true"]],
+  ])("splits edicts on delimiters", async (input, expected) => {
     const actor = createMockActor();
-    const engines = [makeEngine("character_personality_edicts", "Be brave, Help others, Stay true")];
+    const engines = [makeEngine("character_personality_edicts", input)];
     const summary = makeSummary();
     await applyBiography(actor as never, engines, summary);
 
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        "system.details.biography.edicts": ["Be brave", "Help others", "Stay true"],
-      })
-    );
-  });
-
-  it("splits edicts on newlines", async () => {
-    const actor = createMockActor();
-    const engines = [makeEngine("character_personality_edicts", "Be brave\nHelp others\nStay true")];
-    const summary = makeSummary();
-    await applyBiography(actor as never, engines, summary);
-
-    expect(actor.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        "system.details.biography.edicts": ["Be brave", "Help others", "Stay true"],
-      })
-    );
-  });
-
-  it("splits edicts on semicolons", async () => {
-    const actor = createMockActor();
-    const engines = [makeEngine("character_personality_edicts", "Be brave; Help others; Stay true")];
-    const summary = makeSummary();
-    await applyBiography(actor as never, engines, summary);
-
-    expect(actor.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        "system.details.biography.edicts": ["Be brave", "Help others", "Stay true"],
+        "system.details.biography.edicts": expected,
       })
     );
   });

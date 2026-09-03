@@ -141,7 +141,11 @@ describe("applyLanguages", () => {
     };
   }
 
-  it("adds valid languages", async () => {
+  it.each([
+    { delimiter: "commas", value: "Draconic, Elven" },
+    { delimiter: "newlines", value: "Draconic\nElven" },
+    { delimiter: "semicolons", value: "Draconic; Elven" },
+  ])("adds valid languages split on $delimiter", async ({ value }) => {
     const actor = createMockActor();
     const engines: DemiplaneEngineEntry[] = [
       {
@@ -149,7 +153,7 @@ describe("applyLanguages", () => {
         name: "character-languages-user",
         type: "CustomDemiplaneEngine",
         args: {},
-        value: "Draconic, Elven",
+        value,
       },
     ];
     const summary = makeSummary();
@@ -175,44 +179,6 @@ describe("applyLanguages", () => {
     await applyLanguages(actor as never, engines, summary);
 
     expect(summary.log.some((l) => l.includes("not found") && l.includes("klingon"))).toBe(true);
-  });
-
-  it("splits on newlines", async () => {
-    const actor = createMockActor();
-    const engines: DemiplaneEngineEntry[] = [
-      {
-        id: "1",
-        name: "character-languages-user",
-        type: "CustomDemiplaneEngine",
-        args: {},
-        value: "Draconic\nElven",
-      },
-    ];
-    const summary = makeSummary();
-    await applyLanguages(actor as never, engines, summary);
-
-    expect(actor.update).toHaveBeenCalledWith({
-      "system.details.languages.value": ["common", "draconic", "elven"],
-    });
-  });
-
-  it("splits on semicolons", async () => {
-    const actor = createMockActor();
-    const engines: DemiplaneEngineEntry[] = [
-      {
-        id: "1",
-        name: "character-languages-user",
-        type: "CustomDemiplaneEngine",
-        args: {},
-        value: "Draconic; Elven",
-      },
-    ];
-    const summary = makeSummary();
-    await applyLanguages(actor as never, engines, summary);
-
-    expect(actor.update).toHaveBeenCalledWith({
-      "system.details.languages.value": ["common", "draconic", "elven"],
-    });
   });
 });
 
