@@ -5,7 +5,8 @@ import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem } from "../slug-mapping.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
-import type { CompendiumIndexData } from "@client/documents/collections/compendium-collection.mjs";
+import { getPackIndex, type PackIndex } from "./pack-index.js";
+import { toPlainData } from "../pf2e-types.js";
 
 interface EquipmentState {
   primaryHandId: string | undefined;
@@ -123,7 +124,7 @@ function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemTy
   };
 }
 
-function findBySlug(equipIndex: Collection<string, CompendiumIndexData>, slug: string): { _id: string } | undefined {
+function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | undefined {
   const exact = equipIndex.find((e) => e.system?.slug === slug);
   if (exact) return exact;
 
@@ -170,9 +171,7 @@ export async function applyEquipment(
     summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
     return;
   }
-  const equipIndex = await equipPack.getIndex({
-    fields: ["system.slug"],
-  });
+  const equipIndex = await getPackIndex(equipPack, ["system.slug"]);
 
   const items: PendingItem[] = [];
   const skipped: string[] = [];
@@ -206,7 +205,7 @@ export async function applyEquipment(
 async function buildEquipmentItem(
   eng: DemiplaneEngineEntry,
   equipPack: CompendiumCollection,
-  equipIndex: Collection<string, CompendiumIndexData>,
+  equipIndex: PackIndex,
   state: EquipmentState,
   summary: ImportSummary,
   skipped: string[]
@@ -232,8 +231,7 @@ async function buildEquipmentItem(
   const doc = await equipPack.getDocument(indexEntry._id);
   if (!doc) return null;
 
-  // Source data is a system-specific shape; convert to plain data for stamping.
-  const data = doc.toObject() as unknown as Record<string, unknown>;
+  const data = toPlainData(doc);
   const system = data.system as Record<string, unknown>;
   system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
@@ -294,9 +292,7 @@ export async function applyCurrency(
 ): Promise<void> {
   const equipPack = game.packs.get(EQUIPMENT_PACK);
   if (!equipPack) return;
-  const index = await equipPack.getIndex({
-    fields: ["system.slug"],
-  });
+  const index = await getPackIndex(equipPack, ["system.slug"]);
 
   const coinItems: Record<string, unknown>[] = [];
   for (const { engine, slug } of CURRENCY_MAP) {
@@ -310,8 +306,7 @@ export async function applyCurrency(
     const doc = await equipPack.getDocument(entry._id);
     if (!doc) continue;
 
-    // Source data is a system-specific shape; convert to plain data for stamping.
-    const data = doc.toObject() as unknown as Record<string, unknown>;
+    const data = toPlainData(doc);
     const system = data.system as Record<string, unknown>;
     system.quantity = amount;
     system.equipped = { carryType: "worn", handsHeld: 0 };

@@ -174,6 +174,21 @@ export function itemSystem(item: WithSystem): Pf2eItemSystem {
   return item.system as Pf2eItemSystem;
 }
 
+/** A document that can serialize itself to plain source data. */
+interface ToObjectDocument {
+  toObject: () => object;
+}
+
+/**
+ * Serializes a compendium document to a plain, mutable data record for stamping
+ * and item creation. `toObject` returns the system-specific source shape; the
+ * import pipeline treats it as an open record it can stamp flags onto, so this
+ * is the one place that widening happens.
+ */
+export function toPlainData(doc: ToObjectDocument): Record<string, unknown> {
+  return doc.toObject() as Record<string, unknown>;
+}
+
 /**
  * Reads system data off a freshly created embedded document.
  * `createEmbeddedDocuments` is typed to return base `Document`s (which carry
@@ -188,4 +203,51 @@ export function documentSystem(doc: unknown): Pf2eItemSystem | undefined {
 /** Reads this module's item flags without a cast at each call site. */
 export function demiplaneItemFlags(item: { readonly flags?: Record<string, unknown> }): DemiplaneItemFlags {
   return (item.flags?.["demiplane-pf2e"] ?? {}) as DemiplaneItemFlags;
+}
+
+// ─── Document internals not on the base `Document` type ──────────────────────
+
+/**
+ * An item's authored rule elements, read from `_source.system.rules` (the form
+ * before active effects) and falling back to prepared `system.rules`. Grant
+ * resolution needs the authored form, which the base document type doesn't
+ * expose. Structural read so test stand-ins work too.
+ */
+export function sourceRules(item: {
+  system?: { rules?: Array<Record<string, unknown>> };
+}): Array<Record<string, unknown>> {
+  const source = (item as { _source?: { system?: { rules?: Array<Record<string, unknown>> } } })._source?.system;
+  return source?.rules ?? item.system?.rules ?? [];
+}
+
+/** The compendium document id an item was granted/created from, if any. */
+export function itemSourceId(item: object): string | undefined {
+  return (item as { sourceId?: string }).sourceId;
+}
+
+/** The `_stats.compendiumSource` UUID PF2e records on granted items, if any. */
+export function compendiumSource(item: object): string | undefined {
+  return (item as { _stats?: { compendiumSource?: string } })._stats?.compendiumSource;
+}
+
+// ─── PF2e runtime globals ────────────────────────────────────────────────────
+
+/**
+ * The PF2e language keys registered at runtime. Prefers `game.pf2e.system.config`
+ * and falls back to `CONFIG.PF2E`, matching how the system exposes it across
+ * versions. Returns an empty object when neither is present. `foundry-globals.d.ts`
+ * types `game.pf2e` and `CONFIG.PF2E` loosely, so this is the one place that
+ * knows the `languages` shape.
+ */
+export function pf2eLanguages(): Record<string, string> {
+  const fromGame = (
+    game.pf2e as { system?: { config?: { PF2E?: { languages?: Record<string, string> } } } } | undefined
+  )?.system?.config?.PF2E?.languages;
+  return fromGame ?? CONFIG.PF2E?.languages ?? {};
+}
+
+/** A builtin PF2e rule-element class (e.g. `ChoiceSet`) by name, or `undefined`. */
+export function builtinRuleElement(name: string): { prototype: Record<string, unknown> } | undefined {
+  const builtin = game.pf2e?.RuleElements?.builtin?.[name];
+  return builtin as { prototype: Record<string, unknown> } | undefined;
 }

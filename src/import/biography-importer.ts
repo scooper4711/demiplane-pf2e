@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { DEITIES_PACK } from "../config.js";
+import { toPlainData } from "../pf2e-types.js";
 
 /**
  * Maps a Demiplane engine name to the Foundry actor path it populates.
@@ -97,8 +98,7 @@ async function applyDeity(
   }
   const deityDoc = await deityPack.getDocument(match._id);
   if (deityDoc) {
-    // Source data is a system-specific shape; convert to plain data for stamping.
-    const deityData = deityDoc.toObject() as unknown as Record<string, unknown>;
+    const deityData = toPlainData(deityDoc);
     await actor.createEmbeddedDocuments("Item", [stampImported(deityData)]);
     summary.log.push(`+ deity: ${deityName}`);
   }
