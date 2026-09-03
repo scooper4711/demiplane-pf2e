@@ -900,4 +900,86 @@ describe("HookManager", () => {
       expect(exportManager.queueItemChange).not.toHaveBeenCalled();
     });
   });
+
+  describe("deity changes", () => {
+    it("queues the deity name when a deity item is added", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Sarenrae", { type: "deity", system: { slug: "sarenrae" } });
+
+      triggerHook("createItem", item);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Sarenrae");
+    });
+
+    it("clears the deity when a deity item is removed", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Sarenrae", { type: "deity", system: { slug: "sarenrae" } });
+
+      triggerHook("deleteItem", item);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "");
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("queues the deity name from a manual text edit to the deity field", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = { system: { details: { deity: { value: "Iomedae" } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Iomedae");
+    });
+
+    it("does not queue a deity change for non-deity item creation", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = createMockItem(actor, "Longsword", { type: "weapon", system: { slug: "longsword" } });
+
+      triggerHook("createItem", item);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_personality_beliefs",
+        expect.anything()
+      );
+    });
+
+    it("does not queue a deity change when autoSync is disabled", () => {
+      autoSyncEnabled = false;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const created = createMockItem(actor, "Sarenrae", { type: "deity", system: { slug: "sarenrae" } });
+      triggerHook("createItem", created);
+
+      const removed = createMockItem(actor, "Sarenrae", { type: "deity", system: { slug: "sarenrae" } });
+      triggerHook("deleteItem", removed);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("does not queue a deity change while another client is syncing", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor("character", "char-uuid-1234", { syncActiveTokens: ["remote-token"] });
+      const item = createMockItem(actor, "Sarenrae", { type: "deity", system: { slug: "sarenrae" } });
+
+      triggerHook("createItem", item);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+  });
 });
