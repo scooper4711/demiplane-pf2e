@@ -28,6 +28,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Mapping Precedence](#20-mapping-precedence--mappings-win)
 - [Mapping Screen Interaction Model](#21-mapping-screen-interaction-model)
 - [Recorded Resolutions and the Full Mapping List](#22-recorded-resolutions-and-the-full-mapping-list)
+- [Foundry Type Strategy and Access Seams](#23-foundry-type-strategy-and-access-seams)
 
 ---
 
@@ -527,3 +528,31 @@ A useful side effect: the store doubles as a resolution cache. Because a mapping
 **Responsive open:** with the store holding every resolved slug, building the list must learn each mapping's icon and whether its target still exists. The naive approach — a `fromUuid` per mapping — loads every item document in full (rule elements, descriptions, embedded data) just to read two fields, which made a large store slow to open. Instead `applyMappingTargets` groups the mapped rows by pack and reads each pack's _index_ once (`getIndex({ fields: ["img"] })`), which is cached after first access. The index carries `img` and tells us whether an id still exists — the only fields a row needs. So the cost drops from one document load per mapping to roughly one index read per pack (seven at most). Non-compendium UUIDs (rare) still fall back to a direct `fromUuid`. This alone made the editor open fast enough that an interim loading state was unnecessary and was removed.
 
 **Boy-scout note:** the store is now a superset — GM overrides plus recorded auto-resolutions — rather than overrides only ([§19](#19-slug-mapping-storage--one-setting-per-kind) still describes the storage shape, which is unchanged).
+
+---
+
+## 23. Foundry Type Strategy and Access Seams
+
+**Decision:** The module types Foundry against `@dfreds/foundry-types` (the published copy of the PF2e system's own hand-maintained Foundry types), not the League `fvtt-types` package. Anything those types don't model — PF2e's `system` shapes, PF2e-specific document internals, and runtime globals — is reached through a small set of **access seams** rather than inline casts scattered across the codebase.
+
+**Rationale:** `@dfreds/foundry-types` types the document-operation methods with usable signatures (`createEmbeddedDocuments(name, data: object[])`, a generic `getIndex<T>()`), so item create/update/delete and index reads type-check with **no cast at all**. That removes the largest and most dangerous class of assertion outright — the `as never` casts that a stricter type layer would otherwise force onto every document mutation.
+
+What `@dfreds/foundry-types` deliberately does not provide is the PF2e _system_ data model (`Actor#system` / `Item#system` stay generic `object`, because only the PF2e system knows those shapes and it doesn't publish them), nor the Foundry runtime globals (`game`, `ui`, `CONFIG`). Reaching those still needs a type assertion. Left inline, those assertions multiply and drift, and `as unknown as` in particular hides real shape errors. So each cause is centralized behind a named boundary:
+
+| Seam                       | Covers                                                                                     | Public API                                                                                                                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/pf2e-types.ts`        | PF2e `system` shapes, document internals, and PF2e runtime globals                         | `actorSystem`, `characterSystem`, `itemSystem`, `documentSystem`, `demiplaneItemFlags`, `toPlainData`, `sourceRules`, `itemSourceId`, `compendiumSource`, `pf2eLanguages`, `builtinRuleElement` (+ the `Pf2e*` shape interfaces) |
+| `src/import/pack-index.ts` | Typing a compendium index's `system` payload (which `CompendiumIndexData` leaves as `any`) | `getPackIndex(pack, fields)`, `PackIndex` / `PackIndexEntry`                                                                                                                                                                     |
+| `src/foundry-globals.d.ts` | Declaring the Foundry runtime globals `@dfreds/foundry-types` omits                        | ambient `game` / `ui` / `CONFIG` / `ActorSheet` shapes                                                                                                                                                                           |
+
+**Rule for new code:** touching `Actor#system` / `Item#system`, a PF2e-specific document field (`_source`, `sourceId`, `_stats`), a compendium index, or a PF2e runtime global goes through a seam accessor. If the accessor you need doesn't exist, add it to the relevant seam (usually `pf2e-types.ts`) rather than writing `as unknown as { … }` at the call site. That keeps every system-shape assertion in one file with its rationale, and keeps call sites reading as intent (`characterSystem(actor).skills`, `sourceRules(item)`, `toPlainData(doc)`).
+
+**What legitimately stays inline (not everything routes through a seam):**
+
+- **Genuinely untyped globals reached once**, each already wrapped in a single dedicated function: `libWrapper` (`src/libwrapper.ts` — a `globalThis` lookup for an optional module), and the module API assignment in `module.ts`. An `as unknown as` here is the correct tool: there is no published type for the surface, and it is touched in exactly one place.
+- **Parse-boundary narrowing** — `stream-engines.ts` narrowing a freshly-parsed JSON object to a discriminated-union member. This is data ingestion, not a Foundry-type gap.
+- **Single-consumer UI shapes** — the mapping app's `AppClass` constructor coercion and its Compendium Browser access, and `titlebar-dot.ts`'s window→`ActorSheet` narrowing. These are one-off, UI-layer, and self-descriptive.
+
+The test is the same as elsewhere: centralize a cast when the same gap is hit from more than one place, or when the unsafe surface benefits from being named and explained. A one-off, self-evident coercion can stay where it is. `as unknown as` is not banned — it is confined to these isolated, single-use boundaries.
+
+**Relationship to the earlier `fvtt-types` design:** an earlier iteration stayed on `fvtt-types` and taught it the PF2e shapes via a `declare module "fvtt-types/configuration"` augmentation (`pf2e-foundry-config.d.ts`). That approach could not make the document-mutation methods callable (fvtt-types poisons them with `never` parameters unless the concrete subclass overload resolves), so those operations required `as never`. Moving to `@dfreds/foundry-types` removes that whole class of cast at the source; `pf2e-foundry-config.d.ts` is deleted, replaced by `pf2e-types.ts` (system shapes as plain interfaces + accessors) and `foundry-globals.d.ts` (the runtime globals the package omits).

@@ -9,7 +9,14 @@
 
 import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
 import { stampImported } from "./types.js";
-import { characterSystem, itemSystem } from "../pf2e-types.js";
+import {
+  characterSystem,
+  itemSystem,
+  sourceRules,
+  itemSourceId,
+  compendiumSource,
+  toPlainData,
+} from "../pf2e-types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
@@ -189,9 +196,7 @@ export class ResolveGrantsPhase implements ImportPhase {
   private extractSourceRules(item: {
     system: { rules?: Array<Record<string, unknown>> };
   }): Array<Record<string, unknown>> {
-    const sourceSystem = (item as unknown as { _source?: { system?: { rules?: Array<Record<string, unknown>> } } })
-      ._source?.system;
-    return sourceSystem?.rules ?? item.system?.rules ?? [];
+    return sourceRules(item);
   }
 
   private async processGrantRule(
@@ -210,8 +215,7 @@ export class ResolveGrantsPhase implements ImportPhase {
       const doc = await fromUuid(uuid);
       if (!doc) return null;
 
-      // Source data is a system-specific shape; convert to plain data for stamping.
-      const grantData = doc.toObject() as unknown as Record<string, unknown>;
+      const grantData = toPlainData(doc);
       await actor.createEmbeddedDocuments("Item", [stampImported(grantData)]);
       ctx.summary.log.push(`+ granted: ${String(grantData.name)} (from ${itemName})`);
       ctx.summary.itemsImported++;
@@ -251,13 +255,10 @@ export class ResolveGrantsPhase implements ImportPhase {
       const core = existing.flags?.core as { sourceId?: string } | undefined;
       if (core?.sourceId === uuid) return true;
 
-      if ((existing as unknown as { sourceId?: string }).sourceId === uuid) return true;
+      if (itemSourceId(existing) === uuid) return true;
 
       const pf2eFlags = existing.flags?.pf2e as { grantedBy?: { id?: string } } | undefined;
-      if (pf2eFlags?.grantedBy) {
-        const src = (existing as unknown as { _stats?: { compendiumSource?: string } })._stats?.compendiumSource;
-        if (src === uuid) return true;
-      }
+      if (pf2eFlags?.grantedBy && compendiumSource(existing) === uuid) return true;
 
       return false;
     });
