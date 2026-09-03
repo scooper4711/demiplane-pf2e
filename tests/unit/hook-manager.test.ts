@@ -24,6 +24,20 @@ vi.stubGlobal("game", {
   },
 });
 
+vi.stubGlobal("CONFIG", {
+  PF2E: {
+    languages: {
+      common: "Common",
+      draconic: "Draconic",
+      dwarven: "Dwarven",
+      halfling: "Halfling",
+      undercommon: "Undercommon",
+      sakvroth: "Sakvroth",
+      varisian: "Varisian",
+    },
+  },
+});
+
 import { HookManager, queueAllItemChanges, queueCombatResourceChanges } from "../../src/hook-manager.js";
 
 const MODULE_ID = "demiplane-pf2e";
@@ -980,6 +994,89 @@ describe("HookManager", () => {
       triggerHook("createItem", item);
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("updateActor hook — languages", () => {
+    function createActorWithLanguages(
+      value: string[],
+      granted: { slug: string; source: string }[]
+    ): ReturnType<typeof createMockActor> {
+      const actor = createMockActor();
+      actor.system = {
+        ...actor.system,
+        details: { languages: { value } },
+        build: { languages: { granted } },
+      } as never;
+      return actor;
+    }
+
+    it("pushes only user-added languages, excluding ancestry grants, as display names", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      // Common is granted by ancestry; the rest are user-added.
+      const actor = createActorWithLanguages(
+        ["common", "draconic", "dwarven", "halfling", "undercommon", "varisian"],
+        [{ slug: "common", source: "Human" }]
+      );
+      const changes = { system: { details: { languages: { value: actor.system.details.languages.value } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character-languages-user",
+        "Draconic, Dwarven, Halfling, Undercommon, Varisian"
+      );
+    });
+
+    it("pushes the corrected language after a user edit (Undercommon -> Sakvroth)", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createActorWithLanguages(["common", "sakvroth"], [{ slug: "common", source: "Human" }]);
+      const changes = { "system.details.languages.value": ["common", "sakvroth"] };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character-languages-user", "Sakvroth");
+    });
+
+    it("pushes an empty string when only granted languages remain", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createActorWithLanguages(["common"], [{ slug: "common", source: "Human" }]);
+      const changes = { system: { details: { languages: { value: ["common"] } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character-languages-user", "");
+    });
+
+    it("title-cases languages the PF2e config does not know", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createActorWithLanguages(["common", "ancient-osiriani"], [{ slug: "common", source: "Human" }]);
+      const changes = { system: { details: { languages: { value: ["common", "ancient-osiriani"] } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character-languages-user", "Ancient Osiriani");
+    });
+
+    it("does not queue a language change when languages are not part of the update", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createActorWithLanguages(["common", "draconic"], [{ slug: "common", source: "Human" }]);
+      const changes = { system: { attributes: { hp: { value: 10 } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character-languages-user", expect.anything());
     });
   });
 });

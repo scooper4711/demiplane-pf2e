@@ -2,7 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import { isSyncActive } from "./sync-pause.js";
-import { characterSystem, itemSystem } from "./pf2e-types.js";
+import { characterSystem, itemSystem, pf2eLanguages } from "./pf2e-types.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -18,6 +18,21 @@ import { characterSystem, itemSystem } from "./pf2e-types.js";
  * Mirrors the import side (biography-importer.applyDeity).
  */
 const DEITY_STORE_NAME = "character_personality_beliefs";
+
+/**
+ * Demiplane store name for the character's additional (user-added) languages.
+ * Demiplane persists only the languages the user typed in; ancestry/heritage
+ * grants are recomputed on its side and are not writable. So on export we push
+ * the character's full language list minus the ancestry/heritage/feat grants,
+ * mirroring how the import merges this field on top of the granted ones.
+ */
+const LANGUAGES_STORE_NAME = "character-languages-user";
+
+/** Separator Demiplane uses between languages in the free-text field. */
+const LANGUAGE_SEPARATOR = ", ";
+
+/** The Foundry actor path holding the character's full (merged) language list. */
+const LANGUAGES_PATH = "system.details.languages.value";
 
 const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
@@ -191,6 +206,46 @@ export class HookManager {
 
     // Campaign Notes maps to a "Campaign" journal entry, not an engine override.
     this.queueCampaignNotesChange(actor, changes);
+
+    // Languages need the granted set subtracted, so they can't be a plain
+    // ACTOR_FIELD_MAPPINGS entry.
+    this.queueLanguagesChange(actor, changes);
+  }
+
+  /**
+   * Queues the character's additional languages when the language list changes.
+   *
+   * Foundry's `system.details.languages.value` is the full list (ancestry and
+   * feat grants merged with the user's picks), but Demiplane only stores the
+   * user-added languages. So we subtract the granted languages — read from the
+   * live actor's derived `build.languages.granted` — before pushing, and convert
+   * the remaining slugs to Demiplane's display-name, comma-separated format.
+   */
+  private queueLanguagesChange(actor: Actor, changes: Record<string, unknown>): void {
+    if (this.getChangeValue(changes, LANGUAGES_PATH) === undefined) return;
+
+    const additional = this.additionalLanguageNames(actor);
+    this.exportManager.queueChange(actor, LANGUAGES_STORE_NAME, additional.join(LANGUAGE_SEPARATOR));
+  }
+
+  /**
+   * The user-added languages as Demiplane display names: the actor's full
+   * language list minus the ancestry/heritage/feat grants.
+   */
+  private additionalLanguageNames(actor: Actor): string[] {
+    const languages = characterSystem(actor).details.languages;
+    const all = languages?.value ?? [];
+    const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
+    const labels = pf2eLanguages();
+    return all.filter((slug) => !granted.has(slug)).map((slug) => labels[slug] ?? this.titleCase(slug));
+  }
+
+  /** Falls back to a readable name for a language slug the PF2e config doesn't know. */
+  private titleCase(slug: string): string {
+    return slug
+      .split("-")
+      .map((part) => (part.length > 0 ? part[0]!.toUpperCase() + part.slice(1) : part))
+      .join(" ");
   }
 
   private queueOrganizedPlayChange(actor: Actor, changes: Record<string, unknown>): void {

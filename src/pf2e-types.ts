@@ -70,8 +70,16 @@ export interface Pf2ePathfinderSocietyData {
 /** Subset of CharacterSystemData this module reads (pf2e/src/module/actor/character/data.ts). */
 export interface Pf2eCharacterSystem {
   attributes: { hp: Pf2eHitPoints };
-  /** Attribute boosts keyed by the level at which they were taken. */
-  build: { attributes: { boosts: Record<string, string[]> } };
+  /**
+   * Derived build data. `attributes.boosts` is keyed by the level at which each
+   * boost was taken; `languages.granted` lists the languages auto-granted by
+   * ancestry/heritage/feats (each with its human-readable source), which do not
+   * count against the character's chosen-language maximum.
+   */
+  build: {
+    attributes: { boosts: Record<string, string[]> };
+    languages: { granted: { slug: string; source: string }[] };
+  };
   currency: Pf2eCurrency;
   details: Pf2eCharacterDetails;
   pfs: Pf2ePathfinderSocietyData;
