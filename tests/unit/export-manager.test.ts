@@ -11,6 +11,13 @@ vi.stubGlobal("ui", {
   notifications: { error: vi.fn() },
 });
 
+let autoSyncEnabled = true;
+vi.stubGlobal("game", {
+  settings: {
+    get: (_moduleId: string, key: string) => (key === "autoSync" ? autoSyncEnabled : undefined),
+  },
+});
+
 import { ExportManager } from "../../src/export-manager.js";
 import { computeEngineSig } from "../../src/engine-sig.js";
 import { isSyncActive } from "../../src/sync-pause.js";
@@ -86,6 +93,7 @@ describe("ExportManager", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    autoSyncEnabled = true;
   });
 
   afterEach(() => {
@@ -1325,6 +1333,35 @@ describe("ExportManager", () => {
 
       // Error is swallowed (best-effort) and the lock is released.
       expect(isSyncActive(actor as never)).toBe(false);
+    });
+  });
+
+  describe("auto-sync master write switch", () => {
+    it("flush writes nothing to Demiplane when auto-sync is disabled", async () => {
+      autoSyncEnabled = false;
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createMockActor();
+
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(client.updateCharacter).not.toHaveBeenCalled();
+      expect(client.updateLastAccess).not.toHaveBeenCalled();
+    });
+
+    it("exportCampaignNotes writes no journal when auto-sync is disabled", async () => {
+      autoSyncEnabled = false;
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor();
+
+      await manager.exportCampaignNotes(actor as never, "notes");
+
+      expect(client.fetchCharacterJournals).not.toHaveBeenCalled();
+      expect(client.createCharacterJournal).not.toHaveBeenCalled();
+      expect(client.updateCharacterJournal).not.toHaveBeenCalled();
     });
   });
 });

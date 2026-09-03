@@ -439,12 +439,12 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
+    if (!game.settings.get(MODULE_ID, "autoSync")) return;
     if (isSyncActive(actor)) return;
 
     const itemType = (item as { type?: string })?.type;
 
     if (itemType === "deity") {
-      if (!game.settings.get(MODULE_ID, "autoSync")) return;
       debugLog(`Deity removed from linked actor: ${item.name}`);
       this.exportManager.queueChange(actor, DEITY_STORE_NAME, "");
       return;
