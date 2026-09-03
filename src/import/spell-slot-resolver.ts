@@ -37,7 +37,7 @@ export interface ResolveSpellSlotsOptions {
 export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Promise<SpellSlotProgression> {
   const overrides = findSlotOverrides(options.engines, options.parentSpellFeature, options.slotSlug ?? "");
 
-  if (hasCompleteOverrides(overrides, options.characterLevel)) {
+  if (hasCompleteOverrides(overrides)) {
     return buildProgressionFromOverrides(overrides);
   }
 
@@ -140,7 +140,7 @@ function isOverrideActive(engines: DemiplaneEngineEntry[], overrideName: string)
   return engines.some((e) => e.type === "CustomDemiplaneEngine" && e.name === flagName && e.value === 1);
 }
 
-function hasCompleteOverrides(overrides: Map<string, number>, _characterLevel: number): boolean {
+function hasCompleteOverrides(overrides: Map<string, number>): boolean {
   // Only use overrides exclusively if we have at least cantrip + one rank override.
   // Otherwise we need stream-engines data to fill gaps.
   return overrides.size >= 2 && overrides.has("cantrip");

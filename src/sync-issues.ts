@@ -3,7 +3,7 @@ import type { UnmappedSlug } from "./import/types.js";
 
 export const ISSUES_CHANGED_EVENT = "demiplaneSyncIssuesChanged";
 
-export type IssueSetKind = "import" | "export";
+type IssueSetKind = "import" | "export";
 
 const UNMAPPED_FLAG = "unmappedSlugs";
 const ACKNOWLEDGED_FLAG = "issuesAcknowledged";
@@ -85,11 +85,6 @@ export function resetImportIssues(actor: Actor): void {
   void writeIssueSet(actor, "import", new Set());
   void actor.setFlag(MODULE_ID, UNMAPPED_FLAG, []);
   void actor.setFlag(MODULE_ID, ACKNOWLEDGED_FLAG, false);
-  notifyChanged(actor);
-}
-
-export function clearExportIssues(actor: Actor): void {
-  void writeIssueSet(actor, "export", new Set());
   notifyChanged(actor);
 }
 

@@ -7,7 +7,6 @@ import {
   acknowledgeIssues,
   setUnmappedSlugs,
   resetImportIssues,
-  clearExportIssues,
   clearAllIssues,
   addImportIssue,
   addExportIssue,
@@ -74,17 +73,6 @@ describe("sync-issues", () => {
     expect(getImportIssues(actor).size).toBe(0);
     expect(getExportIssues(actor).size).toBe(1);
     expect(hasActiveIssues(actor)).toBe(true);
-  });
-
-  it("clearExportIssues clears only the export set", async () => {
-    const actor = createFlagActor() as unknown as Actor;
-    addImportIssue(actor, "import problem");
-    addExportIssue(actor, "export problem");
-
-    clearExportIssues(actor);
-
-    expect(getImportIssues(actor).size).toBe(1);
-    expect(getExportIssues(actor).size).toBe(0);
   });
 
   it("clearAllIssues clears both sets", async () => {

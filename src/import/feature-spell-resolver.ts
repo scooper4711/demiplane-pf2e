@@ -11,6 +11,7 @@ import {
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 import { getCharacterLevel } from "./spell-slots.js";
 import { itemSystem } from "../pf2e-types.js";
+import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
 export interface GrantedSpell {
@@ -217,7 +218,7 @@ async function createFeatureEntry(
       system: {
         prepared: { value: preparedType },
         tradition: { value: tradition },
-        proficiency: { value: 1 },
+        proficiency: { value: PROFICIENCY_TRAINED },
         showSlotlessLevels: { value: false },
       },
     }),

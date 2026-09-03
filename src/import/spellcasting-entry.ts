@@ -3,8 +3,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 import { documentSystem } from "../pf2e-types.js";
-
-const PROFICIENCY_TRAINED = 1;
+import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
 
 /** Optional per-spell overrides applied to `system.location` on a resolved spell item. */
 export interface SpellLocationExtras {

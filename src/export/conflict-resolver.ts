@@ -3,7 +3,7 @@ import { debugLog } from "../import/debug-log.js";
 import { computeEngineSig } from "../engine-sig.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 
-export type ConflictCheckResult = { status: "ok" } | { status: "conflict"; error: string };
+type ConflictCheckResult = { status: "ok" } | { status: "conflict"; error: string };
 
 /**
  * Encapsulates the optimistic-concurrency check performed before a push.

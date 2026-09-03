@@ -866,20 +866,6 @@ describe("HookManager", () => {
     });
   });
 
-  describe("unregister removes hooks", () => {
-    it("calls Hooks.off for all registered hook IDs", () => {
-      const manager = new HookManager(exportManager as never);
-      manager.register();
-      manager.unregister();
-
-      expect(Hooks.off).toHaveBeenCalledTimes(4);
-      expect(Hooks.off).toHaveBeenCalledWith("updateActor", expect.any(Number));
-      expect(Hooks.off).toHaveBeenCalledWith("updateItem", expect.any(Number));
-      expect(Hooks.off).toHaveBeenCalledWith("createItem", expect.any(Number));
-      expect(Hooks.off).toHaveBeenCalledWith("deleteItem", expect.any(Number));
-    });
-  });
-
   describe("cross-client sync pause", () => {
     it("does not queue an actor push while another client is syncing the character", () => {
       const manager = new HookManager(exportManager as never);

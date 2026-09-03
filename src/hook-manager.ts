@@ -11,6 +11,14 @@ import { characterSystem, itemSystem } from "./pf2e-types.js";
  * to the `updateActor` hook. Values are the Demiplane Custom_Engine store
  * names used by ExportManager.queueChange.
  */
+/**
+ * Demiplane store name for the character's deity. In PF2e a deity is normally
+ * an embedded Item of type "deity"; the free-text `system.details.deity.value`
+ * is only the fallback used when the deity is not found in the compendium.
+ * Mirrors the import side (biography-importer.applyDeity).
+ */
+const DEITY_STORE_NAME = "character_personality_beliefs";
+
 const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
   "system.attributes.hp.temp": "character_hit-points_temp",
@@ -132,13 +140,6 @@ function queueEquipped(
   );
 }
 
-type ActorSyncHook = "updateActor" | "updateItem" | "createItem" | "deleteItem";
-
-interface RegisteredHook {
-  event: ActorSyncHook;
-  id: number;
-}
-
 /**
  * Manages Foundry hooks for detecting session state changes on linked actors
  * and queueing them for export to Demiplane.
@@ -148,29 +149,16 @@ interface RegisteredHook {
  */
 export class HookManager {
   private readonly exportManager: ExportManager;
-  private hooks: RegisteredHook[] = [];
 
   constructor(exportManager: ExportManager) {
     this.exportManager = exportManager;
   }
 
   register(): void {
-    this.hooks.push(
-      {
-        event: "updateActor",
-        id: Hooks.on("updateActor", this.onActorUpdate.bind(this) as (...args: unknown[]) => void),
-      },
-      { event: "updateItem", id: Hooks.on("updateItem", this.onItemUpdate.bind(this) as (...args: unknown[]) => void) },
-      { event: "createItem", id: Hooks.on("createItem", this.onItemCreate.bind(this) as (...args: unknown[]) => void) },
-      { event: "deleteItem", id: Hooks.on("deleteItem", this.onItemDelete.bind(this) as (...args: unknown[]) => void) }
-    );
-  }
-
-  unregister(): void {
-    for (const hook of this.hooks) {
-      Hooks.off(hook.event, hook.id);
-    }
-    this.hooks = [];
+    Hooks.on("updateActor", this.onActorUpdate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("updateItem", this.onItemUpdate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("createItem", this.onItemCreate.bind(this) as (...args: unknown[]) => void);
+    Hooks.on("deleteItem", this.onItemDelete.bind(this) as (...args: unknown[]) => void);
   }
 
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {

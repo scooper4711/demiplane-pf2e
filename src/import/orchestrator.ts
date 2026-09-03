@@ -46,8 +46,6 @@ const CAMPAIGN_JOURNAL_TITLE = "Campaign";
  */
 const CAMPAIGN_NOTES_PATH = "system.details.biography.campaignNotes";
 
-export { collectLoreNames } from "./phases.js";
-
 export class ImportOrchestrator {
   private readonly choiceSetHandler = new ChoiceSetHandler();
   private readonly client: DemiplaneClient | undefined;
