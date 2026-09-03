@@ -270,7 +270,17 @@ async function importLinkedCharacter(
   }
 }
 
-async function exportLinkedCharacter(actor: Actor) {
+async function exportLinkedCharacter(actor: Actor): Promise<ExportResult> {
+  // Auto-sync is the master write switch. When it is off the push would be a
+  // no-op, so tell the user plainly rather than doing the work and reporting a
+  // misleading "pushed" success.
+  if (!game.settings.get(MODULE_ID, "autoSync")) {
+    ui.notifications.warn(
+      `Auto-sync is off, so nothing was pushed for "${actor.name}". Enable it in the module settings to sync to Demiplane.`
+    );
+    return { success: false, error: "Auto-sync is off" };
+  }
+
   const result = await pushCharacterEngines(actor);
 
   // Campaign Notes is a Demiplane *journal* entry, not an engine value, so it is
