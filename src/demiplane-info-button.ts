@@ -125,12 +125,7 @@ function buildDialogButtons(
       icon: "fa-solid fa-sync",
       callback: () => performUpdate(actor, characterId, importCharacter),
     },
-    {
-      action: "push",
-      label: "Push to Demiplane",
-      icon: "fa-solid fa-upload",
-      callback: () => exportCharacter(actor),
-    },
+    buildPushButton(actor, exportCharacter),
     {
       // Deliberately not "close": DialogV2 treats that action as a plain
       // dismissal and never invokes the callback, so the dot would stay lit.
@@ -144,6 +139,24 @@ function buildDialogButtons(
       },
     },
   ];
+}
+
+/**
+ * The "Push to Demiplane" button. Auto-sync is the master write switch, so when
+ * it is off the button is disabled with a tooltip explaining why — pushing would
+ * be a no-op, so it is better to prevent the click than to report a misleading
+ * "pushed" success.
+ */
+function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
+  const autoSyncOn = game.settings.get(MODULE_ID, "autoSync") === true;
+  return {
+    action: "push",
+    label: "Push to Demiplane",
+    icon: "fa-solid fa-upload",
+    disabled: !autoSyncOn,
+    tooltip: autoSyncOn ? "" : "Enable “Auto-sync on Actor Update” in the module settings to push to Demiplane.",
+    callback: () => exportCharacter(actor),
+  };
 }
 
 interface DialogContentOptions {
