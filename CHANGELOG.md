@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.10] - 2026-09-04
+
+### Fixed
+
+- place free-archetype feats in the archetype slots
+- place mythic feats in the mythic slots
+- route ancestry boosts to free slots and support alternate boosts
+- use Demiplane level group for gradual boost buckets
+- apply level 5/10/15 attribute boosts
+- resolve innate spells from add-feat grants
+
+### Changed
+
+- minor wording fix
+
+[0.2.0-beta.10]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.10
+
 ## [0.2.0-beta.9] - 2026-09-04
 
 ### Added
