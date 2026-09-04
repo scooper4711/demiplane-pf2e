@@ -215,9 +215,48 @@ export async function applyAttributeBoosts(
 
   const categories = categorizeBoosts(boostEngines);
 
-  await applyItemBoosts(actor, "ancestry", categories.ancestryBoosts, summary);
+  await applyAncestryBoosts(actor, categories.ancestryBoosts, usesAlternateAncestryBoosts(engines), summary);
   await applyItemBoosts(actor, "background", categories.backgroundBoosts, summary);
   await applyLevelBoosts(actor, categories.levelBoosts, summary);
+}
+
+/**
+ * Whether the character uses the alternate ancestry-boost strategy (two free
+ * boosts instead of the ancestry's fixed boost plus a free choice).
+ *
+ * Demiplane signals this with the `ancestry-boost-option` custom engine set to
+ * `two-boosts`; the default (fixed + free) omits it or uses another value.
+ */
+function usesAlternateAncestryBoosts(engines: DemiplaneEngineEntry[]): boolean {
+  const option = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "ancestry-boost-option");
+  return option?.value === "two-boosts";
+}
+
+/**
+ * Applies ancestry attribute boosts, honoring the two boost strategies.
+ *
+ * - Alternate (`two-boosts`): PF2e stores both free attributes in
+ *   `system.alternateAncestryBoosts`; the fixed/free `boosts` slots are ignored.
+ * - Standard (fixed + free): the free choice(s) fill the ancestry's free boost
+ *   slots (see {@link applyItemBoosts}).
+ */
+async function applyAncestryBoosts(
+  actor: Actor,
+  boosts: string[],
+  alternate: boolean,
+  summary: ImportSummary
+): Promise<void> {
+  if (boosts.length === 0) return;
+
+  if (alternate) {
+    const item = actor.items.find((i: { type: string }) => i.type === "ancestry");
+    if (!item) return;
+    await item.update({ "system.alternateAncestryBoosts": boosts });
+    summary.log.push(`+ boosts: ancestry (alternate) [${boosts.join(", ")}]`);
+    return;
+  }
+
+  await applyItemBoosts(actor, "ancestry", boosts, summary);
 }
 
 interface BoostCategories {
@@ -320,12 +359,40 @@ async function applyItemBoosts(actor: Actor, type: string, boosts: string[], sum
   const item = actor.items.find((i: { type: string }) => i.type === type);
   if (!item) return;
 
+  // Demiplane sends only the player-chosen (free) boosts for an ABC item, not
+  // its fixed boosts. Foundry ABC items interleave fixed slots (a single allowed
+  // option, e.g. Kitsune's fixed Charisma) with free slots (multiple options).
+  // Assign each incoming boost to the next *free* slot; writing to a fixed slot
+  // is rejected by the system, which silently drops the boost.
+  const slotKeys = freeBoostSlotKeys(item);
+
   const updates: Record<string, string> = {};
   boosts.forEach((slug, i) => {
-    updates[`system.boosts.${i}.selected`] = slug;
+    const key = slotKeys[i];
+    if (key !== undefined) updates[`system.boosts.${key}.selected`] = slug;
   });
   await item.update(updates);
   summary.log.push(`+ boosts: ${type} [${boosts.join(", ")}]`);
+}
+
+/** A single ABC boost slot: `value` lists the allowed attributes, `selected` the chosen one. */
+interface AbcBoostSlot {
+  value?: string[];
+  selected?: string | null;
+}
+
+/**
+ * Ordered keys of an ABC item's *free* (player-selectable) boost slots.
+ *
+ * A slot with exactly one allowed `value` is a fixed boost (predetermined by the
+ * ancestry/background/class) and must not be overwritten. Free slots offer
+ * multiple options and are where Demiplane's chosen boosts belong.
+ */
+function freeBoostSlotKeys(item: { system?: { boosts?: Record<string, AbcBoostSlot> } }): string[] {
+  const slots = item.system?.boosts ?? {};
+  // A free slot offers a real choice (multiple allowed options). A single-option
+  // slot is a fixed boost; an empty-option slot is a placeholder — skip both.
+  return Object.keys(slots).filter((key) => (slots[key]?.value?.length ?? 0) > 1);
 }
 
 async function applyLevelBoosts(
