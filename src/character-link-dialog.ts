@@ -18,6 +18,7 @@ export class CharacterLinkDialog {
   /**
    * Opens a dialog for the user to link a Demiplane character to the given actor.
    */
+  // eslint-disable-next-line max-lines-per-function -- reducing this function won't make it easier to maintain
   async open(actor: Actor): Promise<void> {
     const currentId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
 
