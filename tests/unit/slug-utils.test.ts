@@ -130,6 +130,17 @@ describe("parseFeatSlot", () => {
       taken: 2,
     });
   });
+
+  it("parses a free-archetype feat into an archetype slot (not class)", () => {
+    expect(parseFeatSlot("archetype-feat-level-2")).toEqual({
+      location: "archetype-2",
+      taken: 2,
+    });
+    expect(parseFeatSlot("archetype-feat-level-14")).toEqual({
+      location: "archetype-14",
+      taken: 14,
+    });
+  });
 });
 
 describe("categorizeEngine", () => {
