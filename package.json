@@ -41,24 +41,24 @@
   },
   "devDependencies": {
     "@dfreds/foundry-types": "^14.366.1",
-    "@eslint/js": "^9.30.0",
+    "@eslint/js": "^10.0.1",
     "@mermaid-js/mermaid-cli": "^11.16.0",
     "@playwright/test": "^1.62.1",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.0",
-    "@types/node": "^22.15.0",
-    "@vitest/coverage-v8": "^3.2.0",
+    "@types/node": "^26.4.0",
+    "@vitest/coverage-v8": "^4.1.11",
     "dotenv": "^17.4.2",
-    "eslint": "^9.30.0",
+    "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
     "husky": "^9.1.7",
     "jscpd": "^5.0.16",
     "prettier": "^3.5.0",
     "rollup": "^4.40.0",
-    "typescript": "^5.8.0",
+    "typescript": "^6.0.3",
     "typescript-eslint": "^8.35.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"
