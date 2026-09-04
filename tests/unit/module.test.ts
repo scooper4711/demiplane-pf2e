@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
+import { DemiplaneClient } from "@scooper4711/demiplane-api";
 
 vi.mock("@scooper4711/demiplane-api", () => ({
   DemiplaneClient: class {
@@ -124,13 +125,17 @@ describe("module entrypoint", () => {
   });
 
   it("stores a newly configured token on updateSetting", async () => {
+    const setToken = vi.spyOn(DemiplaneClient.prototype, "setToken");
     await onceHook("ready")?.();
     await globalThis.game.settings.set("demiplane-pf2e", "demiplaneToken", "tok-1");
+    setToken.mockClear();
 
     for (const cb of onHooks("updateSetting")) {
       await cb({ key: "demiplane-pf2e.demiplaneToken" });
     }
 
+    expect(setToken).toHaveBeenCalledWith("tok-1");
+    setToken.mockRestore();
     await globalThis.game.settings.set("demiplane-pf2e", "demiplaneToken", "");
   });
 

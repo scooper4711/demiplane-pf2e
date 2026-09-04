@@ -36,6 +36,11 @@ export async function createEntry(
   return first.id;
 }
 
+/** Default resolve options. Shared (never mutated — the body only destructures it). */
+const DEFAULT_RESOLVE_OPTIONS = {
+  logLabel: "spell",
+};
+
 /**
  * Resolves each engine's spell from the compendium, stamps it as imported, and
  * assigns it to the given entry. Deduplicates by Foundry slug and records
@@ -46,9 +51,11 @@ export async function resolveSpellItems(
   engines: DemiplaneEngineEntry[],
   entryId: string,
   summary: ImportSummary,
-  options: { logLabel: string; seen?: Set<string>; extras?: (eng: DemiplaneEngineEntry) => SpellLocationExtras } = {
-    logLabel: "spell",
-  }
+  options: {
+    logLabel: string;
+    seen?: Set<string>;
+    extras?: (eng: DemiplaneEngineEntry) => SpellLocationExtras;
+  } = DEFAULT_RESOLVE_OPTIONS
 ): Promise<Record<string, unknown>[]> {
   const { logLabel, seen = new Set<string>(), extras } = options;
   const items: Record<string, unknown>[] = [];
