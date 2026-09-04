@@ -21,6 +21,12 @@ const LORE_BG = {
   type: "background",
   system: { slug: "lore-bg", trainedSkills: { lore: ["Scribing Lore"] } },
 };
+const FARMHAND_BG = {
+  _id: "bg-farmhand",
+  name: "Farmhand",
+  type: "background",
+  system: { slug: "farmhand", trainedSkills: { lore: ["Farming Lore"] } },
+};
 const POWER_ATTACK = { _id: "feat-pa", name: "Power Attack", type: "feat", system: { slug: "power-attack" } };
 const GRANTED_FEAT = { _id: "feat-granted", name: "Granted Feat", type: "feat", system: { slug: "granted-feat" } };
 const NO_SLUG_FEAT = { _id: "feat-noslug", name: "No Slug", type: "feat", system: {} };
@@ -30,7 +36,7 @@ const GRANT_UUID = "Compendium.pf2e.feats-srd.Item.feat-granted";
 
 function packs() {
   return {
-    "pf2e.backgrounds": createMockPack([SCHOLAR, PLAIN_BG, LORE_BG]),
+    "pf2e.backgrounds": createMockPack([SCHOLAR, PLAIN_BG, LORE_BG, FARMHAND_BG]),
     "pf2e.feats-srd": createMockPack([POWER_ATTACK, GRANTED_FEAT, NO_SLUG_FEAT]),
     "pf2e.equipment-srd": createMockPack([LONGSWORD]),
   };
@@ -188,6 +194,29 @@ describe("import phases", () => {
       expect(data[0].name).toBe("Scribing Lore");
       expect(data[0].type).toBe("lore");
       expect(ctx.summary.log).toContain("+ lore: [Scribing Lore]");
+    });
+
+    it("creates background lore when the engine carries no slug (Farmhand regression)", async () => {
+      // Regression from the real Valeros character: Demiplane sends the Farmhand
+      // background as tabula/background/farmhand-rm.eng with args {id: null} and
+      // no slug. Requiring args.slug dropped the background, so Farming Lore was
+      // never granted. getSlug() must fall back to the engine name.
+      const actor = createMockActor();
+      const ctx = makeCtx([
+        {
+          id: "ddd39521-b0df-403a-b942-c4b106b95f3c",
+          name: "tabula/background/farmhand-rm.eng",
+          type: "DemiplaneEngine",
+          args: { id: null },
+        },
+      ]);
+
+      await new LoreItemsPhase().run(actor, ctx);
+
+      expect(actor.createEmbeddedDocuments).toHaveBeenCalledTimes(1);
+      const data = actor.createEmbeddedDocuments.mock.calls[0][1];
+      expect(data[0].name).toBe("Farming Lore");
+      expect(ctx.summary.log).toContain("+ lore: [Farming Lore]");
     });
 
     it("skips lore the actor already has", async () => {

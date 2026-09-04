@@ -113,9 +113,10 @@ export class LoreItemsPhase implements ImportPhase {
   }
 
   private async getBackgroundLoreNames(engines: DemiplaneEngineEntry[]): Promise<string[]> {
-    const bgEngine = engines.find(
-      (e) => e.type === "DemiplaneEngine" && e.name.includes("/background/") && e.args?.slug
-    );
+    // No args.slug requirement: getSlug() falls back to the engine name
+    // (e.g. tabula/background/farmhand-rm.eng), and some background engines
+    // arrive without args entirely.
+    const bgEngine = engines.find((e) => e.type === "DemiplaneEngine" && e.name.includes("/background/"));
     if (!bgEngine) return [];
     const bgSlug = getSlug(bgEngine);
     if (!bgSlug) return [];
