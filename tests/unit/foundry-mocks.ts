@@ -39,6 +39,7 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
     items: {
       filter: (fn: (i: Record<string, unknown>) => boolean) => items.filter(fn),
       find: (fn: (i: Record<string, unknown>) => boolean) => items.find(fn),
+      some: (fn: (i: Record<string, unknown>) => boolean) => items.some(fn),
       get: (id: string) => items.find((i) => i.id === id),
       map: (fn: (i: Record<string, unknown>) => unknown) => items.map(fn),
       size: items.length,
