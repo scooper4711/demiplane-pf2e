@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/dfca47d2-0786-4bfa-8812-0b4a8aea0f58
 
 **Pathfinder Society players:** Demiplane already integrates with Roll20. With this module, you can use the same character on both Roll20 and Foundry, always kept in sync through Demiplane. Play with different GMs on different VTTs without maintaining separate character sheets.
 
-**GMs:** Your players show up with characters that just work — ancestry, feats, equipment, skills, the whole thing. No more fixing broken sheets mid-session.
+**GMs:** Foundry has the best support for Pathfinder of all the VTTs out there. But it lets players by mistake create invalid characters with too many spell slots or similar hard-to-spot errors. Demiplane enforces the rules of character building, and so by using this module you know that the character build is correct. And if you want to augment the character for some homebrew rules? You can absolutely do that, and Demplane PF2e Sync will leave your additions alone while syncing the rest of the character feats and skills.
 
 ## What Gets Imported
 
@@ -61,6 +61,8 @@ Turn on **Auto-sync on Actor Update** in module settings to push those fields au
 Still on the roadmap:
 
 - Adding inventory items in Foundry pushing to Demiplane
+- Pets/Familiars/Summons
+- Starfinder support
 
 ## How It Works
 
@@ -104,7 +106,12 @@ Once mapped, the Demiplane name resolves on its own from then on — no need to 
 
 ### Linking a Character
 
-The module needs to know which Demiplane character maps to which Foundry actor. You link them by providing either:
+You can't link an existing Actor in Foundry to Demiplane. In order for the module to
+replicate the character build correctly, it needs to start from an empty actor. This allows
+it to keep the actor up-to-date even when you completely rebuild the character.
+
+Importing a character is easy - just press the "import from Demiplane" button and provide
+either:
 
 - The full Demiplane URL: `https://app.demiplane.com/nexus/pathfinder2e/character-sheet/...`
 - Or just the UUID from that URL
