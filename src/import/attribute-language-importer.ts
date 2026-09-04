@@ -226,6 +226,24 @@ interface BoostCategories {
   levelBoosts: Record<string, string[]>;
 }
 
+/** Foundry stores leveling attribute boosts only at these milestone levels. */
+const BOOST_MILESTONES = [1, 5, 10, 15, 20] as const;
+
+/**
+ * Maps a character level to the Foundry boost bucket that owns it.
+ *
+ * Foundry's `system.build.attributes.boosts` is keyed only by 1/5/10/15/20.
+ * Under the standard rule Demiplane already emits boosts at those milestone
+ * levels. Under the Gradual Ability Boosts variant (`variants.gab`), Demiplane
+ * emits one boost per level (2, 3, 4, ...); each must land in the next milestone
+ * bucket (2-5 → 5, 6-10 → 10, etc.) so the system keeps them rather than
+ * discarding writes to non-existent keys.
+ */
+function boostMilestone(level: number): string {
+  const milestone = BOOST_MILESTONES.find((m) => level <= m) ?? BOOST_MILESTONES[BOOST_MILESTONES.length - 1];
+  return String(milestone);
+}
+
 function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories {
   const attrMap: Record<string, string> = {
     strength: "str",
@@ -251,11 +269,15 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
     } else if (sourceRow === "background-boosts") {
       backgroundBoosts.push(slug);
     } else {
-      const levelMatch = /attribute-boosts-level-(\d+)/.exec(sourceRow);
-      if (levelMatch) {
-        const level = levelMatch[1] ?? "";
-        levelBoosts[level] ??= [];
-        levelBoosts[level]?.push(slug);
+      // Demiplane uses two naming schemes for leveling attribute boosts across
+      // classes/versions: "attribute-boosts-level-<n>[-rm]" and
+      // "ability-boost-level-<n>". Match both so mid/high-level boosts (5/10/15)
+      // are not silently dropped.
+      const levelMatch = /(?:attribute-boosts|ability-boost)-level-(\d+)/.exec(sourceRow);
+      if (levelMatch?.[1]) {
+        const bucket = boostMilestone(Number(levelMatch[1]));
+        levelBoosts[bucket] ??= [];
+        levelBoosts[bucket]?.push(slug);
       }
     }
   }

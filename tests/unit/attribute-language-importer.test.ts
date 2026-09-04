@@ -257,6 +257,73 @@ describe("applyAttributeBoosts", () => {
       })
     );
   });
+
+  it("applies level boosts using the ability-boost-level-<n> source-row scheme", async () => {
+    // Regression: level 5/10/15 boosts arrive with sourceRow
+    // "ability-boost-level-N" (not "attribute-boosts-level-N-rm"), and were
+    // previously dropped because only the latter scheme was matched.
+    const actor = createMockActor();
+    const boost = (slug: string, level: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug, sourceRow: `ability-boost-level-${String(level)}` },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [
+      boost("strength", 5),
+      boost("constitution", 5),
+      boost("intelligence", 5),
+      boost("charisma", 5),
+      boost("strength", 10),
+      boost("charisma", 10),
+      boost("charisma", 15),
+      boost("wisdom", 15),
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str", "con", "int", "cha"],
+        "system.build.attributes.boosts.10": ["str", "cha"],
+        "system.build.attributes.boosts.15": ["cha", "wis"],
+      })
+    );
+  });
+
+  it("collapses Gradual Ability Boost per-level boosts into milestone buckets", async () => {
+    // Under the Gradual Ability Boosts variant, Demiplane emits one boost per
+    // level (2, 3, 4, 5, ...). Foundry only stores buckets 1/5/10/15/20, so
+    // levels 2-5 must collapse into bucket 5, 6-10 into 10, and so on.
+    const actor = createMockActor();
+    const boost = (slug: string, level: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug, sourceRow: `ability-boost-level-${String(level)}` },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [
+      boost("strength", 2),
+      boost("dexterity", 3),
+      boost("constitution", 4),
+      boost("intelligence", 5),
+      boost("wisdom", 6),
+      boost("charisma", 7),
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str", "dex", "con", "int"],
+        "system.build.attributes.boosts.10": ["wis", "cha"],
+      })
+    );
+  });
 });
 
 describe("slug validation", () => {
