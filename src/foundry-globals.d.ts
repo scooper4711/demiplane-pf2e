@@ -60,7 +60,7 @@ declare global {
       ): void;
     };
     modules: {
-      get(id: string): { active?: boolean; api?: unknown } | undefined;
+      get(id: string): { active?: boolean; api?: unknown; version?: string } | undefined;
     };
     i18n: {
       /** Returns the localized string for a key, or the key itself if unknown. */

@@ -113,6 +113,7 @@ describe("module entrypoint", () => {
 
   it("shows the pre-release warning when auto-sync is enabled at ready", async () => {
     await globalThis.game.settings.set("demiplane-pf2e", "autoSync", true);
+    globalThis.game.modules.get = () => ({ version: "0.9.0-beta.1" });
     const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
     prompt.mockClear();
 
@@ -121,6 +122,30 @@ describe("module entrypoint", () => {
     expect(prompt).toHaveBeenCalledWith(
       expect.objectContaining({ window: expect.objectContaining({ title: expect.stringContaining("Pre-Release") }) })
     );
+    await globalThis.game.settings.set("demiplane-pf2e", "autoSync", false);
+  });
+
+  it.each([
+    ["1.0.0", false],
+    ["#{VERSION}#", true],
+    ["2.1.0-beta.3", true],
+    [undefined, false],
+  ])("warns at ready only for beta and development builds (version %j)", async (version, shouldWarn) => {
+    await globalThis.game.settings.set("demiplane-pf2e", "autoSync", true);
+    globalThis.game.modules.get = () => (version === undefined ? undefined : { version });
+    const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
+    prompt.mockClear();
+
+    await onceHook("ready")?.();
+
+    if (shouldWarn) {
+      expect(prompt).toHaveBeenCalledWith(
+        expect.objectContaining({ window: expect.objectContaining({ title: expect.stringContaining("Pre-Release") }) })
+      );
+    } else {
+      expect(prompt).not.toHaveBeenCalled();
+    }
+    globalThis.game.modules.get = () => undefined;
     await globalThis.game.settings.set("demiplane-pf2e", "autoSync", false);
   });
 
@@ -142,6 +167,7 @@ describe("module entrypoint", () => {
   it("re-shows the pre-release warning when auto-sync is switched on", async () => {
     await onceHook("ready")?.();
     await globalThis.game.settings.set("demiplane-pf2e", "autoSync", true);
+    globalThis.game.modules.get = () => ({ version: "0.9.0-beta.1" });
     const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
     prompt.mockClear();
 
@@ -150,6 +176,22 @@ describe("module entrypoint", () => {
     }
 
     expect(prompt).toHaveBeenCalled();
+    await globalThis.game.settings.set("demiplane-pf2e", "autoSync", false);
+  });
+
+  it("stays silent when auto-sync is switched on in a release build", async () => {
+    await onceHook("ready")?.();
+    await globalThis.game.settings.set("demiplane-pf2e", "autoSync", true);
+    globalThis.game.modules.get = () => ({ version: "1.0.0" });
+    const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
+    prompt.mockClear();
+
+    for (const cb of onHooks("updateSetting")) {
+      await cb({ key: "demiplane-pf2e.autoSync" });
+    }
+
+    expect(prompt).not.toHaveBeenCalled();
+    globalThis.game.modules.get = () => undefined;
     await globalThis.game.settings.set("demiplane-pf2e", "autoSync", false);
   });
 
@@ -233,5 +275,23 @@ describe("module entrypoint", () => {
   it("ignores non-array context menu payloads", () => {
     const cb = onHook("getActorContextOptions");
     expect(() => cb({}, {})).not.toThrow();
+  });
+});
+
+describe("isPreReleaseVersion", () => {
+  async function subject() {
+    const module = await import("../../src/module.js");
+    return module.isPreReleaseVersion;
+  }
+
+  it.each([["0.9.0-beta.1"], ["1.0.0-BETA.2"], ["beta"], ["#{VERSION}#"]])(
+    "treats %j as pre-release",
+    async (version) => {
+      expect((await subject())(version)).toBe(true);
+    }
+  );
+
+  it.each([["1.0.0"], [""], [null], [undefined]])("treats %j as a release build", async (version) => {
+    expect((await subject())(version)).toBe(false);
   });
 });

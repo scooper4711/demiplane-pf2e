@@ -51,7 +51,7 @@ async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
   // Pre-release warning only applies once the write feature (auto-sync) is enabled.
-  if (game.settings.get(MODULE_ID, "autoSync")) {
+  if (game.settings.get(MODULE_ID, "autoSync") && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
     await showPreReleaseWarning();
   }
 
@@ -120,7 +120,11 @@ function registerTokenSyncHooks(): void {
 
     // The pre-release warning is tied to the write feature (auto-sync). Show it
     // whenever auto-sync is switched on so users are re-warned before writing.
-    if (setting.key === `${MODULE_ID}.autoSync` && game.settings.get(MODULE_ID, "autoSync")) {
+    if (
+      setting.key === `${MODULE_ID}.autoSync` &&
+      game.settings.get(MODULE_ID, "autoSync") &&
+      isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)
+    ) {
       showPreReleaseWarning();
     }
   }) as (...args: unknown[]) => void);
@@ -143,6 +147,16 @@ Hooks.on("renderActorDirectory", (_app: unknown, html: HTMLElement) => {
 
   actionButtons.appendChild(button);
 });
+
+/**
+ * Whether the pre-release warning applies to this build. Release builds have
+ * the `#{VERSION}#` placeholder replaced with a plain version number, so the
+ * dialog is only shown for beta versions and unreplaced development builds.
+ */
+export function isPreReleaseVersion(version: string | null | undefined): boolean {
+  if (!version) return false;
+  return version === "#{VERSION}#" || version.toLowerCase().includes("beta");
+}
 
 function showPreReleaseWarning(): Promise<void> {
   return foundry.applications.api.DialogV2.prompt({
