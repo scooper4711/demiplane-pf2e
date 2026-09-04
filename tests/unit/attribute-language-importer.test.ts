@@ -293,26 +293,30 @@ describe("applyAttributeBoosts", () => {
     );
   });
 
-  it("collapses Gradual Ability Boost per-level boosts into milestone buckets", async () => {
-    // Under the Gradual Ability Boosts variant, Demiplane emits one boost per
-    // level (2, 3, 4, 5, ...). Foundry only stores buckets 1/5/10/15/20, so
-    // levels 2-5 must collapse into bucket 5, 6-10 into 10, and so on.
+  it("buckets Gradual Ability Boosts using Demiplane's own level group", async () => {
+    // Real GAB shape (character ed4a4e3c): sourceRow
+    // "gradual-attribute-boost-level-<n>" plus an authoritative
+    // selectionGroup "attribute-boost-level-group-<milestone>". The group wins,
+    // so a level-2 gradual boost lands in bucket 5.
     const actor = createMockActor();
-    const boost = (slug: string, level: number): DemiplaneEngineEntry =>
+    const gab = (slug: string, level: number, group: number): DemiplaneEngineEntry =>
       ({
         id: "e86570ed-9602-414d-adb1-474064f14f28",
         name: "core/selection/attribute/boost.eng",
         type: "DemiplaneEngine",
-        args: { slug, sourceRow: `ability-boost-level-${String(level)}` },
+        args: {
+          slug,
+          sourceRow: `gradual-attribute-boost-level-${String(level)}`,
+          selectionGroup: `attribute-boost-level-group-${String(group)}`,
+        },
       }) as DemiplaneEngineEntry;
 
     const engines: DemiplaneEngineEntry[] = [
-      boost("strength", 2),
-      boost("dexterity", 3),
-      boost("constitution", 4),
-      boost("intelligence", 5),
-      boost("wisdom", 6),
-      boost("charisma", 7),
+      gab("strength", 2, 5),
+      gab("dexterity", 3, 5),
+      gab("constitution", 4, 5),
+      gab("intelligence", 5, 5),
+      gab("wisdom", 7, 10),
     ];
     const summary = makeSummary();
     await applyAttributeBoosts(actor as never, engines, summary);
@@ -320,7 +324,31 @@ describe("applyAttributeBoosts", () => {
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
         "system.build.attributes.boosts.5": ["str", "dex", "con", "int"],
-        "system.build.attributes.boosts.10": ["wis", "cha"],
+        "system.build.attributes.boosts.10": ["wis"],
+      })
+    );
+  });
+
+  it("falls back to level-derived buckets when no level group is present", async () => {
+    // If a gradual boost ever arrives without a selectionGroup, derive the
+    // bucket from the level in the sourceRow (2-5 → 5, 6-10 → 10).
+    const actor = createMockActor();
+    const gab = (slug: string, level: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug, sourceRow: `gradual-attribute-boost-level-${String(level)}` },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [gab("strength", 3), gab("wisdom", 8)];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str"],
+        "system.build.attributes.boosts.10": ["wis"],
       })
     );
   });
