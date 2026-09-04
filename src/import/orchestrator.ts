@@ -46,6 +46,14 @@ const CAMPAIGN_JOURNAL_TITLE = "Campaign";
  */
 const CAMPAIGN_NOTES_PATH = "system.details.biography.campaignNotes";
 
+/** Fetches the character's engine data blob and last-updated timestamp. */
+const CHARACTER_DATA_QUERY = `query($id: uuid!) {
+  demiplane_user_character(where: {uuid: {_eq: $id}, deleted_at: {_is_null: true}, enabled: {_eq: true}}) {
+    data
+    updated
+  }
+}`;
+
 export class ImportOrchestrator {
   private readonly choiceSetHandler = new ChoiceSetHandler();
   private readonly client: DemiplaneClient | undefined;
@@ -66,7 +74,7 @@ export class ImportOrchestrator {
 
     const fetched = await this.fetchCharacterEngines(characterId, token, summary);
     if (!fetched) return summary;
-    const { engines, updated } = fetched;
+    const { engines, updated, cacheEngineIds } = fetched;
     if (updated) {
       await actor.setFlag(MODULE_ID, "lastUpdated", updated);
       debugLog(`[import] stored lastUpdated=${updated}`);
@@ -91,6 +99,7 @@ export class ImportOrchestrator {
       categorized,
       selectionData,
       grantResolvedSlugs: new Set(),
+      cacheEngineIds,
     };
 
     // `updateSource` stamps the flag before persistence without triggering a
@@ -134,33 +143,29 @@ export class ImportOrchestrator {
     characterId: string,
     token: string | undefined,
     summary: ImportSummary
-  ): Promise<{ engines: DemiplaneEngineEntry[]; updated: string | null } | null> {
+  ): Promise<{ engines: DemiplaneEngineEntry[]; updated: string | null; cacheEngineIds: string[] } | null> {
     if (!token) {
       summary.errors.push("No authentication token provided");
       return null;
     }
 
     try {
-      const query = `query($id: uuid!) {
-        demiplane_user_character(where: {uuid: {_eq: $id}, deleted_at: {_is_null: true}, enabled: {_eq: true}}) {
-          data
-          updated
-        }
-      }`;
-
       const response = await fetch(DEMIPLANE_GRAPHQL_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ query, variables: { id: characterId } }),
+        body: JSON.stringify({ query: CHARACTER_DATA_QUERY, variables: { id: characterId } }),
       });
 
       const json = (await response.json()) as {
         data?: {
           demiplane_user_character: Array<{
-            data: { engines: DemiplaneEngineEntry[] };
+            data: {
+              engines: DemiplaneEngineEntry[];
+              engineCacheIdsBySource?: Record<string, string[]>;
+            };
             updated: string | null;
           }>;
         };
@@ -178,7 +183,12 @@ export class ImportOrchestrator {
         return null;
       }
 
-      return { engines: character.data.engines, updated: character.updated };
+      // The pathfinder2e-v2 source lists every engine the character can access —
+      // including indirectly granted feats that never appear in `engines` — so it
+      // is the lookup set for resolving `add-feat` grants to their definitions.
+      const cacheEngineIds = character.data.engineCacheIdsBySource?.["pathfinder2e-v2"] ?? [];
+
+      return { engines: character.data.engines, updated: character.updated, cacheEngineIds };
     } catch (error) {
       summary.errors.push(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
       return null;

@@ -38,6 +38,12 @@ export interface ImportContext {
   selectionData: { grantedFeatSlugs: Set<string>; selectedFeats: string[] };
   /** Slugs of items created by resolving native PF2e grants. */
   grantResolvedSlugs: Set<string>;
+  /**
+   * All cached engine UUIDs for the character (from `engineCacheIdsBySource`).
+   * Used to resolve indirectly granted feats (via `add-feat`) to their engine
+   * definitions, since those feats never appear in the `engines` array.
+   */
+  cacheEngineIds: string[];
 }
 
 /** A single ordered step of the import pipeline. */
@@ -335,7 +341,7 @@ export class PostProcessingPhase implements ImportPhase {
     await applyEquipment(actor, ctx.engines, ctx.summary);
     await applyCurrency(actor, ctx.engines, ctx.summary);
     await applySpells(actor, ctx.engines, ctx.summary);
-    await applyFeatureGrantedSpells(actor, ctx.engines, ctx.summary);
+    await applyFeatureGrantedSpells(actor, ctx.engines, ctx.summary, ctx.cacheEngineIds);
     await applyItemSpells(actor, ctx.engines, ctx.summary);
     await this.syncSessionState(actor, ctx.engines);
   }
