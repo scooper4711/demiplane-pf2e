@@ -170,6 +170,123 @@ describe("ImportOrchestrator", () => {
 
     expect(summary.errors[0]).toContain("Character not found");
   });
+
+  it("stores the server updated timestamp when present", async () => {
+    mockChoiceSetPrototype();
+    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
+      json: async () => ({
+        data: {
+          demiplane_user_character: [{ data: { engines: [] }, updated: "2026-05-05T00:00:00.000Z" }],
+        },
+      }),
+    });
+
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+    await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
+
+    expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", "2026-05-05T00:00:00.000Z");
+  });
+
+  it("reports fetch failures with Error and non-Error reasons", async () => {
+    const fetchMock = globalThis as unknown as { fetch: ReturnType<typeof vi.fn> };
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+
+    fetchMock.fetch = vi.fn().mockRejectedValueOnce(new Error("down"));
+    const errors = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
+    expect(errors.errors[0]).toContain("Fetch failed: down");
+
+    fetchMock.fetch = vi.fn().mockRejectedValueOnce("string-fail");
+    const stringErrors = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
+    expect(stringErrors.errors[0]).toContain("Fetch failed: string-fail");
+  });
+
+  it("stamps new items through the preCreateItem hook", async () => {
+    mockChoiceSetPrototype();
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+    actor.id = "actor-1";
+    (globalThis as unknown as Record<string, unknown>).game = {
+      ...(globalThis as unknown as { game: Record<string, unknown> }).game,
+      pf2e: {
+        RuleElements: {
+          builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } },
+        },
+      },
+    };
+    await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+    const hooks = globalThis as unknown as { Hooks: { on: ReturnType<typeof vi.fn> } };
+    const preCreate = hooks.Hooks.on.mock.calls.find((call) => call[0] === "preCreateItem")?.[1];
+    const updateSource = vi.fn();
+
+    // Matching parent stamps the imported flag.
+    preCreate({ parent: { id: "actor-1" }, updateSource });
+    expect(updateSource).toHaveBeenCalledWith({ "flags.demiplane-pf2e.imported": true });
+
+    // Other actors' items and parentless documents pass through untouched.
+    const untouched = vi.fn();
+    preCreate({ parent: { id: "someone-else" }, updateSource: untouched });
+    preCreate({ updateSource: untouched });
+    expect(untouched).not.toHaveBeenCalled();
+  });
+
+  it("imports the campaign journal when a client is configured", async () => {
+    mockChoiceSetPrototype();
+    const orchestrator = new ImportOrchestrator({
+      fetchCharacterJournals: vi
+        .fn()
+        .mockResolvedValue([{ objectID: "j1", title: "Campaign", description: "Party notes" }]),
+    });
+    const actor = createMockActor();
+
+    await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+    expect(actor.update).toHaveBeenCalledWith({ "system.details.biography.campaignNotes": "Party notes" });
+  });
+
+  it("skips the journal update without a campaign entry", async () => {
+    mockChoiceSetPrototype();
+    const orchestrator = new ImportOrchestrator({
+      fetchCharacterJournals: vi.fn().mockResolvedValue([{ objectID: "j2", title: "Other", description: "x" }]),
+    });
+    const actor = createMockActor();
+    actor.update.mockClear();
+
+    await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+    const journalWrites = actor.update.mock.calls.filter((call) =>
+      Object.keys(call[0]).some((key) => String(key).includes("campaignNotes"))
+    );
+    expect(journalWrites).toHaveLength(0);
+  });
+
+  it("survives journal fetch failures with Error and non-Error reasons", async () => {
+    mockChoiceSetPrototype();
+    for (const failure of [new Error("nope"), "string-fail"]) {
+      const orchestrator = new ImportOrchestrator({
+        fetchCharacterJournals: vi.fn().mockRejectedValueOnce(failure),
+      });
+      const actor = createMockActor();
+
+      const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+      expect(summary.errors).toHaveLength(0);
+    }
+  });
+
+  /** Full pipeline runs patch ChoiceSets, which needs the mocked rule element prototype. */
+  function mockChoiceSetPrototype(): void {
+    (globalThis as unknown as Record<string, unknown>).game = {
+      ...(globalThis as unknown as { game: Record<string, unknown> }).game,
+      pf2e: {
+        RuleElements: {
+          builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } },
+        },
+      },
+    };
+  }
 });
 
 describe("collectLoreNames", () => {
