@@ -271,10 +271,12 @@ export class HookManager {
 
   private onActorUpdate(actor: Actor, changes: Record<string, unknown>): void {
     if (!this.isLinkedCharacterActor(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
     // While any client is importing or pushing this character, actor updates are
     // just the sync echoing to other clients — don't queue them back to Demiplane.
+    // Checked before the auto-sync guard so an import doesn't log a misleading
+    // "nothing pushed" note for its own writes.
     if (isSyncActive(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
 
     for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
       const value = this.getChangeValue(changes, actorPath);
@@ -338,8 +340,8 @@ export class HookManager {
   private onItemUpdate(item: Item, changes: Record<string, unknown>): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
 
     const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
@@ -396,8 +398,8 @@ export class HookManager {
   private onItemCreate(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
     this.queueDeityChange(item, actor);
   }
@@ -438,8 +440,8 @@ export class HookManager {
   private onItemDelete(item: Item): void {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
     if (isSyncActive(actor)) return;
+    if (!this.autoSyncEnabled(actor.name)) return;
 
     const itemType = (item as { type?: string })?.type;
 
