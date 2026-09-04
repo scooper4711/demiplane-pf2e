@@ -230,18 +230,52 @@ interface BoostCategories {
 const BOOST_MILESTONES = [1, 5, 10, 15, 20] as const;
 
 /**
+ * Demiplane sourceRow schemes for a leveling attribute boost. All three encode
+ * the character level the boost was taken at:
+ * - `attribute-boosts-level-<n>[-rm]` — standard rule (exemplar, bard, ...)
+ * - `ability-boost-level-<n>`         — standard rule (thaumaturge, ...)
+ * - `gradual-attribute-boost-level-<n>` — Gradual Ability Boosts variant
+ */
+const BOOST_LEVEL_SOURCE_ROW_RE = /(?:attribute-boosts|ability-boost|gradual-attribute-boost)-level-(\d+)/;
+
+/**
+ * Demiplane's own milestone grouping for a boost, e.g.
+ * `attribute-boost-level-group-5`. Present on Gradual Ability Boost selections,
+ * where it authoritatively states which Foundry bucket the boost belongs to.
+ */
+const BOOST_LEVEL_GROUP_RE = /attribute-boost-level-group-(\d+)/;
+
+/**
  * Maps a character level to the Foundry boost bucket that owns it.
  *
  * Foundry's `system.build.attributes.boosts` is keyed only by 1/5/10/15/20.
  * Under the standard rule Demiplane already emits boosts at those milestone
- * levels. Under the Gradual Ability Boosts variant (`variants.gab`), Demiplane
- * emits one boost per level (2, 3, 4, ...); each must land in the next milestone
- * bucket (2-5 → 5, 6-10 → 10, etc.) so the system keeps them rather than
- * discarding writes to non-existent keys.
+ * levels. Under the Gradual Ability Boosts variant, Demiplane emits one boost
+ * per level (2, 3, 4, ...); each must land in the next milestone bucket (2-5 →
+ * 5, 6-10 → 10, etc.) so the system keeps them rather than discarding writes to
+ * non-existent keys.
  */
 function boostMilestone(level: number): string {
   const milestone = BOOST_MILESTONES.find((m) => level <= m) ?? BOOST_MILESTONES[BOOST_MILESTONES.length - 1];
   return String(milestone);
+}
+
+/**
+ * Resolves the Foundry milestone bucket for a leveling boost.
+ *
+ * Prefers Demiplane's own `attribute-boost-level-group-<n>` selectionGroup
+ * (authoritative, used by Gradual Ability Boosts); otherwise derives the bucket
+ * from the level encoded in the sourceRow. Returns `undefined` for engines that
+ * are not leveling boosts.
+ */
+function resolveBoostBucket(sourceRow: string, selectionGroup: string): string | undefined {
+  const group = BOOST_LEVEL_GROUP_RE.exec(selectionGroup);
+  if (group?.[1]) return group[1];
+
+  const level = BOOST_LEVEL_SOURCE_ROW_RE.exec(sourceRow);
+  if (level?.[1]) return boostMilestone(Number(level[1]));
+
+  return undefined;
 }
 
 function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories {
@@ -269,13 +303,9 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
     } else if (sourceRow === "background-boosts") {
       backgroundBoosts.push(slug);
     } else {
-      // Demiplane uses two naming schemes for leveling attribute boosts across
-      // classes/versions: "attribute-boosts-level-<n>[-rm]" and
-      // "ability-boost-level-<n>". Match both so mid/high-level boosts (5/10/15)
-      // are not silently dropped.
-      const levelMatch = /(?:attribute-boosts|ability-boost)-level-(\d+)/.exec(sourceRow);
-      if (levelMatch?.[1]) {
-        const bucket = boostMilestone(Number(levelMatch[1]));
+      const selectionGroup = (eng.args.selectionGroup as string) || "";
+      const bucket = resolveBoostBucket(sourceRow, selectionGroup);
+      if (bucket) {
         levelBoosts[bucket] ??= [];
         levelBoosts[bucket]?.push(slug);
       }
