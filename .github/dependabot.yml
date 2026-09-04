@@ -6,6 +6,12 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 10
+    ignore:
+      # typescript-eslint currently supports TypeScript <6.1.0. Lock TypeScript
+      # to the 6.x line until typescript-eslint adds support for TypeScript 7+.
+      - dependency-name: typescript
+        versions:
+          - ">=7"
     groups:
       dev-minor-patch:
         dependency-type: development
