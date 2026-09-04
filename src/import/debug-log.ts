@@ -7,7 +7,8 @@ import { MODULE_ID } from "./types.js";
 export function debugLog(message: string, ...rest: unknown[]): void {
   try {
     if (game.settings.get(MODULE_ID, "debugImport")) {
-      console.warn(`${MODULE_ID} | [debug] ${message}`, ...rest);
+      // eslint-disable-next-line no-console -- console.log avoids the call stack that console.warn attaches to each debug line
+      console.log(`${MODULE_ID} | [debug] ${message}`, ...rest);
     }
   } catch {
     // Settings not yet registered (e.g. during early init) — silently skip
