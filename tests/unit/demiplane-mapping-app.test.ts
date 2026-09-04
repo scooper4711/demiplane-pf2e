@@ -174,7 +174,11 @@ describe("openFinder", () => {
 
   it("opens the individual compendium pack window for a kind without a browser tab", async () => {
     const render = vi.fn();
-    const applicationClass = vi.fn().mockImplementation(() => ({ render }));
+    // vitest 4 requires a constructable implementation (not an arrow) because
+    // the code under test invokes this mock with `new`.
+    const applicationClass = vi.fn().mockImplementation(function () {
+      return { render };
+    });
     const classesPack = { applicationClass };
     gameGlobal().game.packs = { get: vi.fn().mockReturnValue(classesPack) };
 
