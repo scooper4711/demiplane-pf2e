@@ -27,6 +27,18 @@ export interface AddSpellModifier {
   autoScaleSpellLevel?: boolean;
 }
 
+/**
+ * A feat granted by another element (heritage, class feature, ancestry). The
+ * granted feat carries its own engineModifiers — including `add-spell` for
+ * innate-spellcasting feats such as Kitsune Spell Familiarity — so it must be
+ * resolved to its own engine definition and expanded. `addFeat` is the feat
+ * slug; the granting definition does not carry the feat's engine UUID.
+ */
+export interface AddFeatModifier {
+  type: "add-feat";
+  addFeat: string;
+}
+
 /** Spells granted by a staff item. */
 export interface AddStaffSpellsModifier {
   type: "add-staff-spells";
@@ -54,7 +66,7 @@ export interface AddSpellSlotsModifier {
 
 /** Discriminated union of every engineModifier type we understand. */
 export type EngineModifier =
-  AddSpellModifier | AddStaffSpellsModifier | AddSpecialItemSpellModifier | AddSpellSlotsModifier;
+  AddSpellModifier | AddFeatModifier | AddStaffSpellsModifier | AddSpecialItemSpellModifier | AddSpellSlotsModifier;
 
 /** One NDJSON response line: the engine id, its display name, and parsed modifiers. */
 export interface RawEngineLine {
@@ -77,6 +89,10 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "add-spell":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         if (typeof mod.addSpell === "string") results.push(mod as unknown as AddSpellModifier);
+        break;
+      case "add-feat":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        if (typeof mod.addFeat === "string") results.push(mod as unknown as AddFeatModifier);
         break;
       case "add-staff-spells":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
@@ -132,20 +148,53 @@ function parseStringObjects(nodes: EngineNode[]): Array<Record<string, unknown>>
  */
 export function parseEngineLine(line: string): RawEngineLine {
   try {
-    const parsed = JSON.parse(line) as { id?: string; data?: { nodes?: Record<string, EngineNode> } };
+    const parsed = JSON.parse(line) as {
+      id?: string;
+      engineName?: string;
+      data?: { nodes?: Record<string, EngineNode> };
+    };
     const objects = parseStringObjects(Object.values(parsed.data?.nodes ?? {}));
 
     for (const obj of objects) {
       const modifiers = extractModifiersFromObject((obj.engineModifiers as Array<Record<string, unknown>>) ?? []);
       if (modifiers.length > 0) {
-        return finalizeLine(parsed.id, obj.name as string | undefined, modifiers);
+        // Prefer the top-level engineName (e.g. "tabula/feat/foxfire.eng"), which
+        // is stable and present on every line; fall back to the element display
+        // name only when engineName is absent.
+        return finalizeLine(parsed.id, parsed.engineName ?? (obj.name as string | undefined), modifiers);
       }
     }
 
-    return finalizeLine(parsed.id, undefined, []);
+    return finalizeLine(parsed.id, parsed.engineName, []);
   } catch {
     return { modifiers: [] };
   }
+}
+
+/** Extracts the feat slug from a feat engine name, e.g. `tabula/feat/foxfire.eng` → `foxfire`. */
+const FEAT_ENGINE_NAME_RE = /^tabula\/feat\/(.+)\.eng$/;
+
+/**
+ * Builds a map from feat slug to engine UUID by fetching the given engine
+ * definitions and matching those whose engine name is `tabula/feat/<slug>.eng`.
+ *
+ * A grant modifier (`add-feat`) references a feat only by slug, but
+ * stream-engines addresses definitions by UUID. This resolves that gap using
+ * the character's cached engine IDs (from `engineCacheIdsBySource`), which
+ * already include every feat the character can access — including feats granted
+ * indirectly, which never appear in the `engines` selection array.
+ */
+export async function resolveFeatEngineIdsBySlug(cacheEngineIds: string[]): Promise<Map<string, string>> {
+  const bySlug = new Map<string, string>();
+  if (cacheEngineIds.length === 0) return bySlug;
+
+  const lines = await fetchStreamEngineLines(cacheEngineIds);
+  for (const line of lines) {
+    if (!line.id || !line.name) continue;
+    const slug = FEAT_ENGINE_NAME_RE.exec(line.name)?.[1];
+    if (slug) bySlug.set(slug, line.id);
+  }
+  return bySlug;
 }
 
 /** Parses a full NDJSON stream-engines payload into per-line modifier records. */

@@ -5,6 +5,7 @@ import { toFoundrySlug } from "./slug-utils.js";
 import {
   fetchStreamEngineLines,
   fetchDomainEngineData,
+  resolveFeatEngineIdsBySlug,
   type EngineModifier,
   type DomainEngineData,
 } from "./stream-engines.js";
@@ -34,7 +35,8 @@ const SLOT_KEY_RE = /^slot(\d+)$/;
 export async function resolveFeatureGrantedSpells(
   engines: DemiplaneEngineEntry[],
   characterLevel: number,
-  maxSpellRank: number
+  maxSpellRank: number,
+  cacheEngineIds: string[] = []
 ): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[] }> {
   const featureEngineIds = collectFeatureEngineIds(engines);
   const domainEngineIds = collectDomainEngineIds(engines);
@@ -44,7 +46,7 @@ export async function resolveFeatureGrantedSpells(
   }
 
   const [modifiers, domainData] = await Promise.all([
-    fetchFeatureModifiers(featureEngineIds),
+    fetchFeatureModifiers(featureEngineIds, cacheEngineIds),
     fetchDomainEngineData(domainEngineIds),
   ]);
 
@@ -84,14 +86,60 @@ function collectDomainEngineIds(engines: DemiplaneEngineEntry[]): string[] {
 
 // ─── Stream-Engines Fetch ────────────────────────────────────────────────────
 
-async function fetchFeatureModifiers(engineIds: string[]): Promise<EngineModifier[]> {
+async function fetchFeatureModifiers(engineIds: string[], cacheEngineIds: string[]): Promise<EngineModifier[]> {
   const lines = await fetchStreamEngineLines(engineIds);
+
+  const modifiers: EngineModifier[] = [];
+  const grantedFeatSlugs: string[] = [];
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type === "add-spell") modifiers.push(mod);
+      else if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
+    }
+  }
+
+  modifiers.push(...(await fetchGrantedFeatSpellModifiers(grantedFeatSlugs, cacheEngineIds)));
+
+  return modifiers;
+}
+
+/**
+ * Expands `add-feat` grants into the `add-spell` modifiers of the granted feats.
+ *
+ * Heritages and features can grant a feat that itself provides innate
+ * spellcasting (e.g. Empty Sky Kitsune → Kitsune Spell Familiarity → Daze /
+ * Forbidding Ward / Ghost Sound). That granted feat never appears in the
+ * character's `engines` array, so its spells are only reachable by resolving the
+ * feat slug to its engine definition and reading that definition's modifiers.
+ */
+async function fetchGrantedFeatSpellModifiers(
+  grantedFeatSlugs: string[],
+  cacheEngineIds: string[]
+): Promise<EngineModifier[]> {
+  if (grantedFeatSlugs.length === 0 || cacheEngineIds.length === 0) return [];
+
+  const featEngineIdsBySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
+  const grantedFeatEngineIds = grantedFeatSlugs
+    .map((slug) => featEngineIdsBySlug.get(slug))
+    .filter((id): id is string => typeof id === "string");
+
+  if (grantedFeatEngineIds.length === 0) {
+    debugLog(`[feature-spells] no engine ids resolved for granted feats: ${grantedFeatSlugs.join(", ")}`);
+    return [];
+  }
+
+  const lines = await fetchStreamEngineLines(grantedFeatEngineIds);
   const modifiers: EngineModifier[] = [];
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type === "add-spell") modifiers.push(mod);
     }
   }
+
+  debugLog(
+    `[feature-spells] expanded ${String(grantedFeatEngineIds.length)} granted feat(s) into ${String(modifiers.length)} spell grant(s)`
+  );
+
   return modifiers;
 }
 
@@ -134,11 +182,12 @@ function categorizeGrantedSpells(
 export async function applyFeatureGrantedSpells(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<void> {
   const characterLevel = getCharacterLevel(engines);
   const maxSpellRank = getMaxAccessibleSpellRank(actor, characterLevel);
-  const { innate, focus } = await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank);
+  const { innate, focus } = await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank, cacheEngineIds);
 
   debugLog(
     `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells (max rank ${String(maxSpellRank)})`
