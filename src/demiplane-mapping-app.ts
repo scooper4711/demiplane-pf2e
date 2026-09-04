@@ -177,16 +177,11 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
     }
 
     static async #onClickBrowse(_event: PointerEvent, button: HTMLElement): Promise<void> {
-      const kind = button.dataset.kind as SlugKind | undefined;
-      if (!kind) return;
-      await openFinder(kind);
+      await browseAction(button.dataset);
     }
 
     static async #onClickClear(_event: PointerEvent, button: HTMLElement): Promise<void> {
-      const { kind, slug } = button.dataset as { kind?: SlugKind; slug?: string };
-      if (!kind || !slug) return;
-      await clearMapping(kind, slug);
-      refresh();
+      await clearAction(button.dataset);
     }
 
     async #onDrop(event: DragEvent, row: HTMLElement): Promise<void> {
@@ -195,27 +190,61 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
 
       const kind = row.dataset.kind as SlugKind | undefined;
       const slug = row.dataset.slug;
-      if (!kind || !slug) return;
-
-      const dropped = await getDroppedItem(event);
-      if (!dropped) {
-        ui.notifications.warn("Drop a compendium item onto the row to map it.");
-        return;
-      }
-
-      if (!isAcceptedType(kind, dropped.type)) {
-        await showMismatchDialog(slug, kind, dropped.name, dropped.type);
-        return;
-      }
-
-      await setMapping(kind, slug, { uuid: dropped.uuid, name: dropped.name });
-      refresh();
+      await dropOntoRow(kind, slug, event.dataTransfer);
     }
   }
 
   // eslint-disable-next-line no-restricted-syntax -- coercing the ApplicationV2 subclass to its settings-menu constructor shape; single site
   AppClass = DemiplaneMappingApp as unknown as DemiplaneMappingAppConstructor;
   return AppClass;
+}
+
+/**
+ * Section-header "browse" action. Exported for tests (like `isAcceptedType`);
+ * the ApplicationV2 action dispatcher holds the private wrapper above.
+ */
+export async function browseAction(dataset: { kind?: unknown }): Promise<void> {
+  const kind = dataset.kind as SlugKind | undefined;
+  if (!kind) return;
+  await openFinder(kind);
+}
+
+/**
+ * Row "clear mapping" action. Exported for tests; the dispatcher holds the
+ * private wrapper above.
+ */
+export async function clearAction(dataset: { kind?: unknown; slug?: unknown }): Promise<void> {
+  const kind = dataset.kind as SlugKind | undefined;
+  const slug = typeof dataset.slug === "string" ? dataset.slug : undefined;
+  if (!kind || !slug) return;
+  await clearMapping(kind, slug);
+  refresh();
+}
+
+/**
+ * Drops a compendium item onto a mapping row. Exported for tests; the
+ * dragover/drop listeners installed by `_attachPartListeners` delegate here.
+ */
+export async function dropOntoRow(
+  kind: SlugKind | undefined,
+  slug: string | undefined,
+  dataTransfer: DataTransfer | null | undefined
+): Promise<void> {
+  if (!kind || !slug) return;
+
+  const dropped = await getDroppedItem(dataTransfer);
+  if (!dropped) {
+    ui.notifications.warn("Drop a compendium item onto the row to map it.");
+    return;
+  }
+
+  if (!isAcceptedType(kind, dropped.type)) {
+    await showMismatchDialog(slug, kind, dropped.name, dropped.type);
+    return;
+  }
+
+  await setMapping(kind, slug, { uuid: dropped.uuid, name: dropped.name });
+  refresh();
 }
 
 // ─── Aggregation ────────────────────────────────────────────────────────────
@@ -446,8 +475,8 @@ interface DroppedItem {
   type: string;
 }
 
-async function getDroppedItem(event: DragEvent): Promise<DroppedItem | null> {
-  const raw = event.dataTransfer?.getData("text/plain");
+async function getDroppedItem(dataTransfer: DataTransfer | null | undefined): Promise<DroppedItem | null> {
+  const raw = dataTransfer?.getData("text/plain");
   if (!raw) return null;
 
   let parsed: { type?: unknown; uuid?: unknown };
