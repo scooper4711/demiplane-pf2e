@@ -137,7 +137,7 @@ describe("HookManager", () => {
     it("logs pre-selected granted choices", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
       const item = createMockItem(createMockActor(), "Bloodline", {
         system: { rules: [{ key: "ChoiceSet", flag: "bloodline", selection: null }] },
         flags: { pf2e: { rulesSelections: { bloodline: "imperial" } } },
@@ -145,26 +145,26 @@ describe("HookManager", () => {
 
       triggerHook("createItem", item);
 
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(logSpy).toHaveBeenCalledWith(
         `${MODULE_ID} | [debug] Item created on linked actor: Bloodline; granted choices: bloodline=imperial`
       );
-      warnSpy.mockRestore();
+      logSpy.mockRestore();
     });
 
     it("logs none when no granted choices were selected", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
       const item = createMockItem(createMockActor(), "Class Feature", {
         system: { rules: [{ key: "ChoiceSet", flag: "choice", selection: null }] },
       });
 
       triggerHook("createItem", item);
 
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(logSpy).toHaveBeenCalledWith(
         `${MODULE_ID} | [debug] Item created on linked actor: Class Feature; granted choices: choice=none`
       );
-      warnSpy.mockRestore();
+      logSpy.mockRestore();
     });
   });
 
@@ -610,14 +610,14 @@ describe("HookManager", () => {
       autoSyncEnabled = false;
       const manager = new HookManager(exportManager as never);
       manager.register();
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
       triggerHook("updateActor", createMockActor(), { "system.attributes.hp.value": 20 });
 
-      expect(warnSpy).toHaveBeenCalledWith(
+      expect(logSpy).toHaveBeenCalledWith(
         `${MODULE_ID} | [debug] "Test Actor" changed, but auto-sync is off — nothing pushed to Demiplane.`
       );
-      warnSpy.mockRestore();
+      logSpy.mockRestore();
     });
   });
 
