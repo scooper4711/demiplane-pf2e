@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.8] - 2026-09-04
+
+### Added
+
+- Bound the Demiplane dialog's issue lists in a scroll region
+- Show blue/red Demiplane logo as the sync indicator
+- Use libWrapper for ChoiceSet patch when available
+- Record all slug resolutions and rework the mapping editor
+
+### Fixed
+
+- use console.log for debug output to avoid stack traces
+- Live-update the mapping editor when another client changes a mapping
+
+### Changed
+
+- removed movie file in favor of attachment
+- working on video demo
+- Remove dead code and extract PF2e magic-number constants
+- Lint-guard `as unknown as` and `as never` casts
+- Centralize residual type casts behind access seams
+- migrate from fvtt-types to @dfreds/foundry-types
+- removed kiro documents
+- address Sonarqube findings to improve maintanability
+- Resolve mapping icons from the pack index instead of full documents
+- Open the mapping editor instantly with a loading state
+- Update ARCHITECTURE and DESIGN for spell/choice-set refactor
+- Split spell-importer and choice-set-handler god objects
+
+[0.2.0-beta.8]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.8
+
 ## [0.2.0-beta.7] - 2026-09-02
 
 ### Added
