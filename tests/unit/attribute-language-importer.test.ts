@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
 import {
   applySkillProficiencies,
@@ -198,15 +198,23 @@ describe("applyAttributeBoosts", () => {
 
   it("applies ancestry boosts", async () => {
     const actor = createMockActor();
-    // Add a mock ancestry item
-    actor.items.filter = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
-      return items.filter(fn);
-    }) as never;
-    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
-      return items.find(fn);
-    }) as never;
+    const itemUpdate = vi.fn();
+    // Kitsune-style ancestry: slot 0 is a fixed Charisma boost (single allowed
+    // option), slot 2 is the free boost (all six). Demiplane sends only the
+    // free choice.
+    const ancestryItem = {
+      type: "ancestry",
+      id: "anc1",
+      system: {
+        boosts: {
+          "0": { value: ["cha"], selected: "cha" },
+          "1": { value: [] },
+          "2": { value: ["str", "dex", "con", "int", "wis", "cha"], selected: null },
+        },
+      },
+      update: itemUpdate,
+    };
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [ancestryItem].find(fn)) as never;
 
     const engines: DemiplaneEngineEntry[] = [
       {
@@ -215,18 +223,58 @@ describe("applyAttributeBoosts", () => {
         type: "DemiplaneEngine",
         args: { slug: "strength", sourceRow: "ancestry-boosts" },
       },
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    // The free choice must go to the free slot (2), never the fixed slot (0).
+    expect(itemUpdate).toHaveBeenCalledWith({ "system.boosts.2.selected": "str" });
+    expect(summary.log.some((l) => l.includes("ancestry"))).toBe(true);
+  });
+
+  it("writes alternate ancestry boosts to alternateAncestryBoosts", async () => {
+    // With ancestry-boost-option = "two-boosts", the player forgoes the fixed
+    // boost for two free ones; PF2e stores them in system.alternateAncestryBoosts
+    // and ignores the fixed/free slots.
+    const actor = createMockActor();
+    const itemUpdate = vi.fn();
+    const ancestryItem = {
+      type: "ancestry",
+      id: "anc1",
+      system: { boosts: { "0": { value: ["cha"], selected: "cha" }, "2": { value: ["str", "dex", "con"] } } },
+      update: itemUpdate,
+    };
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [ancestryItem].find(fn)) as never;
+
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "opt",
+        name: "ancestry-boost-option",
+        type: "CustomDemiplaneEngine",
+        value: "two-boosts",
+        args: {},
+      } as DemiplaneEngineEntry,
+      {
+        id: "1",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "strength", sourceRow: "ancestry-boosts", selectionGroup: "ancestry" },
+      },
       {
         id: "2",
         name: "core/selection/attribute/boost.eng",
         type: "DemiplaneEngine",
-        args: { slug: "dexterity", sourceRow: "ancestry-boosts" },
+        args: { slug: "dexterity", sourceRow: "ancestry-boosts", selectionGroup: "ancestry" },
       },
     ];
     const summary = makeSummary();
     await applyAttributeBoosts(actor as never, engines, summary);
 
-    expect(actor.update).toHaveBeenCalled();
-    expect(summary.log.some((l) => l.includes("ancestry"))).toBe(true);
+    expect(itemUpdate).toHaveBeenCalledWith({ "system.alternateAncestryBoosts": ["str", "dex"] });
+    // Must NOT touch the per-slot selections under the alternate strategy.
+    expect(itemUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ "system.boosts.0.selected": expect.anything() })
+    );
   });
 
   it("applies level boosts to actor", async () => {
@@ -254,6 +302,101 @@ describe("applyAttributeBoosts", () => {
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
         "system.build.attributes.boosts.1": ["str", "con"],
+      })
+    );
+  });
+
+  it("applies level boosts using the ability-boost-level-<n> source-row scheme", async () => {
+    // Regression: level 5/10/15 boosts arrive with sourceRow
+    // "ability-boost-level-N" (not "attribute-boosts-level-N-rm"), and were
+    // previously dropped because only the latter scheme was matched.
+    const actor = createMockActor();
+    const boost = (slug: string, level: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug, sourceRow: `ability-boost-level-${String(level)}` },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [
+      boost("strength", 5),
+      boost("constitution", 5),
+      boost("intelligence", 5),
+      boost("charisma", 5),
+      boost("strength", 10),
+      boost("charisma", 10),
+      boost("charisma", 15),
+      boost("wisdom", 15),
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str", "con", "int", "cha"],
+        "system.build.attributes.boosts.10": ["str", "cha"],
+        "system.build.attributes.boosts.15": ["cha", "wis"],
+      })
+    );
+  });
+
+  it("buckets Gradual Ability Boosts using Demiplane's own level group", async () => {
+    // Real GAB shape (character ed4a4e3c): sourceRow
+    // "gradual-attribute-boost-level-<n>" plus an authoritative
+    // selectionGroup "attribute-boost-level-group-<milestone>". The group wins,
+    // so a level-2 gradual boost lands in bucket 5.
+    const actor = createMockActor();
+    const gab = (slug: string, level: number, group: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug,
+          sourceRow: `gradual-attribute-boost-level-${String(level)}`,
+          selectionGroup: `attribute-boost-level-group-${String(group)}`,
+        },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [
+      gab("strength", 2, 5),
+      gab("dexterity", 3, 5),
+      gab("constitution", 4, 5),
+      gab("intelligence", 5, 5),
+      gab("wisdom", 7, 10),
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str", "dex", "con", "int"],
+        "system.build.attributes.boosts.10": ["wis"],
+      })
+    );
+  });
+
+  it("falls back to level-derived buckets when no level group is present", async () => {
+    // If a gradual boost ever arrives without a selectionGroup, derive the
+    // bucket from the level in the sourceRow (2-5 → 5, 6-10 → 10).
+    const actor = createMockActor();
+    const gab = (slug: string, level: number): DemiplaneEngineEntry =>
+      ({
+        id: "e86570ed-9602-414d-adb1-474064f14f28",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug, sourceRow: `gradual-attribute-boost-level-${String(level)}` },
+      }) as DemiplaneEngineEntry;
+
+    const engines: DemiplaneEngineEntry[] = [gab("strength", 3), gab("wisdom", 8)];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.build.attributes.boosts.5": ["str"],
+        "system.build.attributes.boosts.10": ["wis"],
       })
     );
   });
