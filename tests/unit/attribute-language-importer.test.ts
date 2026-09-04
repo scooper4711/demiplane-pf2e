@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
 import {
   applySkillProficiencies,
@@ -198,15 +198,23 @@ describe("applyAttributeBoosts", () => {
 
   it("applies ancestry boosts", async () => {
     const actor = createMockActor();
-    // Add a mock ancestry item
-    actor.items.filter = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
-      return items.filter(fn);
-    }) as never;
-    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => {
-      const items = [{ type: "ancestry", id: "anc1", system: {}, update: actor.update }];
-      return items.find(fn);
-    }) as never;
+    const itemUpdate = vi.fn();
+    // Kitsune-style ancestry: slot 0 is a fixed Charisma boost (single allowed
+    // option), slot 2 is the free boost (all six). Demiplane sends only the
+    // free choice.
+    const ancestryItem = {
+      type: "ancestry",
+      id: "anc1",
+      system: {
+        boosts: {
+          "0": { value: ["cha"], selected: "cha" },
+          "1": { value: [] },
+          "2": { value: ["str", "dex", "con", "int", "wis", "cha"], selected: null },
+        },
+      },
+      update: itemUpdate,
+    };
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [ancestryItem].find(fn)) as never;
 
     const engines: DemiplaneEngineEntry[] = [
       {
@@ -215,18 +223,58 @@ describe("applyAttributeBoosts", () => {
         type: "DemiplaneEngine",
         args: { slug: "strength", sourceRow: "ancestry-boosts" },
       },
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    // The free choice must go to the free slot (2), never the fixed slot (0).
+    expect(itemUpdate).toHaveBeenCalledWith({ "system.boosts.2.selected": "str" });
+    expect(summary.log.some((l) => l.includes("ancestry"))).toBe(true);
+  });
+
+  it("writes alternate ancestry boosts to alternateAncestryBoosts", async () => {
+    // With ancestry-boost-option = "two-boosts", the player forgoes the fixed
+    // boost for two free ones; PF2e stores them in system.alternateAncestryBoosts
+    // and ignores the fixed/free slots.
+    const actor = createMockActor();
+    const itemUpdate = vi.fn();
+    const ancestryItem = {
+      type: "ancestry",
+      id: "anc1",
+      system: { boosts: { "0": { value: ["cha"], selected: "cha" }, "2": { value: ["str", "dex", "con"] } } },
+      update: itemUpdate,
+    };
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [ancestryItem].find(fn)) as never;
+
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "opt",
+        name: "ancestry-boost-option",
+        type: "CustomDemiplaneEngine",
+        value: "two-boosts",
+        args: {},
+      } as DemiplaneEngineEntry,
+      {
+        id: "1",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "strength", sourceRow: "ancestry-boosts", selectionGroup: "ancestry" },
+      },
       {
         id: "2",
         name: "core/selection/attribute/boost.eng",
         type: "DemiplaneEngine",
-        args: { slug: "dexterity", sourceRow: "ancestry-boosts" },
+        args: { slug: "dexterity", sourceRow: "ancestry-boosts", selectionGroup: "ancestry" },
       },
     ];
     const summary = makeSummary();
     await applyAttributeBoosts(actor as never, engines, summary);
 
-    expect(actor.update).toHaveBeenCalled();
-    expect(summary.log.some((l) => l.includes("ancestry"))).toBe(true);
+    expect(itemUpdate).toHaveBeenCalledWith({ "system.alternateAncestryBoosts": ["str", "dex"] });
+    // Must NOT touch the per-slot selections under the alternate strategy.
+    expect(itemUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ "system.boosts.0.selected": expect.anything() })
+    );
   });
 
   it("applies level boosts to actor", async () => {
