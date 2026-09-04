@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.9] - 2026-09-04
+
+### Added
+
+- show pre-release warning only on beta and dev builds
+
+### Fixed
+
+- include templates and assets in release archive
+- grant background lore when the engine has no slug
+- resolve SonarQube warnings in module test and spell entry
+- resolve @scooper4711/demiplane-api from node_modules under vitest 4
+
+### Changed
+
+- clarify GM value, linking, and roadmap; refresh .env.example
+- elminate lint error
+- normalize package-lock optional dependency metadata
+- cover mapping app, matchers, and remaining sub-60 files
+- cover import phases to lift branch coverage over 80%
+- decompose module entrypoint into testable units
+- bump the dev-minor-patch group across 1 directory with 2 updates
+- make coverage non-blocking temporarily under vitest 4
+- guard against local demiplane-api references in pre-commit
+- bump the dev-major group with 6 updates
+- lock TypeScript to 6.x in Dependabot
+- added license
+- updated readme to reflect current state
+- bump qs from 6.15.3 to 6.16.0
+
+[0.2.0-beta.9]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.9
+
 ## [0.2.0-beta.8] - 2026-09-04
 
 ### Added
