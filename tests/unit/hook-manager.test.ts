@@ -619,6 +619,23 @@ describe("HookManager", () => {
       );
       logSpy.mockRestore();
     });
+
+    it("does not log the auto-sync note for the actor's own in-flight sync", () => {
+      // During an import/push the actor is marked with a sync token. The
+      // structural sync-active guard must short-circuit *before* the auto-sync
+      // note, so an import does not spam "nothing pushed" for its own writes.
+      autoSyncEnabled = false;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+      const logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+      const importing = createMockActor("character", "char-uuid-1234", { syncActiveTokens: ["local-token"] });
+      triggerHook("updateActor", importing, { "system.attributes.hp.value": 20 });
+
+      expect(logSpy).not.toHaveBeenCalledWith(expect.stringContaining("nothing pushed to Demiplane"));
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+      logSpy.mockRestore();
+    });
   });
 
   describe("updateItem hook — currency via treasure items", () => {
