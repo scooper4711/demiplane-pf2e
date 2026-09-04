@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { normalizeEquipmentSlug, parseRankedConsumable } from "./slug-utils.js";
+import { isRuneEngine, collectRunesByParent, type WeaponRunes } from "./weapon-runes.js";
 import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem } from "../slug-mapping.js";
@@ -161,8 +162,16 @@ export async function applyEquipment(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const itemEngines = engines.filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"));
-  if (itemEngines.length === 0) return;
+  const allItemEngines = engines.filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"));
+  if (allItemEngines.length === 0) return;
+
+  // Runes are affixed to a parent weapon (weapon.system.runes), not created as
+  // their own inventory items. Split them out and group by the parent's id.
+  const runeEngines = allItemEngines.filter(isRuneEngine);
+  const itemEngines = allItemEngines.filter((e) => !isRuneEngine(e));
+  const runesByParent = collectRunesByParent(runeEngines, (slug) => {
+    summary.log.push(`! rune not recognized: ${slug}`);
+  });
 
   const state = buildEquipmentState(engines);
 
@@ -178,7 +187,10 @@ export async function applyEquipment(
 
   for (const eng of itemEngines) {
     const pending = await buildEquipmentItem(eng, equipPack, equipIndex, state, summary, skipped);
-    if (pending) items.push(pending);
+    if (pending) {
+      applyRunesToItem(pending.data, runesByParent.get(pending.demiplaneId));
+      items.push(pending);
+    }
   }
 
   if (items.length === 0) {
@@ -199,6 +211,25 @@ export async function applyEquipment(
   if (skipped.length > 0) {
     summary.log.push(`! equipment skipped: [${skipped.join(", ")}]`);
   }
+}
+
+/**
+ * Applies affixed runes to an item's `system.runes`, merging with any runes the
+ * compendium item already carries (e.g. specific magic items). No-op when the
+ * parent has no runes.
+ */
+function applyRunesToItem(data: Record<string, unknown>, runes: WeaponRunes | undefined): void {
+  if (!runes) return;
+
+  const system = data.system as Record<string, unknown>;
+  const existing = (system.runes as Partial<WeaponRunes> | undefined) ?? {};
+  const existingProperty = Array.isArray(existing.property) ? existing.property : [];
+
+  system.runes = {
+    potency: Math.max(existing.potency ?? 0, runes.potency),
+    striking: Math.max(existing.striking ?? 0, runes.striking),
+    property: [...new Set([...existingProperty, ...runes.property])],
+  };
 }
 
 /** Builds one equipment item from its engine, or records why it can't be imported. */
