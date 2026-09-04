@@ -141,6 +141,85 @@ describe("feature-spell-resolver", () => {
     expect(result).toEqual({ innate: [], focus: [] });
   });
 
+  describe("add-feat grant expansion", () => {
+    /**
+     * A heritage grants a feat via `add-feat`; that feat grants innate spells.
+     * The granted feat is not in `engines` — it is reached by resolving the feat
+     * slug to its engine id through the cached engine ids, then reading that
+     * feat definition's `add-spell` modifiers. This is the Empty Sky Kitsune →
+     * Kitsune Spell Familiarity → Daze / Forbidding Ward chain.
+     */
+    function requestAwareFetch() {
+      const featEngineName = "tabula/feat/kitsune-spell-familiarity.eng";
+      return vi.fn().mockImplementation((_url: string, init: { body: string }) => {
+        const body = JSON.parse(init.body) as { engineIdsBySource: Record<string, string[]> };
+        const ids = body.engineIdsBySource["pathfinder2e-v2"] ?? [];
+
+        // Call 1: the heritage feature engine → add-feat grant.
+        if (ids.includes("her-1")) {
+          return Promise.resolve({
+            ok: true,
+            text: async () => ndjsonLine("her-1", [{ type: "add-feat", addFeat: "kitsune-spell-familiarity" }]),
+          });
+        }
+        // Call 2: cache-index resolution → map feat slug to its engine id.
+        if (ids.includes("c50dedbd")) {
+          return Promise.resolve({
+            ok: true,
+            text: async () =>
+              JSON.stringify({
+                id: "c50dedbd",
+                engineName: featEngineName,
+                data: {
+                  nodes: {
+                    n1: {
+                      name: "StringObject",
+                      data: {
+                        string: JSON.stringify({
+                          engineModifiers: [
+                            ADD_SPELL("daze", 1, { isInnate: true, tradition: "divine" }),
+                            ADD_SPELL("forbidding-ward", 1, { isInnate: true, tradition: "divine" }),
+                          ],
+                        }),
+                      },
+                    },
+                  },
+                },
+              }),
+          });
+        }
+        return Promise.resolve({ ok: true, text: async () => "" });
+      });
+    }
+
+    it("expands a heritage-granted feat into its innate spells", async () => {
+      vi.stubGlobal("fetch", requestAwareFetch());
+
+      const result = await resolveFeatureGrantedSpells(
+        [featureEngine("tabula/heritage/empty-sky-kitsune.eng", "her-1")],
+        2,
+        1,
+        ["c50dedbd"]
+      );
+
+      expect(result.innate.map((s) => s.slug).sort()).toEqual(["daze", "forbidding-ward"]);
+      expect(result.innate.every((s) => s.isInnate && s.tradition === "divine")).toBe(true);
+    });
+
+    it("does not expand granted feats when no cache ids are provided", async () => {
+      vi.stubGlobal("fetch", requestAwareFetch());
+
+      const result = await resolveFeatureGrantedSpells(
+        [featureEngine("tabula/heritage/empty-sky-kitsune.eng", "her-1")],
+        2,
+        1
+      );
+
+      expect(result.innate).toEqual([]);
+      expect(result.focus).toEqual([]);
+    });
+  });
+
   describe("domain focus spells", () => {
     beforeEach(() => {
       installFoundryMocks({ "pf2e.spells-srd": createMockPack(FIRE_DOMAIN_SPELLS) });
