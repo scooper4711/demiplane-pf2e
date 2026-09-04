@@ -90,7 +90,7 @@ That's it. The module fetches the latest version and applies the diff.
 
 Demiplane and Foundry don't always use the same name for the same thing, and Demiplane sometimes carries content the PF2e compendium lists under a different name. When the importer can't find a match, it skips the item and records it as an unresolved item rather than guessing. The **Demiplane Mapping** screen lets a GM teach the module those matches once, and every future import for every player picks them up automatically.
 
-Open it from **Settings > Module Settings > Demiplane PF2e Sync > Demiplane Mapping** (visible to GMs only). You'll see the unresolved Demiplane names grouped by kind — equipment, feats, spells, ancestry, heritage, background, and class — along with which characters each one affects.
+Open it from **Settings > Game Settings > Demiplane PF2e Sync > Demiplane Mapping** (visible to GMs only). You'll see the unresolved Demiplane names grouped by kind — equipment, feats, spells, ancestry, heritage, background, and class — along with which characters each one affects.
 
 To create a mapping:
 
