@@ -55,6 +55,8 @@ jobs:
             module.json \
             module.css \
             dist/ \
+            templates/ \
+            assets/ \
             README.md
 
       - name: Update Release With Files
