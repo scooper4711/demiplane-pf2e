@@ -31,6 +31,12 @@ describe("applyEquipment", () => {
           system: { slug: "commanders-banner" },
           type: "equipment",
         },
+        {
+          _id: "whip1",
+          name: "Whip",
+          system: { slug: "whip", runes: { potency: 0, striking: 0, property: [] } },
+          type: "weapon",
+        },
       ]),
     });
   });
@@ -61,6 +67,43 @@ describe("applyEquipment", () => {
 
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
+  });
+
+  it("affixes a potency rune to its weapon instead of creating a separate item", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "whip",
+        name: "tabula/item/whip-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "whip-rm" },
+        demiplaneEngineId: "whip-eng-id",
+      },
+      {
+        id: "rune",
+        name: "tabula/item/weapon-potency-1-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "weapon-potency-1-rm",
+          metaItemType: "item-rune",
+          parentItemID: "whip-eng-id",
+          parentEngine: "whip-eng-id",
+        },
+        demiplaneEngineId: "rune-eng-id",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    const created = (actor.createEmbeddedDocuments as ReturnType<typeof import("vitest").vi.fn>).mock.calls.flatMap(
+      (c: unknown[]) => c[1] as Array<Record<string, unknown>>
+    );
+    // Exactly one item — the whip — and no standalone rune item.
+    expect(created).toHaveLength(1);
+    const whip = created[0]!;
+    expect(whip.name).toBe("Whip");
+    expect((whip.system as { runes: { potency: number } }).runes.potency).toBe(1);
+    expect(created.some((i) => (i.name as string)?.toLowerCase().includes("potency"))).toBe(false);
   });
 
   it("derives slug from engine name when args.slug is missing", async () => {
