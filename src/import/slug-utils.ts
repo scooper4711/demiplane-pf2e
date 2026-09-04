@@ -26,14 +26,18 @@ export function parseFeatSlot(sourceRow: string): {
 } {
   if (!sourceRow) return { location: null, taken: null };
 
+  // The mythic calling occupies its own dedicated slot, not a level slot.
+  if (sourceRow === "mythic-calling") return { location: "mythic-calling", taken: 1 };
+
   const levelMatch = /^(\w+)-feats?-level-(\d+)/.exec(sourceRow);
   if (levelMatch) {
     const prefix = levelMatch[1] ?? "";
     const level = Number.parseInt(levelMatch[2] ?? "0", 10);
-    let type = "class";
-    if (prefix === "ancestry") type = "ancestry";
-    else if (prefix === "skill") type = "skill";
-    else if (prefix === "general") type = "general";
+    // Map the Demiplane feat-slot prefix to the Foundry location prefix. Prefixes
+    // that already match Foundry (ancestry/skill/general/mythic) pass through;
+    // anything else (a class name) becomes a class feat.
+    const PASSTHROUGH_PREFIXES = new Set(["ancestry", "skill", "general", "mythic"]);
+    const type = PASSTHROUGH_PREFIXES.has(prefix) ? prefix : "class";
     return { location: `${type}-${level}`, taken: level };
   }
 
