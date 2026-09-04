@@ -29,6 +29,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Mapping Screen Interaction Model](#21-mapping-screen-interaction-model)
 - [Recorded Resolutions and the Full Mapping List](#22-recorded-resolutions-and-the-full-mapping-list)
 - [Foundry Type Strategy and Access Seams](#23-foundry-type-strategy-and-access-seams)
+- [Module Entrypoint Decomposition](#24-module-entrypoint-decomposition)
 
 ---
 
@@ -558,3 +559,31 @@ What `@dfreds/foundry-types` deliberately does not provide is the PF2e _system_ 
 The test is the same as elsewhere: centralize a cast when the same gap is hit from more than one place, or when the unsafe surface benefits from being named and explained. A one-off, self-evident coercion can stay where it is. `as unknown as` is not banned — it is confined to these isolated, single-use boundaries.
 
 **Relationship to the earlier `fvtt-types` design:** an earlier iteration stayed on `fvtt-types` and taught it the PF2e shapes via a `declare module "fvtt-types/configuration"` augmentation (`pf2e-foundry-config.d.ts`). That approach could not make the document-mutation methods callable (fvtt-types poisons them with `never` parameters unless the concrete subclass overload resolves), so those operations required `as never`. Moving to `@dfreds/foundry-types` removes that whole class of cast at the source; `pf2e-foundry-config.d.ts` is deleted, replaced by `pf2e-types.ts` (system shapes as plain interfaces + accessors) and `foundry-globals.d.ts` (the runtime globals the package omits).
+
+---
+
+## 24. Module Entrypoint Decomposition
+
+**Decision:** `src/module.ts` (385 lines, 9.4% line coverage) is thin wiring only. Import/export flows, the sidebar import-button flow, the actor context-menu option, and the module API each live in a focused unit that `module.ts` composes; the flows take their collaborators as parameters instead of reading module globals.
+
+| Unit                         | Responsibility                                                                                                                                                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/sync-flows.ts`          | `importLinkedCharacter`, `exportLinkedCharacter`, `pushCharacterEngines`, `reimportActorOnConflict`, `recoverStaleSyncPauses`, plus the shared `SyncFlowDeps` / `ImportCharacterFn` / `ExportCharacterFn` types |
+| `src/directory-import.ts`    | Sidebar import-button flow: `extractCharacterId`, prompt content, permission check, and the full click orchestration (`onImportButtonClick`)                                                                    |
+| `src/actor-context-menu.ts`  | "Update from Demiplane" option: `canOpenSyncDialog` visibility rule and the wipe-and-reimport click flow                                                                                                        |
+| `src/module-api.ts`          | `registerModuleApi`: the external `importCharacter` / `exportNow` surface with its unlinked-actor and missing-token guards                                                                                      |
+| `src/module.ts` (~165 lines) | `init`/`ready` wiring, singleton construction, hook registration, and binding the real collaborators into the flow functions                                                                                    |
+
+**Rationale:** The entrypoint mixed three things that want different test strategies: Foundry hook registration (needs hook invocation with globals mocked), user-flow branching (needs each branch driven with fakes), and pure helpers (direct unit tests). Co-located, the flows were reachable only through the module's private singletons, so they went untested — 9.4% coverage on the file that owns every sync flow. Separated, each unit is fully drivable: flows take a `SyncFlowDeps { exportManager, importOrchestrator }` (tests substitute a fake orchestrator and a real `ExportManager` over a stub client), while Foundry globals keep the codebase's existing global-mock pattern. Coverage is now 95%+ lines on `module.ts` and 100% on all four units.
+
+**Lazy singleton binding:** `module.ts` binds the real collaborators through `importFn`/`exportFn` closures that read the module-level singletons at _call_ time (`flowDeps()`), not registration time. This matters because `renderActorDirectory` and `getActorContextOptions` register at import time — before `ready` assigns the singletons — while their callbacks run long after. Eagerly snapshotting the deps object at registration would capture `undefined`.
+
+**Tradeoffs considered:**
+
+| Approach                                       | Pros                                                            | Cons                                                                                        |
+| ---------------------------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Thin wiring + injected flows **(chosen)**      | Units testable in isolation; entrypoint stays obviously correct | More files; hook callbacks still need the `unknown[]` boundary cast from §23                |
+| Test through the entrypoint's private state    | No new files                                                    | Requires reaching module `let` bindings (re-import tricks); flows stay untested in practice |
+| Constructor-inject everything into `module.ts` | Purest DI                                                       | Foundry owns instantiation (hooks fire on import); fights the platform lifecycle            |
+
+The hook-callback `(...args: unknown[]) => void` boundary casts and the module-API surface cast stay exactly as §23 describes — decomposition moved code, it did not change the type strategy.
