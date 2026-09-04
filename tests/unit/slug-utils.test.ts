@@ -116,6 +116,20 @@ describe("parseFeatSlot", () => {
       taken: null,
     });
   });
+
+  it("parses the mythic calling into its dedicated slot", () => {
+    expect(parseFeatSlot("mythic-calling")).toEqual({
+      location: "mythic-calling",
+      taken: 1,
+    });
+  });
+
+  it("parses a mythic feat into a mythic level slot (not class)", () => {
+    expect(parseFeatSlot("mythic-feat-level-2")).toEqual({
+      location: "mythic-2",
+      taken: 2,
+    });
+  });
 });
 
 describe("categorizeEngine", () => {
