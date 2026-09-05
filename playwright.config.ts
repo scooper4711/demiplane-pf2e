@@ -15,9 +15,9 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     headless: true,
+    // Foundry warns and degrades below 1366x768; headless defaults to 1280x720.
+    viewport: { width: 1600, height: 900 },
   },
   // Global setup only runs if FOUNDRY_SETUP=true (opt-in for license/system/world setup)
-  ...(process.env.FOUNDRY_SETUP === "true"
-    ? { globalSetup: "./tests/integration/global-setup.ts" }
-    : {}),
+  ...(process.env.FOUNDRY_SETUP === "true" ? { globalSetup: "./tests/integration/global-setup.ts" } : {}),
 });

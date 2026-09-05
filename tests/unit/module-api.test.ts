@@ -60,7 +60,7 @@ describe("module-api", () => {
 
     await moduleObject.api.importCharacter(actor, {});
 
-    expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, TOKEN);
+    expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, TOKEN, undefined);
   });
 
   it("prefers an explicitly passed token", async () => {
@@ -68,7 +68,15 @@ describe("module-api", () => {
 
     await moduleObject.api.importCharacter(actor, { token: "explicit" });
 
-    expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, "explicit");
+    expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, "explicit", undefined);
+  });
+
+  it("passes wipe through for full re-imports", async () => {
+    const actor = linkedActor();
+
+    await moduleObject.api.importCharacter(actor, { token: "explicit", wipe: true });
+
+    expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, "explicit", { wipe: true });
   });
 
   it("delegates exportNow to the export flow", async () => {
