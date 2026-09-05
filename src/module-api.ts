@@ -12,7 +12,7 @@ export function registerModuleApi(importCharacter: ImportCharacterFn, exportChar
 
   // eslint-disable-next-line no-restricted-syntax -- attaching a module API surface Foundry's Module type doesn't model; single site
   (module as unknown as { api: Record<string, unknown> }).api = {
-    importCharacter: async (actor: Actor, options?: { token?: string }) => {
+    importCharacter: async (actor: Actor, options?: { token?: string; wipe?: boolean }) => {
       const characterId = actor.getFlag(MODULE_ID, "characterId") as string;
       if (!characterId) {
         ui.notifications.error("No Demiplane character linked to this actor.");
@@ -23,7 +23,8 @@ export function registerModuleApi(importCharacter: ImportCharacterFn, exportChar
         ui.notifications.error("No Demiplane token configured. Set it in module settings.");
         return null;
       }
-      return importCharacter(actor, characterId, token);
+      const wipe = options?.wipe === true;
+      return importCharacter(actor, characterId, token, wipe ? { wipe } : undefined);
     },
     exportNow: (actor: Actor) => exportCharacter(actor),
   };
