@@ -198,6 +198,37 @@ describe("applyEquipment", () => {
     });
   });
 
+  it("marks an item invested from its is-invested flag even when not held or worn", async () => {
+    // Mirrors a pendant of the occult: is-equipped is absent/0, but the
+    // value--is-invested--<id> flag is 1, so it must import as invested.
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "longsword-rm" },
+        demiplaneEngineId: "eng1",
+      },
+      {
+        id: "2",
+        name: "value--is-invested--eng1",
+        type: "CustomDemiplaneEngine",
+        args: {},
+        value: 1,
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    const itemData = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+    expect((itemData.system as Record<string, unknown>).equipped).toEqual({
+      carryType: "worn",
+      handsHeld: 0,
+      invested: true,
+    });
+  });
+
   it("does nothing with no item engines", async () => {
     const actor = createMockActor();
     const summary = makeSummary();
