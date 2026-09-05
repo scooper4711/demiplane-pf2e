@@ -170,7 +170,11 @@ export async function applyEquipment(
   const runeEngines = allItemEngines.filter(isRuneEngine);
   const itemEngines = allItemEngines.filter((e) => !isRuneEngine(e));
   const runesByParent = collectRunesByParent(runeEngines, (slug) => {
+    // Surface an unrecognized rune the same way as an unresolved item, so it
+    // appears in the sync issues and the GM mapping editor rather than being
+    // silently dropped.
     summary.log.push(`! rune not recognized: ${slug}`);
+    summary.unmapped.push({ slug, kind: "equipment" });
   });
 
   const state = buildEquipmentState(engines);

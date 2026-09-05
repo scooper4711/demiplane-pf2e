@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { isRuneEngine, runeParentId, collectRunesByParent } from "../../src/import/weapon-runes.js";
+import { isRuneEngine, runeParentId, collectRunesByParent, toPropertyRuneSlug } from "../../src/import/weapon-runes.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
 
 function runeEngine(slug: string, parentItemID: string): DemiplaneEngineEntry {
@@ -67,11 +67,51 @@ describe("collectRunesByParent", () => {
     expect(map.get("handwraps")?.potency).toBe(2);
   });
 
-  it("reports unknown rune slugs instead of guessing", () => {
+  it("resolves validated property runes to their PF2e slug (Ezren's staff)", () => {
+    // Injected validator stands in for the PF2e localization registry.
+    const valid = new Set(["ghostTouch", "greaterCorrosive", "greaterShock"]);
+    const isValid = (slug: string) => valid.has(slug);
     const onUnknown = vi.fn();
-    const map = collectRunesByParent([runeEngine("flaming-rm", "w1")], onUnknown);
-    expect(onUnknown).toHaveBeenCalledWith("flaming-rm");
-    // No property rune resolved, so the weapon gets a zero-rune record.
+
+    const map = collectRunesByParent(
+      [
+        runeEngine("weapon-potency-3-rm", "staff"),
+        runeEngine("striking-major-rm", "staff"),
+        runeEngine("ghost-touch-rm", "staff"),
+        runeEngine("corrosive-greater-rm", "staff"),
+        runeEngine("shock-greater-rm", "staff"),
+      ],
+      onUnknown,
+      isValid
+    );
+
+    expect(map.get("staff")).toEqual({
+      potency: 3,
+      striking: 3,
+      property: ["ghostTouch", "greaterCorrosive", "greaterShock"],
+    });
+    expect(onUnknown).not.toHaveBeenCalled();
+  });
+
+  it("reports a property rune the system does not recognize instead of guessing", () => {
+    const onUnknown = vi.fn();
+    const map = collectRunesByParent([runeEngine("made-up-rune-rm", "w1")], onUnknown, () => false);
+    expect(onUnknown).toHaveBeenCalledWith("made-up-rune-rm");
     expect(map.get("w1")).toEqual({ potency: 0, striking: 0, property: [] });
+  });
+});
+
+describe("toPropertyRuneSlug", () => {
+  it("camelCases a multi-word rune", () => {
+    expect(toPropertyRuneSlug("ghost-touch-rm")).toBe("ghostTouch");
+  });
+
+  it("moves a trailing grade word to the front", () => {
+    expect(toPropertyRuneSlug("corrosive-greater-rm")).toBe("greaterCorrosive");
+    expect(toPropertyRuneSlug("shock-greater-rm")).toBe("greaterShock");
+  });
+
+  it("leaves an ungraded single-word rune unchanged", () => {
+    expect(toPropertyRuneSlug("flaming-rm")).toBe("flaming");
   });
 });
