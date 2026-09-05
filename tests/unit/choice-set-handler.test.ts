@@ -365,13 +365,12 @@ describe("ChoiceSetHandler with libWrapper active", () => {
     const { wrappers } = activateLibWrapper();
 
     const handler = new ChoiceSetHandler();
-    // The character took "widen-spell-wizard", but the choices are compendium
-    // UUIDs whose labels don't match the -wizard-suffixed slug, so no strategy
-    // matches and the importer falls back to the first option.
+    // The character's only selection is unrelated to either offered option, so
+    // no strategy matches and the importer falls back to the first choice.
     handler.setEngines([
       eng({
-        name: "tabula/feat/widen-spell-wizard.eng",
-        args: { sourceRow: "select-feat-x", slug: "widen-spell-wizard" },
+        name: "tabula/feat/something-else-wizard.eng",
+        args: { sourceRow: "select-feat-x", slug: "something-else-wizard" },
       }),
     ]);
     handler.enable();
@@ -406,9 +405,70 @@ describe("ChoiceSetHandler with libWrapper active", () => {
       itemName: "Experimental Spellshaping",
       chosenLabel: "Reach Spell",
       offeredLabels: ["Reach Spell", "Widen Spell"],
-      candidateSlugs: ["widen-spell-wizard"],
+      candidateSlugs: ["something-else-wizard"],
     });
     // Draining clears the list.
+    expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+
+  it("resolves the class-suffixed selection to its metamagic feat, scoped by feature", async () => {
+    // Regression for Ezren: the character's "widen-spell-wizard" selection
+    // (scoped to School of Unified Magical Theory) must resolve to Widen Spell,
+    // not fall back. The compendium choice labels are unsuffixed ("Widen Spell").
+    installFoundryMocks();
+    installChoiceSetPrototype();
+    const { wrappers } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([
+      eng({
+        name: "tabula/feat/widen-spell-wizard-rm.eng",
+        args: {
+          slug: "widen-spell-wizard-rm",
+          sourceRow: "abc_select-feat-school-of-unified-magical-theory-rm-xyz",
+        },
+      }),
+      eng({
+        name: "tabula/feat/reach-spell-wizard-rm.eng",
+        args: {
+          slug: "reach-spell-wizard-rm",
+          sourceRow: "def_select-feat-experimental-spellshaping-rm-xyz",
+        },
+      }),
+    ]);
+    handler.enable();
+
+    const choices = [
+      { value: "Compendium.pf2e.feats-srd.Item.RS", label: "Reach Spell" },
+      { value: "Compendium.pf2e.feats-srd.Item.WS", label: "Widen Spell" },
+      { value: "Compendium.pf2e.feats-srd.Item.CS", label: "Counterspell (Prepared)" },
+    ];
+    const ctx = {
+      selection: null as unknown,
+      choices,
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "School of Unified Magical Theory",
+      },
+      actor: { getRollOptions: () => [] },
+      resolveInjectedProperties: () => ({ test: () => true }),
+      predicate: {},
+      inflateChoices: async () => choices,
+      flag: "feat",
+      rollOption: "foo",
+      prompt: undefined,
+    };
+
+    const wrapper = wrappers.get("game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate");
+    await wrapper!.call(ctx, vi.fn().mockResolvedValue(undefined), {
+      ruleSource: {},
+      itemSource: { name: "School of Unified Magical Theory" },
+    });
+
+    // Scoped to the school's own selection → Widen Spell, and no fallback.
+    expect(ctx.selection).toBe("Compendium.pf2e.feats-srd.Item.WS");
     expect(handler.drainFallbacks()).toHaveLength(0);
   });
 

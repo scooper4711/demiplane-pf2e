@@ -1,5 +1,5 @@
 import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug } from "./slug-utils.js";
+import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
@@ -21,7 +21,7 @@ export function findMatchInChoices(
     matchAllSlugs(choices, engines) ??
     matchClassFeatures(choices, engines) ??
     matchGenericFeatures(choices, engines) ??
-    matchFeatSlugs(choices, engines) ??
+    matchFeatSlugs(choices, engines, itemName) ??
     matchGenericChoice(choices, engines, itemName);
 
   if (!match) debugLog("[ChoiceSet match] No match found across all strategies");
@@ -141,19 +141,49 @@ function matchGenericFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]
   return null;
 }
 
-function matchFeatSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
-  const featSlugs = engines
-    .filter((e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug)
-    .map((e) => toFoundrySlug(e.args.slug as string));
+/**
+ * Matches a compendium-feat ChoiceSet (e.g. the metamagic feat chosen for
+ * School of Unified Magical Theory or Experimental Spellshaping) against the
+ * character's `select-feat-<feature>` engines.
+ *
+ * Two things make this reliable where a naive slug-equality check fails:
+ *
+ * 1. **Scoping.** A character can have several `select-feat-*` engines for
+ *    different features that all offer overlapping feat lists (any level-1
+ *    wizard feat). When the owning feature is known, only that feature's
+ *    selection is considered, so the school's choice resolves to its feat and
+ *    Experimental Spellshaping's to its own — not whichever appears first.
+ * 2. **Class-suffix stripping.** Demiplane feat slugs carry a class suffix
+ *    (`widen-spell-wizard`) while the compendium/label slug does not
+ *    (`widen-spell`). Each candidate is expanded via {@link generateSlugCandidates}
+ *    (which strips the class suffix) before comparing.
+ */
+function matchFeatSlugs(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
+  const itemSlug = itemName ? toChoiceSlug(itemName) : "";
+  const selectFeatEngines = engines.filter(
+    (e) => ((e.args?.sourceRow as string) || "").includes("select-feat-") && e.args?.slug
+  );
 
-  debugLog(`[ChoiceSet match] Strategy 5 - feat slugs: [${featSlugs.join(", ")}]`);
+  // Prefer engines whose sourceRow names this feature; fall back to all when the
+  // owner is unknown or none are scoped (preserving the prior broad behavior).
+  const scoped = itemSlug ? selectFeatEngines.filter((e) => (e.args?.sourceRow as string).includes(itemSlug)) : [];
+  const relevant = scoped.length > 0 ? scoped : selectFeatEngines;
+
+  // Expand each Demiplane feat slug into its class-suffix-stripped candidates.
+  const featSlugs = [...new Set(relevant.flatMap((e) => generateSlugCandidates(toFoundrySlug(e.args.slug as string))))];
+
+  const scope = itemName ? ` for "${itemName}"` : "";
+  debugLog(`[ChoiceSet match] Strategy 5 - feat slugs${scope}: [${featSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     if (typeof choice.value === "string" && choice.value.includes("Compendium")) {
-      const label = choice.label
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, "-")
-        .replace(/-+/g, "-");
+      // Compare the label slug against each candidate. `label === featSlug`
+      // catches the class-suffix-stripped exact match (widen-spell ==
+      // widen-spell from widen-spell-wizard); `label.includes(featSlug)` keeps
+      // the prior behavior where a broader label contains the feat (Greater
+      // Power Attack ⊃ power-attack). Scoping above prevents this leniency from
+      // matching a sibling feature's feat.
+      const label = toChoiceSlug(choice.label);
       for (const featSlug of featSlugs) {
         if (label === featSlug || label.includes(featSlug)) return choice;
       }

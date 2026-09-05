@@ -132,6 +132,49 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices([{ label: "Toughness", value: "Compendium.pf2e.feats-srd.Item.t" }], engines)).toBeNull();
   });
 
+  it("matches a class-suffixed feat slug against the unsuffixed label", () => {
+    // Demiplane slug "widen-spell-wizard" must match the compendium label
+    // "Widen Spell" — the -wizard class suffix is stripped before comparing.
+    const engines = [
+      {
+        id: "e",
+        name: "tabula/feat/widen-spell-wizard-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "widen-spell-wizard-rm", sourceRow: "select-feat-school-of-unified-magical-theory-rm" },
+      },
+    ];
+    const choices = [{ label: "Widen Spell", value: "Compendium.pf2e.feats-srd.Item.ws" }];
+    expect(findMatchInChoices(choices, engines, "School of Unified Magical Theory")?.value).toBe(
+      "Compendium.pf2e.feats-srd.Item.ws"
+    );
+  });
+
+  it("scopes feat matching to the owning feature when several selections exist", () => {
+    // Two select-feat engines for different features; each feature's ChoiceSet
+    // must resolve to its own selection, not whichever appears first.
+    const engines = [
+      {
+        id: "widen",
+        name: "tabula/feat/widen-spell-wizard-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "widen-spell-wizard-rm", sourceRow: "a_select-feat-school-of-unified-magical-theory-rm_b" },
+      },
+      {
+        id: "reach",
+        name: "tabula/feat/reach-spell-wizard-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "reach-spell-wizard-rm", sourceRow: "c_select-feat-experimental-spellshaping-rm_d" },
+      },
+    ];
+    const choices = [
+      { label: "Reach Spell", value: "Compendium.pf2e.feats-srd.Item.rs" },
+      { label: "Widen Spell", value: "Compendium.pf2e.feats-srd.Item.ws" },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "School of Unified Magical Theory")?.label).toBe("Widen Spell");
+    expect(findMatchInChoices(choices, engines, "Experimental Spellshaping")?.label).toBe("Reach Spell");
+  });
+
   it("skips feat matching for non-compendium values", () => {
     const engines = [featEngine("power-attack")];
 
