@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint';
 
 export default defineConfig(
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'foundry-playwright/**'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'playwright/**'],
   },
 
   // Production TypeScript files

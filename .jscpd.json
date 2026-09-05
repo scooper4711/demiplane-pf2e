@@ -1,13 +1,7 @@
 {
   "threshold": 10,
   "reporters": ["console", "json"],
-  "ignore": [
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/*.test.ts",
-    "**/*.spec.ts",
-    "**/foundry-playwright/**"
-  ],
+  "ignore": ["**/node_modules/**", "**/dist/**", "**/*.test.ts", "**/*.spec.ts", "**/playwright/**"],
   "format": ["typescript", "javascript"],
   "minLines": 5,
   "minTokens": 50,
