@@ -16,6 +16,8 @@ export interface EquippedState {
   carryType: string;
   handsHeld?: number | undefined;
   inSlot?: boolean | undefined;
+  /** Whether the item is invested. Pushed back as Demiplane's `value--is-invested--<id>` flag. */
+  invested?: boolean | undefined;
 }
 
 export interface PendingItemChange {

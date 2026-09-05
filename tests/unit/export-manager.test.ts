@@ -313,6 +313,90 @@ describe("ExportManager", () => {
       expect(matches).toHaveLength(1);
       expect(matches[0].value).toBe(12);
     });
+
+    it("pushes an invested toggle as the item's value--is-invested engine", async () => {
+      // Server data includes the pendant item engine but no invest flag yet, so
+      // the push must create value--is-invested--<demiplaneId> = 1.
+      const client = createMockClient({
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [
+            {
+              id: "pendant",
+              name: "tabula/item/pendant-of-the-occult-greater-rm.eng",
+              type: "DemiplaneEngine",
+              saveType: "CharacterSheet",
+              demiplaneEngineId: "de-pendant",
+              args: { slug: "pendant-of-the-occult-greater-rm" },
+            },
+          ],
+          updated: "2026-08-27T00:00:00.000Z",
+        }),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "pendant-of-the-occult-greater-rm",
+        "pendant-of-the-occult-greater-rm",
+        "equipped",
+        { carryType: "worn", handsHeld: 0, invested: true },
+        "equipment"
+      );
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      const engines = client.updateCharacter.mock.calls[0][0].data.engines as Array<Record<string, unknown>>;
+      const invested = engines.find((e) => e.name === "value--is-invested--de-pendant");
+      expect(invested).toBeDefined();
+      expect(invested?.value).toBe(1);
+      expect(invested?.type).toBe("CustomDemiplaneEngine");
+    });
+
+    it("clears the invest flag when an item is uninvested", async () => {
+      const client = createMockClient({
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [
+            {
+              id: "pendant",
+              name: "tabula/item/pendant-of-the-occult-greater-rm.eng",
+              type: "DemiplaneEngine",
+              saveType: "CharacterSheet",
+              demiplaneEngineId: "de-pendant",
+              args: { slug: "pendant-of-the-occult-greater-rm" },
+            },
+            {
+              id: "inv",
+              name: "value--is-invested--de-pendant",
+              value: 1,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-inv",
+              args: { id: null },
+            },
+          ],
+          updated: "2026-08-27T00:00:00.000Z",
+        }),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "pendant-of-the-occult-greater-rm",
+        "pendant-of-the-occult-greater-rm",
+        "equipped",
+        { carryType: "worn", handsHeld: 0, invested: false },
+        "equipment"
+      );
+      await manager.flush(actor as never);
+
+      const engines = client.updateCharacter.mock.calls[0][0].data.engines as Array<Record<string, unknown>>;
+      const invested = engines.filter((e) => e.name === "value--is-invested--de-pendant");
+      expect(invested).toHaveLength(1);
+      expect(invested[0].value).toBe(0);
+    });
   });
 
   describe("flush detects conflicts via updated timestamp", () => {

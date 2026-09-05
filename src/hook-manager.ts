@@ -1,6 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
+import type { EquippedState } from "./export/change-buffer.js";
 import { isSyncActive } from "./sync-pause.js";
 import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 
@@ -372,27 +373,31 @@ export class HookManager {
     if (!equippedChanged || typeof slug !== "string") return;
 
     const itemType = (item as { type?: string })?.type;
-    const changeCarryType = this.getNestedValue(changes, "system.equipped.carryType");
-    const changeHandsHeld = this.getNestedValue(changes, "system.equipped.handsHeld");
-    const liveEquipped = itemSystem(item)?.equipped;
-    const effectiveCarryType =
-      typeof changeCarryType === "string" ? changeCarryType : (liveEquipped?.carryType ?? "stowed");
-    const effectiveHandsHeld =
-      typeof changeHandsHeld === "number" ? changeHandsHeld : (liveEquipped?.handsHeld ?? undefined);
-    const effectiveInSlot = typeof liveEquipped?.inSlot === "boolean" ? (liveEquipped.inSlot as boolean) : undefined;
+    const equipped = this.resolveEffectiveEquipped(item, changes);
 
     debugLog(
-      `Equipped change: ${slug} -> carryType=${effectiveCarryType}, handsHeld=${effectiveHandsHeld}, inSlot=${effectiveInSlot}, type=${itemType}`
+      `Equipped change: ${slug} -> carryType=${equipped.carryType}, handsHeld=${equipped.handsHeld}, inSlot=${equipped.inSlot}, invested=${equipped.invested}, type=${itemType}`
     );
 
-    this.exportManager.queueItemChange(
-      actor,
-      slug,
-      demiplaneSlug,
-      "equipped",
-      { carryType: effectiveCarryType, handsHeld: effectiveHandsHeld, inSlot: effectiveInSlot },
-      itemType
-    );
+    this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "equipped", equipped, itemType);
+  }
+
+  /**
+   * Merges the incoming equipped changes with the item's live equipped state so
+   * a partial update (e.g. only `invested` toggled) still pushes the full state.
+   * Prefers the changed value when present, else the live value, else a default.
+   */
+  private resolveEffectiveEquipped(item: Item, changes: Record<string, unknown>): EquippedState {
+    const live = itemSystem(item)?.equipped;
+    const changeCarryType = this.getNestedValue(changes, "system.equipped.carryType");
+    const changeHandsHeld = this.getNestedValue(changes, "system.equipped.handsHeld");
+    const changeInvested = this.getNestedValue(changes, "system.equipped.invested");
+    return {
+      carryType: typeof changeCarryType === "string" ? changeCarryType : (live?.carryType ?? "stowed"),
+      handsHeld: typeof changeHandsHeld === "number" ? changeHandsHeld : (live?.handsHeld ?? undefined),
+      inSlot: typeof live?.inSlot === "boolean" ? (live.inSlot as boolean) : undefined,
+      invested: typeof changeInvested === "boolean" ? changeInvested : (live?.invested ?? undefined),
+    };
   }
 
   private onItemCreate(item: Item): void {
