@@ -21,6 +21,7 @@ import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
+import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
 import {
@@ -129,6 +130,13 @@ export class ImportOrchestrator {
       summary.errors.push(formatChoiceSetFallback(fallback));
     }
 
+    // Flag variant rules the character relies on that aren't enabled in the
+    // Foundry world (e.g. Gradual Ability Boosts, Mythic), which would otherwise
+    // silently drop content.
+    for (const issue of findVariantMismatches(engines, this.readVariantSettings())) {
+      summary.errors.push(issue);
+    }
+
     await actor.setFlag(MODULE_ID, "lastImportTimestamp", Date.now());
     await this.importJournals(actor, characterId);
     return summary;
@@ -143,6 +151,24 @@ export class ImportOrchestrator {
       new PostProcessingPhase(),
       new RemoveDuplicatesPhase(),
     ];
+  }
+
+  /**
+   * Reads the PF2e variant-rule settings from the live game. Mythic is a
+   * string setting ("disabled" when off); the others are booleans. Accessed via
+   * a narrow cast since `game.pf2e.settings` is a runtime shape not in the
+   * published Foundry types.
+   */
+  private readVariantSettings(): FoundryVariantSettings {
+    const settings = (
+      globalThis as {
+        game?: { pf2e?: { settings?: { variants?: { gab?: boolean }; campaign?: { mythic?: string } } } };
+      }
+    ).game?.pf2e?.settings;
+    return {
+      gradualAbilityBoosts: settings?.variants?.gab === true,
+      mythic: settings?.campaign?.mythic !== undefined && settings.campaign.mythic !== "disabled",
+    };
   }
 
   private async fetchCharacterEngines(
