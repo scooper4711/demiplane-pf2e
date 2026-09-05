@@ -21,15 +21,54 @@ const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.pr
  * prototype patch. Either way the wrap is installed only for the duration of an
  * import and removed afterwards.
  */
+/** A ChoiceSet the importer couldn't resolve, recorded so the GM can correct it. */
+export interface ChoiceSetFallback {
+  /** The item whose ChoiceSet was unresolved (e.g. "Experimental Spellshaping"). */
+  itemName: string;
+  /** The option the importer defaulted to (first choice), by label. */
+  chosenLabel: string;
+  /** The labels of every option that was offered, so the GM can pick the right one. */
+  offeredLabels: string[];
+  /** The Demiplane selection slugs in scope, to jog the GM's memory of their choice. */
+  candidateSlugs: string[];
+}
+
+/**
+ * Builds the human-readable sync-issue message for an unresolved ChoiceSet.
+ * Includes what was chosen, the other options, and the character's in-scope
+ * selections — a GM may not recall every small decision on a complex character.
+ */
+export function formatChoiceSetFallback(fallback: ChoiceSetFallback): string {
+  const parts = [`Couldn't determine the choice for "${fallback.itemName}" — defaulted to "${fallback.chosenLabel}".`];
+  if (fallback.offeredLabels.length > 1) {
+    parts.push(`Options: ${fallback.offeredLabels.join(", ")}.`);
+  }
+  if (fallback.candidateSlugs.length > 0) {
+    parts.push(`Your character had: ${fallback.candidateSlugs.join(", ")}.`);
+  }
+  parts.push("Edit the item on the actor sheet if this is wrong.");
+  return parts.join(" ");
+}
+
 export class ChoiceSetHandler {
   private originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private usingLibWrapper = false;
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
+  /** Fallbacks accumulated during the current import; drained by the orchestrator. */
+  private fallbacks: ChoiceSetFallback[] = [];
 
   setEngines(engines: DemiplaneEngineEntry[]): void {
     this.currentEngines = engines;
+    this.fallbacks = [];
+  }
+
+  /** Returns and clears the fallbacks recorded since the last {@link setEngines}. */
+  drainFallbacks(): ChoiceSetFallback[] {
+    const drained = this.fallbacks;
+    this.fallbacks = [];
+    return drained;
   }
 
   enable(): void {
@@ -131,13 +170,33 @@ export class ChoiceSetHandler {
       return;
     }
 
-    debugLog(`ChoiceSet presented choices: ${this.describeChoices(context.choices)}`);
+    const candidateSlugs = this.candidateSelectionSlugs();
+    debugLog(
+      `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
+    );
 
     const matched = findMatchInChoices(context.choices, this.currentEngines, context.item.name);
     const selected = matched ?? context.choices[0];
     if (selected) {
-      this.applySelectedChoice(context, params, selected, matched !== null);
+      this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
     }
+  }
+
+  /**
+   * The Demiplane selection slugs in scope for matching — the values the
+   * strategies compare against. Logged next to the presented choices so a failed
+   * match shows both sides (e.g. choices "Reach Spell"/"Widen Spell" vs
+   * candidates "reach-spell-wizard"/"widen-spell-wizard"), and carried into the
+   * sync issue so the GM can recognize which option they actually took.
+   */
+  private candidateSelectionSlugs(): string[] {
+    const slugs = this.currentEngines
+      .filter((e) => {
+        const sourceRow = (e.args?.sourceRow as string) || "";
+        return e.args?.slug && (sourceRow.includes("select-") || e.name.includes("/class-feature/"));
+      })
+      .map((e) => e.args?.slug as string);
+    return [...new Set(slugs)];
   }
 
   /**
@@ -180,9 +239,22 @@ export class ChoiceSetHandler {
     context: ChoiceSetContext,
     params: PreCreateParams,
     selected: Choice,
-    matched: boolean
+    matched: boolean,
+    candidateSlugs: string[]
   ): void {
     debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
+
+    // A fallback is a guess (the first option), applied so the import stays
+    // usable, but recorded so it surfaces as a sync issue for the GM to correct.
+    if (!matched) {
+      this.fallbacks.push({
+        itemName: context.item.name,
+        chosenLabel: selected.label,
+        offeredLabels: context.choices.map((c) => c.label),
+        candidateSlugs,
+      });
+    }
+
     context.selection = params.ruleSource.selection = selected.value;
 
     // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation

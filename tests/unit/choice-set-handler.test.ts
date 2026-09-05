@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
-import { ChoiceSetHandler } from "../../src/import/choice-set-handler.js";
+import { ChoiceSetHandler, formatChoiceSetFallback } from "../../src/import/choice-set-handler.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
 
 function eng(overrides: Partial<DemiplaneEngineEntry>): DemiplaneEngineEntry {
@@ -357,5 +357,120 @@ describe("ChoiceSetHandler with libWrapper active", () => {
     await wrapper!.call(ctx, wrapped, { ruleSource: {}, itemSource: { name: "Test Feat" } });
 
     expect(ctx.selection).toBe("society");
+  });
+
+  it("records a fallback with offered options and candidate slugs when nothing matches", async () => {
+    installFoundryMocks();
+    installChoiceSetPrototype();
+    const { wrappers } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    // The character took "widen-spell-wizard", but the choices are compendium
+    // UUIDs whose labels don't match the -wizard-suffixed slug, so no strategy
+    // matches and the importer falls back to the first option.
+    handler.setEngines([
+      eng({
+        name: "tabula/feat/widen-spell-wizard.eng",
+        args: { sourceRow: "select-feat-x", slug: "widen-spell-wizard" },
+      }),
+    ]);
+    handler.enable();
+
+    const choices = [
+      { value: "Compendium.pf2e.feats-srd.Item.AAAA", label: "Reach Spell" },
+      { value: "Compendium.pf2e.feats-srd.Item.BBBB", label: "Widen Spell" },
+    ];
+    const ctx = {
+      selection: null as unknown,
+      choices,
+      item: { flags: {}, getRollOptions: () => [], rules: [{ ignored: true }], name: "Experimental Spellshaping" },
+      actor: { getRollOptions: () => [] },
+      resolveInjectedProperties: () => ({ test: () => true }),
+      predicate: {},
+      inflateChoices: async () => choices,
+      flag: "choice",
+      rollOption: "foo",
+      prompt: undefined,
+    };
+
+    const wrapper = wrappers.get("game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate");
+    const wrapped = vi.fn().mockResolvedValue(undefined);
+    await wrapper!.call(ctx, wrapped, { ruleSource: {}, itemSource: { name: "Experimental Spellshaping" } });
+
+    // Still applies the first-choice guess so the import stays usable.
+    expect(ctx.selection).toBe("Compendium.pf2e.feats-srd.Item.AAAA");
+
+    const fallbacks = handler.drainFallbacks();
+    expect(fallbacks).toHaveLength(1);
+    expect(fallbacks[0]).toEqual({
+      itemName: "Experimental Spellshaping",
+      chosenLabel: "Reach Spell",
+      offeredLabels: ["Reach Spell", "Widen Spell"],
+      candidateSlugs: ["widen-spell-wizard"],
+    });
+    // Draining clears the list.
+    expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+
+  it("does not record a fallback when a choice matches", async () => {
+    installFoundryMocks();
+    installChoiceSetPrototype();
+    const { wrappers } = activateLibWrapper();
+
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.enable();
+
+    const choices = [
+      { value: "society", label: "Society" },
+      { value: "crafting", label: "Crafting" },
+    ];
+    const ctx = {
+      selection: null as unknown,
+      choices,
+      item: { flags: {}, getRollOptions: () => [], rules: [{ ignored: true }], name: "Test Feat" },
+      actor: { getRollOptions: () => [] },
+      resolveInjectedProperties: () => ({ test: () => true }),
+      predicate: {},
+      inflateChoices: async () => choices,
+      flag: "choice",
+      rollOption: "foo",
+      prompt: undefined,
+    };
+
+    const wrapper = wrappers.get("game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate");
+    await wrapper!.call(ctx, vi.fn().mockResolvedValue(undefined), {
+      ruleSource: {},
+      itemSource: { name: "Test Feat" },
+    });
+
+    expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+});
+
+describe("formatChoiceSetFallback", () => {
+  it("includes the item, the guess, the options, and the character's selections", () => {
+    const msg = formatChoiceSetFallback({
+      itemName: "Experimental Spellshaping",
+      chosenLabel: "Reach Spell",
+      offeredLabels: ["Reach Spell", "Widen Spell"],
+      candidateSlugs: ["widen-spell-wizard"],
+    });
+    expect(msg).toContain("Experimental Spellshaping");
+    expect(msg).toContain('defaulted to "Reach Spell"');
+    expect(msg).toContain("Reach Spell, Widen Spell");
+    expect(msg).toContain("widen-spell-wizard");
+  });
+
+  it("omits the options and selections lines when there is nothing to show", () => {
+    const msg = formatChoiceSetFallback({
+      itemName: "Some Feat",
+      chosenLabel: "Only Option",
+      offeredLabels: ["Only Option"],
+      candidateSlugs: [],
+    });
+    expect(msg).toContain("Some Feat");
+    expect(msg).not.toContain("Options:");
+    expect(msg).not.toContain("Your character had:");
   });
 });
