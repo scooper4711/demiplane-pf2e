@@ -20,7 +20,7 @@ import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types.js";
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
-import { ChoiceSetHandler } from "./choice-set-handler.js";
+import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
 import {
@@ -121,6 +121,12 @@ export class ImportOrchestrator {
     } finally {
       Hooks.off("preCreateItem", importHookId);
       this.choiceSetHandler.disable();
+    }
+
+    // Surface any unresolved ChoiceSets (defaulted to a guess) as import issues
+    // so the GM can review and correct them on the actor sheet.
+    for (const fallback of this.choiceSetHandler.drainFallbacks()) {
+      summary.errors.push(formatChoiceSetFallback(fallback));
     }
 
     await actor.setFlag(MODULE_ID, "lastImportTimestamp", Date.now());
