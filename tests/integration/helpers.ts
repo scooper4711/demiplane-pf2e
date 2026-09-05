@@ -24,18 +24,90 @@ const DISMISS_BUTTON_NAMES = [
 ];
 
 /**
+ * Dismisses tour popups only: exits the active tour through Foundry's own
+ * API (`foundry.nue.Tour.activeTour.exit()` — exactly what the Escape key
+ * invokes), then the tooltip X (`<a data-action="exit">`, which has no
+ * accessible name), plus overlay removal. Never touches generic buttons, so
+ * it is safe to call while an installer dialog is open — a broad "Close"
+ * click would kill the dialog itself.
+ *
+ * There is intentionally no focus juggling: the API call needs none, unlike
+ * a synthetic Escape keypress.
+ *
+ * TODO-remove: verbose console.logs below are temporary diagnostics for
+ * matching expectations against the live screen.
+ */
+export async function dismissTours(page: Page): Promise<void> {
+  // Any of these visible means a tour is up (tooltip, centered step, or dim
+  // overlay). Checked separately because the tooltip container varies.
+  const TOUR_SELECTORS = [".tour", ".tour-center-step", ".tour-overlay", "#tooltip.tour"];
+  const deadline = Date.now() + 10_000;
+  for (;;) {
+    const apiResult = await page
+      .evaluate(() => {
+        const Ns = (globalThis as unknown as { foundry?: { nue?: { Tour?: unknown } } }).foundry?.nue?.Tour as
+          { tourInProgress: boolean; activeTour?: { exit: () => void } | null } | undefined;
+        if (!Ns) return "no-api";
+        if (Ns.tourInProgress) {
+          Ns.activeTour?.exit();
+          return "exited";
+        }
+        return "none-active";
+      })
+      .catch((e) => `error:${String(e).slice(0, 80)}`);
+    console.log(`[dismissTours] tour API: ${apiResult}`);
+    await page
+      .evaluate(() => {
+        document.querySelectorAll(".tour-overlay, .tour-center-step").forEach((el) => el.remove());
+      })
+      .catch(() => {});
+    let matched = "";
+    for (const sel of TOUR_SELECTORS) {
+      if (
+        await page
+          .locator(sel)
+          .first()
+          .isVisible({ timeout: 250 })
+          .catch(() => false)
+      ) {
+        matched = sel;
+        break;
+      }
+    }
+    console.log(`[dismissTours] tour selectors matched: ${matched || "(none)"}`);
+    if (!matched && apiResult !== "exited") return;
+    const tourExit = page.locator('.tour [data-action="exit"], .tour-center-step [data-action="exit"]');
+    if (await tourExit.isVisible({ timeout: 500 }).catch(() => false)) {
+      console.log("[dismissTours] clicking tour X");
+      await tourExit
+        .first()
+        .click()
+        .catch(() => {});
+      await page.waitForTimeout(500);
+    }
+    if (Date.now() > deadline) {
+      console.log("[dismissTours] deadline reached with tour still visible");
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+}
+
+/**
  * Clears first-run popups (NUE tours, welcome/what's-new dialogs, usage-data
  * prompts). These appear on a clean data dir but never on the second run,
  * which is the classic clean-checkout flake source. Only ever *dismisses* —
- * never clicks OK/Accept/Join — and is only used during login, never while a
- * test dialog of our own might be open.
+ * never clicks OK/Accept/Join — and is only used during login/setup, never
+ * while a test dialog of our own might be open.
  */
 export async function dismissOverlays(page: Page): Promise<void> {
+  // Tours first: Escape reliably ends them, while DOM removal alone can
+  // leave a live tour blocking behind an invisible tooltip.
+  await dismissTours(page);
   const deadline = Date.now() + 15_000;
   for (;;) {
     await page
       .evaluate(() => {
-        document.querySelectorAll(".tour-overlay, .tour-center-step").forEach((el) => el.remove());
         document.querySelectorAll("#notifications li").forEach((el) => el.remove());
       })
       .catch(() => {});
@@ -87,38 +159,7 @@ export async function loginAsGamemaster(page: Page): Promise<void> {
     }
 
     if (url.includes("/join")) {
-      // Select Gamemaster from the autocomplete dropdown. The option is an
-      // <li> inside #autocomplete (NOT the wrapping <menu>, whose text also
-      // matches) — clicking the wrapper selects nothing and Join silently
-      // does nothing.
-      const userSelect = page.getByRole("textbox", { name: "Select User" });
-      // waitFor (not isVisible): the form renders async after page load, and
-      // isVisible() does not wait — gating on it skips user selection entirely.
-      await userSelect.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
-      if (await userSelect.isVisible().catch(() => false)) {
-        await userSelect.click().catch(() => {});
-        await userSelect.fill("Gamemaster");
-        // click() auto-waits for the suggestion; isVisible() would not.
-        const selected = await page
-          .locator("#autocomplete li", { hasText: /^Gamemaster$/ })
-          .click({ timeout: 10_000 })
-          .then(() => true)
-          .catch(() => false);
-        if (!selected) {
-          // Fallback: keyboard-select the highlighted suggestion.
-          await userSelect.press("ArrowDown").catch(() => {});
-          await userSelect.press("Enter").catch(() => {});
-        }
-      }
-
-      // Click Join (waits for the button to actually enable)
-      const joinButton = page.getByRole("button", { name: "Join Game Session" });
-      await joinButton.waitFor({ state: "visible", timeout: 15_000 });
-      await Promise.all([page.waitForURL(/\/game/, { timeout: 90_000, waitUntil: "commit" }), joinButton.click()]);
-      await page.waitForFunction(() => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true, {
-        timeout: 90_000,
-      });
-      await dismissOverlays(page);
+      await joinAsGamemaster(page);
       return;
     }
 
@@ -126,6 +167,63 @@ export async function loginAsGamemaster(page: Page): Promise<void> {
   }
 
   throw new Error(`Failed to reach /game. Current URL: ${page.url()}`);
+}
+
+/**
+ * Joins the current world as Gamemaster. Assumes the page is already on
+ * /join. Shared with the setup script so both use the same robust flow.
+ */
+export async function joinAsGamemaster(page: Page): Promise<void> {
+  // Select Gamemaster from the autocomplete dropdown. The option is an
+  // <li> inside #autocomplete (NOT the wrapping <menu>, whose text also
+  // matches) — clicking the wrapper selects nothing and Join silently
+  // does nothing.
+  const userSelect = page.getByRole("textbox", { name: "Select User" });
+  // waitFor (not isVisible): the form renders async after page load, and
+  // isVisible() does not wait — gating on it skips user selection entirely.
+  await userSelect.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
+  if (await userSelect.isVisible().catch(() => false)) {
+    await userSelect.click().catch(() => {});
+    await userSelect.fill("Gamemaster");
+    // click() auto-waits for the suggestion; isVisible() would not.
+    const selected = await page
+      .locator("#autocomplete li", { hasText: /^Gamemaster$/ })
+      .click({ timeout: 10_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!selected) {
+      // Fallback: keyboard-select the highlighted suggestion.
+      await userSelect.press("ArrowDown").catch(() => {});
+      await userSelect.press("Enter").catch(() => {});
+    }
+  }
+
+  // Click Join (waits for the button to actually enable)
+  const joinButton = page.getByRole("button", { name: "Join Game Session" });
+  await joinButton.waitFor({ state: "visible", timeout: 15_000 });
+  await Promise.all([page.waitForURL(/\/game/, { timeout: 90_000, waitUntil: "commit" }), joinButton.click()]);
+  // A passwordless Gamemaster is prompted to set one on first join, which
+  // blocks game load — save through it empty, then wait for ready. Poll
+  // because the prompt can appear at any point during load.
+  const readyDeadline = Date.now() + 90_000;
+  for (;;) {
+    const saveContinue = page.getByRole("button", { name: "Save and Continue" });
+    if (await saveContinue.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await saveContinue.click().catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+    const ready = await page
+      .waitForFunction(() => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true, {
+        timeout: 3000,
+      })
+      .then(() => true)
+      .catch(() => false);
+    if (ready) break;
+    if (Date.now() > readyDeadline) {
+      throw new Error("game never became ready after joining");
+    }
+  }
+  await dismissOverlays(page);
 }
 
 /**

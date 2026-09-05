@@ -35,11 +35,15 @@ Thank you for your interest in improving the Demiplane-Foundry PF2e sync module.
 
    This uses Rollup to bundle the module. The output goes to `dist/` and can be symlinked into your Foundry modules directory.
 
-4. Link the built module into Foundry VTT:
+4. Start the dev server (seeds license, PF2e, and the `demiplane-test` world on first run):
 
    ```bash
-   ln -s /path/to/demiplane-pf2e/dist /path/to/foundry-data/Data/modules/foundry-demiplane-pf2e
+   ./scripts/foundry.sh dev start
    ```
+
+   The module is symlinked into the data dir automatically, so `npm run
+build` (or `build:watch`) takes effect on next page reload — no reinstall.
+   See [TESTING.md](./TESTING.md) for the full dev + integration test guide.
 
 ## Project Structure
 
