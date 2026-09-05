@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "npx playwright test",
+    "coverage:e2e": "node scripts/e2e-coverage.mjs",
     "start:foundry": "source .env && node \"${FOUNDRY_PATH:-./foundry-playwright/FoundryVTT-Node-14.367}/main.mjs\" --dataPath=\"${FOUNDRY_DATA_PATH:-./foundry-playwright/Data}\" --port=\"${FOUNDRY_PORT:-30000}\" --adminPassword=\"${FOUNDRY_ADMIN_PASSWORD:-test-admin}\" --noupdate",
     "dev": "npm run build && npm run start:foundry",
     "setup:foundry": "./scripts/setup-foundry.sh",
@@ -35,7 +36,7 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@scooper4711/demiplane-api": "^0.5.0",
+    "@scooper4711/demiplane-api": "^1.0.0",
     "tslib": "^2.8.1",
     "zod": "^4.5.4"
   },
@@ -49,15 +50,19 @@
     "@rollup/plugin-typescript": "^12.1.0",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.11",
+    "convert-source-map": "^2.0.0",
     "dotenv": "^17.4.2",
     "eslint": "^10.9.1",
     "fast-check": "^4.9.0",
     "husky": "^9.1.7",
     "jscpd": "^5.1.1",
+    "lint-staged": "^17.4.1",
+    "nyc": "^18.0.0",
     "prettier": "^3.5.0",
     "rollup": "^4.40.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
+    "v8-to-istanbul": "^9.3.0",
     "vitest": "^4.1.11"
   },
   "engines": {
