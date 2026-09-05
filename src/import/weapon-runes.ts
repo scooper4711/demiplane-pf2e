@@ -29,16 +29,48 @@ const STRIKING_VALUES: Record<string, number> = {
 };
 
 /**
- * Demiplane property-rune slugs → PF2e property-rune slug (camelCase). Extend as
- * property runes are encountered; unknown property runes are reported rather
- * than guessed, since the PF2e slug is not a mechanical transform of the
- * Demiplane one.
+ * Grade prefixes that PF2e places at the *front* of a property-rune slug, while
+ * Demiplane places them at the *end* (e.g. `corrosive-greater` → `greaterCorrosive`).
  */
-const PROPERTY_RUNE_SLUGS: Record<string, string> = {};
+const GRADE_WORDS = new Set(["greater", "major", "true", "lesser", "moderate", "supreme"]);
+
+/**
+ * Validates that a candidate PF2e property-rune slug is real. Injectable so the
+ * transform can be unit-tested without a live `game`; defaults to the PF2e
+ * system's localization registry, which has a `PF2E.WeaponPropertyRune.<slug>.Name`
+ * key for every valid rune.
+ */
+export type PropertyRuneValidator = (slug: string) => boolean;
+
+/** Default validator: a rune slug is valid iff PF2e has a name localization for it. */
+export function defaultPropertyRuneValidator(slug: string): boolean {
+  const key = `PF2E.WeaponPropertyRune.${slug}.Name`;
+  const i18n = (globalThis as { game?: { i18n?: { has?: (k: string) => boolean } } }).game?.i18n;
+  return i18n?.has?.(key) ?? false;
+}
 
 /** Strips the trailing "-rm" (remaster) suffix from a Demiplane rune slug. */
 function stripRemaster(slug: string): string {
   return slug.endsWith("-rm") ? slug.slice(0, -3) : slug;
+}
+
+/**
+ * Converts a Demiplane property-rune slug to its PF2e camelCase slug by moving a
+ * trailing grade word to the front and camelCasing the rest:
+ *   `ghost-touch`      → `ghostTouch`
+ *   `corrosive-greater`→ `greaterCorrosive`
+ *   `shock-greater`    → `greaterShock`
+ *
+ * This is a general transform (no per-rune table), so newly released runes work
+ * without code changes as long as they follow the naming convention. The result
+ * is validated by the caller before use.
+ */
+export function toPropertyRuneSlug(demiplaneSlug: string): string {
+  const words = stripRemaster(demiplaneSlug).split("-");
+  const grades = words.filter((w) => GRADE_WORDS.has(w));
+  const rest = words.filter((w) => !GRADE_WORDS.has(w));
+  const ordered = [...grades, ...rest];
+  return ordered.map((word, i) => (i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1))).join("");
 }
 
 /**
@@ -68,7 +100,8 @@ export function runeParentId(eng: DemiplaneEngineEntry): string | undefined {
  */
 export function collectRunesByParent(
   runeEngines: DemiplaneEngineEntry[],
-  onUnknown?: (slug: string) => void
+  onUnknown?: (slug: string) => void,
+  isValidProperty: PropertyRuneValidator = defaultPropertyRuneValidator
 ): Map<string, WeaponRunes> {
   const byParent = new Map<string, WeaponRunes>();
 
@@ -78,7 +111,7 @@ export function collectRunesByParent(
     if (!parentId || !rawSlug) continue;
 
     const runes = byParent.get(parentId) ?? { potency: 0, striking: 0, property: [] };
-    applyRuneSlug(runes, rawSlug, onUnknown);
+    applyRuneSlug(runes, rawSlug, isValidProperty, onUnknown);
     byParent.set(parentId, runes);
   }
 
@@ -86,7 +119,12 @@ export function collectRunesByParent(
 }
 
 /** Applies a single Demiplane rune slug to an accumulating {@link WeaponRunes}. */
-function applyRuneSlug(runes: WeaponRunes, rawSlug: string, onUnknown?: (slug: string) => void): void {
+function applyRuneSlug(
+  runes: WeaponRunes,
+  rawSlug: string,
+  isValidProperty: PropertyRuneValidator,
+  onUnknown?: (slug: string) => void
+): void {
   const slug = stripRemaster(rawSlug);
 
   const potency = POTENCY_SLUG_RE.exec(slug);
@@ -101,9 +139,12 @@ function applyRuneSlug(runes: WeaponRunes, rawSlug: string, onUnknown?: (slug: s
     return;
   }
 
-  const property = PROPERTY_RUNE_SLUGS[slug];
-  if (property) {
-    if (!runes.property.includes(property)) runes.property.push(property);
+  // Property runes: derive the PF2e slug and keep it only if the system
+  // recognizes it, so a bad transform surfaces as an issue instead of writing a
+  // junk rune onto the weapon.
+  const propertySlug = toPropertyRuneSlug(rawSlug);
+  if (isValidProperty(propertySlug)) {
+    if (!runes.property.includes(propertySlug)) runes.property.push(propertySlug);
     return;
   }
 
