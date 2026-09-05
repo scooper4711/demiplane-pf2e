@@ -209,10 +209,49 @@ export class PushPayloadBuilder {
     const equippedName = `${demiplaneId}-is-equipped`;
     const existingEquipped = findCustomEngineByName(updatedEngines, equippedName);
     debugLog(
-      `[push] equipped state for ${itemChange.itemSlug}: carryType=${carryType}, inSlot=${equippedState.inSlot}, isArmor=${isArmor}, isEquipped=${isEquipped}, engine=${equippedName} found=${existingEquipped !== undefined}`
+      `[push] equipped state for ${itemChange.itemSlug}: carryType=${carryType}, inSlot=${equippedState.inSlot}, isArmor=${isArmor}, isEquipped=${isEquipped}, invested=${equippedState.invested}, engine=${equippedName} found=${existingEquipped !== undefined}`
     );
-    if (!existingEquipped) return updatedEngines;
-    return updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: isEquipped ? 1 : 0 } : e));
+
+    let engines = existingEquipped
+      ? updatedEngines.map((e) => (e === existingEquipped ? { ...e, value: isEquipped ? 1 : 0 } : e))
+      : updatedEngines;
+
+    engines = this.applyInvestedEngine(engines, equippedState, demiplaneId);
+    return engines;
+  }
+
+  /**
+   * Writes the item's `value--is-invested--<id>` flag when the invested state is
+   * known. Investment is a Foundry-editable toggle that Demiplane tracks
+   * separately from equipped, so it is pushed even when the item isn't held/worn
+   * (e.g. a pendant). The engine is created if the character has none yet.
+   */
+  private applyInvestedEngine(
+    engines: CustomEngine[],
+    equippedState: EquippedState,
+    demiplaneId: string
+  ): CustomEngine[] {
+    if (typeof equippedState.invested !== "boolean") return engines;
+
+    const investedName = `value--is-invested--${demiplaneId}`;
+    const value = equippedState.invested ? 1 : 0;
+    const existing = findCustomEngineByName(engines, investedName);
+    if (existing) {
+      return engines.map((e) => (e === existing ? { ...e, value } : e));
+    }
+    return [
+      ...engines,
+      {
+        id: `custom_${investedName}`,
+        name: investedName,
+        value,
+        type: "CustomDemiplaneEngine",
+        saveType: "CharacterSheet",
+        storeType: "override",
+        demiplaneEngineId: crypto.randomUUID(),
+        args: { id: null, parentEngine: demiplaneId },
+      },
+    ];
   }
 
   private applyHandSlotAssignment(updatedEngines: CustomEngine[], resolved: ResolvedItemChange[]): CustomEngine[] {

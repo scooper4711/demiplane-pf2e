@@ -14,6 +14,8 @@ interface EquipmentState {
   offHandId: string | undefined;
   bothHandsId: string | undefined;
   wornIds: Set<string>;
+  /** Item engine ids the character has invested (independent of being worn/held). */
+  investedIds: Set<string>;
   containerMap: Map<string, string>;
   quantityMap: Map<string, number>;
   /** Item engine id → the slug of the spell the item carries. */
@@ -39,12 +41,13 @@ function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
     engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === name)?.value;
 
   const wornIds = new Set<string>();
+  const investedIds = new Set<string>();
   const containerMap = new Map<string, string>();
   const quantityMap = new Map<string, number>();
   const spellByItemId = new Map<string, string>();
   const nameById = new Map<string, string>();
 
-  const customBags = { wornIds, containerMap, quantityMap, nameById };
+  const customBags = { wornIds, investedIds, containerMap, quantityMap, nameById };
 
   for (const eng of engines) {
     if (eng.type === "DemiplaneEngine") {
@@ -59,6 +62,7 @@ function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
     offHandId: findCustom("character_hand_offhand_equipped-id") as string | undefined,
     bothHandsId: findCustom("character_hand_both_equipped-id") as string | undefined,
     wornIds,
+    investedIds,
     containerMap,
     quantityMap,
     spellByItemId,
@@ -75,10 +79,14 @@ function collectCarriedSpell(eng: DemiplaneEngineEntry, spellByItemId: Map<strin
   if (ownerId && spellSlug) spellByItemId.set(ownerId, spellSlug);
 }
 
+/** Prefix Demiplane uses for the per-item "invested" flag: `value--is-invested--<engineId>`. */
+const INVESTED_PREFIX = "value--is-invested--";
+
 function collectCustomEngine(
   eng: DemiplaneEngineEntry,
   bags: {
     wornIds: Set<string>;
+    investedIds: Set<string>;
     containerMap: Map<string, string>;
     quantityMap: Map<string, number>;
     nameById: Map<string, string>;
@@ -87,6 +95,12 @@ function collectCustomEngine(
   if (eng.name.endsWith("-override-name")) {
     const parentId = eng.args?.parentEngine as string | undefined;
     if (parentId && typeof eng.value === "string" && eng.value) bags.nameById.set(parentId, eng.value);
+    return;
+  }
+  // Investment is a separate flag from equipped: an item can be invested without
+  // being held/worn in a slot (e.g. a pendant of the occult).
+  if (eng.name.startsWith(INVESTED_PREFIX)) {
+    if (eng.value === 1) bags.investedIds.add(eng.name.slice(INVESTED_PREFIX.length));
     return;
   }
   if (eng.name.endsWith("-is-equipped") && eng.value === 1) {
@@ -103,16 +117,24 @@ function collectCustomEngine(
 }
 
 function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemType: string): EquippedResult {
-  if (state.primaryHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
-  if (state.offHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested: null };
-  if (state.bothHandsId === demiplaneId) return { carryType: "held", handsHeld: 2, invested: null };
-  if (state.containerMap.has(demiplaneId)) return { carryType: "stowed", handsHeld: 0 };
+  // Investment is tracked by its own Demiplane flag and is independent of how the
+  // item is carried, so resolve it once and apply it to whichever branch wins.
+  // `invested` stays null for items that can't be invested (held weapons), where
+  // PF2e expects null rather than false.
+  const invested = state.investedIds.has(demiplaneId) ? true : null;
+
+  if (state.primaryHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested };
+  if (state.offHandId === demiplaneId) return { carryType: "held", handsHeld: 1, invested };
+  if (state.bothHandsId === demiplaneId) return { carryType: "held", handsHeld: 2, invested };
+  if (state.containerMap.has(demiplaneId)) return { carryType: "stowed", handsHeld: 0, invested };
 
   const needsSlot = itemType === "armor" || itemType === "backpack";
   if (state.wornIds.has(demiplaneId)) {
     return {
       carryType: "worn",
       handsHeld: 0,
+      // Worn items default to invested (unchanged prior behavior); the invest
+      // flag only ever adds investment, never removes it here.
       invested: true,
       ...(needsSlot && { inSlot: true }),
     };
@@ -120,7 +142,7 @@ function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemTy
   return {
     carryType: "worn",
     handsHeld: 0,
-    invested: null,
+    invested,
     ...(needsSlot && { inSlot: true }),
   };
 }
