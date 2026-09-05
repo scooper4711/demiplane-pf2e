@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.11] - 2026-09-05
+
+### Added
+
+- two-way sync for item investment
+- flag unresolved ChoiceSets as sync issues
+
+### Fixed
+
+- scope and suffix-strip ChoiceSet feat matching
+- resolve weapon property runes generally, with validation
+- affix weapon runes to the weapon instead of importing them separately
+- check sync-active before the auto-sync note in change hooks
+
+### Changed
+
+- deleted playwright bookeeping noise
+- add E2E coverage tooling dependencies
+- stabilize and extend the Playwright integration suite
+
+[0.2.0-beta.11]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.11
+
 ## [0.2.0-beta.10] - 2026-09-04
 
 ### Fixed
