@@ -6,6 +6,7 @@ import {
   categorizeEngine,
   generateSlugCandidates,
   normalizeEquipmentSlug,
+  describeFeatSlot,
 } from "../../src/import/slug-utils.js";
 
 describe("toFoundrySlug", () => {
@@ -237,5 +238,38 @@ describe("normalizeEquipmentSlug", () => {
 
   it("passes through unknown slugs", () => {
     expect(normalizeEquipmentSlug("half-plate-rm")).toBe("half-plate");
+  });
+});
+
+describe("describeFeatSlot", () => {
+  it("labels leveled category slots", () => {
+    expect(describeFeatSlot("skill-feat-level-2-rm")).toBe("Skill feat (level 2)");
+    expect(describeFeatSlot("general-feat-level-3-rm")).toBe("General feat (level 3)");
+    expect(describeFeatSlot("ancestry-feat-level-5-rm")).toBe("Ancestry feat (level 5)");
+    expect(describeFeatSlot("archetype-feat-level-4")).toBe("Archetype feat (level 4)");
+  });
+
+  it("labels a class feat slot from the class-name prefix", () => {
+    expect(describeFeatSlot("champion-feat-level-1-rm")).toBe("Class feat (level 1)");
+    expect(describeFeatSlot("barbarian-feat-level-6-rm")).toBe("Class feat (level 6)");
+  });
+
+  it("labels the level-1 ancestry feats slot without a level", () => {
+    expect(describeFeatSlot("ancestry-feats")).toBe("Ancestry feat");
+  });
+
+  it("labels background and granted feats", () => {
+    expect(describeFeatSlot("some-background-row")).toBe("Background feat");
+    expect(describeFeatSlot("b09db8d2_select-feat-versatile-human-rm-1bd2ed71")).toBe("Granted feat");
+  });
+
+  it("labels the mythic calling slot", () => {
+    expect(describeFeatSlot("mythic-calling")).toBe("Mythic calling");
+  });
+
+  it("returns undefined for empty or unrecognized source rows", () => {
+    expect(describeFeatSlot(undefined)).toBeUndefined();
+    expect(describeFeatSlot("")).toBeUndefined();
+    expect(describeFeatSlot("manual-sheet-drawer")).toBeUndefined();
   });
 });
