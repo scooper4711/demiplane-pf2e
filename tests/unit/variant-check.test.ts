@@ -8,47 +8,69 @@ function pref(name: string, value: number): DemiplaneEngineEntry {
 
 const GAB = "preferences--enable-gradual-ability-boosts";
 const MYTHIC = "preferences--enable-mythic";
+const FA = "preferences--enable-free-archetype";
 
-const bothOff: FoundryVariantSettings = { gradualAbilityBoosts: false, mythic: false };
-const bothOn: FoundryVariantSettings = { gradualAbilityBoosts: true, mythic: true };
+const allOff: FoundryVariantSettings = { gradualAbilityBoosts: false, mythic: false, freeArchetype: false };
+const allOn: FoundryVariantSettings = { gradualAbilityBoosts: true, mythic: true, freeArchetype: true };
 
 describe("findVariantMismatches", () => {
-  it("returns nothing when the character uses no variants", () => {
-    expect(findVariantMismatches([], bothOff)).toEqual([]);
+  it("is silent when neither side uses any variant", () => {
+    expect(findVariantMismatches([], allOff)).toEqual([]);
   });
 
-  it("flags Gradual Ability Boosts when the character uses it but Foundry has it off", () => {
-    const issues = findVariantMismatches([pref(GAB, 1)], bothOff);
+  it("is silent when both sides agree the variants are on", () => {
+    expect(findVariantMismatches([pref(GAB, 1), pref(MYTHIC, 1), pref(FA, 1)], allOn)).toEqual([]);
+  });
+
+  it("flags a variant used in Demiplane but disabled in Foundry", () => {
+    const issues = findVariantMismatches([pref(GAB, 1)], allOff);
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toContain("Gradual Ability Boosts");
+    expect(issues[0]).toContain("Gradual Attribute Boosts");
+    expect(issues[0]).toContain("not enabled in Foundry");
   });
 
-  it("flags Mythic when the character uses it but Foundry has it off", () => {
-    const issues = findVariantMismatches([pref(MYTHIC, 1)], bothOff);
+  it("flags a variant enabled in Foundry but not used by the character", () => {
+    const issues = findVariantMismatches([], { gradualAbilityBoosts: true, mythic: false, freeArchetype: false });
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toContain("Mythic");
+    expect(issues[0]).toContain("Gradual Attribute Boosts");
+    expect(issues[0]).toContain("enabled in Foundry, but this character does not use it");
   });
 
-  it("flags both when both are used but neither is enabled", () => {
-    const issues = findVariantMismatches([pref(GAB, 1), pref(MYTHIC, 1)], bothOff);
-    expect(issues).toHaveLength(2);
+  it("flags Mythic in both mismatch directions", () => {
+    expect(findVariantMismatches([pref(MYTHIC, 1)], allOff)[0]).toContain("Mythic Rules");
+    expect(findVariantMismatches([], { gradualAbilityBoosts: false, mythic: true, freeArchetype: false })[0]).toContain(
+      "Mythic Rules"
+    );
   });
 
-  it("stays silent when the variants the character uses are enabled in Foundry", () => {
-    expect(findVariantMismatches([pref(GAB, 1), pref(MYTHIC, 1)], bothOn)).toEqual([]);
+  it("flags Free Archetype in both mismatch directions", () => {
+    expect(findVariantMismatches([pref(FA, 1)], allOff)[0]).toContain("Free Archetype");
+    expect(findVariantMismatches([], { gradualAbilityBoosts: false, mythic: false, freeArchetype: true })[0]).toContain(
+      "Free Archetype"
+    );
   });
 
-  it("does not flag a variant whose preference flag is present but not set to 1", () => {
-    expect(findVariantMismatches([pref(GAB, 0)], bothOff)).toEqual([]);
-  });
-
-  it("flags only the mismatched variant when settings differ", () => {
-    // GAB used and off → flagged; Mythic used but on → not flagged.
-    const issues = findVariantMismatches([pref(GAB, 1), pref(MYTHIC, 1)], {
+  it("flags every variant when all three mismatch", () => {
+    // GAB used but off; Mythic + FA on in Foundry but unused → three issues.
+    const issues = findVariantMismatches([pref(GAB, 1)], {
       gradualAbilityBoosts: false,
       mythic: true,
+      freeArchetype: true,
     });
-    expect(issues).toHaveLength(1);
-    expect(issues[0]).toContain("Gradual Ability Boosts");
+    expect(issues).toHaveLength(3);
+  });
+
+  it("treats a preference flag set to 0 as not used", () => {
+    expect(findVariantMismatches([pref(GAB, 0)], allOff)).toEqual([]);
+    // ...and still flags it when Foundry has it on but the flag is 0/unused.
+    expect(
+      findVariantMismatches([pref(GAB, 0)], { gradualAbilityBoosts: true, mythic: false, freeArchetype: false })
+    ).toHaveLength(1);
+  });
+
+  it("names both settings paths so the GM can fix either side", () => {
+    const issue = findVariantMismatches([pref(MYTHIC, 1)], allOff)[0];
+    expect(issue).toContain("Toggle Variant Rules");
+    expect(issue).toContain("Preferences & Rules");
   });
 });
