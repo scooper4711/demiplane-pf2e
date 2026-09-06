@@ -7,6 +7,12 @@ import type { DemiplaneEngineEntry } from "./types.js";
 export interface WeaponRunes {
   potency: number;
   striking: number;
+  /**
+   * Armor's fundamental defense rune, the armor analogue of striking. PF2e
+   * stores it on `armor.system.runes.resilient` (0-3); it is simply ignored on
+   * weapons, so carrying it here alongside striking keeps one rune shape for both.
+   */
+  resilient: number;
   property: string[];
 }
 
@@ -30,6 +36,18 @@ const STRIKING_VALUES: Record<string, number> = {
   "striking-greater": 2,
   "striking-major": 3,
   "striking-mythic": 4,
+};
+
+/**
+ * Demiplane resilient-rune slugs → PF2e resilient value, the armor counterpart
+ * of {@link STRIKING_VALUES}. Grades match PF2e's own conversion (resilient 1,
+ * greater 2, major 3).
+ */
+const RESILIENT_VALUES: Record<string, number> = {
+  "resilient-basic": 1,
+  resilient: 1,
+  "resilient-greater": 2,
+  "resilient-major": 3,
 };
 
 /**
@@ -123,7 +141,7 @@ export function collectRunesByParent(
     const rawSlug = eng.args?.slug as string | undefined;
     if (!parentId || !rawSlug) continue;
 
-    const runes = byParent.get(parentId) ?? { potency: 0, striking: 0, property: [] };
+    const runes = byParent.get(parentId) ?? { potency: 0, striking: 0, resilient: 0, property: [] };
     applyRuneSlug(runes, rawSlug, isValidProperty, onUnknown);
     byParent.set(parentId, runes);
   }
@@ -149,6 +167,12 @@ function applyRuneSlug(
   const striking = STRIKING_VALUES[slug];
   if (striking !== undefined) {
     runes.striking = Math.max(runes.striking, striking);
+    return;
+  }
+
+  const resilient = RESILIENT_VALUES[slug];
+  if (resilient !== undefined) {
+    runes.resilient = Math.max(runes.resilient, resilient);
     return;
   }
 
