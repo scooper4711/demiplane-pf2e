@@ -172,6 +172,14 @@ describe("categorizeEngine", () => {
   it("returns null for core engines", () => {
     expect(categorizeEngine("core/selection/attribute/boost.eng")).toBeNull();
   });
+
+  it("does not treat an ancestry *selection* engine as the character's ancestry", () => {
+    // Adopted Ancestry (Human) arrives as core/selection/ancestry/...; it must
+    // not be categorized as "ancestry" and overwrite the real ancestry (Skeleton).
+    expect(categorizeEngine("core/selection/ancestry/custom-selection/index.eng")).toBeNull();
+    expect(categorizeEngine("core/selection/skill/increase/index.eng")).toBeNull();
+    expect(categorizeEngine("core/selection/item/custom-selection/index.eng")).toBeNull();
+  });
 });
 
 describe("generateSlugCandidates", () => {

@@ -98,6 +98,13 @@ export function describeFeatSlot(sourceRow: string | undefined): string | undefi
  */
 export function categorizeEngine(engineName: string): ItemCategory | null {
   if (engineName.includes("/classfeature/") || engineName.includes("/class-feature/")) return null;
+  // `core/selection/...` engines are the character's *choices* (adopted
+  // ancestry, skill increases, attribute boosts, item picks), handled by the
+  // choice/attribute/skill importers — not the ABC/feat/equipment items to
+  // create. Excluding them prevents e.g. `core/selection/ancestry/...` (Adopted
+  // Ancestry = Human) from being mistaken for the character's ancestry
+  // (Skeleton) and overwriting it.
+  if (engineName.includes("/selection/")) return null;
   if (engineName.includes("/ancestry/")) return "ancestry";
   if (engineName.includes("/heritage/")) return "heritage";
   if (engineName.includes("/background/")) return "background";
