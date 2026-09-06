@@ -47,6 +47,52 @@ export function parseFeatSlot(sourceRow: string): {
   return { location: null, taken: null };
 }
 
+/** Feat-slot prefixes that name a category directly (the rest are class names). */
+const FEAT_SLOT_CATEGORY_LABELS: Record<string, string> = {
+  ancestry: "Ancestry",
+  skill: "Skill",
+  general: "General",
+  archetype: "Archetype",
+  mythic: "Mythic",
+};
+
+/**
+ * Produces a human-readable label for the feat slot a Demiplane feat came from,
+ * derived from its `sourceRow`. This is display context to help a GM recognize
+ * an unresolved feat (the slug often doesn't match the name on the sheet), not a
+ * mapping key — the same feat can occupy different slots on different characters.
+ *
+ * Examples:
+ *   `skill-feat-level-2-rm`       → "Skill feat (level 2)"
+ *   `champion-feat-level-1-rm`    → "Class feat (level 1)"
+ *   `ancestry-feat-level-5-rm`    → "Ancestry feat (level 5)"
+ *   `ancestry-feats`              → "Ancestry feat"
+ *   `background-feat` / bg row    → "Background feat"
+ *   `..._select-feat-<x>_...`     → "Granted feat"
+ * Returns `undefined` when the sourceRow carries no useful slot context.
+ */
+export function describeFeatSlot(sourceRow: string | undefined): string | undefined {
+  if (!sourceRow) return undefined;
+
+  if (sourceRow === "mythic-calling") return "Mythic calling";
+
+  const levelMatch = /^(\w+)-feats?-level-(\d+)/.exec(sourceRow);
+  if (levelMatch) {
+    const prefix = levelMatch[1] ?? "";
+    const level = levelMatch[2];
+    const category = FEAT_SLOT_CATEGORY_LABELS[prefix] ?? "Class";
+    return `${category} feat (level ${level})`;
+  }
+
+  if (sourceRow === "ancestry-feats") return "Ancestry feat";
+  if (sourceRow.includes("background")) return "Background feat";
+  // A feat granted by another selection (e.g. Natural Ambition, Versatile
+  // Human) — the level lives on the granting feat, not here.
+  if (sourceRow.includes("select-feat-")) return "Granted feat";
+
+  return undefined;
+}
+
 /**
  * Categorize a Demiplane engine entry by its path.
  */

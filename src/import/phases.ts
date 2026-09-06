@@ -19,7 +19,7 @@ import {
 } from "../pf2e-types.js";
 import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
 import { debugLog } from "./debug-log.js";
-import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot } from "./slug-utils.js";
+import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";
@@ -303,7 +303,10 @@ export class BatchItemsPhase implements ImportPhase {
     const itemData = await resolveCompendiumItem(eng._slug, category);
     if (!itemData) {
       ctx.summary.log.push(`- ${category}: ${eng._slug} (not found)`);
-      ctx.summary.unmapped.push({ slug: eng._slug, kind: category });
+      // Feats carry a slot label (e.g. "Skill feat (level 2)") so the GM can
+      // identify a feat whose slug doesn't match its Demiplane sheet name.
+      const slot = category === "feat" ? describeFeatSlot(eng.args?.sourceRow as string | undefined) : undefined;
+      ctx.summary.unmapped.push({ slug: eng._slug, kind: category, ...(slot ? { slot } : {}) });
       ctx.summary.itemsSkipped++;
       return null;
     }

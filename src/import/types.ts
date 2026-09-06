@@ -51,11 +51,18 @@ export interface UnmappedSlug {
   slug: string;
   /** What kind of thing it was, for grouping and compendium-browser selection. */
   kind: SlugKind;
+  /**
+   * For feats, a human-readable slot label (e.g. "Skill feat (level 2)") derived
+   * from the Demiplane sourceRow. Display context to help a GM recognize a feat
+   * whose slug doesn't match its sheet name — not part of the mapping key.
+   */
+  slot?: string;
 }
 
 /** The single place the human-readable form of an unmapped slug comes from. */
 export function formatUnmapped(record: UnmappedSlug): string {
-  return `Could not import ${record.kind} "${record.slug}": not found in compendium`;
+  const suffix = record.slot ? ` (${record.slot})` : "";
+  return `Could not import ${record.kind} "${record.slug}"${suffix}: not found in compendium`;
 }
 
 /** Stamp an item data object with the imported flag before creation. */

@@ -359,6 +359,27 @@
   text-transform: none;
 }
 
+/* The Feat Slot column: the slot label(s) a feat was seen in, aggregated across
+   characters. Narrower than the name/Demiplane columns since it holds short
+   labels like "Skill feat (level 2)". Only feats populate it; other kinds show
+   an empty cell that keeps the columns aligned. */
+.demiplane-mapping .col-slot {
+  align-items: center;
+  color: var(--color-pf-alternate);
+  display: flex;
+  flex: 2;
+  font-size: var(--font-size-11, 0.6875rem);
+}
+
+.demiplane-mapping .inventory-list > header .col-slot-label {
+  align-items: center;
+  display: flex;
+  flex: 2;
+  font-size: var(--font-size-14, 0.875rem);
+  justify-content: flex-start;
+  text-transform: none;
+}
+
 /* The clear action column, narrow like the inventory's read-only controls. */
 .demiplane-mapping .inventory-list .item-controls {
   flex-basis: 2rem;

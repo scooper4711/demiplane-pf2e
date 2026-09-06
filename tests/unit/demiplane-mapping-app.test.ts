@@ -60,6 +60,32 @@ describe("collectSections", () => {
     expect(spells?.rows[0]?.characters).toBe("Kyra");
   });
 
+  it("aggregates distinct feat-slot labels for the same slug across characters", async () => {
+    // Two characters took the same unresolved feat in different slots. The slug
+    // stays a single mapping row; the slot column lists both slots.
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [
+      linkedActor("Kyra", [{ slug: "inspirational-performance", kind: "feat", slot: "Skill feat (level 2)" }]),
+      linkedActor("Ezren", [{ slug: "inspirational-performance", kind: "feat", slot: "Skill feat (level 4)" }]),
+      linkedActor("Merisiel", [{ slug: "inspirational-performance", kind: "feat", slot: "Skill feat (level 2)" }]),
+    ] as never;
+
+    const feats = await collectSections().then((s) => s.find((x) => x.kind === "feat"));
+
+    expect(feats?.rows).toHaveLength(1);
+    expect(feats?.rows[0]?.slug).toBe("inspirational-performance");
+    // Distinct slots merged; the duplicate "level 2" appears once.
+    expect(feats?.rows[0]?.slots.split(", ").sort()).toEqual(["Skill feat (level 2)", "Skill feat (level 4)"]);
+  });
+
+  it("leaves the slot column empty for non-feat kinds", async () => {
+    (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [
+      linkedActor("Kyra", [{ slug: "religious-symbol", kind: "equipment" }]),
+    ] as never;
+
+    const equipment = await collectSections().then((s) => s.find((x) => x.kind === "equipment"));
+    expect(equipment?.rows[0]?.slots).toBe("");
+  });
+
   it("shows a mapping even when the slug is no longer reported unmapped", async () => {
     await setMapping("equipment", "was-unmapped", { uuid: HALF_PLATE, name: "Half Plate" });
     (globalThis as unknown as { game: { actors: { contents: unknown[] } } }).game.actors.contents = [] as never;

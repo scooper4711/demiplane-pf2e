@@ -10,6 +10,12 @@ interface SlugRow {
   kind: SlugKind;
   /** Comma-separated names of the characters this slug affects. */
   characters: string;
+  /**
+   * Comma-separated feat-slot labels this slug was seen in (e.g. "Skill feat
+   * (level 2)"), aggregated across characters. Feats only; display context to
+   * help identify the feat, never part of the mapping key.
+   */
+  slots: string;
   mappedName: string | null;
   /** True when the slug has no mapping yet — the filter keys off this. */
   unmapped: boolean;
@@ -266,6 +272,7 @@ async function collectSections(): Promise<SlugSection[]> {
         slug,
         kind,
         characters: "",
+        slots: "",
         mappedName: null,
         unmapped: true,
         mappingMissing: false,
@@ -281,7 +288,8 @@ async function collectSections(): Promise<SlugSection[]> {
 
     for (const record of getUnmappedSlugs(actor)) {
       const row = ensure(record.kind, record.slug);
-      row.characters = appendCharacter(row.characters, actor.name ?? "Unknown");
+      row.characters = appendDistinct(row.characters, actor.name ?? "Unknown");
+      if (record.slot) row.slots = appendDistinct(row.slots, record.slot);
     }
   }
 
@@ -312,11 +320,12 @@ async function collectSections(): Promise<SlugSection[]> {
   }).filter((section) => section.rows.length > 0);
 }
 
-function appendCharacter(existing: string, name: string): string {
-  if (!existing) return name;
-  const names = new Set(existing.split(", "));
-  names.add(name);
-  return [...names].join(", ");
+/** Appends a value to a comma-joined list, de-duplicating (used for characters and feat slots). */
+function appendDistinct(existing: string, value: string): string {
+  if (!existing) return value;
+  const values = new Set(existing.split(", "));
+  values.add(value);
+  return [...values].join(", ");
 }
 
 interface MappedRowTarget {
