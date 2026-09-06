@@ -2,9 +2,11 @@ import { spawn, type ChildProcess } from "child_process";
 import { existsSync, lstatSync, rmSync, symlinkSync } from "fs";
 import { resolve, join } from "path";
 
-const FOUNDRY_PATH = process.env.FOUNDRY_PATH ?? resolve(__dirname, "../../foundry-playwright/FoundryVTT-Node-14.367");
+const FOUNDRY_PATH =
+  process.env.FOUNDRY_PATH ?? resolve(__dirname, "../../playwright/versions/14.367/FoundryVTT-Node-14.367");
 // The TEST data dir (port 30001), separate from the dev Data dir (30000).
-const DATA_PATH = process.env.FOUNDRY_DATA_PATH ?? resolve(__dirname, "../../foundry-playwright/TestData");
+// The smoke script overrides all of these per version via env.
+const DATA_PATH = process.env.FOUNDRY_DATA_PATH ?? resolve(__dirname, "../../playwright/Data-14.367");
 const PORT = process.env.FOUNDRY_TEST_PORT ?? process.env.FOUNDRY_PORT ?? "30001";
 const ADMIN_PASSWORD = process.env.FOUNDRY_ADMIN_PASSWORD ?? "test-admin";
 // Boot straight into the test world so first-run setup screens are skipped.

@@ -11,6 +11,10 @@ export default defineConfig({
   retries: 0,
   use: {
     baseURL: `http://localhost:${process.env.FOUNDRY_PORT ?? "30000"}`,
-    headless: true,
+    // Headed when PLAYWRIGHT_HEADED=true (see --headed on scripts/foundry.sh).
+    headless: process.env.PLAYWRIGHT_HEADED !== "true",
+    // Same as the main config: Foundry degrades below 1366x768 and headless
+    // defaults to 1280x720, which raises a blocking warning banner.
+    viewport: { width: 1600, height: 900 },
   },
 });

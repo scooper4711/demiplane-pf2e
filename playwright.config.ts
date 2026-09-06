@@ -14,10 +14,13 @@ export default defineConfig({
   workers: 1, // Foundry can only handle one session at a time
   use: {
     baseURL: `http://localhost:${PORT}`,
-    headless: true,
+    // Headed when PLAYWRIGHT_HEADED=true (see --headed on scripts/foundry.sh).
+    headless: process.env.PLAYWRIGHT_HEADED !== "true",
     // Foundry warns and degrades below 1366x768; headless defaults to 1280x720.
     viewport: { width: 1600, height: 900 },
   },
-  // Global setup only runs if FOUNDRY_SETUP=true (opt-in for license/system/world setup)
+  // Global setup only runs if FOUNDRY_SETUP=true (opt-in for license/system/world setup).
+  // Teardown always runs but no-ops unless setup spawned a server.
   ...(process.env.FOUNDRY_SETUP === "true" ? { globalSetup: "./tests/integration/global-setup.ts" } : {}),
+  globalTeardown: "./tests/integration/global-teardown.ts",
 });
