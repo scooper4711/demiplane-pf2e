@@ -13,8 +13,12 @@ export interface WeaponRunes {
 /** Marks an item engine that is a rune affixed to another item, not a standalone item. */
 const RUNE_META_ITEM_TYPE = "item-rune";
 
-/** `weapon-potency-<n>-rm` → the potency value <n>. */
-const POTENCY_SLUG_RE = /^weapon-potency-(\d+)/;
+/**
+ * `weapon-potency-<n>` or `armor-potency-<n>` → the potency value <n>. Weapon
+ * and armor potency both store their value on `system.runes.potency`, so a
+ * single pattern covers both (the parent item's type decides where it lands).
+ */
+const POTENCY_SLUG_RE = /^(?:weapon|armor)-potency-(\d+)/;
 
 /**
  * Demiplane striking-rune slugs → PF2e striking value. Striking grades are a
@@ -33,6 +37,13 @@ const STRIKING_VALUES: Record<string, number> = {
  * Demiplane places them at the *end* (e.g. `corrosive-greater` → `greaterCorrosive`).
  */
 const GRADE_WORDS = new Set(["greater", "major", "true", "lesser", "moderate", "supreme"]);
+
+/**
+ * The base grade Demiplane appends to a property-rune slug (e.g. `crushing-basic`).
+ * PF2e's base-grade runes carry no grade prefix (`crushing`), so this word is
+ * dropped entirely rather than moved to the front like the other grades.
+ */
+const BASE_GRADE_WORD = "basic";
 
 /**
  * Validates that a candidate PF2e property-rune slug is real. Injectable so the
@@ -66,7 +77,9 @@ function stripRemaster(slug: string): string {
  * is validated by the caller before use.
  */
 export function toPropertyRuneSlug(demiplaneSlug: string): string {
-  const words = stripRemaster(demiplaneSlug).split("-");
+  const words = stripRemaster(demiplaneSlug)
+    .split("-")
+    .filter((w) => w !== BASE_GRADE_WORD);
   const grades = words.filter((w) => GRADE_WORDS.has(w));
   const rest = words.filter((w) => !GRADE_WORDS.has(w));
   const ordered = [...grades, ...rest];
