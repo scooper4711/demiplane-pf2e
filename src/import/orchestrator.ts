@@ -162,12 +162,15 @@ export class ImportOrchestrator {
   private readVariantSettings(): FoundryVariantSettings {
     const settings = (
       globalThis as {
-        game?: { pf2e?: { settings?: { variants?: { gab?: boolean }; campaign?: { mythic?: string } } } };
+        game?: {
+          pf2e?: { settings?: { variants?: { gab?: boolean; fa?: boolean }; campaign?: { mythic?: string } } };
+        };
       }
     ).game?.pf2e?.settings;
     return {
       gradualAbilityBoosts: settings?.variants?.gab === true,
       mythic: settings?.campaign?.mythic !== undefined && settings.campaign.mythic !== "disabled",
+      freeArchetype: settings?.variants?.fa === true,
     };
   }
 
