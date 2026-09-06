@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { stampImported } from "../../src/import/types.js";
+import { stampImported, formatUnmapped } from "../../src/import/types.js";
+
+describe("formatUnmapped", () => {
+  it("formats a plain unmapped record", () => {
+    expect(formatUnmapped({ slug: "religious-symbol-rm", kind: "equipment" })).toBe(
+      'Could not import equipment "religious-symbol-rm": not found in compendium'
+    );
+  });
+
+  it("appends the feat slot label when present", () => {
+    expect(formatUnmapped({ slug: "inspirational-performance", kind: "feat", slot: "Skill feat (level 2)" })).toBe(
+      'Could not import feat "inspirational-performance" (Skill feat (level 2)): not found in compendium'
+    );
+  });
+});
 
 describe("stampImported", () => {
   it("adds imported flag to empty item", () => {
