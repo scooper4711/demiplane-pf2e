@@ -71,7 +71,11 @@ function addTokenValidationButton(html: SettingsHtml): void {
   button.className = "demiplane-token-validation";
   button.innerHTML = '<i class="fas fa-check-circle" inert></i> Validate token';
   button.addEventListener("click", () => {
-    void validateDemiplaneToken();
+    // Validate the value currently in the input, not the saved setting, so the
+    // GM can paste a new token and validate it before clicking Save.
+    const input = tokenSetting.querySelector<HTMLInputElement>(`input[name="${MODULE_ID}.demiplaneToken"]`);
+    const token = input?.value ?? (game.settings.get(MODULE_ID, "demiplaneToken") as string);
+    void validateDemiplaneToken(token);
   });
   tokenSetting.querySelector(".form-fields")?.appendChild(button);
 }
@@ -81,10 +85,15 @@ function findTokenSetting(html: SettingsHtml): HTMLElement | null {
   return tokenInput?.closest(".form-group") ?? null;
 }
 
-async function validateDemiplaneToken(): Promise<void> {
-  const token = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+async function validateDemiplaneToken(token: string): Promise<void> {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    await showTokenValidationDialog("No token entered", "Enter a Demiplane authorization token before validating.");
+    return;
+  }
+
   const client = new DemiplaneClient();
-  client.setToken(token);
+  client.setToken(trimmed);
 
   try {
     await client.validateToken();
@@ -94,10 +103,7 @@ async function validateDemiplaneToken(): Promise<void> {
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "The API rejected the token.";
-    await showTokenValidationDialog(
-      "Token rejected",
-      `The token could not be validated: ${message}<br><br><strong>If you changed the token, save the settings before clicking Validate token.</strong>`
-    );
+    await showTokenValidationDialog("Token rejected", `The token could not be validated: ${message}`);
   }
 }
 
