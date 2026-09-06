@@ -107,6 +107,28 @@ describe("demiplane-info-button", () => {
     expect(opts.content).not.toContain("Your GM can map these");
   });
 
+  it("omits the sanctification selector when the character has no sanctification choice", async () => {
+    // The default actor mock returns undefined for the sanctification flag.
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).not.toContain("demiplane-sanctification-select");
+  });
+
+  it("renders a sanctification selector with the deity's options when the choice is real", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "sanctification") return { options: ["holy", "none"], selected: "holy", acknowledged: false };
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).toContain("demiplane-sanctification-select");
+    expect(opts.content).toContain('<option value="holy" selected>Holy</option>');
+    expect(opts.content).toContain('<option value="none">None</option>');
+    // Only the deity's options appear — "Unholy" is not offered for a can-be-holy deity.
+    expect(opts.content).not.toContain(">Unholy<");
+  });
+
   it("flags the dialog when the latest sync has unacknowledged issues", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     const withIssues = wait.mock.calls[0][0] as { classes: string[] };

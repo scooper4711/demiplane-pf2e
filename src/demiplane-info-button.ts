@@ -9,7 +9,20 @@ import {
   shouldShowIndicator,
 } from "./sync-issues.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
+import {
+  getSanctification,
+  setSanctificationSelection,
+  isSanctification,
+  type Sanctification,
+} from "./sanctification.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
+
+/** Human-readable labels for the sanctification select options. */
+const SANCTIFICATION_LABELS: Record<Sanctification, string> = {
+  holy: "Holy",
+  unholy: "Unholy",
+  none: "None",
+};
 
 type ImportCharacterFn = (
   actor: Actor,
@@ -71,6 +84,7 @@ export async function showDemiplaneInfoDialog(
   const indicatorActive = shouldShowIndicator(actor);
 
   const syncIssuesSection = buildSyncIssuesSection(syncIssues);
+  const sanctificationSection = buildSanctificationSection(actor);
   const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
   const manualItems = actor.items.filter((item) => {
@@ -84,6 +98,7 @@ export async function showDemiplaneInfoDialog(
     lastImportDisplay,
     lastExportDisplay,
     syncIssuesSection,
+    sanctificationSection,
     unmappedItemsSection,
     manualItemsSection,
   });
@@ -93,7 +108,10 @@ export async function showDemiplaneInfoDialog(
     classes: indicatorActive ? ["demiplane-sync-dialog", "has-sync-errors"] : ["demiplane-sync-dialog"],
     content,
     buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, indicatorActive),
-    render: attachMappingEditorButton,
+    render: (event, dialog) => {
+      attachMappingEditorButton(event, dialog);
+      attachSanctificationSelect(actor, dialog);
+    },
   });
 }
 
@@ -164,6 +182,7 @@ interface DialogContentOptions {
   lastImportDisplay: string;
   lastExportDisplay: string;
   syncIssuesSection: string;
+  sanctificationSection: string;
   unmappedItemsSection: string;
   manualItemsSection: string;
 }
@@ -193,6 +212,7 @@ function buildDialogContent(opts: DialogContentOptions): string {
         <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
       ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
+      ${opts.sanctificationSection}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -256,6 +276,50 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+/**
+ * Renders the sanctification selector — only for characters whose deity presents
+ * a real holy/unholy/none choice (a "can be" deity). Demiplane doesn't export
+ * the choice, so the import guesses; this lets the player correct it. Absent for
+ * "must be" deities (deterministic) and non-deity classes, so the section simply
+ * doesn't render for them.
+ */
+function buildSanctificationSection(actor: Actor): string {
+  const state = getSanctification(actor);
+  if (!state) return "";
+
+  const options = state.options
+    .map((value) => {
+      const selected = value === state.selected ? " selected" : "";
+      return `<option value="${value}"${selected}>${escapeHtml(SANCTIFICATION_LABELS[value])}</option>`;
+    })
+    .join("");
+
+  return `
+    <hr>
+    <section class="demiplane-sanctification">
+      <p><strong>Sanctification:</strong>
+        <select class="demiplane-sanctification-select">${options}</select>
+      </p>
+      <p class="hint">Demiplane doesn't export this, so it was guessed on import. Set it here, then Update from Demiplane to apply it.</p>
+    </section>`;
+}
+
+/**
+ * Wires the sanctification `<select>` to persist the player's choice. The choice
+ * is applied on the next "Update from Demiplane": the import honors the stored
+ * preference and stops flagging it. (Applying it live would mean rewriting the
+ * deity feature's ChoiceSet rules array, which is error-prone, so we defer to
+ * the import that already sets sanctification correctly.)
+ */
+function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
+  const select = dialog.element.querySelector<HTMLSelectElement>(".demiplane-sanctification-select");
+  select?.addEventListener("change", () => {
+    const value = select.value;
+    if (!isSanctification(value)) return;
+    void setSanctificationSelection(actor, value);
+  });
 }
 
 function buildManualItemsSection(items: Array<{ name: string; type: string }>): string {
