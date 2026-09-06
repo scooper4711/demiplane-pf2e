@@ -99,6 +99,19 @@ describe("collectRunesByParent", () => {
     expect(onUnknown).toHaveBeenCalledWith("made-up-rune-rm");
     expect(map.get("w1")).toEqual({ potency: 0, striking: 0, property: [] });
   });
+
+  it("resolves an armor potency rune the same as a weapon potency rune", () => {
+    // Armor and weapon potency both land on system.runes.potency.
+    const map = collectRunesByParent([runeEngine("armor-potency-1-rm", "chain-mail")]);
+    expect(map.get("chain-mail")).toEqual({ potency: 1, striking: 0, property: [] });
+  });
+
+  it("resolves a base-grade property rune (crushing-basic, no -rm suffix)", () => {
+    const onUnknown = vi.fn();
+    const map = collectRunesByParent([runeEngine("crushing-basic", "halberd")], onUnknown, (s) => s === "crushing");
+    expect(map.get("halberd")).toEqual({ potency: 0, striking: 0, property: ["crushing"] });
+    expect(onUnknown).not.toHaveBeenCalled();
+  });
 });
 
 describe("toPropertyRuneSlug", () => {
@@ -113,5 +126,10 @@ describe("toPropertyRuneSlug", () => {
 
   it("leaves an ungraded single-word rune unchanged", () => {
     expect(toPropertyRuneSlug("flaming-rm")).toBe("flaming");
+  });
+
+  it("drops the base grade so crushing-basic maps to the plain rune slug", () => {
+    expect(toPropertyRuneSlug("crushing-basic")).toBe("crushing");
+    expect(toPropertyRuneSlug("crushing-basic-rm")).toBe("crushing");
   });
 });
