@@ -24,15 +24,15 @@ const VARIANT_RULES: VariantRule[] = [
     enabledInFoundry: (s) => s.gradualAbilityBoosts,
     issue:
       "This character uses the Gradual Ability Boosts variant, but it is not enabled in Foundry " +
-      "(Configure Settings → Pathfinder 2e → Variant Rules → Gradual Ability Boosts). " +
+      "(Game Settings → Pathfinder Second Edition → Toggle Variant Rules → Gradual Ability Boosts). " +
       "Attribute boosts may be off until it is enabled and the character is re-imported.",
   },
   {
     engineName: "preferences--enable-mythic",
     enabledInFoundry: (s) => s.mythic,
     issue:
-      "This character uses the Mythic variant, but Mythic is not enabled in Foundry " +
-      "(Configure Settings → Pathfinder 2e → Campaign → Mythic). " +
+      "This character uses the Mythic variant, but it is not enabled in Foundry " +
+      "(Game Settings → Pathfinder Second Edition → Toggle Variant Rules → Mythic). " +
       "Mythic feats and abilities may be missing until it is enabled and the character is re-imported.",
   },
 ];
