@@ -105,6 +105,26 @@ export function addImportIssue(actor: Actor, message: string): void {
   notifyChanged(actor);
 }
 
+/**
+ * Adds several import issues in a single flag write.
+ *
+ * Adding them one at a time via {@link addImportIssue} is unsafe in a loop: each
+ * call reads the flag synchronously from the in-memory document but writes it
+ * back with an un-awaited `setFlag`. Because the in-memory value only updates
+ * once that write resolves, every call in a tight loop reads the same stale set,
+ * adds only its own message, and the last write wins — so all but the final
+ * issue are silently dropped. Batching reads once, adds all, and writes once
+ * (awaited), so every issue survives.
+ */
+export async function addImportIssues(actor: Actor, messages: string[]): Promise<void> {
+  if (messages.length === 0) return;
+  const issues = getImportIssues(actor);
+  for (const message of messages) issues.add(message);
+  await writeIssueSet(actor, "import", issues);
+  markUnacknowledged(actor);
+  notifyChanged(actor);
+}
+
 export function addExportIssue(actor: Actor, message: string): void {
   const issues = getExportIssues(actor);
   issues.add(message);

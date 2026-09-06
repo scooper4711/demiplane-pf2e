@@ -213,4 +213,44 @@ describe("choice-matchers", () => {
       )
     ).toBeNull();
   });
+
+  // Deity and domain arrive as CustomDemiplaneEngine overrides, which the
+  // DemiplaneEngine-only strategies skip — so these use that type deliberately.
+  function deityEngine(slug) {
+    return { id: `deity-${slug}`, name: `tabula/deity/${slug}.eng`, type: "CustomDemiplaneEngine", args: { slug } };
+  }
+
+  function domainEngine(slug) {
+    return { id: `domain-${slug}`, name: `tabula/domain/${slug}.eng`, type: "CustomDemiplaneEngine", args: { slug } };
+  }
+
+  it("matches the deity choice by label when the option value is a compendium UUID", () => {
+    const choices = [
+      { label: "Abadar", value: "Compendium.pf2e.deities.Item.abadar" },
+      { label: "Sarenrae", value: "Compendium.pf2e.deities.Item.sarenrae" },
+    ];
+
+    expect(findMatchInChoices(choices, [deityEngine("sarenrae-rm")])).toBe(choices[1]);
+  });
+
+  it("does not match a deity when the character's deity isn't among the options", () => {
+    const choices = [{ label: "Abadar", value: "Compendium.pf2e.deities.Item.abadar" }];
+
+    expect(findMatchInChoices(choices, [deityEngine("sarenrae-rm")])).toBeNull();
+  });
+
+  it("matches a domain choice by value (fire-rm -> fire)", () => {
+    const choices = [
+      { label: "Change", value: "change" },
+      { label: "Fire", value: "fire" },
+    ];
+
+    expect(findMatchInChoices(choices, [domainEngine("fire-rm")])).toBe(choices[1]);
+  });
+
+  it("matches a domain choice by slugified label when the value differs", () => {
+    const choices = [{ label: "Fire", value: "some-uuid" }];
+
+    expect(findMatchInChoices(choices, [domainEngine("fire-rm")])).toBe(choices[0]);
+  });
 });

@@ -18,6 +18,8 @@ export function findMatchInChoices(
   const match =
     matchSkillSlugs(choices, engines) ??
     matchCustomSelectionLore(choices, engines, itemName) ??
+    matchDeity(choices, engines) ??
+    matchDomain(choices, engines) ??
     matchAllSlugs(choices, engines) ??
     matchClassFeatures(choices, engines) ??
     matchGenericFeatures(choices, engines) ??
@@ -26,6 +28,60 @@ export function findMatchInChoices(
 
   if (!match) debugLog("[ChoiceSet match] No match found across all strategies");
   return match;
+}
+
+/**
+ * Matches the cleric "Deity" ChoiceSet against the character's deity engine.
+ *
+ * Two things make deity distinct from the generic slug strategies:
+ *
+ * 1. **Engine type.** The deity arrives as a `tabula/deity/<slug>.eng` engine of
+ *    type `CustomDemiplaneEngine` (an override), so the strategies that filter
+ *    to `type === "DemiplaneEngine"` never see it. We select it by name path
+ *    instead, regardless of type.
+ * 2. **Choice shape.** The deity ChoiceSet is a compendium filter: each option's
+ *    `value` is a Compendium UUID, not a slug, so a value-equality check can't
+ *    work. We compare the deity's foundry slug (e.g. `sarenrae` from
+ *    `sarenrae-rm`) against each option's slugified label ("Sarenrae").
+ */
+function matchDeity(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const deitySlugs = engines
+    .filter((e) => e.name.includes("/deity/") && e.args?.slug)
+    .map((e) => toFoundrySlug(e.args?.slug as string));
+
+  if (deitySlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Deity strategy - deity slugs: [${deitySlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const labelSlug = toChoiceSlug(choice.label);
+    if (deitySlugs.includes(labelSlug)) return choice;
+  }
+  return null;
+}
+
+/**
+ * Matches domain ChoiceSets (e.g. Domain Initiate) against the character's
+ * domain engines. Like the deity, domains arrive as `tabula/domain/<slug>.eng`
+ * `CustomDemiplaneEngine` overrides invisible to the DemiplaneEngine-only
+ * strategies. The domain choice's `value` is the domain key (e.g. `fire`), so we
+ * match the domain's foundry slug (`fire` from `fire-rm`) against both the
+ * option value and its slugified label.
+ */
+function matchDomain(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const domainSlugs = engines
+    .filter((e) => e.name.includes("/domain/") && e.args?.slug)
+    .map((e) => toFoundrySlug(e.args?.slug as string));
+
+  if (domainSlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Domain strategy - domain slugs: [${domainSlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const val = typeof choice.value === "string" ? choice.value : "";
+    if (domainSlugs.includes(val) || domainSlugs.includes(toChoiceSlug(choice.label))) return choice;
+  }
+  return null;
 }
 
 function matchSkillSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {

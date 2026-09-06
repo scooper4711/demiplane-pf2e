@@ -212,6 +212,57 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     expect(ctx.selection).toBe("foo");
   });
 
+  it("auto-selects a 'must be' deity's sole sanctification without flagging it", async () => {
+    const builtin = installChoiceSetPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    // A "must be" deity leaves a single predicate-passing option (e.g. Iomedae → Holy).
+    const choices = [{ value: "holy", label: "Holy" }];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "sanctification",
+      item: { flags: {}, getRollOptions: () => [], rules: [], name: "Deity (Cleric)" },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
+
+    expect(ctx.selection).toBe("holy");
+    expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+
+  it("defaults a 'can be' deity to the affirmative sanctification and records a note", async () => {
+    const builtin = installChoiceSetPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    // A "can be" deity leaves the affirmative option plus the "none" opt-out
+    // (e.g. Sarenrae → Holy / None).
+    const choices = [
+      { value: "holy", label: "Holy" },
+      { value: "none", label: "None" },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "sanctification",
+      item: { flags: {}, getRollOptions: () => [], rules: [], name: "Deity (Cleric)" },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
+
+    expect(ctx.selection).toBe("holy");
+    const fallbacks = handler.drainFallbacks();
+    expect(fallbacks).toHaveLength(1);
+    expect(fallbacks[0].chosenLabel).toBe("Holy");
+    expect(fallbacks[0].note).toContain("sanctification");
+    // The note replaces the generic "couldn't determine" lead-in.
+    expect(formatChoiceSetFallback(fallbacks[0])).not.toContain("Couldn't determine");
+  });
+
   it("passes through a valid pre-set selection without re-resolving", async () => {
     const builtin = installChoiceSetPrototype();
     const original = builtin.ChoiceSet.prototype.preCreate;

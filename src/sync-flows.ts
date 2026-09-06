@@ -6,7 +6,7 @@ import type { ExportManager, ExportResult } from "./export-manager.js";
 import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { characterSystem } from "./pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
-import { resetImportIssues, addImportIssue, setUnmappedSlugs } from "./sync-issues.js";
+import { resetImportIssues, addImportIssues, setUnmappedSlugs } from "./sync-issues.js";
 
 // Re-exported so wiring and tests share one definition.
 export type { ExportResult };
@@ -66,7 +66,7 @@ export async function importLinkedCharacter(
 
     const summary = await deps.importOrchestrator.importCharacter(actor, characterId, { token });
     setUnmappedSlugs(actor, summary.unmapped);
-    for (const error of summary.errors) addImportIssue(actor, error);
+    await addImportIssues(actor, summary.errors);
     return summary;
   } finally {
     await endSyncPause(actor);
