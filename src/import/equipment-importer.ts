@@ -251,9 +251,18 @@ function applyRunesToItem(data: Record<string, unknown>, runes: WeaponRunes | un
   const existing = (system.runes as Partial<WeaponRunes> | undefined) ?? {};
   const existingProperty = Array.isArray(existing.property) ? existing.property : [];
 
+  // Armor and weapons share potency and property runes but differ in their
+  // fundamental defense/offense rune: armor carries `resilient`, weapons
+  // `striking`. Write only the key that matches the item type so neither ends
+  // up with a rune field its schema doesn't expect.
+  const fundamental =
+    data.type === "armor"
+      ? { resilient: Math.max(existing.resilient ?? 0, runes.resilient) }
+      : { striking: Math.max(existing.striking ?? 0, runes.striking) };
+
   system.runes = {
     potency: Math.max(existing.potency ?? 0, runes.potency),
-    striking: Math.max(existing.striking ?? 0, runes.striking),
+    ...fundamental,
     property: [...new Set([...existingProperty, ...runes.property])],
   };
 }
