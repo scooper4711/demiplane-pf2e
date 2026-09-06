@@ -89,9 +89,42 @@ describe("applyBiography", () => {
     );
   });
 
-  it("adds deity from compendium", async () => {
+  function makeDeityEngine(displayName: string, slug: string): DemiplaneEngineEntry {
+    return {
+      id: "deity-eng",
+      name: `tabula/deity/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: { name: displayName, slug },
+    };
+  }
+
+  it("adds deity from compendium via the beliefs free-text fallback", async () => {
     const actor = createMockActor();
     const engines = [makeEngine("character_personality_beliefs", "Cayden Cailean")];
+    const summary = makeSummary();
+    await applyBiography(actor as never, engines, summary);
+
+    expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    expect(summary.log).toContain("+ deity: Cayden Cailean");
+  });
+
+  it("prefers the class-selected deity engine over the beliefs free text", async () => {
+    const actor = createMockActor();
+    const engines = [
+      makeDeityEngine("Cayden Cailean", "cayden-cailean-rm"),
+      makeEngine("character_personality_beliefs", "Some Personal Creed"),
+    ];
+    const summary = makeSummary();
+    await applyBiography(actor as never, engines, summary);
+
+    // The engine's display name resolves to the compendium deity, not the free text.
+    expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    expect(summary.log).toContain("+ deity: Cayden Cailean");
+  });
+
+  it("uses the deity engine even when beliefs is blank", async () => {
+    const actor = createMockActor();
+    const engines = [makeDeityEngine("Cayden Cailean", "cayden-cailean-rm")];
     const summary = makeSummary();
     await applyBiography(actor as never, engines, summary);
 

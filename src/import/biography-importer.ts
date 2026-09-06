@@ -48,7 +48,7 @@ export async function applyBiography(
   applyListField(updates, getValue("character_personality_edicts"), "system.details.biography.edicts");
   applyListField(updates, getValue("character_personality_anathema"), "system.details.biography.anathema");
   applyOrganizedPlayId(updates, getValue("character_organizedplayid"));
-  await applyDeity(actor, getValue("character_personality_beliefs"), updates, summary);
+  await applyDeity(actor, resolveDeityName(engines, getValue("character_personality_beliefs")), updates, summary);
 
   if (Object.keys(updates).length > 0) {
     await actor.update(updates);
@@ -77,6 +77,25 @@ function applyOrganizedPlayId(updates: Record<string, unknown>, orgPlayId: strin
     updates["system.pfs.playerNumber"] = Number.parseInt(orgPlayId.slice(0, lastDash), 10) || null;
     updates["system.pfs.characterNumber"] = Number.parseInt(orgPlayId.slice(lastDash + 1), 10) || null;
   }
+}
+
+/**
+ * Resolves the character's deity name, preferring the structured class-selected
+ * deity over the free-text "beliefs" field.
+ *
+ * A cleric (or other deity-required class) picks a deity in the builder, which
+ * arrives as a `tabula/deity/<slug>.eng` engine carrying the clean display name
+ * in `args.name` (e.g. "Sarenrae"). That is authoritative and always populated
+ * when a deity was chosen. The `character_personality_beliefs` free text is only
+ * a fallback for classes with no deity slot (champions, druids, etc.) or players
+ * who typed a belief without selecting a deity — it may hold anything, so it is
+ * used only when no deity engine is present.
+ */
+function resolveDeityName(engines: DemiplaneEngineEntry[], beliefs: string | undefined): string | undefined {
+  const deityEngine = engines.find((e) => e.name.includes("/deity/"));
+  const engineName = deityEngine?.args?.name;
+  if (typeof engineName === "string" && engineName.length > 0) return engineName;
+  return beliefs;
 }
 
 async function applyDeity(
