@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const hoisted = vi.hoisted(() => ({ validateToken: vi.fn() }));
+const hoisted = vi.hoisted(() => ({ validateToken: vi.fn(), setToken: vi.fn() }));
 
 vi.mock("@scooper4711/demiplane-api", () => ({
   DemiplaneClient: class {
-    setToken(): void {}
+    setToken(token: string): void {
+      hoisted.setToken(token);
+    }
     validateToken(): unknown {
       return hoisted.validateToken();
     }
@@ -28,6 +30,7 @@ describe("settings", () => {
   };
   let formFields: { appendChild: ReturnType<typeof vi.fn> };
   let formGroup: { querySelector: ReturnType<typeof vi.fn>; remove?: ReturnType<typeof vi.fn> };
+  let tokenInput: { value: string };
   let input: { closest: ReturnType<typeof vi.fn> };
   let html: { querySelector: ReturnType<typeof vi.fn> };
 
@@ -40,8 +43,13 @@ describe("settings", () => {
     user = { isGM: true };
 
     formFields = { appendChild: vi.fn() };
+    tokenInput = { value: "tok" };
     formGroup = {
-      querySelector: vi.fn((sel: string) => (sel === ".form-fields" ? formFields : null)),
+      querySelector: vi.fn((sel: string) => {
+        if (sel === ".form-fields") return formFields;
+        if (sel.includes("demiplaneToken")) return tokenInput;
+        return null;
+      }),
       remove: vi.fn(),
     };
     input = { closest: vi.fn().mockReturnValue(formGroup), querySelector: vi.fn() };
@@ -81,6 +89,7 @@ describe("settings", () => {
       notifications: { error: vi.fn(), info: vi.fn(), warn: vi.fn() },
     };
     hoisted.validateToken.mockReset();
+    hoisted.setToken.mockReset();
   });
 
   function settingsCallback(): ((html: unknown) => void) | undefined {
@@ -183,6 +192,28 @@ describe("settings", () => {
     await button._handler?.();
     expect(prompt).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining("could not be validated") })
+    );
+  });
+
+  it("validates the token currently in the input, not the saved setting", async () => {
+    registerSettings();
+    settingsCallback()?.({}, html);
+    // The saved setting is "tok"; the GM has pasted a new, unsaved value.
+    tokenInput.value = "freshly-pasted-token";
+    hoisted.validateToken.mockResolvedValue({ valid: true });
+    await button._handler?.();
+    expect(hoisted.setToken).toHaveBeenCalledWith("freshly-pasted-token");
+    expect(settingsGet).not.toHaveBeenCalledWith("demiplane-pf2e", "demiplaneToken");
+  });
+
+  it("does not call the API when the token input is empty", async () => {
+    registerSettings();
+    settingsCallback()?.({}, html);
+    tokenInput.value = "   ";
+    await button._handler?.();
+    expect(hoisted.validateToken).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith(
+      expect.objectContaining({ content: expect.stringContaining("Enter a Demiplane authorization token") })
     );
   });
 });
