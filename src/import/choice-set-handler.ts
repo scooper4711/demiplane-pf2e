@@ -11,6 +11,12 @@ import { builtinRuleElement } from "../pf2e-types.js";
 /** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
 const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";
 
+/** The `rollOption` PF2e's cleric Sanctification ChoiceSet declares (see `deity-cleric` class feature). */
+const SANCTIFICATION_ROLL_OPTION = "sanctification";
+
+/** The Sanctification "opt out" option value (neither holy nor unholy). */
+const SANCTIFICATION_NONE_VALUE = "none";
+
 /**
  * Manages ChoiceSet auto-resolution during import.
  *
@@ -31,6 +37,13 @@ export interface ChoiceSetFallback {
   offeredLabels: string[];
   /** The Demiplane selection slugs in scope, to jog the GM's memory of their choice. */
   candidateSlugs: string[];
+  /**
+   * An explanation that replaces the generic "couldn't determine" lead-in.
+   * Used when the choice is a known gap (e.g. Demiplane doesn't export cleric
+   * sanctification) rather than a failed match, so the message reads as a
+   * "confirm this" note instead of a bug.
+   */
+  note?: string;
 }
 
 /**
@@ -39,7 +52,10 @@ export interface ChoiceSetFallback {
  * selections — a GM may not recall every small decision on a complex character.
  */
 export function formatChoiceSetFallback(fallback: ChoiceSetFallback): string {
-  const parts = [`Couldn't determine the choice for "${fallback.itemName}" — defaulted to "${fallback.chosenLabel}".`];
+  const lead =
+    fallback.note ??
+    `Couldn't determine the choice for "${fallback.itemName}" — defaulted to "${fallback.chosenLabel}".`;
+  const parts = [lead];
   if (fallback.offeredLabels.length > 1) {
     parts.push(`Options: ${fallback.offeredLabels.join(", ")}.`);
   }
@@ -170,6 +186,11 @@ export class ChoiceSetHandler {
       return;
     }
 
+    if (context.rollOption === SANCTIFICATION_ROLL_OPTION) {
+      this.resolveSanctification(context, params);
+      return;
+    }
+
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
       `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
@@ -180,6 +201,36 @@ export class ChoiceSetHandler {
     if (selected) {
       this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
     }
+  }
+
+  /**
+   * Resolves the cleric Sanctification ChoiceSet (holy / unholy / none).
+   *
+   * Demiplane does not export the character's sanctification, so we can't match
+   * it from engine data. PF2e pre-filters the options by the deity's own
+   * sanctification, which lets us infer the right behavior from what remains:
+   *
+   * - **Deterministic ("must be" deity):** exactly one option survives the
+   *   predicate (e.g. Iomedae → only Holy). The trait is automatic, so select it
+   *   silently — there was no choice to lose.
+   * - **A real choice ("can be" deity):** several options survive, including the
+   *   "none" opt-out (e.g. Sarenrae → Holy / None). The player made a decision we
+   *   can't see, so default to the affirmative sanctification (the deity's
+   *   holy/unholy option rather than opting out) but record it as an issue for
+   *   the GM to confirm.
+   */
+  private resolveSanctification(context: ChoiceSetContext, params: PreCreateParams): void {
+    const choices = context.choices;
+    if (choices.length === 1) {
+      this.applySelectedChoice(context, params, choices[0]!, true, []);
+      return;
+    }
+
+    const affirmative = choices.find((c) => c.value !== SANCTIFICATION_NONE_VALUE) ?? choices[0]!;
+    const note =
+      `Demiplane doesn't export your deity's sanctification, so it defaulted to "${affirmative.label}". ` +
+      `Your deity lets you choose, so confirm this is the sanctification you took.`;
+    this.applySelectedChoice(context, params, affirmative, false, [], note);
   }
 
   /**
@@ -240,19 +291,22 @@ export class ChoiceSetHandler {
     params: PreCreateParams,
     selected: Choice,
     matched: boolean,
-    candidateSlugs: string[]
+    candidateSlugs: string[],
+    note?: string
   ): void {
     debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
 
     // A fallback is a guess (the first option), applied so the import stays
     // usable, but recorded so it surfaces as a sync issue for the GM to correct.
     if (!matched) {
-      this.fallbacks.push({
+      const fallback: ChoiceSetFallback = {
         itemName: context.item.name,
         chosenLabel: selected.label,
         offeredLabels: context.choices.map((c) => c.label),
         candidateSlugs,
-      });
+      };
+      if (note !== undefined) fallback.note = note;
+      this.fallbacks.push(fallback);
     }
 
     context.selection = params.ruleSource.selection = selected.value;

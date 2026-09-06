@@ -9,6 +9,7 @@ import {
   resetImportIssues,
   clearAllIssues,
   addImportIssue,
+  addImportIssues,
   addExportIssue,
   ISSUES_CHANGED_EVENT,
 } from "../../src/sync-issues.js";
@@ -21,6 +22,28 @@ function createFlagActor() {
       return moduleFlags ? moduleFlags[key] : undefined;
     }),
     setFlag: vi.fn(async (_scope: string, key: string, value: unknown) => {
+      flags["demiplane-pf2e"] = { ...(flags["demiplane-pf2e"] ?? {}), [key]: value };
+    }),
+  };
+  return actor;
+}
+
+/**
+ * An actor whose `setFlag` defers the in-memory update until the returned
+ * promise resolves — matching real Foundry, where `getFlag` only reflects a
+ * write after its `setFlag` promise settles. This exposes the read-modify-write
+ * race that a synchronous mock hides: an un-awaited loop of single-issue writes
+ * all read the same stale value and clobber each other.
+ */
+function createDeferredFlagActor() {
+  const flags: Record<string, Record<string, unknown>> = {};
+  const actor = {
+    getFlag: vi.fn((_scope: string, key: string) => {
+      const moduleFlags = flags["demiplane-pf2e"];
+      return moduleFlags ? moduleFlags[key] : undefined;
+    }),
+    setFlag: vi.fn(async (_scope: string, key: string, value: unknown) => {
+      await Promise.resolve();
       flags["demiplane-pf2e"] = { ...(flags["demiplane-pf2e"] ?? {}), [key]: value };
     }),
   };
@@ -61,6 +84,38 @@ describe("sync-issues", () => {
     expect(hasActiveIssues(actor)).toBe(true);
     expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT)).toHaveLength(3);
     expect(getImportIssues(actor).has("Another import error")).toBe(true);
+  });
+
+  it("addImportIssues persists every message in a single write", async () => {
+    const actor = createFlagActor() as unknown as Actor;
+    await addImportIssues(actor, ['Couldn\'t determine the choice for "Deity (Cleric)"', "Free Archetype variant"]);
+
+    const issues = getImportIssues(actor);
+    expect(issues.size).toBe(2);
+    expect(issues.has('Couldn\'t determine the choice for "Deity (Cleric)"')).toBe(true);
+    expect(issues.has("Free Archetype variant")).toBe(true);
+    expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT)).toHaveLength(1);
+  });
+
+  it("addImportIssues does nothing (and does not fire the hook) for an empty list", async () => {
+    const actor = createFlagActor() as unknown as Actor;
+    await addImportIssues(actor, []);
+
+    expect(getImportIssues(actor).size).toBe(0);
+    expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT)).toHaveLength(0);
+  });
+
+  // Regression: against real Foundry, setFlag defers the visible flag update
+  // until its promise resolves. Batching must survive that; a per-message loop
+  // would keep only the last message.
+  it("addImportIssues keeps all messages even when setFlag updates are deferred", async () => {
+    const actor = createDeferredFlagActor() as unknown as Actor;
+    await addImportIssues(actor, ["first", "second", "third"]);
+
+    const issues = getImportIssues(actor);
+    expect(issues.size).toBe(3);
+    expect(issues.has("first")).toBe(true);
+    expect(issues.has("third")).toBe(true);
   });
 
   it("resetImportIssues clears only the import set", async () => {

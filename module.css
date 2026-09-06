@@ -85,6 +85,18 @@
   overflow-wrap: anywhere;
 }
 
+/* Re-enable text selection for the issue lists. DialogV2 windows inherit the
+   ApplicationV2 default of `user-select: none` (so header drags don't select
+   text), which also blocks selecting the issue messages. Users need to copy the
+   exact sync-issue and unmapped-item text verbatim for bug reports, so opt these
+   lists back into selection. */
+.demiplane-info-dialog .demiplane-sync-issues,
+.demiplane-info-dialog .demiplane-unmapped-items {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
 /* "Open mapping editor" button in the unmapped-items section of the dialog.
    Unmapped items are routine and fixable, so the button is sized as a normal
    inline action rather than a full-width form button. */
