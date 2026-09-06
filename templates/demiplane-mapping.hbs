@@ -19,7 +19,7 @@
           <header>
             <h3 class="item-name kind-label">{{label}}</h3>
             <span class="col-demiplane-label">Demiplane Name</span>
-            <span class="col-slot-label">Feat Slot</span>
+            {{#if isFeat}}<span class="col-slot-label">Feat Slot</span>{{/if}}
             <div class="item-controls">
               {{#if canBrowse}}
                 <a data-action="browse" data-kind="{{kind}}"
@@ -55,7 +55,7 @@
                     {{#if characters}}<span class="characters">{{characters}}</span>{{/if}}
                   </span>
 
-                  <span class="col-slot">{{#if slots}}{{slots}}{{/if}}</span>
+                  {{#if ../isFeat}}<span class="col-slot">{{#if slots}}{{slots}}{{/if}}</span>{{/if}}
 
                   <div class="item-controls">
                     {{#if mappedName}}
