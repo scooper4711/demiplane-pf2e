@@ -32,6 +32,8 @@ interface SlugSection {
   hasUnmapped: boolean;
   /** False when there is no way to open a browser for this kind. */
   canBrowse: boolean;
+  /** True only for the feat section, which shows the Feat Slot column. */
+  isFeat: boolean;
 }
 
 /** PF2e's own placeholder icon, used for a row with no mapping yet. */
@@ -308,16 +310,23 @@ async function collectSections(): Promise<SlugSection[]> {
   }
   await applyMappingTargets(mappedRows);
 
-  return KIND_ORDER.map((kind) => {
-    const rows = [...rowsByKind.get(kind)!.values()].sort((a, b) => a.slug.localeCompare(b.slug));
-    return {
-      kind,
-      label: KIND_LABELS[kind],
-      rows,
-      hasUnmapped: rows.some((row) => row.unmapped),
-      canBrowse: kind in KIND_TABS || (KIND_PACKS[kind] !== undefined && game.packs.get(KIND_PACKS[kind]!) != null),
-    };
-  }).filter((section) => section.rows.length > 0);
+  return KIND_ORDER.map((kind) => buildSection(kind, rowsByKind.get(kind)!)).filter(
+    (section) => section.rows.length > 0
+  );
+}
+
+/** Assembles one section (sorted rows + column flags) for a kind. */
+function buildSection(kind: SlugKind, bySlug: Map<string, SlugRow>): SlugSection {
+  const rows = [...bySlug.values()].sort((a, b) => a.slug.localeCompare(b.slug));
+  return {
+    kind,
+    label: KIND_LABELS[kind],
+    rows,
+    hasUnmapped: rows.some((row) => row.unmapped),
+    canBrowse: kind in KIND_TABS || (KIND_PACKS[kind] !== undefined && game.packs.get(KIND_PACKS[kind]!) != null),
+    // The Feat Slot column is only meaningful for feats; other sections omit it.
+    isFeat: kind === "feat",
+  };
 }
 
 /** Appends a value to a comma-joined list, de-duplicating (used for characters and feat slots). */

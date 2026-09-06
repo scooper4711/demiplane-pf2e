@@ -20,6 +20,8 @@ export function findMatchInChoices(
     matchCustomSelectionLore(choices, engines, itemName) ??
     matchDeity(choices, engines) ??
     matchDomain(choices, engines) ??
+    matchMuse(choices, engines) ??
+    matchAdoptedAncestry(choices, engines) ??
     matchAllSlugs(choices, engines) ??
     matchClassFeatures(choices, engines) ??
     matchGenericFeatures(choices, engines) ??
@@ -136,6 +138,54 @@ function matchCustomSelectionLore(
       const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
       if (val === target || toChoiceSlug(choice.label) === target) return choice;
     }
+  }
+  return null;
+}
+
+/**
+ * Matches a bard/other-archetype muse ChoiceSet (Bard Dedication → Enigma /
+ * Maestro / …). Demiplane records the chosen muse as a `.../class-feature/
+ * <muse>-archetype-rm.eng` engine (e.g. `enigma-archetype-rm`), while PF2e's
+ * ChoiceSet offers the bare muse slug (`enigma`, value via `slugsAsValues`). We
+ * strip the `-archetype` suffix from the engine slug and match against the
+ * choice value/label so the muse resolves instead of defaulting to the first.
+ */
+function matchMuse(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const museSlugs = engines
+    .filter((e) => e.name.includes("/class-feature/") && /-archetype-rm(\.eng)?$/.test(e.name) && e.args?.slug)
+    .map((e) => toFoundrySlug(e.args?.slug as string).replace(/-archetype$/, ""));
+
+  if (museSlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Muse strategy - muse slugs: [${museSlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const val = typeof choice.value === "string" ? choice.value : "";
+    if (museSlugs.includes(val) || museSlugs.includes(toChoiceSlug(choice.label))) return choice;
+  }
+  return null;
+}
+
+/**
+ * Matches the Adopted Ancestry ChoiceSet against the character's chosen adopted
+ * ancestry. Demiplane records it as a
+ * `core/selection/ancestry/custom-selection/index.eng` engine whose `args.slug`
+ * is the ancestry (e.g. `human-rm`); PF2e's ChoiceSet offers ancestry slugs via
+ * `slugsAsValues`. Handled explicitly because the generic slug strategies don't
+ * single out the ancestry-selection engine.
+ */
+function matchAdoptedAncestry(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const ancestrySlugs = engines
+    .filter((e) => e.name === "core/selection/ancestry/custom-selection/index.eng" && e.args?.slug)
+    .map((e) => toFoundrySlug(e.args?.slug as string));
+
+  if (ancestrySlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Adopted ancestry strategy - slugs: [${ancestrySlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const val = typeof choice.value === "string" ? choice.value : "";
+    if (ancestrySlugs.includes(val) || ancestrySlugs.includes(toChoiceSlug(choice.label))) return choice;
   }
   return null;
 }

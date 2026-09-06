@@ -253,4 +253,49 @@ describe("choice-matchers", () => {
 
     expect(findMatchInChoices(choices, [domainEngine("fire-rm")])).toBe(choices[0]);
   });
+
+  // Muse and adopted-ancestry selections arrive as CustomDemiplaneEngine
+  // overrides, matched by the engine name path rather than type.
+  function museEngine(slug) {
+    return {
+      id: `muse-${slug}`,
+      name: `tabula/class-feature/${slug}.eng`,
+      type: "CustomDemiplaneEngine",
+      args: { slug },
+    };
+  }
+
+  function adoptedAncestryEngine(slug) {
+    return {
+      id: `adopted-${slug}`,
+      name: "core/selection/ancestry/custom-selection/index.eng",
+      type: "DemiplaneEngine",
+      args: { slug },
+    };
+  }
+
+  it("matches the bard muse choice, stripping the -archetype-rm suffix", () => {
+    const choices = [
+      { label: "Enigma", value: "enigma" },
+      { label: "Maestro", value: "maestro" },
+      { label: "Polymath", value: "polymath" },
+    ];
+
+    expect(findMatchInChoices(choices, [museEngine("enigma-archetype-rm")])).toBe(choices[0]);
+  });
+
+  it("does not match a muse the character didn't take", () => {
+    const choices = [{ label: "Maestro", value: "maestro" }];
+
+    expect(findMatchInChoices(choices, [museEngine("enigma-archetype-rm")])).toBeNull();
+  });
+
+  it("matches the Adopted Ancestry choice (human-rm -> human)", () => {
+    const choices = [
+      { label: "Elf", value: "elf" },
+      { label: "Human", value: "human" },
+    ];
+
+    expect(findMatchInChoices(choices, [adoptedAncestryEngine("human-rm")])).toBe(choices[1]);
+  });
 });
