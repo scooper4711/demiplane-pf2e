@@ -344,11 +344,19 @@ case "$ACTION" in
     ;;
   run)
     STARTED_BY_ME=0
+    if pid_alive "$(read_pidfile)"; then
+      if [ "$CLEAN" -eq 1 ]; then
+        # A live server pins its world on disk: stop first so --clean can
+        # actually wipe it, then fall through to a fresh start below.
+        echo "--clean requested: stopping the running $MODE server first..."
+        do_stop
+      else
+        echo "Reusing already-running $MODE server."
+      fi
+    fi
     if ! pid_alive "$(read_pidfile)"; then
       do_start
       STARTED_BY_ME=1
-    else
-      echo "Reusing already-running $MODE server."
     fi
     # Always clean up what we started, even if tests or summary fail.
     cleanup_on_exit() {
