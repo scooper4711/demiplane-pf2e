@@ -171,6 +171,10 @@ This module is pre-release software. It can result in data loss for the Foundry 
 
 MIT
 
+## Acknowledgements
+
+Huge thanks to the beta testers whose feedback shaped this module: **AKA_Kira**, **Anchor89**, and **Greywolf**.
+
 ## Support
 
 If this module saves you time at the table, consider supporting development:
