@@ -647,5 +647,55 @@ describe("import phases", () => {
       // Different keys (source id vs name) — no duplicate detected.
       expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
     });
+
+    it("keeps multiple owned copies of the same inventory item", async () => {
+      // Four identical wands (same compendium source), all import-stamped, are
+      // legitimately-owned separate copies — none should be removed. Mirrors the
+      // "four Wand of the Snowfields" case.
+      const src = { core: { sourceId: "Compendium.pf2e.equipment-srd.Item.WAND" }, [MODULE_ID]: { imported: true } };
+      const actor = createMockActor({
+        items: [
+          item("1", "consumable", "Wand of the Snowfields", structuredClone(src)),
+          item("2", "consumable", "Wand of the Snowfields", structuredClone(src)),
+          item("3", "consumable", "Wand of the Snowfields", structuredClone(src)),
+          item("4", "consumable", "Wand of the Snowfields", structuredClone(src)),
+        ],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+    });
+
+    it("still drops an import copy of an inventory item the Grant Chain also created", async () => {
+      // One native (grant-created, unstamped) + one import-stamped copy of the
+      // same item: the import copy is the redundant one and should be removed.
+      const source = { core: { sourceId: "Compendium.x" } };
+      const actor = createMockActor({
+        items: [
+          item("native", "equipment", "Kit Item", structuredClone(source)),
+          item("import", "equipment", "Kit Item", { ...structuredClone(source), [MODULE_ID]: { imported: true } }),
+        ],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["import"]);
+    });
+
+    it("still collapses duplicate non-inventory items (feats)", async () => {
+      // Two stamped feats with the same source remain a genuine duplicate.
+      const src = { core: { sourceId: "Compendium.feat" }, [MODULE_ID]: { imported: true } };
+      const actor = createMockActor({
+        items: [
+          item("1", "feat", "Same Feat", structuredClone(src)),
+          item("2", "feat", "Same Feat", structuredClone(src)),
+        ],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["2"]);
+    });
   });
 });

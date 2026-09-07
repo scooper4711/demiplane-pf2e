@@ -1,5 +1,25 @@
 export const MODULE_ID = "demiplane-pf2e";
 
+/**
+ * PF2e item `type`s that represent carriable inventory (physical items). A
+ * character can legitimately own several of the same one (four wands, three
+ * potions), so these are treated differently from feats/features when detecting
+ * duplicates or propagating deletions. Single source of truth for both the
+ * import dedup (phases.ts) and the export delete guard (hook-manager.ts).
+ */
+export const INVENTORY_ITEM_TYPES = new Set([
+  "ammo",
+  "armor",
+  "backpack",
+  "book",
+  "consumable",
+  "equipment",
+  "kit",
+  "shield",
+  "treasure",
+  "weapon",
+]);
+
 export const PACKS = [
   "pf2e.classes",
   "pf2e.ancestries",

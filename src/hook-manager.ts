@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID, INVENTORY_ITEM_TYPES } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import type { EquippedState } from "./export/change-buffer.js";
@@ -57,23 +57,8 @@ const TREASURE_ITEM_MAP: Record<string, string> = {
   "copper-pieces": "character_currency_copper",
 };
 
-/**
- * PF2e item subtypes that live in the character's inventory and therefore map
- * to a "tabula/item/*.eng" Demiplane engine. Non-inventory items (feats,
- * backgrounds, classes, spells, etc.) are excluded from delete propagation.
- */
-const INVENTORY_ITEM_TYPES = new Set([
-  "ammo",
-  "armor",
-  "backpack",
-  "book",
-  "consumable",
-  "equipment",
-  "kit",
-  "shield",
-  "treasure",
-  "weapon",
-]);
+// INVENTORY_ITEM_TYPES (the physical/inventory item `type`s eligible for delete
+// propagation) is defined in import/types.js as the single source of truth.
 
 /**
  * Queues current HP, temporary HP, and hero points from a linked actor
