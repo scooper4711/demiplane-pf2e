@@ -488,7 +488,7 @@ sequenceDiagram
         EM->>EM: Reset 2s debounce timer
     else Campaign Notes changed
         HM->>EM: exportCampaignNotes(actor, notes)
-        Note over EM: Runs under the sync pause and skips if a remote client is mid-sync
+        Note over EM: No actor pause here, or hook queueing stalls and drops edits. A local lock serializes our own writes. Skips if a remote client is mid-sync
         EM->>DC: fetchCharacterJournals(characterId)
         DC-->>EM: Existing journals
         EM->>DC: create or update the Campaign journal
@@ -664,6 +664,23 @@ All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e
 | `system.currency.sp`                | `character_currency_silver`    |
 | `system.currency.cp`                | `character_currency_copper`    |
 | `system.currency.pp`                | `character_currency_platinum`  |
+
+### Fields that do not round-trip
+
+Proven live by the Kyra mutation round-trip spec. These actor fields cannot
+survive a push → wipe → re-import cycle, so the suite (and GMs) should not
+expect them to:
+
+| Field                               | Why not                                                                                                                                                                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Deity (`details.deity`, deity item) | Build-derived (a cleric's deity comes from the class choice); the module never pushes it, and an import always resolves it from the deity engine. See DESIGN §25.                              |
+| `details.languages.value` additions | PF2e recomputes the list from grants on every prepare, silently discarding directly-written languages that have no granting source. (The import side shares this gap for ungranted languages.) |
+| `system.pfs.characterNumber`        | PF2e silently ignores direct writes (the sibling `playerNumber` persists). The combined `character_organizedplayid` engine still round-trips whatever is stored.                               |
+| Item `carryType` (stowed/carried)   | The push records only hand-slot assignment and the equipped flag; the import defaults anything else to worn. Only held ⇄ worn round-trips.                                                     |
+
+Display metadata (`formated_data`, the `{format: {name, class, level, avatar}}`
+blob the overview page renders as "Lvl X Class") is builder-owned: pushes pass
+it through untouched and never construct it. See DESIGN §29.
 
 ---
 
