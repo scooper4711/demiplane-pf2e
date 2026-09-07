@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.13] - 2026-09-07
+
+### Added
+
+- import resilient armor runes
+- hide Feat Slot column for non-feats; match muse and adopted-ancestry choices
+- show feat-slot provenance for unmapped feats
+
+### Fixed
+
+- link-api keeps the API tree releasable and works on npm 11
+- preserve formated_data (overview subtitle) on push
+- don't treat ancestry-selection engines as the character's ancestry
+- validate the token as entered, not the saved setting
+- resolve base-grade property runes and armor potency runes on import
+
+### Changed
+
+- use published demiplane-api 1.1.0
+- record mutation-testing findings (deity, sync tokens, subtitle)
+- link/unlink scripts for local demiplane-api development
+- Kyra mutation round-trip proving push/pull fidelity
+- cover describeFeatSlot feat-slot labels
+- bump the dev-minor-patch group with 3 updates
+- thank the beta testers
+
+[0.2.0-beta.13]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.13
+
 ## [0.2.0-beta.12] - 2026-09-06
 
 ### Added
