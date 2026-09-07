@@ -8,7 +8,7 @@
  */
 
 import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
-import { stampImported } from "./types.js";
+import { stampImported, INVENTORY_ITEM_TYPES } from "./types.js";
 import {
   characterSystem,
   itemSystem,
@@ -389,18 +389,10 @@ export class RemoveDuplicatesPhase implements ImportPhase {
     const seen = new Map<string, Record<string, unknown>>();
     const toDelete: string[] = [];
 
-    const isImportStamped = (item: Record<string, unknown>): boolean => {
-      const flags = (item.flags as Record<string, Record<string, unknown>> | undefined) ?? {};
-      const dpFlags = flags["demiplane-pf2e"] as { imported?: boolean } | undefined;
-      return Boolean(dpFlags?.imported);
-    };
-
     for (const item of items) {
       const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
       const core = (flags.core || {}) as { sourceId?: string };
       const key = core.sourceId || `${String(item.type)}::${String(item.name)}`;
-
-      const isStamped = isImportStamped(item);
 
       const existing = seen.get(key);
       if (!existing) {
@@ -408,11 +400,9 @@ export class RemoveDuplicatesPhase implements ImportPhase {
         continue;
       }
 
-      const existingStamped = isImportStamped(existing);
-
-      if (isStamped && !existingStamped) {
-        toDelete.push(String(item._id));
-      } else if (!isStamped && existingStamped) {
+      const resolution = this.resolveDuplicate(existing, item);
+      if (resolution === "keep-both") continue; // legitimate separate copies
+      if (resolution === "drop-existing") {
         toDelete.push(String(existing._id));
         seen.set(key, item);
       } else {
@@ -424,6 +414,44 @@ export class RemoveDuplicatesPhase implements ImportPhase {
       await actor.deleteEmbeddedDocuments("Item", toDelete);
       ctx.summary.log.push(`- removed ${toDelete.length} duplicate item(s)`);
     }
+  }
+
+  /**
+   * Decides what to do with two items sharing a duplicate key.
+   *
+   * The dedup exists to drop an import-created copy the PF2e Grant Chain also
+   * made natively (same compendium source, one stamped by us and one not). But a
+   * character can legitimately own several of the SAME physical item — four
+   * identical wands, three potions — which all resolve to one compendium source
+   * and are all import-stamped. So for inventory items we only collapse the
+   * grant-vs-import case (exactly one stamped) and otherwise keep both; feats,
+   * features and other non-inventory items keep the original collapse-always
+   * behavior (the Grant Chain never yields two legitimate copies of those).
+   */
+  private resolveDuplicate(
+    existing: Record<string, unknown>,
+    incoming: Record<string, unknown>
+  ): "keep-both" | "drop-existing" | "drop-incoming" {
+    const existingStamped = this.isImportStamped(existing);
+    const incomingStamped = this.isImportStamped(incoming);
+
+    if (INVENTORY_ITEM_TYPES.has(String(incoming.type))) {
+      // Prefer the native grant copy over our import copy; otherwise both are
+      // real, separately-owned items — keep them.
+      if (incomingStamped && !existingStamped) return "drop-incoming";
+      if (!incomingStamped && existingStamped) return "drop-existing";
+      return "keep-both";
+    }
+
+    if (incomingStamped && !existingStamped) return "drop-incoming";
+    if (!incomingStamped && existingStamped) return "drop-existing";
+    return "drop-incoming";
+  }
+
+  private isImportStamped(item: Record<string, unknown>): boolean {
+    const flags = (item.flags as Record<string, Record<string, unknown>> | undefined) ?? {};
+    const dpFlags = flags["demiplane-pf2e"] as { imported?: boolean } | undefined;
+    return Boolean(dpFlags?.imported);
   }
 }
 
