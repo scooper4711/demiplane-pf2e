@@ -38,8 +38,8 @@ describe("sync-pause", () => {
 
   it("endSyncPause removes only our token and clears the active state", async () => {
     const actor = makeActor("char-2");
-    await beginSyncPause(actor);
-    await endSyncPause(actor);
+    const token = await beginSyncPause(actor);
+    await endSyncPause(actor, token);
 
     expect(tokensOf(actor)).toHaveLength(0);
     expect(isSyncActive(actor)).toBe(false);
@@ -65,13 +65,32 @@ describe("sync-pause", () => {
     expect(isRemoteSyncActive(actor)).toBe(true);
 
     // We begin our own sync while the remote one is active.
-    await beginSyncPause(actor);
+    const token = await beginSyncPause(actor);
     expect(isRemoteSyncActive(actor)).toBe(true);
 
     // Ending our sync must leave the remote token intact.
-    await endSyncPause(actor);
+    await endSyncPause(actor, token);
     expect(tokensOf(actor)).toEqual(["remote-token"]);
     expect(isRemoteSyncActive(actor)).toBe(true);
+  });
+
+  it("overlapping syncs on one client clear exactly their own token", async () => {
+    // Regression test: a floating journal push overlapping a manual push used
+    // to strand its token (single-slot bookkeeping), wedging every future
+    // push into defer-forever.
+    const actor = makeActor("char-6");
+    const first = await beginSyncPause(actor);
+    const second = await beginSyncPause(actor);
+    expect(tokensOf(actor)).toHaveLength(2);
+
+    await endSyncPause(actor, first);
+    expect(tokensOf(actor)).toHaveLength(1);
+    expect(isSyncActive(actor)).toBe(true);
+
+    await endSyncPause(actor, second);
+    expect(tokensOf(actor)).toHaveLength(0);
+    expect(isSyncActive(actor)).toBe(false);
+    expect(isRemoteSyncActive(actor)).toBe(false);
   });
 
   it("clearSyncPause empties all tokens", async () => {

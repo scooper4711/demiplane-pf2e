@@ -1,22 +1,25 @@
 import { test, expect } from "@playwright/test";
-import { loginAsGamemaster, deleteActorsForCharacter, stopCoverage } from "./helpers.js";
+import { loginAsGamemaster, deleteActorsForCharacter, deleteAllActors, stopCoverage } from "./helpers.js";
 
-const VALEROS_UUID = process.env.VALEROS_L5_UUID ?? "a5884413-857f-444c-a5d6-24d819632c8a";
+const KYRA_UUID = process.env.KYRA_UUID ?? "";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";
-const ACTOR_NAME = "Valeros Reimport Test";
+const ACTOR_NAME = "Kyra Reimport Test";
 
 /**
  * Wipe-and-reimport idempotence: deleting all imported items and importing
  * again must reproduce the same actor (covers deleteImportedItems, which no
- * single import ever executes).
+ * single import ever executes). Uses Kyra because her first import reports
+ * the sanctification default exactly once — the reimport must NOT repeat
+ * it, proving derived state survives the wipe.
  */
-test.describe("Valeros Reimport", () => {
-  test.skip(!DEMIPLANE_TOKEN, "DEMIPLANE_TOKEN env var required");
+test.describe("Kyra Reimport", () => {
+  test.skip(!DEMIPLANE_TOKEN || !KYRA_UUID, "DEMIPLANE_TOKEN and KYRA_UUID env vars required");
 
-  test("reimport reproduces the same items", async ({ browser }) => {
+  test("reimport reproduces the same items without repeating warnings", async ({ browser }) => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
-    await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
+    await deleteAllActors(page);
+    await deleteActorsForCharacter(page, KYRA_UUID, ACTOR_NAME);
 
     const first = await page.evaluate(
       async ({ actorName, characterId, token, moduleId }) => {
@@ -30,9 +33,10 @@ test.describe("Valeros Reimport", () => {
         const items = [...actor.items].map((i: { name: string; type: string }) => `${i.type}:${i.name}`).sort();
         return { actorId: actor.id as string, summary, items };
       },
-      { actorName: ACTOR_NAME, characterId: VALEROS_UUID, token: DEMIPLANE_TOKEN, moduleId: "demiplane-pf2e" }
+      { actorName: ACTOR_NAME, characterId: KYRA_UUID, token: DEMIPLANE_TOKEN, moduleId: "demiplane-pf2e" }
     );
-    expect(first.summary.errors).toHaveLength(0);
+    expect(first.summary.errors).toHaveLength(1);
+    expect(first.summary.errors[0]).toMatch(/sanctification/i);
 
     const second = await page.evaluate(
       async ({ actorId, token, moduleId }) => {
@@ -52,7 +56,7 @@ test.describe("Valeros Reimport", () => {
     expect(second.summary.errors).toHaveLength(0);
     expect(second.items).toEqual(first.items);
 
-    await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
+    await deleteActorsForCharacter(page, KYRA_UUID, ACTOR_NAME);
     await page.close();
   });
 });

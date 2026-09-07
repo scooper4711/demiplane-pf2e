@@ -1,6 +1,6 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { normalizeEquipmentSlug, parseRankedConsumable } from "./slug-utils.js";
+import { normalizeEquipmentSlug, parseRankedConsumable, rawEquipmentSlug } from "./slug-utils.js";
 import { isRuneEngine, collectRunesByParent, type WeaponRunes } from "./weapon-runes.js";
 import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { EQUIPMENT_PACK } from "../config.js";
@@ -334,14 +334,6 @@ async function attachCarriedSpell(
     _id: foundry.utils.randomID(),
     system: { ...spellSystem, location: { value: null, heightenedLevel: rank } },
   };
-}
-
-/**
- * Derives the raw (Demiplane) equipment slug for an item engine, without
- * normalizing it to the compendium's naming.
- */
-function rawEquipmentSlug(eng: DemiplaneEngineEntry): string {
-  return (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
 }
 
 const CURRENCY_MAP = [

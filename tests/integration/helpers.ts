@@ -33,9 +33,6 @@ const DISMISS_BUTTON_NAMES = [
  *
  * There is intentionally no focus juggling: the API call needs none, unlike
  * a synthetic Escape keypress.
- *
- * TODO-remove: verbose console.logs below are temporary diagnostics for
- * matching expectations against the live screen.
  */
 export async function dismissTours(page: Page): Promise<void> {
   // Any of these visible means a tour is up (tooltip, centered step, or dim
@@ -55,7 +52,6 @@ export async function dismissTours(page: Page): Promise<void> {
         return "none-active";
       })
       .catch((e) => `error:${String(e).slice(0, 80)}`);
-    console.log(`[dismissTours] tour API: ${apiResult}`);
     await page
       .evaluate(() => {
         document.querySelectorAll(".tour-overlay, .tour-center-step").forEach((el) => el.remove());
@@ -74,11 +70,9 @@ export async function dismissTours(page: Page): Promise<void> {
         break;
       }
     }
-    console.log(`[dismissTours] tour selectors matched: ${matched || "(none)"}`);
     if (!matched && apiResult !== "exited") return;
     const tourExit = page.locator('.tour [data-action="exit"], .tour-center-step [data-action="exit"]');
     if (await tourExit.isVisible({ timeout: 500 }).catch(() => false)) {
-      console.log("[dismissTours] clicking tour X");
       await tourExit
         .first()
         .click()
@@ -86,7 +80,6 @@ export async function dismissTours(page: Page): Promise<void> {
       await page.waitForTimeout(500);
     }
     if (Date.now() > deadline) {
-      console.log("[dismissTours] deadline reached with tour still visible");
       return;
     }
     await page.waitForTimeout(500);
@@ -299,6 +292,30 @@ export async function stopCoverage(page: Page, name: string): Promise<void> {
   );
 }
 
+/**
+ * Retries a Demiplane API call on HTTP 429 (rate limiting) with backoff. The
+ * full suite makes many API calls in a few minutes and the server throttles;
+ * without this a throttled read/write fails the run instead of waiting out
+ * the window. Only 429s retry — auth errors, validation failures, and
+ * updateCharacter's success:false (non-rate) results propagate immediately.
+ */
+export async function withApiRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const delays = [10_000, 20_000, 40_000];
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      const status = (error as { statusCode?: number })?.statusCode;
+      const message = error instanceof Error ? error.message : String(error);
+      const rateLimited =
+        status === 429 || (status === undefined && /rate.?limit|too many requests|\b429\b/i.test(message));
+      if (!rateLimited || attempt >= delays.length) throw error;
+      console.log(`[api-retry] ${label}: rate limited; waiting ${delays[attempt]! / 1000}s`);
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+}
+
 /** Waits until our module API is callable — it lands after game.ready. */
 export async function waitForModuleApi(page: Page): Promise<void> {
   await page.waitForFunction(
@@ -340,6 +357,24 @@ export async function deleteActorsForCharacter(page: Page, characterId: string, 
     },
     { characterId, moduleId: MODULE_ID }
   );
+}
+
+/**
+ * Deletes EVERY actor in the test world. Call at the start of each spec's
+ * setup: the world is disposable (reseedable via `foundry.sh test run
+ * --clean`), and any leftover — a renamed import, a stale link-holder the
+ * targeted cleanup missed — poisons subsequent runs through the
+ * duplicate-link guard. Targeted per-character cleanup stays in afterAll.
+ */
+export async function deleteAllActors(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    // @ts-expect-error Foundry global
+    const ids = game.actors.contents.map((actor) => actor.id);
+    for (const id of ids) {
+      // @ts-expect-error Foundry global
+      await game.actors.get(id)?.delete();
+    }
+  });
 }
 
 export interface ImportResult {

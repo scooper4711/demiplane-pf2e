@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   loginAsGamemaster,
   deleteActorsForCharacter,
+  deleteAllActors,
   createAndImportCharacter,
   stopCoverage,
   type ImportResult,
@@ -22,6 +23,7 @@ test.describe("Kyra Import", () => {
   test.beforeAll(async ({ browser }) => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
+    await deleteAllActors(page);
     await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
     result = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
     await stopCoverage(page, "kyra");
@@ -36,15 +38,11 @@ test.describe("Kyra Import", () => {
   });
 
   test("no import errors", () => {
-    // Unresolvable ChoiceSets fall back to defaults and are flagged as sync
-    // issues by design (see "flag unresolved ChoiceSets" feature): Deity and
-    // Domain Initiate cannot be matched from Demiplane's data.
-    expect(result.summary.errors).toHaveLength(3);
-    for (const error of result.summary.errors) {
-      expect(error).toMatch(/Couldn't determine the choice for/);
-    }
-    expect(result.summary.errors.join("\n")).toContain("Deity (Cleric)");
-    expect(result.summary.errors.join("\n")).toContain("Domain Initiate");
+    // Demiplane doesn't export deity sanctification, so the import defaults
+    // to holy and flags it once. Everything else (including the Deity and
+    // Domain Initiate ChoiceSets) resolves cleanly.
+    expect(result.summary.errors).toHaveLength(1);
+    expect(result.summary.errors[0]).toMatch(/sanctification.*holy/i);
     expect(result.summary.itemsSkipped).toBe(0);
   });
 

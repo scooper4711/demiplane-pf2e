@@ -12,7 +12,7 @@ export function registerSettings(): void {
 
   game.settings.register(MODULE_ID, "autoSync", {
     name: "Auto-sync on Actor Update",
-    hint: "Automatically push edits back to Demiplane as you make them: HP and hero points, currency, item quantity and equipped state, deity, languages, and biography/appearance details.",
+    hint: "Automatically push edits back to Demiplane as you make them: HP and hero points, currency, item quantity and equipped state, languages, and biography/appearance details. (Deity is build-derived and never pushed.)",
     scope: "world",
     config: true,
     type: Boolean,

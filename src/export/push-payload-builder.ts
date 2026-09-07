@@ -1,4 +1,4 @@
-import { normalizeEquipmentSlug } from "../import/slug-utils.js";
+import { normalizeEquipmentSlug, rawEquipmentSlug } from "../import/slug-utils.js";
 import { debugLog } from "../import/debug-log.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
@@ -71,6 +71,10 @@ export class PushPayloadBuilder {
 
   private applyFieldChanges(updatedEngines: CustomEngine[], changes: Map<string, PendingChange>): CustomEngine[] {
     let engines = updatedEngines;
+    debugLog(
+      `[push] applying ${String(changes.size)} field change(s):`,
+      [...changes.values()].map((c) => `${c.field}=${String(c.value)}`)
+    );
     for (const change of changes.values()) {
       const existing = findCustomEngineByName(engines, change.field);
       if (existing) {
@@ -110,8 +114,9 @@ export class PushPayloadBuilder {
       const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
       const itemEngine = fetched.engines.find((e) => {
         if (e.type !== "DemiplaneEngine" || !e.name.startsWith("tabula/item/")) return false;
-        const engineSlug = (e.args?.slug as string) ?? "";
-        return normalizeEquipmentSlug(engineSlug) === normalizeEquipmentSlug(matchSlug);
+        // Class-kit items carry no args.slug — fall back to the engine name,
+        // exactly like the import side does when stamping items.
+        return normalizeEquipmentSlug(rawEquipmentSlug(e)) === normalizeEquipmentSlug(matchSlug);
       });
       if (!itemEngine) continue;
       resolved.push({ change: itemChange, demiplaneId: itemEngine.demiplaneEngineId });
@@ -178,9 +183,10 @@ export class PushPayloadBuilder {
   private applyItemDelete(engines: CustomEngine[], itemChange: PendingItemChange, demiplaneId: string): CustomEngine[] {
     const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
     const kept = engines.filter((e) => {
-      // Remove the base item engine matching the deleted slug.
-      if (e.name.startsWith("tabula/item/") && e.args?.slug) {
-        if (normalizeEquipmentSlug(String(e.args.slug)) === normalizeEquipmentSlug(matchSlug)) return false;
+      // Remove the base item engine matching the deleted slug (same
+      // name-fallback as resolveItemChanges for slug-less class-kit items).
+      if (e.name.startsWith("tabula/item/")) {
+        if (normalizeEquipmentSlug(rawEquipmentSlug(e)) === normalizeEquipmentSlug(matchSlug)) return false;
       }
       // Remove any custom engine owned by this item's engine id.
       const name = e.name ?? "";
