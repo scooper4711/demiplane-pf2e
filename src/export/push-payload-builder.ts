@@ -10,6 +10,12 @@ interface CharacterMetadata {
   avatarUrl?: string | undefined;
   viewPermission?: number | undefined;
   editPermission?: number | undefined;
+  /**
+   * Builder-maintained display blob read by the character overview page.
+   * Passed through untouched on every push — omitting it nulls the
+   * overview subtitle ("Lvl X Class").
+   */
+  formatedData?: unknown;
 }
 
 export interface FetchedCharacter {
@@ -65,6 +71,7 @@ export class PushPayloadBuilder {
         avatarUrl: fetched.avatarUrl,
         viewPermission: fetched.viewPermission,
         editPermission: fetched.editPermission,
+        formatedData: fetched.formatedData,
       },
     };
   }
