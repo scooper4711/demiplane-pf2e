@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
 import { ExportManager } from "../../src/export-manager.js";
 import {
@@ -42,6 +42,14 @@ describe("sync-flows", () => {
   });
 
   describe("importLinkedCharacter", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      // Drain the pending sync-release timer so it can't leak into sibling
+      // describe blocks (which run with real timers), then restore real timers.
+      vi.runAllTimers();
+      vi.useRealTimers();
+    });
+
     it("imports without wiping by default and records unmapped slugs and issues", async () => {
       const { deps, importCharacter } = makeDeps();
       const actor = linkedActor();
@@ -53,6 +61,29 @@ describe("sync-flows", () => {
       expect(result.itemsImported).toBe(3);
       expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "unmappedSlugs", [{ slug: "nope", kind: "feat" }]);
       expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "importIssues", ["boom"]);
+      // The guard is held through the grace window so late import-induced hooks
+      // stay suppressed; it releases only after the grace timer fires.
+      expect(isSyncActive(actor)).toBe(true);
+      await vi.runAllTimersAsync();
+      expect(isSyncActive(actor)).toBe(false);
+    });
+
+    it("keeps the sync guard active through the grace window after import returns", async () => {
+      // Regression: an import creates/deletes items, but Foundry fires the item
+      // hooks (and PF2e re-prepares) on later ticks. If the guard released the
+      // instant import returned, a late deleteItem would push a deletion to
+      // Demiplane. The guard must stay active until the grace window elapses.
+      const { deps } = makeDeps();
+      const actor = linkedActor();
+
+      await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps);
+
+      expect(isSyncActive(actor)).toBe(true);
+      // Still held just before the grace window closes...
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(isSyncActive(actor)).toBe(true);
+      // ...released after it does.
+      await vi.advanceTimersByTimeAsync(2000);
       expect(isSyncActive(actor)).toBe(false);
     });
 
@@ -84,6 +115,7 @@ describe("sync-flows", () => {
       await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps, { wipe: true });
 
       expect(importCharacter).toHaveBeenCalledTimes(1);
+      await vi.runAllTimersAsync();
       expect(isSyncActive(actor)).toBe(false);
     });
 
@@ -93,6 +125,8 @@ describe("sync-flows", () => {
       importCharacter.mockRejectedValueOnce(new Error("import failed"));
 
       await expect(importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps)).rejects.toThrow("import failed");
+      // The guard still releases after the grace window even on failure.
+      await vi.runAllTimersAsync();
       expect(isSyncActive(actor)).toBe(false);
     });
   });
