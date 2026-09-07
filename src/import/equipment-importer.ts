@@ -11,7 +11,7 @@ import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { fetchStreamEngineLines } from "./stream-engines.js";
 import { debugLog } from "./debug-log.js";
 import { EQUIPMENT_PACK } from "../config.js";
-import { resolveMappedItem } from "../slug-mapping.js";
+import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
 import { getPackIndex, type PackIndex } from "./pack-index.js";
 import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
@@ -423,15 +423,16 @@ async function buildEquipmentItem(
   summary: ImportSummary,
   skipped: string[]
 ): Promise<PendingItem | null> {
-  const { state } = ctx;
   const demiplaneSlug = rawEquipmentSlug(eng);
   const slug = normalizeEquipmentSlug(demiplaneSlug);
-  const demiplaneId = eng.demiplaneEngineId as string;
 
   // A GM mapping is checked before the compendium lookup, and before the slug is
-  // rewritten by normalization, so it matches what the GM mapped.
+  // rewritten by normalization, so it matches what the GM mapped. The mapped item
+  // is the base; a scroll/wand still runs the carried-spell attach below, so the
+  // GM can correct which base item a spell-bearing consumable resolves to without
+  // losing its spell.
   const mapped = await resolveMappedItem("equipment", demiplaneSlug);
-  if (mapped) return { data: stampImported(mapped, slug), demiplaneId };
+  if (mapped) return finishEquipmentItem(mapped, eng, ctx, demiplaneSlug, slug, summary);
 
   const indexEntry = findBySlug(ctx.equipIndex, slug);
   if (!indexEntry) {
@@ -442,7 +443,43 @@ async function buildEquipmentItem(
   if (!doc) return null;
 
   const data = toPlainData(doc);
+
+  // Record the resolution so it appears as an editable row on the mapping
+  // screen — a GM can then correct an item that matched the wrong compendium
+  // entry. Keyed by the pre-normalization slug, matching the resolveMappedItem
+  // lookup above. No-ops if the GM has already set a mapping for this slug. The
+  // carried-spell attach in finishEquipmentItem re-runs on the next import (which
+  // hits the mapping branch above), so caching this does not empty the item.
+  await recordResolvedMapping("equipment", demiplaneSlug, {
+    uuid: `Compendium.${EQUIPMENT_PACK}.Item.${indexEntry._id}`,
+    name: (data.name as string | undefined) ?? demiplaneSlug,
+  });
+
+  return finishEquipmentItem(data, eng, ctx, demiplaneSlug, slug, summary);
+}
+
+/**
+ * Finishes an equipment item from its resolved base data — whether that came
+ * from a GM mapping or the compendium lookup. Sets quantity and equipped state,
+ * embeds the spell a scroll/wand carries, and applies the display name (explicit
+ * override, else the "Scroll of {Spell} (Rank N)" form for a spell carrier, else
+ * the base item's own name).
+ *
+ * Shared by both resolution paths so a GM-mapped scroll/wand still gets its
+ * carried spell — the mapping only chooses the base item, not the spell.
+ */
+async function finishEquipmentItem(
+  data: Record<string, unknown>,
+  eng: DemiplaneEngineEntry,
+  ctx: EquipmentBuildContext,
+  demiplaneSlug: string,
+  slug: string,
+  summary: ImportSummary
+): Promise<PendingItem> {
+  const { state } = ctx;
+  const demiplaneId = eng.demiplaneEngineId as string;
   const system = data.system as Record<string, unknown>;
+
   system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
@@ -452,12 +489,8 @@ async function buildEquipmentItem(
       `[equipment] "${demiplaneSlug}" (id ${demiplaneId}) → ${slug}; carried spell: ${carriedSpellSlug ?? "none"}`
     );
   }
-  const carried = await attachCarriedSpell(system, demiplaneSlug, carriedSpellSlug);
+  const carried = await attachCarriedSpell(system, demiplaneSlug, carriedSpellSlug, summary);
 
-  // Name priority: the character's explicit override, else the PF2e-style
-  // "Scroll of {Spell} (Rank N)" when a generic ranked consumable carries a
-  // spell (matching what dragging a spell onto the sheet produces), else the
-  // compendium name.
   const customName = state.nameById.get(demiplaneId);
   if (customName) {
     data.name = customName;
@@ -566,17 +599,23 @@ interface CarriedSpellNaming {
  * Returns the naming info for a generic ranked consumable (so the caller can
  * rename it "Scroll of {Spell} (Rank N)"), or null when no spell is carried or
  * the item is a named item that keeps its own name.
+ *
+ * A carried spell whose slug doesn't resolve in the compendium is recorded as an
+ * unmapped spell so the GM sees it on the mapping screen and can map it, rather
+ * than the item silently importing with no spell attached.
  */
 async function attachCarriedSpell(
   system: Record<string, unknown>,
   demiplaneSlug: string,
-  spellSlug: string | undefined
+  spellSlug: string | undefined,
+  summary: ImportSummary
 ): Promise<CarriedSpellNaming | null> {
   if (!spellSlug) return null;
 
   const spellSource = await resolveSpellSourceFromCompendium(spellSlug);
   if (!spellSource) {
     debugLog(`[equipment] carried-spell "${spellSlug}" did not resolve in the spell compendium; item left empty`);
+    summary.unmapped.push({ slug: spellSlug, kind: "spell" });
     return null;
   }
 
