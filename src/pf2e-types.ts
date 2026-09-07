@@ -91,11 +91,29 @@ export interface Pf2eCharacterSystem {
   slug: string | null;
 }
 
+/** PF2e creature/item size categories (pf2e/src/module/data.ts `SIZES`). */
+export type Pf2eSize = "tiny" | "sm" | "med" | "lg" | "huge" | "grg";
+
 /** Fields shared by every PF2e actor subtype this module reads. */
 export interface Pf2eActorSystem {
   attributes: { hp: Pf2eHitPoints };
   details: { level: ValueOf<number> };
   slug: string | null;
+  /**
+   * `size.value` is the actor's current size; `naturalSize` is its size before
+   * any size-changing effects. Both mirror pf2e/src/module/actor/data/base.ts.
+   */
+  traits?: { size?: { value?: Pf2eSize }; naturalSize?: Pf2eSize };
+}
+
+/**
+ * The size PF2e would give items held by this actor: its natural size, falling
+ * back to its current size, defaulting to Medium. Mirrors the `naturalSize ??
+ * size` read in `sizeItemForActor` (pf2e/src/module/item/physical/helpers.ts).
+ */
+export function actorNaturalSize(actor: WithSystem): Pf2eSize {
+  const traits = (actor.system as Pf2eActorSystem | undefined)?.traits;
+  return traits?.naturalSize ?? traits?.size?.value ?? "med";
 }
 
 /** Physical-item equipped state (pf2e/src/module/item/physical/data.ts). */

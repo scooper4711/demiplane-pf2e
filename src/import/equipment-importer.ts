@@ -1,13 +1,27 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { normalizeEquipmentSlug, parseRankedConsumable, rawEquipmentSlug } from "./slug-utils.js";
+import {
+  genericConsumableSlug,
+  normalizeEquipmentSlug,
+  parseRankedConsumable,
+  rawEquipmentSlug,
+} from "./slug-utils.js";
 import { isRuneEngine, collectRunesByParent, type WeaponRunes } from "./weapon-runes.js";
 import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
+import { fetchStreamEngineLines } from "./stream-engines.js";
+import { debugLog } from "./debug-log.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem } from "../slug-mapping.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
 import { getPackIndex, type PackIndex } from "./pack-index.js";
-import { toPlainData } from "../pf2e-types.js";
+import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
+
+/** A fixed spell a scroll/wand carries, taken from its `add-special-item-spell` modifier. */
+interface SpecialItemSpell {
+  spell: string;
+  rank: number;
+  itemType: "scroll" | "wand";
+}
 
 interface EquipmentState {
   primaryHandId: string | undefined;
@@ -34,6 +48,15 @@ interface EquippedResult {
 interface PendingItem {
   data: Record<string, unknown>;
   demiplaneId: string;
+}
+
+/** The compendium and per-character data needed to resolve one item engine. */
+interface EquipmentBuildContext {
+  equipPack: CompendiumCollection;
+  equipIndex: PackIndex;
+  state: EquipmentState;
+  /** Item engine stream id → the fixed spell it carries (scrolls/wands). */
+  specialSpells: Map<string, SpecialItemSpell>;
 }
 
 function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
@@ -70,13 +93,70 @@ function buildEquipmentState(engines: DemiplaneEngineEntry[]): EquipmentState {
   };
 }
 
-/** A spell linked to a scroll or wand names its owning item in `sourceData`. */
+/**
+ * Fetches the fixed spell each scroll/wand engine carries via its
+ * `add-special-item-spell` modifier, keyed by the item engine's stream id.
+ *
+ * Only fixed-spell items (an inline `spell` slug, `freeSpell` false) are
+ * collected — generic holders carry no spell here. This backs the fallback for
+ * named scrolls/wands (e.g. Scroll of Glitterdust) that have no dedicated
+ * compendium item: the modifier tells us the spell and rank to build a generic
+ * ranked consumable instead. Network/parse failures degrade to an empty map.
+ */
+async function fetchSpecialItemSpells(itemEngines: DemiplaneEngineEntry[]): Promise<Map<string, SpecialItemSpell>> {
+  const byEngineId = new Map<string, SpecialItemSpell>();
+  // Only scroll/wand engines can carry `add-special-item-spell`, so limit the
+  // network fetch to those rather than every equipment item.
+  const engineIds = itemEngines.filter(isScrollOrWandEngine).map((e) => e.id);
+  if (engineIds.length === 0) return byEngineId;
+
+  const lines = await fetchStreamEngineLines(engineIds);
+  for (const line of lines) {
+    if (!line.id) continue;
+    for (const mod of line.modifiers) {
+      if (mod.type !== "add-special-item-spell") continue;
+      if (mod.freeSpell || typeof mod.spell !== "string") {
+        debugLog(
+          `[equipment] special-item-spell for ${line.id}: no fixed spell (freeSpell=${String(mod.freeSpell)}, spell=${String(mod.spell)}) — using linked spell if any`
+        );
+        continue;
+      }
+      const itemType = mod.itemType === "scroll" ? "scroll" : "wand";
+      debugLog(`[equipment] special-item-spell for ${line.id}: fixed "${mod.spell}" rank ${String(mod.rank)}`);
+      byEngineId.set(line.id, { spell: mod.spell, rank: Number(mod.rank), itemType });
+    }
+  }
+  return byEngineId;
+}
+
+/** Whether an item engine is a scroll or wand (the only carriers of a fixed item spell). */
+function isScrollOrWandEngine(eng: DemiplaneEngineEntry): boolean {
+  const slug = rawEquipmentSlug(eng);
+  return slug.includes("scroll") || slug.includes("wand");
+}
+
+/**
+ * A spell linked to a scroll or wand names its owning item in `sourceData`. A
+ * generic scroll/wand holds a single spell, but Demiplane can emit several
+ * candidate spell engines for one item (e.g. a wand whose held spell was
+ * changed leaves the earlier selections orphaned in the save data). Demiplane's
+ * own runtime honors the last selection, so take the last candidate and let it
+ * overwrite earlier ones to match what the character sheet actually shows.
+ */
 function collectCarriedSpell(eng: DemiplaneEngineEntry, spellByItemId: Map<string, string>): void {
   if (!eng.name.startsWith("tabula/spell/")) return;
 
   const ownerId = (eng.args?.sourceData as { engineID?: string } | undefined)?.engineID;
   const spellSlug = eng.args?.slug as string | undefined;
-  if (ownerId && spellSlug) spellByItemId.set(ownerId, spellSlug);
+  if (!ownerId || !spellSlug) return;
+
+  const previous = spellByItemId.get(ownerId);
+  if (previous && previous !== spellSlug) {
+    debugLog(`[equipment] carried-spell: item ${ownerId} superseding "${previous}" with later "${spellSlug}"`);
+  } else {
+    debugLog(`[equipment] carried-spell: item ${ownerId} carries "${spellSlug}"`);
+  }
+  spellByItemId.set(ownerId, spellSlug);
 }
 
 /** Prefix Demiplane uses for the per-item "invested" flag: `value--is-invested--<engineId>`. */
@@ -155,6 +235,15 @@ function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | unde
   const pluralMatch = equipIndex.find((e) => e.system?.slug === plural);
   if (pluralMatch) return pluralMatch;
 
+  // Named ranked specialty scrolls/wands are normalized to end in `-Nth-rank`,
+  // but most compendium entries carry a trailing `-spell` (e.g.
+  // `wand-of-widening-9th-rank-spell`). A few (e.g. Legerdemain) don't, which the
+  // exact match above already covers.
+  if (/-\d+(?:st|nd|rd|th)-rank$/.test(slug)) {
+    const withSpell = equipIndex.find((e) => e.system?.slug === `${slug}-spell`);
+    if (withSpell) return withSpell;
+  }
+
   const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
   if (fallbackSlug !== slug) {
     return equipIndex.find((e) => e.system?.slug === fallbackSlug);
@@ -199,20 +288,24 @@ export async function applyEquipment(
     summary.unmapped.push({ slug, kind: "equipment" });
   });
 
-  const state = buildEquipmentState(engines);
-
   const equipPack = game.packs.get(EQUIPMENT_PACK);
   if (!equipPack) {
     summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
     return;
   }
-  const equipIndex = await getPackIndex(equipPack, ["system.slug"]);
+
+  const ctx: EquipmentBuildContext = {
+    equipPack,
+    equipIndex: await getPackIndex(equipPack, ["system.slug"]),
+    state: buildEquipmentState(engines),
+    specialSpells: await fetchSpecialItemSpells(itemEngines),
+  };
 
   const items: PendingItem[] = [];
   const skipped: string[] = [];
 
   for (const eng of itemEngines) {
-    const pending = await buildEquipmentItem(eng, equipPack, equipIndex, state, summary, skipped);
+    const pending = await buildEquipmentItem(eng, ctx, summary, skipped);
     if (pending) {
       applyRunesToItem(pending.data, runesByParent.get(pending.demiplaneId));
       items.push(pending);
@@ -224,7 +317,9 @@ export async function applyEquipment(
     return;
   }
 
-  const backpackCount = await createBackpackFirst(actor, items, state);
+  resizeItemsForActor(items, actor);
+
+  const backpackCount = await createBackpackFirst(actor, items, ctx.state);
 
   if (items.length > 0) {
     await actor.createEmbeddedDocuments(
@@ -237,6 +332,60 @@ export async function applyEquipment(
   if (skipped.length > 0) {
     summary.log.push(`! equipment skipped: [${skipped.join(", ")}]`);
   }
+}
+
+/**
+ * Resizes every built item to the actor's size before creation. Foundry only
+ * does this on the sheet drop handler; the direct createEmbeddedDocuments this
+ * importer uses bypasses it, so gear on a Tiny/Large actor would otherwise be
+ * flagged as the wrong size on the sheet.
+ */
+function resizeItemsForActor(items: PendingItem[], actor: Actor): void {
+  const actorSize = actorNaturalSize(actor);
+  for (const item of items) resizeItemForActor(item.data, actorSize);
+}
+
+/** Treasure keeps its own size (coins/gems aren't resized to the bearer). */
+const TREASURE_ITEM_TYPE = "treasure";
+
+/**
+ * Resizes an item's source `system.size` to the actor's size, mirroring the
+ * PF2e system's `sizeItemForActor` (which only runs on the sheet drop handler,
+ * not on the direct createEmbeddedDocuments this importer uses).
+ *
+ * Small is treated as Medium, so only Tiny and Large-or-bigger actors change an
+ * item's size — matching how the sheet decides whether to flag a size mismatch.
+ * Treasure is left alone. For a Large-or-bigger character carrying a non-magical
+ * item, PF2e also clears `price.sizeSensitive`; we do the same for fidelity.
+ */
+function resizeItemForActor(data: Record<string, unknown>, actorSize: Pf2eSize): void {
+  if (data.type === TREASURE_ITEM_TYPE) return;
+
+  const itemSize: Pf2eSize = actorSize === "sm" ? "med" : actorSize;
+  if (itemSize === "med") return;
+
+  const system = data.system as Record<string, unknown>;
+  system.size = itemSize;
+
+  if (isLargerThanMedium(itemSize) && !isMagicalItem(system)) {
+    const price = (system.price as Record<string, unknown> | undefined) ?? {};
+    price.sizeSensitive = false;
+    system.price = price;
+  }
+}
+
+const SIZE_RANK: Record<Pf2eSize, number> = { tiny: 0, sm: 1, med: 2, lg: 3, huge: 4, grg: 5 };
+
+function isLargerThanMedium(size: Pf2eSize): boolean {
+  return SIZE_RANK[size] > SIZE_RANK.med;
+}
+
+/** Whether an item's source data carries the `magical` trait (or a magical tradition). */
+function isMagicalItem(system: Record<string, unknown>): boolean {
+  const traits = (system.traits as { value?: unknown } | undefined)?.value;
+  if (!Array.isArray(traits)) return false;
+  const MAGICAL_TRAITS = new Set(["magical", "arcane", "divine", "occult", "primal"]);
+  return traits.some((t) => typeof t === "string" && MAGICAL_TRAITS.has(t));
 }
 
 /**
@@ -270,12 +419,11 @@ function applyRunesToItem(data: Record<string, unknown>, runes: WeaponRunes | un
 /** Builds one equipment item from its engine, or records why it can't be imported. */
 async function buildEquipmentItem(
   eng: DemiplaneEngineEntry,
-  equipPack: CompendiumCollection,
-  equipIndex: PackIndex,
-  state: EquipmentState,
+  ctx: EquipmentBuildContext,
   summary: ImportSummary,
   skipped: string[]
 ): Promise<PendingItem | null> {
+  const { state } = ctx;
   const demiplaneSlug = rawEquipmentSlug(eng);
   const slug = normalizeEquipmentSlug(demiplaneSlug);
   const demiplaneId = eng.demiplaneEngineId as string;
@@ -285,16 +433,12 @@ async function buildEquipmentItem(
   const mapped = await resolveMappedItem("equipment", demiplaneSlug);
   if (mapped) return { data: stampImported(mapped, slug), demiplaneId };
 
-  const indexEntry = findBySlug(equipIndex, slug);
+  const indexEntry = findBySlug(ctx.equipIndex, slug);
   if (!indexEntry) {
-    skipped.push(slug);
-    // Record the slug as Demiplane reported it, not the normalized one: that is
-    // what a GM mapping is keyed on, and what they need to see.
-    summary.unmapped.push({ slug: demiplaneSlug, kind: "equipment" });
-    return null;
+    return buildFixedSpellConsumable(eng, ctx, demiplaneSlug, summary, skipped);
   }
 
-  const doc = await equipPack.getDocument(indexEntry._id);
+  const doc = await ctx.equipPack.getDocument(indexEntry._id);
   if (!doc) return null;
 
   const data = toPlainData(doc);
@@ -302,28 +446,139 @@ async function buildEquipmentItem(
   system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
-  await attachCarriedSpell(system, demiplaneSlug, state.spellByItemId.get(demiplaneId));
+  const carriedSpellSlug = state.spellByItemId.get(demiplaneId);
+  if (isScrollOrWandEngine(eng)) {
+    debugLog(
+      `[equipment] "${demiplaneSlug}" (id ${demiplaneId}) → ${slug}; carried spell: ${carriedSpellSlug ?? "none"}`
+    );
+  }
+  const carried = await attachCarriedSpell(system, demiplaneSlug, carriedSpellSlug);
 
+  // Name priority: the character's explicit override, else the PF2e-style
+  // "Scroll of {Spell} (Rank N)" when a generic ranked consumable carries a
+  // spell (matching what dragging a spell onto the sheet produces), else the
+  // compendium name.
   const customName = state.nameById.get(demiplaneId);
-  if (customName) data.name = customName;
+  if (customName) {
+    data.name = customName;
+  } else if (carried) {
+    data.name = spellConsumableName(carried.kind, carried.spellName, carried.rank);
+  }
 
   return { data: stampImported(data, slug), demiplaneId };
+}
+
+/**
+ * The PF2e display name for a spell-bearing scroll/wand, matching the system's
+ * `FromSpell` templates (e.g. "Scroll of Blessed Boundary (Rank 6)"). Applied so
+ * an imported generic ranked consumable reads the same as one made by dragging a
+ * spell onto the sheet, instead of the generic "Scroll of 6th-rank Spell".
+ */
+function spellConsumableName(kind: "scroll" | "wand", spellName: string, rank: number): string {
+  const noun = kind === "scroll" ? "Scroll" : "Wand";
+  return `${noun} of ${spellName} (Rank ${rank})`;
+}
+
+/**
+ * Fallback for a fixed-spell scroll/wand with no dedicated compendium item (e.g.
+ * Scroll of Glitterdust). Its `add-special-item-spell` modifier names the spell,
+ * rank, and item type, so PF2e's generic ranked consumable
+ * (`scroll-of-Nth-rank-spell` / `magic-wand-Nth-rank-spell`) can stand in with
+ * the spell embedded. Records the item as unmapped (as before) when there is no
+ * such modifier or the generic consumable itself is missing.
+ */
+async function buildFixedSpellConsumable(
+  eng: DemiplaneEngineEntry,
+  ctx: EquipmentBuildContext,
+  demiplaneSlug: string,
+  summary: ImportSummary,
+  skipped: string[]
+): Promise<PendingItem | null> {
+  const { state } = ctx;
+  const demiplaneId = eng.demiplaneEngineId as string;
+  const special = ctx.specialSpells.get(eng.id);
+
+  const recordUnmapped = (): null => {
+    skipped.push(normalizeEquipmentSlug(demiplaneSlug));
+    // Record the slug as Demiplane reported it, not the normalized one: that is
+    // what a GM mapping is keyed on, and what they need to see. Holder/activation
+    // wands with no fixed spell (e.g. Wand of Widening) stay unmapped on purpose,
+    // so the GM can build and map an item that represents them rather than get a
+    // silent, spell-less generic stand-in.
+    summary.unmapped.push({ slug: demiplaneSlug, kind: "equipment" });
+    return null;
+  };
+
+  if (!special) return recordUnmapped();
+
+  const genericSlug = genericConsumableSlug(special.itemType, special.rank);
+  const indexEntry = findBySlug(ctx.equipIndex, genericSlug);
+  if (!indexEntry) return recordUnmapped();
+
+  const doc = await ctx.equipPack.getDocument(indexEntry._id);
+  if (!doc) return recordUnmapped();
+
+  debugLog(`[equipment] "${demiplaneSlug}" → generic ${genericSlug} carrying ${special.spell} (rank ${special.rank})`);
+
+  const data = toPlainData(doc);
+  const system = data.system as Record<string, unknown>;
+  system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
+  system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
+
+  await attachSpecialItemSpell(system, special);
+
+  // Keep the character's own item name (e.g. "Scroll of Glitterdust") rather
+  // than the generic "Scroll of 2nd-rank Spell", preferring an explicit override.
+  data.name = state.nameById.get(demiplaneId) ?? deriveFixedSpellItemName(eng, special.itemType);
+
+  return { data: stampImported(data, genericSlug), demiplaneId };
+}
+
+/**
+ * A readable name for a generic consumable standing in for a named scroll/wand.
+ * Prefers the engine's display name; otherwise titlecases the Demiplane slug
+ * (e.g. `scroll-of-glitterdust-rm` → "Scroll Of Glitterdust").
+ */
+function deriveFixedSpellItemName(eng: DemiplaneEngineEntry, itemType: "scroll" | "wand"): string {
+  const engineName = eng.args?.name as string | undefined;
+  if (engineName) return engineName;
+
+  const slug = rawEquipmentSlug(eng).replace(/-rm$/, "");
+  const titled = slug
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+  return titled || (itemType === "scroll" ? "Scroll" : "Wand");
+}
+
+/** How a spell-bearing consumable should be renamed after its spell is embedded. */
+interface CarriedSpellNaming {
+  kind: "scroll" | "wand";
+  spellName: string;
+  rank: number;
 }
 
 /**
  * Embeds the spell a scroll or wand carries, mirroring how the PF2e system
  * builds spell consumables: the spell's own source, detached from any
  * spellcasting entry and heightened to the item's rank.
+ *
+ * Returns the naming info for a generic ranked consumable (so the caller can
+ * rename it "Scroll of {Spell} (Rank N)"), or null when no spell is carried or
+ * the item is a named item that keeps its own name.
  */
 async function attachCarriedSpell(
   system: Record<string, unknown>,
   demiplaneSlug: string,
   spellSlug: string | undefined
-): Promise<void> {
-  if (!spellSlug) return;
+): Promise<CarriedSpellNaming | null> {
+  if (!spellSlug) return null;
 
   const spellSource = await resolveSpellSourceFromCompendium(spellSlug);
-  if (!spellSource) return;
+  if (!spellSource) {
+    debugLog(`[equipment] carried-spell "${spellSlug}" did not resolve in the spell compendium; item left empty`);
+    return null;
+  }
 
   const ranked = parseRankedConsumable(demiplaneSlug);
   const spellSystem = (spellSource.system as Record<string, unknown>) ?? {};
@@ -333,6 +588,29 @@ async function attachCarriedSpell(
     ...spellSource,
     _id: foundry.utils.randomID(),
     system: { ...spellSystem, location: { value: null, heightenedLevel: rank } },
+  };
+
+  // Only generic ranked consumables get the "Scroll of {Spell}" rename; a named
+  // item (e.g. a specific magic wand) keeps its compendium name.
+  if (!ranked) return null;
+  const spellName = (spellSource.name as string | undefined) ?? spellSlug;
+  return { kind: ranked.kind, spellName, rank };
+}
+
+/**
+ * Embeds a fixed-spell item's spell on the generic consumable standing in for
+ * it, at the rank named by the item's `add-special-item-spell` modifier (rather
+ * than a rank parsed from the slug, which a named item doesn't carry).
+ */
+async function attachSpecialItemSpell(system: Record<string, unknown>, special: SpecialItemSpell): Promise<void> {
+  const spellSource = await resolveSpellSourceFromCompendium(special.spell);
+  if (!spellSource) return;
+
+  const spellSystem = (spellSource.system as Record<string, unknown>) ?? {};
+  system.spell = {
+    ...spellSource,
+    _id: foundry.utils.randomID(),
+    system: { ...spellSystem, location: { value: null, heightenedLevel: special.rank } },
   };
 }
 

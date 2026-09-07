@@ -58,7 +58,10 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     }
 
     const parentFeature = eng.args?.parentSpellFeature as string | undefined;
-    if (!parentFeature || parentFeature === "scroll") continue;
+    // "scroll"/"wand" parent features are spells carried by a scroll or wand
+    // consumable (attached to the item by the equipment importer), not entries
+    // in a class spellbook — skip them so they don't form a phantom spell group.
+    if (!parentFeature || parentFeature === "scroll" || parentFeature === "wand") continue;
 
     addToGroup(getOrCreateGroup(mainGroups, parentFeature), eng);
   }
