@@ -231,6 +231,8 @@ export class ChoiceSetHandler {
       return;
     }
 
+    if (this.resolveForcedSingleChoice(context, params)) return;
+
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
       `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
@@ -241,6 +243,31 @@ export class ChoiceSetHandler {
     if (selected) {
       this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
     }
+  }
+
+  /**
+   * Applies a ChoiceSet whose predicates have narrowed the options to a single
+   * survivor, treating it as determined rather than a guess.
+   *
+   * Some ChoiceSets aren't player decisions at all — the right option is dictated
+   * by the character's existing state via option `predicate`s. Guardian
+   * Dedication is the canonical case: it offers "light and medium" armor when the
+   * character is untrained in either, and "heavy" when already trained in both.
+   * A Fighter is trained in all armor, so only "heavy" survives inflation. The
+   * engine data carries no slug to match this against, so the generic strategies
+   * would fall back to the first option and (correctly, but noisily) flag it as
+   * an unresolved guess. When exactly one option remains there is no decision to
+   * lose, so select it silently and record no fallback.
+   *
+   * Returns true when it handled the ChoiceSet, false to defer to slug matching.
+   */
+  private resolveForcedSingleChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
+    if (context.choices.length !== 1) return false;
+    debugLog(
+      `[ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
+    );
+    this.applySelectedChoice(context, params, context.choices[0]!, true, []);
+    return true;
   }
 
   /**

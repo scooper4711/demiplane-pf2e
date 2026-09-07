@@ -212,6 +212,34 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     expect(ctx.selection).toBe("foo");
   });
 
+  it("selects a predicate-narrowed sole option without recording a fallback", async () => {
+    const builtin = installChoiceSetPrototype();
+    const handler = new ChoiceSetHandler();
+    // Guardian Dedication on a Fighter: the character is already trained in
+    // light and medium armor, so only the "heavy" option survives PF2e's
+    // predicate. The engine data carries only unrelated skill selections, which
+    // would otherwise fall back to the first (only) choice and flag it noisily.
+    handler.setEngines([
+      eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "acrobatics" } }),
+      eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "survival" } }),
+    ]);
+    handler.enable();
+
+    const choices = [{ value: "heavy", label: "Heavy" }];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "guardian-dedication",
+      item: { flags: {}, getRollOptions: () => [], rules: [], name: "Guardian Dedication" },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Guardian Dedication" } });
+
+    expect(ctx.selection).toBe("heavy");
+    // The choice was determined by the character's state, not guessed.
+    expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+
   function sanctificationCtx(makeContext: (o?: Record<string, unknown>) => Record<string, unknown>, values: string[]) {
     const choices = values.map((v) => ({ value: v, label: v[0]!.toUpperCase() + v.slice(1) }));
     return makeContext({
