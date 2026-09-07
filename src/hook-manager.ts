@@ -13,14 +13,6 @@ import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
  * names used by ExportManager.queueChange.
  */
 /**
- * Demiplane store name for the character's deity. In PF2e a deity is normally
- * an embedded Item of type "deity"; the free-text `system.details.deity.value`
- * is only the fallback used when the deity is not found in the compendium.
- * Mirrors the import side (biography-importer.applyDeity).
- */
-const DEITY_STORE_NAME = "character_personality_beliefs";
-
-/**
  * Demiplane store name for the character's additional (user-added) languages.
  * Demiplane persists only the languages the user typed in; ancestry/heritage
  * grants are recomputed on its side and are not writable. So on export we push
@@ -56,10 +48,6 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.biography.organizations": "character_campaign_organizations",
   "system.details.biography.edicts": "character_personality_edicts",
   "system.details.biography.anathema": "character_personality_anathema",
-  // Text-only fallback: catches manual edits to the deity text field when the
-  // deity is not a compendium item. The compendium-item case is handled by the
-  // deity item create/delete hooks.
-  "system.details.deity.value": DEITY_STORE_NAME,
 };
 
 const TREASURE_ITEM_MAP: Record<string, string> = {
@@ -162,25 +150,24 @@ function queueEquipped(
 
 /**
  * Queues every syncable character-detail field from a linked actor's current
- * state: biography/appearance/personality/campaign fields, deity, languages,
- * and organized play ID. This is the manual-push counterpart to the per-field
+ * state: biography/appearance/personality/campaign fields, languages, and
+ * organized play ID. This is the manual-push counterpart to the per-field
  * `updateActor` hook — the hook reacts to individual edits, while this re-syncs
  * the full detail state on demand (e.g. the "Update to Demiplane" button).
+ *
+ * Deity is deliberately absent: it is build-derived (a cleric's deity comes
+ * from the class choice, not the text field), so pushing it can only write a
+ * value the next import overwrites. The import side still reads it.
  */
 export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor): void {
   queueMappedDetailFields(exportManager, actor);
   queueOrganizedPlayId(exportManager, actor);
-  queueDeityName(exportManager, actor);
   queueAdditionalLanguages(exportManager, actor);
 }
 
 /** Queues each ACTOR_FIELD_MAPPINGS field from the actor's current value. */
 function queueMappedDetailFields(exportManager: ExportManager, actor: Actor): void {
   for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
-    // The deity text field is handled by queueDeityName (which prefers the
-    // deity item), so skip it here to avoid clobbering a good value with "".
-    if (storeName === DEITY_STORE_NAME) continue;
-
     const value = readActorPath(actor, actorPath);
     if (value === undefined || value === null) continue;
 
@@ -197,20 +184,6 @@ function queueOrganizedPlayId(exportManager: ExportManager, actor: Actor): void 
   const pfs = characterSystem(actor).pfs;
   if (typeof pfs?.playerNumber === "number" && typeof pfs?.characterNumber === "number") {
     exportManager.queueChange(actor, "character_organizedplayid", `${pfs.playerNumber}-${pfs.characterNumber}`);
-  }
-}
-
-/**
- * Queues the character's deity. Prefers the embedded deity item's name (the
- * usual compendium case); falls back to the free-text `details.deity.value`.
- */
-function queueDeityName(exportManager: ExportManager, actor: Actor): void {
-  // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
-  const items = Array.from(actor.items) as unknown as Item[];
-  const deityItem = items.find((item) => (item as { type?: string })?.type === "deity");
-  const deityName = deityItem?.name ?? characterSystem(actor).details.deity?.value;
-  if (typeof deityName === "string" && deityName.length > 0) {
-    exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
   }
 }
 
@@ -406,21 +379,6 @@ export class HookManager {
     if (isSyncActive(actor)) return;
     if (!this.autoSyncEnabled(actor.name)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
-    this.queueDeityChange(item, actor);
-  }
-
-  /**
-   * Queues a deity change when a deity item is added to or removed from a linked
-   * actor. Demiplane stores the deity as a name string in the
-   * `character_personality_beliefs` engine, so adding a deity item queues its
-   * name and removing one clears the field.
-   */
-  private queueDeityChange(item: Item, actor: Actor): void {
-    if ((item as { type?: string })?.type !== "deity") return;
-    const deityName = item.name;
-    if (typeof deityName !== "string" || deityName.length === 0) return;
-    debugLog(`Deity set on linked actor: ${deityName}`);
-    this.exportManager.queueChange(actor, DEITY_STORE_NAME, deityName);
   }
 
   private getGrantedChoiceLog(item: Item): string {
@@ -450,12 +408,9 @@ export class HookManager {
 
     const itemType = (item as { type?: string })?.type;
 
-    if (itemType === "deity") {
-      debugLog(`Deity removed from linked actor: ${item.name}`);
-      this.exportManager.queueChange(actor, DEITY_STORE_NAME, "");
-      return;
-    }
-
+    // No deity branch: deity is build-derived and never pushed (a local delete
+    // must not clear the remote value). Deity items fall through to the
+    // non-inventory skip below.
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
       debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
       return;

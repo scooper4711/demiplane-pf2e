@@ -3,7 +3,7 @@ import { debugLog } from "./import/debug-log.js";
 import { addExportIssue } from "./sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
-import { beginSyncPause, endSyncPause, isRemoteSyncActive } from "./sync-pause.js";
+import { isRemoteSyncActive } from "./sync-pause.js";
 import { isClientElectedWriter } from "./sync-election.js";
 import { ChangeBuffer, type EquippedState, type ItemChangeType, type PendingChange } from "./export/change-buffer.js";
 import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
@@ -124,10 +124,15 @@ export class ExportManager {
    * "Campaign" journal entry. Finds the existing journal and updates it, or
    * creates one when none exists.
    *
-   * Runs inside the cross-client concurrency lock (beginSyncPause/endSyncPause)
-   * like every other push, so the journal write cannot race a concurrent import
-   * or push into an optimistic-concurrency conflict. If a *different* client is
-   * already mid-sync, we skip rather than pile on.
+   * Deliberately takes NO sync pause: a journal write touches no actor
+   * documents, so there is nothing for other clients' (or our own) hooks to
+   * echo — but a pause here would suppress hook queueing for the whole write,
+   * silently dropping real edits (notably item deletes, which unlike field
+   * edits have no full-state re-queue to rescue them). Racing a concurrent
+   * import/push is benign: the import reads journals best-effort, and an
+   * `updated` bump from the journal write falls through the push's benign
+   * conflict check. If a *different* client is already mid-sync, we still
+   * skip rather than pile on.
    */
   async exportCampaignNotes(actor: Actor, notes: string): Promise<void> {
     // Master write switch — see flush(). Campaign Notes is a separate journal
@@ -148,27 +153,47 @@ export class ExportManager {
       return;
     }
 
-    await beginSyncPause(actor);
+    // No sync pause here (see docstring): the local lock inside
+    // writeCampaignJournal serializes our own concurrent writes.
     try {
       await this.writeCampaignJournal(characterId, notes);
     } catch (error) {
       debugLog(`[push] journal export failed: ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      await endSyncPause(actor);
     }
   }
 
+  /**
+   * Local per-character lock serializing our own concurrent journal writes
+   * (e.g. a hook-fired notes push racing the manual push's notes push) so the
+   * fetch-then-update-or-create can't double-create the Campaign entry.
+   * In-memory only — unlike the sync pause it never touches the actor, so
+   * hooks keep queueing real edits throughout the write.
+   */
+  private readonly journalLocks = new Map<string, Promise<void>>();
+
   /** Creates or updates the "Campaign" journal entry with the given body. */
   private async writeCampaignJournal(characterId: string, notes: string): Promise<void> {
-    const journals = await this.client.fetchCharacterJournals(characterId);
-    const existing = journals.find((journal) => journal.title === "Campaign");
+    const prior = this.journalLocks.get(characterId);
+    let release!: () => void;
+    const mine = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.journalLocks.set(characterId, mine);
+    try {
+      if (prior) await prior;
+      const journals = await this.client.fetchCharacterJournals(characterId);
+      const existing = journals.find((journal) => journal.title === "Campaign");
 
-    if (existing) {
-      await this.client.updateCharacterJournal(existing.objectID, characterId, "Campaign", notes);
-      debugLog(`[push] updated Campaign journal entry`);
-    } else {
-      await this.client.createCharacterJournal(characterId, "Campaign", notes);
-      debugLog(`[push] created Campaign journal entry`);
+      if (existing) {
+        await this.client.updateCharacterJournal(existing.objectID, characterId, "Campaign", notes);
+        debugLog(`[push] updated Campaign journal entry`);
+      } else {
+        await this.client.createCharacterJournal(characterId, "Campaign", notes);
+        debugLog(`[push] created Campaign journal entry`);
+      }
+    } finally {
+      release();
+      if (this.journalLocks.get(characterId) === mine) this.journalLocks.delete(characterId);
     }
   }
 
@@ -237,7 +262,10 @@ export class ExportManager {
     // Defer rather than race another client importing/pushing this character, then
     // re-arm the timer so the pending changes are pushed once the remote sync settles.
     if (isRemoteSyncActive(actor)) {
-      debugLog(`[push] remote sync in progress for ${characterId}; deferring flush`);
+      const tokens = (actor.getFlag(MODULE_ID, "syncActiveTokens") as string[] | undefined) ?? [];
+      debugLog(
+        `[push] flush deferring for ${characterId} (remote sync active) tokens=${JSON.stringify(tokens.map((t) => String(t).slice(0, 8)))}`
+      );
       this.changeBuffer.rearmFlush(actor, characterId);
       return { success: true };
     }

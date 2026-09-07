@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   loginAsGamemaster,
   deleteActorsForCharacter,
+  deleteAllActors,
   createAndImportCharacter,
   stopCoverage,
   type ImportResult,
@@ -23,6 +24,7 @@ test.describe("Valeros Level 5 Import", () => {
   test.beforeAll(async ({ browser }) => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
+    await deleteAllActors(page);
     await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
     result = await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
     await stopCoverage(page, "valeros");

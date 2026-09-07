@@ -5,7 +5,7 @@ import { deleteImportedItems } from "./import/reconcile.js";
 import type { ExportManager, ExportResult } from "./export-manager.js";
 import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { characterSystem } from "./pf2e-types.js";
-import { beginSyncPause, endSyncPause, clearSyncPause } from "./sync-pause.js";
+import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "./sync-pause.js";
 import { resetImportIssues, addImportIssues, setUnmappedSlugs } from "./sync-issues.js";
 
 // Re-exported so wiring and tests share one definition.
@@ -48,8 +48,12 @@ export async function importLinkedCharacter(
   // Mark the character as syncing so every connected client (including this one)
   // pauses its pushes while the import rewrites the actor. This prevents the
   // import's own actor updates from echoing back to Demiplane via other clients.
-  await beginSyncPause(actor);
+  // beginSyncPause sits inside the try so a throw can't strand the suspension
+  // (a stuck suspend silently drops every later queued change), and its token
+  // is threaded through so overlapping syncs clear exactly their own mark.
+  let syncToken: string | undefined;
   try {
+    syncToken = await beginSyncPause(actor);
     // Wiping has to happen inside the pause: the delete hook would otherwise read
     // these removals as user edits and queue them for push, deleting the real
     // items on Demiplane and advancing its timestamp into a false conflict.
@@ -69,7 +73,7 @@ export async function importLinkedCharacter(
     await addImportIssues(actor, summary.errors);
     return summary;
   } finally {
-    await endSyncPause(actor);
+    await endSyncPause(actor, syncToken);
     deps.exportManager.resume(characterId);
   }
 }
@@ -106,7 +110,15 @@ export async function exportLinkedCharacter(actor: Actor, deps: SyncFlowDeps): P
  * cannot race a concurrent import/push into an optimistic-concurrency conflict.
  */
 export async function pushCharacterEngines(actor: Actor, deps: SyncFlowDeps): Promise<ExportResult> {
-  await beginSyncPause(actor);
+  // The manual/API path must not silently defer: `flush` reports fake success
+  // when another sync is in flight (the debounced path retries via re-arm, but
+  // there is no retry here — and a later import would suspend away the
+  // buffered changes entirely). Wait out in-flight syncs (bounded) so the
+  // push below really lands; fail honestly on timeout instead.
+  if (!(await waitForSyncIdle(actor))) {
+    return { success: false, error: "Timed out waiting for an in-flight sync to finish; nothing was pushed." };
+  }
+  const syncToken = await beginSyncPause(actor);
   try {
     queueCombatResourceChanges(deps.exportManager, actor);
     queueAllItemChanges(deps.exportManager, actor);
@@ -122,8 +134,28 @@ export async function pushCharacterEngines(actor: Actor, deps: SyncFlowDeps): Pr
     }
     return result;
   } finally {
-    await endSyncPause(actor);
+    await endSyncPause(actor, syncToken);
   }
+}
+
+/**
+ * Waits until no sync (own or remote) is in flight for the actor's character
+ * (or the deadline passes). Campaign-notes edits trigger a floating journal
+ * push that holds the sync mark for a second or two — pushing through it
+ * would defer with fake success, so the manual path waits it out instead.
+ * Uses isSyncActive (any pause) rather than isRemoteSyncActive: our own
+ * overlapping syncs count as busy here.
+ */
+async function waitForSyncIdle(actor: Actor, timeoutMs = 15_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (isSyncActive(actor)) {
+    if (Date.now() >= deadline) {
+      debugLog(`[push] waitForSyncIdle timed out; proceeding anyway`);
+      return false;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return true;
 }
 
 /**

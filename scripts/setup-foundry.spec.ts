@@ -443,6 +443,16 @@ test("complete Foundry VTT setup with PF2e system, world, and users", async ({ p
     console.log("-> No DEMIPLANE_TOKEN in env; skipping token setup.");
   }
 
+  // ========== PHASE 6c: Enable debug logging ==========
+  // Test runs diagnose via the import lifecycle logs — always leave debug
+  // logging on in seeded environments.
+  console.log("-> Enabling module debug logging...");
+  await page.evaluate(async () => {
+    // @ts-expect-error Foundry global
+    await game.settings.set("demiplane-pf2e", "debugImport", true);
+  });
+  console.log(">>> Debug logging enabled.");
+
   // ========== PHASE 7: Create Player User ==========
   console.log("-> Creating player user...");
   const playerResult = await page.evaluate(async (playerName) => {

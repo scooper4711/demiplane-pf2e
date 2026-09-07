@@ -1362,14 +1362,15 @@ describe("ExportManager", () => {
       expect(vi.mocked(client.createCharacterJournal)).not.toHaveBeenCalled();
     });
 
-    it("runs the journal write inside the concurrency lock", async () => {
-      // Assert the sync pause is held while the write is in flight and released
-      // afterward, so the journal update cannot race a concurrent import/push.
-      let lockHeldDuringWrite = false;
+    it("does not hold the actor sync pause during the journal write", async () => {
+      // The journal write touches no actor documents, so it must not suppress
+      // hook queueing: a pause here silently dropped real edits (notably item
+      // deletes) made while the write was in flight.
+      let pauseHeldDuringWrite = true;
       const actor = createFlagTrackingActor();
       const client = createMockClient({
         fetchCharacterJournals: vi.fn().mockImplementation(() => {
-          lockHeldDuringWrite = isSyncActive(actor as never);
+          pauseHeldDuringWrite = isSyncActive(actor as never);
           return Promise.resolve([]);
         }),
       });
@@ -1377,9 +1378,31 @@ describe("ExportManager", () => {
 
       await manager.exportCampaignNotes(actor as never, "notes");
 
-      expect(lockHeldDuringWrite).toBe(true);
-      // Lock released after the write completes.
+      expect(pauseHeldDuringWrite).toBe(false);
       expect(isSyncActive(actor as never)).toBe(false);
+    });
+
+    it("serializes concurrent journal writes so the entry is created once", async () => {
+      const actor = createFlagTrackingActor();
+      let calls = 0;
+      const client = createMockClient({
+        fetchCharacterJournals: vi.fn().mockImplementation(() => {
+          calls += 1;
+          // First caller sees no entry (would create); second must see the
+          // first caller's entry (update instead of a duplicate create).
+          const existing = calls > 1 ? [{ objectID: "j-new", title: "Campaign" }] : [];
+          return Promise.resolve(existing);
+        }),
+      });
+      const manager = new ExportManager(client as never);
+
+      await Promise.all([
+        manager.exportCampaignNotes(actor as never, "notes"),
+        manager.exportCampaignNotes(actor as never, "notes"),
+      ]);
+
+      expect(vi.mocked(client.createCharacterJournal)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(client.updateCharacterJournal)).toHaveBeenCalledTimes(1);
     });
 
     it("skips the write when a different client is mid-sync", async () => {

@@ -192,6 +192,17 @@ export function parseRankedConsumable(demiplaneSlug: string): RankedConsumable |
   };
 }
 
+/**
+ * The Demiplane-side slug for an item engine. Class-kit items carry no
+ * `args.slug`, so fall back to the engine name
+ * (`tabula/item/<slug>-rm.eng`). Shared by the import (which stamps items)
+ * and the push (which matches queued changes back to engines) so both sides
+ * resolve the same slug for the same engine.
+ */
+export function rawEquipmentSlug(eng: { args?: { slug?: unknown } | null; name: string }): string {
+  return (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
+}
+
 export function normalizeEquipmentSlug(demiplaneSlug: string): string {
   const stripped = demiplaneSlug.replace(/-rm$/, "");
 

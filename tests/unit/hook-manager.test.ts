@@ -946,7 +946,7 @@ describe("HookManager", () => {
       };
     }
 
-    it("queues mapped detail fields, org play ID, deity, and languages", () => {
+    it("queues mapped detail fields, org play ID, and languages", () => {
       const actor = createDetailActor();
 
       queueAllDetailChanges(exportManager as never, actor as never);
@@ -964,27 +964,10 @@ describe("HookManager", () => {
       expect(exportManager.exportCampaignNotes).not.toHaveBeenCalled();
     });
 
-    it("prefers the embedded deity item name over the deity text field", () => {
+    it("never queues deity: it is build-derived, not a pushable field", () => {
       const actor = createDetailActor();
       actor.items = [{ type: "deity", name: "Sarenrae" }];
-      actor.system.details.deity.value = "stale-text";
-
-      queueAllDetailChanges(exportManager as never, actor as never);
-
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Sarenrae");
-    });
-
-    it("falls back to the deity text field when there is no deity item", () => {
-      const actor = createDetailActor();
-      actor.system.details.deity.value = "Gozreh";
-
-      queueAllDetailChanges(exportManager as never, actor as never);
-
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Gozreh");
-    });
-
-    it("does not queue a deity when neither an item nor text is present", () => {
-      const actor = createDetailActor();
+      actor.system.details.deity.value = "Sarenrae";
 
       queueAllDetailChanges(exportManager as never, actor as never);
 
@@ -1040,7 +1023,7 @@ describe("HookManager", () => {
   });
 
   describe("deity changes", () => {
-    it("queues the deity name when a deity item is added", () => {
+    it("does not queue anything when a deity item is added", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -1049,10 +1032,14 @@ describe("HookManager", () => {
 
       triggerHook("createItem", item);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Sarenrae");
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_personality_beliefs",
+        expect.anything()
+      );
     });
 
-    it("clears the deity when a deity item is removed", () => {
+    it("does not queue anything when a deity item is removed", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -1061,11 +1048,15 @@ describe("HookManager", () => {
 
       triggerHook("deleteItem", item);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "");
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_personality_beliefs",
+        expect.anything()
+      );
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
     });
 
-    it("queues the deity name from a manual text edit to the deity field", () => {
+    it("does not queue anything for a manual text edit to the deity field", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -1074,7 +1065,11 @@ describe("HookManager", () => {
 
       triggerHook("updateActor", actor, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_personality_beliefs", "Iomedae");
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_personality_beliefs",
+        expect.anything()
+      );
     });
 
     it("does not queue a deity change for non-deity item creation", () => {

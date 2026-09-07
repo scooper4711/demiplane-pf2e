@@ -68,7 +68,11 @@ let chunks = 0;
 for (const file of rawFiles) {
   const entries = JSON.parse(readFileSync(join(RAW_DIR, file), "utf8"));
   for (let i = 0; i < entries.length; i++) {
-    const converter = v8toIstanbul(entries[i].url, 0, { source, sourceMap });
+    // Pass the local bundle path, NOT the page URL: v8-to-istanbul resolves
+    // the map's relative sources against this path, and resolving against
+    // "http://localhost:…/dist/module.js" yields unresolvable
+    // "<cwd>/http:/localhost:…/src/…" keys in the report.
+    const converter = v8toIstanbul(BUNDLE, 0, { source, sourceMap });
     await converter.load();
     converter.applyCoverage(entries[i].functions);
     writeFileSync(join(TMP_DIR, `${file.replace(/\.json$/, "")}-${i}.json`), JSON.stringify(converter.toIstanbul()));
@@ -79,7 +83,7 @@ console.log(`e2e-coverage: converted ${chunks} chunk(s) from ${rawFiles.length} 
 
 execSync(`npx nyc merge ${TMP_DIR} ${join(REPORT_DIR, "coverage-merged.json")}`, { stdio: "inherit", cwd: ROOT });
 execSync(
-  `npx nyc report --temp-dir ${REPORT_DIR} --reporter=text --reporter=html --reporter=lcov --report-dir ${REPORT_DIR}`,
+  `npx nyc report --temp-dir ${REPORT_DIR} --reporter=text --reporter=html --reporter=lcov --report-dir ${REPORT_DIR} --exclude 'node_modules/**'`,
   { stdio: "inherit", cwd: ROOT },
 );
 rmSync(TMP_DIR, { recursive: true, force: true });

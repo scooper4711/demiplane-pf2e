@@ -7,6 +7,7 @@ import {
   generateSlugCandidates,
   normalizeEquipmentSlug,
   describeFeatSlot,
+  rawEquipmentSlug,
 } from "../../src/import/slug-utils.js";
 
 describe("toFoundrySlug", () => {
@@ -279,5 +280,21 @@ describe("describeFeatSlot", () => {
     expect(describeFeatSlot(undefined)).toBeUndefined();
     expect(describeFeatSlot("")).toBeUndefined();
     expect(describeFeatSlot("manual-sheet-drawer")).toBeUndefined();
+  });
+});
+
+describe("rawEquipmentSlug", () => {
+  it("prefers args.slug when present", () => {
+    expect(rawEquipmentSlug({ args: { slug: "longsword" }, name: "tabula/item/longsword-rm.eng" })).toBe("longsword");
+  });
+
+  it("falls back to the engine name for slug-less class-kit items", () => {
+    expect(rawEquipmentSlug({ args: { id: null }, name: "tabula/item/scimitar-rm.eng" })).toBe("scimitar-rm");
+    expect(rawEquipmentSlug({ args: null, name: "tabula/item/scimitar-rm.eng" })).toBe("scimitar-rm");
+  });
+
+  it("normalizes the fallback the same way as a real slug", () => {
+    const eng = { args: {}, name: "tabula/item/scimitar-rm.eng" };
+    expect(normalizeEquipmentSlug(rawEquipmentSlug(eng))).toBe("scimitar");
   });
 });
