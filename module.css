@@ -24,14 +24,14 @@
   width: 16px;
   height: 16px;
   vertical-align: middle;
-  background-image: url("assets/demiplane.ico");
+  background-image: url("assets/demiplane.png");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
 
 .demiplane-info-btn.has-sync-errors::before {
-  background-image: url("assets/demiplane-error.ico");
+  background-image: url("assets/demiplane-error.png");
 }
 
 /* Demiplane logo before the "Sync issues" heading inside the Demiplane dialog.
@@ -43,7 +43,7 @@
   height: 16px;
   margin-right: 5px;
   vertical-align: text-bottom;
-  background-image: url("assets/demiplane-error.ico");
+  background-image: url("assets/demiplane-error.png");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -57,14 +57,14 @@
   height: 18px;
   margin-right: 6px;
   vertical-align: middle;
-  background-image: url("assets/demiplane.ico");
+  background-image: url("assets/demiplane.png");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
 
 .demiplane-sync-dialog.has-sync-errors .window-title::before {
-  background-image: url("assets/demiplane-error.ico");
+  background-image: url("assets/demiplane-error.png");
 }
 
 /* Cap the dialog width so long issue text can't stretch the window across the
@@ -451,4 +451,48 @@
 
 .directory-item.actor > .demiplane-directory-icon:hover {
   filter: drop-shadow(0 0 3px var(--color-shadow-primary, rgb(0 0 0 / 50%)));
+}
+
+/* When the badge is showing its red error variant (directory-icon.ts swaps the
+   `src` to demiplane-error.png for unacknowledged sync issues), surround it
+   with a red glow that slowly pulses to draw the eye. Keyed off the `src` so it
+   stays a CSS-only concern — no state class is needed on the element.
+
+   The glow is a `box-shadow` on a circular element, not a `drop-shadow` of the
+   logo. The error PNG is a dark disc (transparent only at the square corners),
+   and `border-radius: 50%` rounds the badge to that disc, so the box-shadow
+   hugs the disc edge and reads as a solid, clearly-visible *circular* halo that
+   emanates straight from the icon. Zero spread keeps the red starting right at
+   the edge rather than pushed out into the background. Animating the shadow's
+   blur and alpha fades the glow in and out. */
+@keyframes demiplane-sync-error-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 3px 0 rgb(220 0 0 / 55%);
+  }
+
+  50% {
+    box-shadow: 0 0 7px 0 rgb(255 0 0 / 95%);
+  }
+}
+
+.directory-item.actor > .demiplane-directory-icon[src*="demiplane-error"] {
+  border-radius: 50%;
+  animation: demiplane-sync-error-pulse 2s ease-in-out infinite;
+}
+
+/* Hovering the pulsing error badge keeps a steady, stronger red glow so the
+   hover affordance still reads while the icon is animated. */
+.directory-item.actor > .demiplane-directory-icon[src*="demiplane-error"]:hover {
+  animation: none;
+  filter: none;
+  box-shadow: 0 0 7px 0 rgb(255 0 0 / 95%);
+}
+
+/* Respect a reduced-motion preference: keep the red glow, drop the pulsing. */
+@media (prefers-reduced-motion: reduce) {
+  .directory-item.actor > .demiplane-directory-icon[src*="demiplane-error"] {
+    animation: none;
+    box-shadow: 0 0 6px 0 rgb(255 0 0 / 85%);
+  }
 }
