@@ -30,6 +30,12 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Recorded Resolutions and the Full Mapping List](#22-recorded-resolutions-and-the-full-mapping-list)
 - [Foundry Type Strategy and Access Seams](#23-foundry-type-strategy-and-access-seams)
 - [Module Entrypoint Decomposition](#24-module-entrypoint-decomposition)
+- [Deity Is Never Pushed](#25-deity-is-never-pushed)
+- [Overlap-Safe Sync Tokens](#26-overlap-safe-sync-tokens)
+- [Journal Writes Without the Actor Pause](#27-journal-writes-without-the-actor-pause)
+- [Manual Push Waits for Sync Idle](#28-manual-push-waits-for-sync-idle)
+- [Overview Subtitle Preservation](#29-overview-subtitle-preservation)
+- [Shared Slug Derivation for Slug-Less Engines](#30-shared-slug-derivation-for-slug-less-engines)
 
 ---
 
@@ -587,3 +593,41 @@ The test is the same as elsewhere: centralize a cast when the same gap is hit fr
 | Constructor-inject everything into `module.ts` | Purest DI                                                       | Foundry owns instantiation (hooks fire on import); fights the platform lifecycle            |
 
 The hook-callback `(...args: unknown[]) => void` boundary casts and the module-API surface cast stay exactly as §23 describes — decomposition moved code, it did not change the type strategy.
+
+---
+
+## 25. Deity Is Never Pushed
+
+**Decision:** No push path — per-field hooks, item create/delete hooks, or full-state re-queue — ever writes the deity (`character_personality_beliefs`). The import side still reads it as a fallback.
+
+**Rationale:** Deity is build-derived: a cleric's deity comes from the class choice (the `tabula/deity/` engine), not from the Foundry text field or item. Pushing the local value could only write something the next import overwrites — and worse, deleting the deity item locally used to clear the remote value. Found live when a deity-text edit survived a push but vanished on re-import, which still resolved Sarenrae from the build.
+
+## 26. Overlap-Safe Sync Tokens
+
+**Decision:** `beginSyncPause` returns its token and `endSyncPause(actor, token)` removes exactly that token; the client-side record is a per-character set, not a single slot (§16's actor-flag array is unchanged).
+
+**Rationale:** A floating campaign-notes push and a manual push routinely overlap on one client. With single-slot bookkeeping, whichever `endSyncPause` ran second found an empty slot and removed nothing, stranding its token on the actor flag forever — after which every future flush took the defer path and reported fake success. Threading exact tokens makes overlapping syncs unload independently; a unit test begins two pauses and asserts each end clears only its own mark.
+
+## 27. Journal Writes Without the Actor Pause
+
+**Decision:** `exportCampaignNotes` takes no actor sync pause. A local per-character promise lock serializes our own concurrent journal writes instead.
+
+**Rationale:** A journal write touches no actor documents, so there is nothing for hooks to echo — but the pause suppressed hook queueing for the whole write, silently dropping real edits made concurrently. Field edits were rescued by the manual push's full-state re-queue, but item deletes (hook-queued only) were lost permanently. Racing a concurrent import/push is benign: the import reads journals best-effort, and an `updated` bump from the journal write falls through the push's benign conflict check (§17). Skipping when a _different_ client is mid-sync is retained.
+
+## 28. Manual Push Waits for Sync Idle
+
+**Decision:** `pushCharacterEngines` (the manual/API path behind `exportNow`) waits, bounded at 15s, for _any_ in-flight sync via `isSyncActive` — own overlapping syncs count as busy — and fails honestly on timeout instead of pushing through a busy window.
+
+**Rationale:** `flush` reports fake success when it defers, which is fine for the debounced path (it retries via re-arm) but a lie on the manual path, where there is no retry — and a following import suspends the buffered changes away entirely, turning a deferred push into total silent loss. Waiting out the usual one-to-two-second journal write makes the manual push actually land.
+
+## 29. Overview Subtitle Preservation
+
+**Decision:** Pushes pass the builder-maintained `formated_data` display blob (`{format: {name, class, level, avatar}, version}`) through untouched, and never construct it.
+
+**Rationale:** The character overview page renders "Lvl X Class" from `formated_data`, not from engines or columns (the `class` column is null even on never-pushed characters). Every push sent `formatedData: null`, wiping the subtitle until a builder save recomputed it — confirmed by comparing a pushed character's nulled blob against an unpushed one, then restoring it with a one-shot write and watching the subtitle return. Nothing the sync pushes feeds the blob (name/class/level/avatar all come from the builder), so pass-through is always correct. Requires `formated_data` in the API client's `fetchCharacterData`.
+
+## 30. Shared Slug Derivation for Slug-Less Engines
+
+**Decision:** Import and push resolve an item engine's Demiplane slug with one shared helper (`rawEquipmentSlug`: `args.slug`, falling back to the `tabula/item/<slug>-rm.eng` name).
+
+**Rationale:** Class-kit item engines carry no `args.slug`. The import side already fell back to the engine name when stamping items, but the push matched queued quantity/equipped/delete changes by `args.slug` only — so every push-side change to a class-kit item (e.g. Kyra's scimitar) was silently dropped at resolution. Sharing the derivation guarantees both sides resolve the same slug for the same engine.
