@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applyEquipment, applyCurrency } from "../../src/import/equipment-importer.js";
+import { getAllMappings, setMapping } from "../../src/slug-mapping.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
 describe("applyEquipment", () => {
@@ -67,6 +68,28 @@ describe("applyEquipment", () => {
 
     expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
+  });
+
+  // Resolved items must show as editable rows on the mapping screen so a GM can
+  // correct one that matched the wrong compendium entry — not just unmapped ones.
+  it("records the resolved equipment mapping keyed by the Demiplane slug", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "longsword-rm" },
+        demiplaneEngineId: "eng1",
+      },
+    ];
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    const mapping = getAllMappings("equipment")["longsword-rm"];
+    expect(mapping).toEqual({
+      uuid: "Compendium.pf2e.equipment-srd.Item.ls1",
+      name: "Longsword",
+    });
   });
 
   it("affixes a potency rune to its weapon instead of creating a separate item", async () => {
@@ -518,6 +541,107 @@ describe("applyEquipment", () => {
       const spell = (item.system as Record<string, unknown>).spell as { system: { slug: string } } | undefined;
       expect(spell?.system.slug).toBe("bloodspray-curse");
       expect(item.name).toBe("Wand of Bloodspray Curse (Rank 4)");
+    });
+
+    // Regression: a spell-bearing wand IS recorded as an equipment mapping (so a
+    // GM can correct the base item), and the carried-spell attach still runs when
+    // that mapping is hit on a later import — so the wand isn't left empty.
+    it("re-attaches the carried spell on a second import even after the base wand is mapped", async () => {
+      const packs = {
+        "pf2e.equipment-srd": createMockPack([
+          {
+            _id: "mw4",
+            name: "Magic Wand (4th-Rank Spell)",
+            system: { slug: "magic-wand-4th-rank-spell" },
+            type: "consumable",
+          },
+        ]),
+        "pf2e.spells-srd": createMockPack([
+          {
+            _id: "bc1",
+            name: "Bloodspray Curse",
+            system: { slug: "bloodspray-curse", level: { value: 4 } },
+            type: "spell",
+          },
+        ]),
+      };
+      const wandItem: DemiplaneEngineEntry = {
+        id: "wand-stream-id",
+        name: "tabula/item/magic-wand-4th-rank-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "magic-wand-4th-rank-rm" },
+        demiplaneEngineId: "facc6aa7-item",
+      };
+      const linkedSpell: DemiplaneEngineEntry = {
+        id: "spell-stream-id",
+        name: "tabula/spell/bloodspray-curse-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "bloodspray-curse-rm", sourceData: { engineID: "facc6aa7-item" }, parentSpellFeature: "wand" },
+        demiplaneEngineId: "s1",
+      };
+
+      // First import records the base wand as an equipment mapping.
+      installFoundryMocks(packs);
+      const firstActor = createMockActor();
+      await applyEquipment(firstActor as never, [wandItem, linkedSpell], makeSummary());
+      expect(getAllMappings("equipment")["magic-wand-4th-rank-rm"]).toEqual({
+        uuid: "Compendium.pf2e.equipment-srd.Item.mw4",
+        name: "Magic Wand (4th-Rank Spell)",
+      });
+
+      // Second import: fresh mocks reset the settings store, so re-seed the
+      // mapping the first import recorded to exercise the mapping-hit path. The
+      // spell must still be embedded rather than the bare mapped item returned.
+      installFoundryMocks(packs);
+      await setMapping("equipment", "magic-wand-4th-rank-rm", {
+        uuid: "Compendium.pf2e.equipment-srd.Item.mw4",
+        name: "Magic Wand (4th-Rank Spell)",
+      });
+      const secondActor = createMockActor();
+      await applyEquipment(secondActor as never, [wandItem, linkedSpell], makeSummary());
+
+      const item = secondActor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      const spell = (item.system as Record<string, unknown>).spell as { system: { slug: string } } | undefined;
+      expect(spell?.system.slug).toBe("bloodspray-curse");
+      expect(item.name).toBe("Wand of Bloodspray Curse (Rank 4)");
+    });
+
+    // A carried spell whose slug isn't in the compendium must be surfaced as an
+    // unmapped spell for the GM, not silently dropped leaving an empty item.
+    it("records a carried spell that fails to resolve as an unmapped spell", async () => {
+      installFoundryMocks({
+        "pf2e.equipment-srd": createMockPack([
+          {
+            _id: "mw4",
+            name: "Magic Wand (4th-Rank Spell)",
+            system: { slug: "magic-wand-4th-rank-spell" },
+            type: "consumable",
+          },
+        ]),
+        // Deliberately empty: the carried spell has no compendium match.
+        "pf2e.spells-srd": createMockPack([]),
+      });
+      const actor = createMockActor();
+      const wandItem: DemiplaneEngineEntry = {
+        id: "wand-stream-id",
+        name: "tabula/item/magic-wand-4th-rank-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "magic-wand-4th-rank-rm" },
+        demiplaneEngineId: "wand-item",
+      };
+      const linkedSpell: DemiplaneEngineEntry = {
+        id: "spell-stream-id",
+        name: "tabula/spell/nonexistent-spell.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "nonexistent-spell", sourceData: { engineID: "wand-item" }, parentSpellFeature: "wand" },
+        demiplaneEngineId: "spell1",
+      };
+      const summary = makeSummary();
+      await applyEquipment(actor as never, [wandItem, linkedSpell], summary);
+
+      expect(summary.unmapped).toContainEqual({ slug: "nonexistent-spell", kind: "spell" });
+      const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+      expect((item.system as Record<string, unknown>).spell).toBeUndefined();
     });
   });
 
