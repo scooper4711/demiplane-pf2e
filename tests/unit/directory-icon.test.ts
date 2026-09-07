@@ -153,7 +153,7 @@ describe("directory icon", () => {
     expect(entry.appended).toHaveLength(1);
     const icon = entry.appended[0];
     expect(icon.className).toBe("demiplane-directory-icon");
-    expect(icon.src).toBe("modules/demiplane-pf2e/assets/demiplane.ico");
+    expect(icon.src).toBe("modules/demiplane-pf2e/assets/demiplane.png");
   });
 
   it("does not add the icon to an actor without a characterId flag", () => {
