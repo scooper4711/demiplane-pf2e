@@ -12,6 +12,22 @@ import { resetImportIssues, addImportIssues, setUnmappedSlugs } from "./sync-iss
 export type { ExportResult };
 
 /**
+ * How long to keep the sync guard active AFTER an import's writes finish.
+ *
+ * Import creates/deletes items via createEmbeddedDocuments/deleteEmbeddedDocuments,
+ * but Foundry fires the resulting item hooks — and PF2e re-prepares derived data
+ * (which can itself delete/recreate embedded items) — on later ticks, after the
+ * import promise has already resolved. If the guard released the instant the
+ * import returned, one of those late `deleteItem` hooks would be seen as a user
+ * edit, queue an item delete, and the debounced push would DELETE the item on
+ * Demiplane. Holding the guard past the export debounce window closes that hole.
+ *
+ * Must be greater than the export debounce (2s) so any push a late hook schedules
+ * is still suppressed when it tries to flush.
+ */
+const SYNC_RELEASE_GRACE_MS = 5000;
+
+/**
  * The import side of the sync flows. Structural so tests can substitute a
  * fake; the real `ImportOrchestrator` satisfies it.
  */
@@ -73,9 +89,30 @@ export async function importLinkedCharacter(
     await addImportIssues(actor, summary.errors);
     return summary;
   } finally {
-    await endSyncPause(actor, syncToken);
-    deps.exportManager.resume(characterId);
+    // Release the guard AFTER a grace window, not immediately: the import's own
+    // item hooks and PF2e's post-import re-preparation fire on later ticks, and
+    // releasing now would let one of those late `deleteItem` events push a
+    // deletion to Demiplane. Scheduled (not awaited) so the import still returns
+    // promptly; the suspend ref-count and the sync token stay held meanwhile.
+    scheduleSyncRelease(actor, characterId, syncToken, deps.exportManager);
   }
+}
+
+/**
+ * Releases the import sync guard (`endSyncPause` + `exportManager.resume`) after
+ * {@link SYNC_RELEASE_GRACE_MS}, so item hooks the import triggers on later ticks
+ * remain suppressed and cannot push item deletions back to Demiplane.
+ */
+function scheduleSyncRelease(
+  actor: Actor,
+  characterId: string,
+  syncToken: string | undefined,
+  exportManager: ExportManager
+): void {
+  setTimeout(() => {
+    void endSyncPause(actor, syncToken);
+    exportManager.resume(characterId);
+  }, SYNC_RELEASE_GRACE_MS);
 }
 
 export async function exportLinkedCharacter(actor: Actor, deps: SyncFlowDeps): Promise<ExportResult> {
