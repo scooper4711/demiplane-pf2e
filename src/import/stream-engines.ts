@@ -46,15 +46,22 @@ export interface AddStaffSpellsModifier {
 }
 
 /**
- * A spell granted by a wand / special item. Generic scroll and wand items emit
- * only the rank and item type here — the actual spell is carried by a linked
- * `tabula/spell/*` engine, so `spell` is optional.
+ * A spell granted by a wand / special item.
+ *
+ * Two shapes occur:
+ * - A fixed-spell item (e.g. a Scroll of Glitterdust) names its `spell` and
+ *   `rank` inline; `freeSpell` is false.
+ * - A generic holder (e.g. Wand of Widening) or a generic ranked scroll/wand
+ *   sets `freeSpell` true and omits `spell` — the player-chosen spell, if any,
+ *   is carried by a linked `tabula/spell/*` engine instead.
+ * So `spell` is optional.
  */
 export interface AddSpecialItemSpellModifier {
   type: "add-special-item-spell";
   rank: string | number;
   spell?: string;
   itemType: string;
+  freeSpell?: boolean;
 }
 
 /** Spell-slot progression granted by a class engine. */

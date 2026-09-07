@@ -213,5 +213,37 @@ export function normalizeEquipmentSlug(demiplaneSlug: string): string {
       : `magic-wand-${ranked.ordinal}-rank-spell`;
   }
 
+  // Named specialty scrolls/wands (e.g. Wand of Widening) — Demiplane writes the
+  // rank tier as `-Nth-level-spell` or `-Nth-rank-rm`, while the compendium uses
+  // `-Nth-rank-spell` (or, for a few like Legerdemain, `-Nth-rank`). Canonicalize
+  // the tier to `-Nth-rank`; findBySlug tries the `-spell` variant too.
+  const named = stripped.replace(/-(\d+(?:st|nd|rd|th))-(?:level|rank)(?:-spell)?$/, "-$1-rank");
+  if (named !== stripped) return named;
+
   return EQUIPMENT_SLUG_NORMALIZATIONS[stripped] ?? stripped;
+}
+
+/**
+ * The English ordinal for a spell rank (1 → "1st", 3 → "3rd", 11 → "11th").
+ * Used to build the compendium slug of a generic ranked consumable.
+ */
+export function rankOrdinal(rank: number): string {
+  const mod100 = rank % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${rank}th`;
+  const suffix = { 1: "st", 2: "nd", 3: "rd" }[rank % 10] ?? "th";
+  return `${rank}${suffix}`;
+}
+
+/**
+ * The compendium slug of the generic ranked consumable that holds a spell of the
+ * given rank, e.g. `("scroll", 2)` → `scroll-of-2nd-rank-spell` and
+ * `("wand", 1)` → `magic-wand-1st-rank-spell`.
+ *
+ * The fallback for a fixed-spell scroll/wand (e.g. Scroll of Glitterdust) that
+ * has no dedicated compendium item: PF2e models it as this generic consumable
+ * carrying the spell.
+ */
+export function genericConsumableSlug(itemType: "scroll" | "wand", rank: number): string {
+  const ordinal = rankOrdinal(rank);
+  return itemType === "scroll" ? `scroll-of-${ordinal}-rank-spell` : `magic-wand-${ordinal}-rank-spell`;
 }

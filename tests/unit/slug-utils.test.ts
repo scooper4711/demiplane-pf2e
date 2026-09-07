@@ -8,6 +8,8 @@ import {
   normalizeEquipmentSlug,
   describeFeatSlot,
   rawEquipmentSlug,
+  rankOrdinal,
+  genericConsumableSlug,
 } from "../../src/import/slug-utils.js";
 
 describe("toFoundrySlug", () => {
@@ -248,6 +250,27 @@ describe("normalizeEquipmentSlug", () => {
   it("passes through unknown slugs", () => {
     expect(normalizeEquipmentSlug("half-plate-rm")).toBe("half-plate");
   });
+
+  it("canonicalizes named specialty scroll/wand rank tiers to -Nth-rank", () => {
+    // Demiplane writes the tier as -Nth-level-spell or -Nth-rank-rm; the
+    // compendium uses -Nth-rank(-spell). Normalize to a -Nth-rank core so
+    // findBySlug can match the real named item (not a generic wand).
+    expect(normalizeEquipmentSlug("wand-of-widening-9th-rank-rm")).toBe("wand-of-widening-9th-rank");
+    expect(normalizeEquipmentSlug("wand-of-spiritual-warfare-8th-level-spell")).toBe(
+      "wand-of-spiritual-warfare-8th-rank"
+    );
+    expect(normalizeEquipmentSlug("wand-of-thundering-echoes-8th-level-spell")).toBe(
+      "wand-of-thundering-echoes-8th-rank"
+    );
+    expect(normalizeEquipmentSlug("wand-of-legerdemain-9th-level-spell")).toBe("wand-of-legerdemain-9th-rank");
+    expect(normalizeEquipmentSlug("wand-of-the-snowfields-5th-level-spell")).toBe("wand-of-the-snowfields-5th-rank");
+    expect(normalizeEquipmentSlug("wand-of-the-snowfields-7th-level-spell")).toBe("wand-of-the-snowfields-7th-rank");
+  });
+
+  it("still maps the generic ranked consumables (not caught by the named-tier rule)", () => {
+    expect(normalizeEquipmentSlug("magic-scroll-6th-rank-rm")).toBe("scroll-of-6th-rank-spell");
+    expect(normalizeEquipmentSlug("magic-wand-4th-rank-rm")).toBe("magic-wand-4th-rank-spell");
+  });
 });
 
 describe("describeFeatSlot", () => {
@@ -296,5 +319,42 @@ describe("rawEquipmentSlug", () => {
   it("normalizes the fallback the same way as a real slug", () => {
     const eng = { args: {}, name: "tabula/item/scimitar-rm.eng" };
     expect(normalizeEquipmentSlug(rawEquipmentSlug(eng))).toBe("scimitar");
+  });
+});
+
+describe("rankOrdinal", () => {
+  it("uses st/nd/rd for 1-3", () => {
+    expect(rankOrdinal(1)).toBe("1st");
+    expect(rankOrdinal(2)).toBe("2nd");
+    expect(rankOrdinal(3)).toBe("3rd");
+  });
+
+  it("uses th for 4 and up", () => {
+    expect(rankOrdinal(4)).toBe("4th");
+    expect(rankOrdinal(9)).toBe("9th");
+    expect(rankOrdinal(10)).toBe("10th");
+  });
+
+  it("uses th for the 11-13 special case", () => {
+    expect(rankOrdinal(11)).toBe("11th");
+    expect(rankOrdinal(12)).toBe("12th");
+    expect(rankOrdinal(13)).toBe("13th");
+  });
+});
+
+describe("genericConsumableSlug", () => {
+  it("builds the ranked scroll slug", () => {
+    expect(genericConsumableSlug("scroll", 2)).toBe("scroll-of-2nd-rank-spell");
+    expect(genericConsumableSlug("scroll", 1)).toBe("scroll-of-1st-rank-spell");
+  });
+
+  it("builds the ranked wand slug", () => {
+    expect(genericConsumableSlug("wand", 7)).toBe("magic-wand-7th-rank-spell");
+    expect(genericConsumableSlug("wand", 1)).toBe("magic-wand-1st-rank-spell");
+  });
+
+  it("round-trips with normalizeEquipmentSlug for the generic Demiplane slugs", () => {
+    expect(genericConsumableSlug("scroll", 2)).toBe(normalizeEquipmentSlug("magic-scroll-2nd-rank-rm"));
+    expect(genericConsumableSlug("wand", 1)).toBe(normalizeEquipmentSlug("magic-wand-1st-rank-rm"));
   });
 });
