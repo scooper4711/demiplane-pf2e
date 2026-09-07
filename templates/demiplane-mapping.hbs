@@ -4,12 +4,19 @@
       Every Demiplane name and the Foundry item it resolved to. Drag an item onto a row to change a mapping,
       or open a section's browser to find one. Mappings apply to every character on the next import.
     </p>
-    {{#if anyUnmapped}}
-      <label class="only-unmapped-filter">
-        <input type="checkbox" class="only-unmapped-toggle" {{#if onlyUnmapped}}checked{{/if}} />
-        Show only unmapped items
-      </label>
-    {{/if}}
+    <div class="mapping-controls">
+      <div class="mapping-search">
+        <i class="fa-solid fa-magnifying-glass fa-fw"></i>
+        <input type="search" class="mapping-search-input" placeholder="Search names…"
+               aria-label="Search mappings by name" />
+      </div>
+      {{#if anyUnmapped}}
+        <label class="only-unmapped-filter">
+          <input type="checkbox" class="only-unmapped-toggle" {{#if onlyUnmapped}}checked{{/if}} />
+          Show only unmapped items
+        </label>
+      {{/if}}
+    </div>
   </div>
 
   <div class="mapping-scroll">

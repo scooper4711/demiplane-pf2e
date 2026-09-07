@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import {
+  applySearchFilter,
   browseAction,
   clearAction,
   collectSections,
@@ -11,6 +12,7 @@ import {
   openFinder,
   registerDemiplaneMappingTemplates,
   registerMappingSyncHook,
+  rowMatchesSearch,
 } from "../../src/demiplane-mapping-app.js";
 import { getAllMappings, registerSlugMappingSettings, setMapping, clearMapping } from "../../src/slug-mapping.js";
 import type { UnmappedSlug } from "../../src/import/types.js";
@@ -464,15 +466,21 @@ describe("mapping app rendering", () => {
     };
   }
 
-  function fakeHtml({ rows = [], checkbox = undefined, list = undefined } = {}) {
+  function fakeHtml({ rows = [], checkbox = undefined, list = undefined, search = undefined } = {}) {
     return {
       querySelectorAll: (sel) => (sel === ".mapping-row" ? rows : []),
       querySelector: (sel) => {
         if (sel === ".only-unmapped-toggle") return checkbox ?? null;
         if (sel === ".mapping-scroll") return list ?? null;
+        if (sel === ".mapping-search-input") return search ?? null;
         return null;
       },
     };
+  }
+
+  /** A search list whose querySelectorAll returns no rows/sections, so applySearchFilter is a no-op. */
+  function fakeSearchList() {
+    return { classList: { toggle: vi.fn() }, querySelectorAll: () => [] };
   }
 
   beforeEach(() => {
@@ -549,6 +557,37 @@ describe("mapping app rendering", () => {
     await row.listeners.drop({ preventDefault: vi.fn(), dataTransfer: null });
 
     expect(globalThis.ui.notifications.warn).not.toHaveBeenCalled();
+  });
+
+  it("wires the search box and filters on input", async () => {
+    const searchListeners = {};
+    const search = {
+      value: "",
+      addEventListener: vi.fn((type, fn) => {
+        searchListeners[type] = fn;
+      }),
+    };
+    const list = fakeSearchList();
+    const app = await openApp();
+
+    app._attachPartListeners("list", fakeHtml({ list, search }), {});
+    // Typing updates the persisted query and re-applies the filter.
+    search.value = "blink";
+    searchListeners.input();
+
+    expect(search.addEventListener).toHaveBeenCalledWith("input", expect.any(Function));
+
+    // The persisted query is restored onto the input on a later render.
+    const secondSearch = { value: "", addEventListener: vi.fn() };
+    app._attachPartListeners("list", fakeHtml({ list: fakeSearchList(), search: secondSearch }), {});
+    expect(secondSearch.value).toBe("blink");
+  });
+
+  it("skips the search box when its elements are absent", async () => {
+    const app = await openApp();
+    expect(() =>
+      app._attachPartListeners("list", fakeHtml({ search: { value: "", addEventListener: vi.fn() } }), {})
+    ).not.toThrow();
   });
 
   it("skips the filter toggle without its elements", async () => {
@@ -634,5 +673,109 @@ describe("mapping target resolution", () => {
     const ancestry = sectionFor("ancestry", await collectSections());
 
     expect(ancestry?.canBrowse).toBe(false);
+  });
+});
+
+describe("search filter", () => {
+  /**
+   * A minimal DOM-like row: `dataset.slug` and a `.foundry-name`/`.unknown`
+   * child, plus a `classList` recording toggles. Matches only the surface the
+   * search helpers read.
+   */
+  function fakeRow(slug: string, mappedName: string | null) {
+    const classes = new Set<string>();
+    return {
+      dataset: { slug },
+      classList: {
+        toggle: (cls: string, on: boolean) => (on ? classes.add(cls) : classes.delete(cls)),
+        contains: (cls: string) => classes.has(cls),
+      },
+      querySelector: (sel: string) =>
+        sel === ".foundry-name, .unknown" && mappedName !== null ? { textContent: mappedName } : null,
+    };
+  }
+
+  describe("rowMatchesSearch", () => {
+    it("matches everything when the query is blank", () => {
+      const row = fakeRow("blink", "Blink") as unknown as HTMLElement;
+      expect(rowMatchesSearch(row, "")).toBe(true);
+      expect(rowMatchesSearch(row, "   ")).toBe(true);
+    });
+
+    it("matches on the Demiplane slug, case-insensitively", () => {
+      const row = fakeRow("bloodspray-curse-rm", "Bloodspray Curse") as unknown as HTMLElement;
+      expect(rowMatchesSearch(row, "BLOODSPRAY")).toBe(true);
+      expect(rowMatchesSearch(row, "curse-rm")).toBe(true);
+    });
+
+    it("matches on the mapped Foundry name", () => {
+      const row = fakeRow("magic-wand-4th-rank-rm", "Wand of Bloodspray Curse (Rank 4)") as unknown as HTMLElement;
+      expect(rowMatchesSearch(row, "rank 4")).toBe(true);
+    });
+
+    it("does not match when neither slug nor name contains the query", () => {
+      const row = fakeRow("longsword", "Longsword") as unknown as HTMLElement;
+      expect(rowMatchesSearch(row, "dagger")).toBe(false);
+    });
+
+    it("tolerates a row with no mapped-name element", () => {
+      const row = fakeRow("unmapped-thing", null) as unknown as HTMLElement;
+      expect(rowMatchesSearch(row, "unmapped")).toBe(true);
+      expect(rowMatchesSearch(row, "nope")).toBe(false);
+    });
+  });
+
+  describe("applySearchFilter", () => {
+    /** A section holding rows; hides via `search-empty` when no row matches. */
+    function fakeSection(rows: ReturnType<typeof fakeRow>[]) {
+      const classes = new Set<string>();
+      return {
+        classList: {
+          toggle: (cls: string, on: boolean) => (on ? classes.add(cls) : classes.delete(cls)),
+          contains: (cls: string) => classes.has(cls),
+        },
+        querySelector: (sel: string) =>
+          sel === ".mapping-row:not(.search-hidden)"
+            ? (rows.find((r) => !r.classList.contains("search-hidden")) ?? null)
+            : null,
+      };
+    }
+
+    function fakeList(rows: ReturnType<typeof fakeRow>[], sections: ReturnType<typeof fakeSection>[]) {
+      return {
+        querySelectorAll: (sel: string) => {
+          if (sel === ".mapping-row") return rows;
+          if (sel === ".inventory-list") return sections;
+          return [];
+        },
+      };
+    }
+
+    it("hides non-matching rows and collapses sections left empty", () => {
+      const match = fakeRow("blink", "Blink");
+      const miss = fakeRow("longsword", "Longsword");
+      const emptySection = fakeSection([miss]);
+      const list = fakeList([match, miss], [fakeSection([match]), emptySection]);
+
+      applySearchFilter(list as unknown as HTMLElement, "blink");
+
+      expect(match.classList.contains("search-hidden")).toBe(false);
+      expect(miss.classList.contains("search-hidden")).toBe(true);
+      expect(emptySection.classList.contains("search-empty")).toBe(true);
+    });
+
+    it("shows every row and section again when the query is cleared", () => {
+      const a = fakeRow("blink", "Blink");
+      const b = fakeRow("longsword", "Longsword");
+      const section = fakeSection([a, b]);
+      const list = fakeList([a, b], [section]);
+
+      applySearchFilter(list as unknown as HTMLElement, "blink");
+      applySearchFilter(list as unknown as HTMLElement, "");
+
+      expect(a.classList.contains("search-hidden")).toBe(false);
+      expect(b.classList.contains("search-hidden")).toBe(false);
+      expect(section.classList.contains("search-empty")).toBe(false);
+    });
   });
 });

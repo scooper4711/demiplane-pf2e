@@ -148,6 +148,33 @@
   padding: 0 var(--space-4, 0.25rem) var(--space-8, 0.5rem);
 }
 
+/* Search box + unmapped toggle share a row, search taking the free space. */
+.demiplane-mapping .mapping-controls {
+  align-items: center;
+  display: flex;
+  gap: var(--space-12, 0.75rem);
+  padding: 0 var(--space-4, 0.25rem) var(--space-8, 0.5rem);
+}
+
+.demiplane-mapping .mapping-search {
+  align-items: center;
+  color: var(--color-pf-alternate);
+  display: flex;
+  flex: 1;
+  gap: var(--space-4, 0.25rem);
+}
+
+.demiplane-mapping .mapping-search-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The unmapped toggle sits inside the controls row now, so drop its own padding. */
+.demiplane-mapping .mapping-controls .only-unmapped-filter {
+  flex: 0 0 auto;
+  padding: 0;
+}
+
 /* The scroll region holds every kind section. `min-height: 0` lets this flex
    child shrink below its content height, which is what enables the scrollbar. */
 #demiplane-mapping .mapping-scroll {
@@ -171,6 +198,16 @@
 }
 
 .demiplane-mapping .mapping-scroll.only-unmapped .inventory-list:not([data-has-unmapped]) {
+  display: none;
+}
+
+/* Search filter: hide rows that don't match, and collapse a section once the
+   search has hidden every row in it. Applied in JS via these classes. */
+.demiplane-mapping .mapping-scroll .mapping-row.search-hidden {
+  display: none;
+}
+
+.demiplane-mapping .mapping-scroll .inventory-list.search-empty {
   display: none;
 }
 

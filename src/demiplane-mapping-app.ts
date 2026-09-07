@@ -86,6 +86,41 @@ export function isAcceptedType(kind: SlugKind, itemType: string): boolean {
   return EXPECTED_TYPES[kind].includes(itemType);
 }
 
+/** Class marking a row hidden by the search filter (distinct from the unmapped filter). */
+const SEARCH_HIDDEN_CLASS = "search-hidden";
+/** Class marking a section with no rows left after the search filter, so it collapses. */
+const SEARCH_EMPTY_CLASS = "search-empty";
+
+/**
+ * Whether a row's searchable text contains the query. Matches the Demiplane slug
+ * (`data-slug`) and the mapped Foundry item name (`.foundry-name` / `.unknown`),
+ * case-insensitively. An empty query matches everything.
+ */
+export function rowMatchesSearch(row: HTMLElement, query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+
+  const slug = (row.dataset.slug ?? "").toLowerCase();
+  const mappedName = (row.querySelector(".foundry-name, .unknown")?.textContent ?? "").toLowerCase();
+  return slug.includes(needle) || mappedName.includes(needle);
+}
+
+/**
+ * Applies the search query to the list: hides non-matching rows, then hides any
+ * section left with no visible rows so the list collapses to just the matches.
+ * A pure DOM operation (no re-render) so typing keeps scroll position and focus.
+ */
+export function applySearchFilter(list: HTMLElement, query: string): void {
+  for (const row of Array.from(list.querySelectorAll<HTMLElement>(".mapping-row"))) {
+    row.classList.toggle(SEARCH_HIDDEN_CLASS, !rowMatchesSearch(row, query));
+  }
+
+  for (const section of Array.from(list.querySelectorAll<HTMLElement>(".inventory-list"))) {
+    const hasVisibleRow = section.querySelector(`.mapping-row:not(.${SEARCH_HIDDEN_CLASS})`) !== null;
+    section.classList.toggle(SEARCH_EMPTY_CLASS, !hasVisibleRow);
+  }
+}
+
 /**
  * The app class is built on first use rather than at import time: extending a
  * Foundry global requires that global to exist, and this module is imported
@@ -142,6 +177,12 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
      */
     #onlyUnmapped: boolean | undefined = undefined;
 
+    /**
+     * The current search text, preserved across the re-renders that follow each
+     * drop or clear so a filtered view isn't reset by editing a mapping.
+     */
+    #searchQuery = "";
+
     protected override async _prepareContext(_options: unknown): Promise<Record<string, unknown>> {
       const sections = await collectSections();
       const anyUnmapped = sections.some((section) => section.hasUnmapped);
@@ -165,6 +206,26 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
       }
 
       this.#attachFilterToggle(html);
+      this.#attachSearch(html);
+    }
+
+    /**
+     * Wires the search box to a live row filter. Like the unmapped toggle, this
+     * shows/hides rows via a class rather than re-rendering, so scroll position
+     * and focus are kept while typing. The persisted query is re-applied on each
+     * render (after a drop or clear) so the filtered view survives edits.
+     */
+    #attachSearch(html: HTMLElement): void {
+      const input = html.querySelector<HTMLInputElement>(".mapping-search-input");
+      const list = html.querySelector<HTMLElement>(".mapping-scroll");
+      if (!input || !list) return;
+
+      input.value = this.#searchQuery;
+      applySearchFilter(list, this.#searchQuery);
+      input.addEventListener("input", () => {
+        this.#searchQuery = input.value;
+        applySearchFilter(list, input.value);
+      });
     }
 
     /**
