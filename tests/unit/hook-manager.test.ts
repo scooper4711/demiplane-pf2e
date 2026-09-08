@@ -198,8 +198,14 @@ describe("HookManager", () => {
       });
     }
 
-    /** Let the async confirm-then-queue microtask settle. */
-    const settle = () => Promise.resolve();
+    /**
+     * Let the async confirm-then-queue chain settle. The delete path awaits
+     * across a couple of nested async hops (confirmAndQueueDelete →
+     * confirmHardDelete → DialogV2.wait), so flush several microtasks.
+     */
+    const settle = async () => {
+      for (let i = 0; i < 5; i++) await Promise.resolve();
+    };
 
     it("prompts, then queues deletion using the item's demiplane slug when confirmed", async () => {
       const manager = new HookManager(exportManager as never);
@@ -219,7 +225,7 @@ describe("HookManager", () => {
       expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "armored-coat");
     });
 
-    it("soft-deletes by pushing quantity 0 instead of removing the item when enabled", async () => {
+    it("soft-deletes by pushing quantity 0 with no prompt when enabled", async () => {
       softDeleteEnabled = true;
       const manager = new HookManager(exportManager as never);
       manager.register();
@@ -234,7 +240,8 @@ describe("HookManager", () => {
       triggerHook("deleteItem", item);
       await settle();
 
-      expect(dialogConfirm).toHaveBeenCalledTimes(1);
+      // Soft-delete is reversible (no Demiplane data loss), so it must not prompt.
+      expect(dialogConfirm).not.toHaveBeenCalled();
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
       expect(exportManager.queueItemChange).toHaveBeenCalledWith(
         actor,
