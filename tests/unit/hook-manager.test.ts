@@ -903,6 +903,72 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
 
+    /** An actor whose `items.get` resolves a single backpack container by id. */
+    function actorWithContainer() {
+      const backpack = {
+        id: "backpack-foundry-id",
+        type: "backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm" } },
+      };
+      return {
+        ...createMockActor(),
+        items: { get: (id: string) => (id === backpack.id ? backpack : undefined) },
+      };
+    }
+
+    it("queues a container move into a container by the container's demiplane slug", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      triggerHook("updateItem", item, { system: { containerId: "backpack-foundry-id" } });
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "dagger",
+        undefined,
+        "container",
+        { containerSlug: "backpack-rm" },
+        "weapon"
+      );
+    });
+
+    it("queues a move to the top level as a null container", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      // containerId cleared (moved out of a container).
+      triggerHook("updateItem", item, { system: { containerId: null } });
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "dagger",
+        undefined,
+        "container",
+        { containerSlug: null },
+        "weapon"
+      );
+    });
+
+    it("does not queue a container change when containerId is untouched", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      triggerHook("updateItem", item, { system: { quantity: 2 } });
+
+      const containerCalls = exportManager.queueItemChange.mock.calls.filter((c: unknown[]) => c[3] === "container");
+      expect(containerCalls).toHaveLength(0);
+    });
+
     it("does not queue for unlinked actors", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();

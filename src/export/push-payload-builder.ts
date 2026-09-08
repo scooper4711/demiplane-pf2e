@@ -2,7 +2,7 @@ import { normalizeEquipmentSlug, rawEquipmentSlug } from "../import/slug-utils.j
 import { debugLog } from "../import/debug-log.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
-import type { CastChange, EquippedState, PendingChange, PendingItemChange } from "./change-buffer.js";
+import type { CastChange, ContainerChange, EquippedState, PendingChange, PendingItemChange } from "./change-buffer.js";
 
 interface CharacterMetadata {
   name?: string | undefined;
@@ -26,6 +26,22 @@ export interface FetchedCharacter {
 interface ResolvedItemChange {
   change: PendingItemChange;
   demiplaneId: string;
+}
+
+/**
+ * Finds the `tabula/item` engine matching a Demiplane/equipment slug. Class-kit
+ * items carry no `args.slug`, so fall back to the engine name — exactly like the
+ * import side does when stamping items. Shared by item-change resolution and
+ * container-target resolution.
+ */
+function findItemEngineBySlug(engines: CharacterData["engines"], slug: string): CustomEngine | undefined {
+  const normalized = normalizeEquipmentSlug(slug);
+  return engines.find(
+    (e) =>
+      e.type === "DemiplaneEngine" &&
+      e.name.startsWith("tabula/item/") &&
+      normalizeEquipmentSlug(rawEquipmentSlug(e)) === normalized
+  ) as CustomEngine | undefined;
 }
 
 /**
@@ -164,12 +180,7 @@ export class PushPayloadBuilder {
     const resolved: ResolvedItemChange[] = [];
     for (const itemChange of itemChanges.values()) {
       const matchSlug = itemChange.demiplaneSlug ?? itemChange.itemSlug;
-      const itemEngine = fetched.engines.find((e) => {
-        if (e.type !== "DemiplaneEngine" || !e.name.startsWith("tabula/item/")) return false;
-        // Class-kit items carry no args.slug — fall back to the engine name,
-        // exactly like the import side does when stamping items.
-        return normalizeEquipmentSlug(rawEquipmentSlug(e)) === normalizeEquipmentSlug(matchSlug);
-      });
+      const itemEngine = findItemEngineBySlug(fetched.engines, matchSlug);
       if (!itemEngine) continue;
       resolved.push({ change: itemChange, demiplaneId: itemEngine.demiplaneEngineId });
     }
@@ -217,9 +228,60 @@ export class PushPayloadBuilder {
         }
       } else if (itemChange.changeType === "equipped") {
         engines = this.applyEquippedEngine(engines, itemChange, demiplaneId);
+      } else if (itemChange.changeType === "container") {
+        engines = this.applyContainerEngine(engines, itemChange, demiplaneId);
       }
     }
     return engines;
+  }
+
+  /**
+   * Reflects a container move: the moved item's `<itemId>-container` custom
+   * engine holds the parent container's engine id (the same representation the
+   * importer reads). Moving into a container creates or updates that engine;
+   * moving to the top level removes it. A move whose target container can't be
+   * resolved to an engine is skipped rather than writing a dangling link.
+   */
+  private applyContainerEngine(
+    engines: CustomEngine[],
+    itemChange: PendingItemChange,
+    demiplaneId: string
+  ): CustomEngine[] {
+    const { containerSlug } = itemChange.value as ContainerChange;
+    const engineName = `${demiplaneId}-container`;
+    const existing = findCustomEngineByName(engines, engineName);
+
+    if (containerSlug === null) {
+      // Moved out to the top level: drop the container link if present.
+      if (!existing) return engines;
+      debugLog(`[push] container: ${itemChange.itemSlug} moved to top level (removed ${engineName})`);
+      return engines.filter((e) => e !== existing);
+    }
+
+    const containerEngine = findItemEngineBySlug(engines, containerSlug);
+    if (!containerEngine) {
+      debugLog(`[push] container: target "${containerSlug}" for ${itemChange.itemSlug} not found; skipping`);
+      return engines;
+    }
+    const containerId = containerEngine.demiplaneEngineId;
+
+    debugLog(`[push] container: ${itemChange.itemSlug} → ${containerSlug} (${engineName}=${containerId})`);
+    if (existing) {
+      return engines.map((e) => (e === existing ? { ...e, value: containerId } : e));
+    }
+    return [
+      ...engines,
+      {
+        id: `custom_${engineName}`,
+        name: engineName,
+        value: containerId,
+        type: "CustomDemiplaneEngine",
+        saveType: "CharacterSheet",
+        storeType: "override",
+        demiplaneEngineId: crypto.randomUUID(),
+        args: { id: null, parentEngine: demiplaneId },
+      },
+    ];
   }
 
   /**
@@ -242,7 +304,11 @@ export class PushPayloadBuilder {
       }
       // Remove any custom engine owned by this item's engine id.
       const name = e.name ?? "";
-      return name !== `${demiplaneId}--quantity` && name !== `${demiplaneId}-is-equipped`;
+      return (
+        name !== `${demiplaneId}--quantity` &&
+        name !== `${demiplaneId}-is-equipped` &&
+        name !== `${demiplaneId}-container`
+      );
     });
 
     debugLog(

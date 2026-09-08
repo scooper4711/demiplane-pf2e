@@ -9,6 +9,7 @@ import { isClientElectedWriter } from "./sync-election.js";
 import {
   ChangeBuffer,
   type CastChange,
+  type ContainerChange,
   type EquippedState,
   type ItemChangeType,
   type PendingChange,
@@ -34,6 +35,7 @@ function isWritingEnabled(): boolean {
 
 export type {
   CastChange,
+  ContainerChange,
   EquippedState,
   ItemChangeType,
   PendingChange,
@@ -116,7 +118,7 @@ export class ExportManager {
     itemSlug: string,
     demiplaneSlug: string | undefined,
     changeType: ItemChangeType,
-    value: number | string | EquippedState | CastChange,
+    value: number | string | EquippedState | CastChange | ContainerChange,
     itemType?: string,
     edited?: boolean
   ): void {
