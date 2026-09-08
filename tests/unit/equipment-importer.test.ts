@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applyEquipment, applyCurrency } from "../../src/import/equipment-importer.js";
-import { getAllMappings, setMapping } from "../../src/slug-mapping.js";
+import { applyCraftingFormulas } from "../../src/import/crafting-formulas.js";
+import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/slug-mapping.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
 
 describe("applyEquipment", () => {
@@ -1193,6 +1194,113 @@ describe("applyCurrency", () => {
     const summary = makeSummary();
     await applyCurrency(actor as never, engines, summary);
 
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyCraftingFormulas", () => {
+  beforeEach(() => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        {
+          _id: "aa1",
+          name: "Ablative Armor Plating (Lesser)",
+          system: { slug: "ablative-armor-plating" },
+          type: "equipment",
+        },
+        { _id: "ls1", name: "Longsword", system: { slug: "longsword" }, type: "weapon" },
+      ]),
+    });
+    registerSlugMappingSettings();
+  });
+
+  function makeSummary(): ImportSummary {
+    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+  }
+
+  function formulaEngine(slug: string, name = ""): DemiplaneEngineEntry {
+    return {
+      id: `f-${slug}`,
+      name: `tabula/item/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: { slug, name, sourceRow: "manual-sheet-drawer", metaItemType: "formula" },
+      demiplaneEngineId: `eng-${slug}`,
+    };
+  }
+
+  /** The formulas written by the last actor.update call, if any. */
+  function writtenFormulas(actor: ReturnType<typeof createMockActor>): Array<{ uuid: string }> | undefined {
+    const call = actor.update.mock.calls.find(
+      (c: unknown[]) => (c[0] as Record<string, unknown>)["system.crafting.formulas"] !== undefined
+    );
+    return call
+      ? ((call[0] as Record<string, unknown>)["system.crafting.formulas"] as Array<{ uuid: string }>)
+      : undefined;
+  }
+
+  it("records a resolved formula on system.crafting.formulas and not as an item", async () => {
+    const actor = createMockActor();
+    const summary = makeSummary();
+    // Demiplane sends the base slug; the compendium item is a tiered variant.
+    await applyCraftingFormulas(
+      actor as never,
+      [formulaEngine("ablative-armor-plating", "Ablative Armor Plating")],
+      summary
+    );
+
+    expect(writtenFormulas(actor)).toEqual([{ uuid: "Compendium.pf2e.equipment-srd.Item.aa1" }]);
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+    expect(summary.log.some((l) => l.includes("formulas: 1"))).toBe(true);
+  });
+
+  it("resolves via a GM mapping when one exists", async () => {
+    await setMapping("equipment", "custom-formula-rm", {
+      uuid: "Compendium.pf2e.equipment-srd.Item.ls1",
+      name: "Longsword",
+    });
+    const actor = createMockActor();
+    await applyCraftingFormulas(actor as never, [formulaEngine("custom-formula-rm")], makeSummary());
+
+    expect(writtenFormulas(actor)).toEqual([{ uuid: "Compendium.pf2e.equipment-srd.Item.ls1" }]);
+  });
+
+  it("merges with existing formulas, deduping by uuid", async () => {
+    const actor = createMockActor();
+    (actor.system as Record<string, unknown>).crafting = {
+      formulas: [
+        { uuid: "Compendium.pf2e.equipment-srd.Item.existing" },
+        { uuid: "Compendium.pf2e.equipment-srd.Item.aa1" },
+      ],
+    };
+    await applyCraftingFormulas(actor as never, [formulaEngine("ablative-armor-plating")], makeSummary());
+
+    const written = writtenFormulas(actor);
+    // The already-present aa1 isn't duplicated; the pre-existing entry is kept.
+    expect(written).toEqual([
+      { uuid: "Compendium.pf2e.equipment-srd.Item.existing" },
+      { uuid: "Compendium.pf2e.equipment-srd.Item.aa1" },
+    ]);
+  });
+
+  it("records an unresolvable formula as unmapped equipment and writes nothing", async () => {
+    const actor = createMockActor();
+    const summary = makeSummary();
+    await applyCraftingFormulas(actor as never, [formulaEngine("unknown-formula-rm")], summary);
+
+    expect(summary.unmapped).toEqual([{ slug: "unknown-formula-rm", kind: "equipment" }]);
+    expect(actor.update).not.toHaveBeenCalled();
+  });
+
+  it("does nothing when there are no formula engines", async () => {
+    const actor = createMockActor();
+    await applyCraftingFormulas(actor as never, [], makeSummary());
+    expect(actor.update).not.toHaveBeenCalled();
+  });
+
+  it("is not imported as inventory by applyEquipment", async () => {
+    const actor = createMockActor();
+    await applyEquipment(actor as never, [formulaEngine("ablative-armor-plating")], makeSummary());
+    // A formula engine must never become an inventory item.
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
   });
 });

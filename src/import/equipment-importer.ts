@@ -2,6 +2,7 @@ import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import {
   genericConsumableSlug,
+  isFormulaEngine,
   isGrantedByElement,
   normalizeEquipmentSlug,
   parseRankedConsumable,
@@ -233,7 +234,7 @@ function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemTy
   };
 }
 
-function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | undefined {
+export function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | undefined {
   const exact = equipIndex.find((e) => e.system?.slug === slug);
   if (exact) return exact;
 
@@ -293,11 +294,16 @@ function skipElementGrantedItem(eng: DemiplaneEngineEntry): boolean {
 /**
  * The item engines this importer should create as inventory: `tabula/item`
  * engines, minus those another element grants (which Foundry creates itself; see
- * {@link skipElementGrantedItem}).
+ * {@link skipElementGrantedItem}) and minus crafting formulas (which are recorded
+ * as known formulas by {@link applyCraftingFormulas}, not created as items).
  */
 function collectImportableItemEngines(engines: DemiplaneEngineEntry[]): DemiplaneEngineEntry[] {
   return engines.filter(
-    (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/") && !skipElementGrantedItem(e)
+    (e) =>
+      e.type === "DemiplaneEngine" &&
+      e.name.startsWith("tabula/item/") &&
+      !isFormulaEngine(e) &&
+      !skipElementGrantedItem(e)
   );
 }
 
