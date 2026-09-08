@@ -26,7 +26,6 @@ import { applyBiography } from "./biography-importer.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
 import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
-import { applyItemSpells } from "./item-spell-resolver.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
 
 /** Shared state threaded through every phase of a single import. */
@@ -345,7 +344,6 @@ export class PostProcessingPhase implements ImportPhase {
     await applyCurrency(actor, ctx.engines, ctx.summary);
     await applySpells(actor, ctx.engines, ctx.summary);
     await applyFeatureGrantedSpells(actor, ctx.engines, ctx.summary, ctx.cacheEngineIds);
-    await applyItemSpells(actor, ctx.engines, ctx.summary);
     await this.syncSessionState(actor, ctx.engines);
   }
 

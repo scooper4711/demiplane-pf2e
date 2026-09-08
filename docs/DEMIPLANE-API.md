@@ -623,7 +623,7 @@ this endpoint, so this is not a bypass of an existing method — it is a gap. If
 the goal is "one client for all Demiplane access," stream-engines support would
 need to be added to the client first. Until then this is the sanctioned place
 for stream-engines access; the resolvers
-(`spell-slot-resolver.ts`, `item-spell-resolver.ts`, `feature-spell-resolver.ts`)
+(`spell-slot-resolver.ts`, `feature-spell-resolver.ts`)
 correctly funnel through it rather than calling `fetch` themselves.
 
 ### Summary for cleanup

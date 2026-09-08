@@ -47,8 +47,7 @@ graph TD
         SpellImp["spell-importer<br/>Spellcasting Entries"]
         SpellSlot["spell-slot-resolver<br/>Slot Progression"]
         FeatSpell["feature-spell-resolver<br/>Focus/Innate Spells"]
-        ItemSpell["item-spell-resolver<br/>Staff/Wand Spells"]
-        EquipImp["equipment-importer<br/>Items + Containers"]
+        EquipImp["equipment-importer<br/>Items + Containers + Carried Spells"]
         AttrImp["attribute-language-importer<br/>Boosts + Skills + Languages"]
         BioImp["biography-importer<br/>Bio Fields + Deity"]
         Phases["phases.ts<br/>ImportPhase Pipeline"]
@@ -306,10 +305,6 @@ classDiagram
         +applyFeatureGrantedSpells(actor, engines, level): Promise~void~
     }
 
-    class ItemSpellResolver {
-        +applyItemSpells(actor, engines): Promise~void~
-    }
-
     ImportOrchestrator --> DemiplaneClient : fetches data
     ImportOrchestrator --> ChoiceSetHandler : auto-resolves choices
     ChoiceSetHandler --> ChoiceMatchers : delegates strategy matching
@@ -453,7 +448,6 @@ sequenceDiagram
         IO->>Act: applyEquipment + applyCurrency
         IO->>SE: applySpells (fetches slot data)
         IO->>SE: applyFeatureGrantedSpells
-        IO->>SE: applyItemSpells
         IO->>Act: syncSessionState (HP, hero points)
     end
 
@@ -564,9 +558,8 @@ src/
 │   ├── spell-engines.ts           Spell engine identification helpers
 │   ├── spell-slot-resolver.ts     Fetches slot progression from stream-engines
 │   ├── feature-spell-resolver.ts  Focus/innate spells from class features
-│   ├── item-spell-resolver.ts     Staff/wand spells from items
 │   │
-│   ├── equipment-importer.ts      Equipment + containers + carry state
+│   ├── equipment-importer.ts      Equipment + containers + carry state + carried spells
 │   ├── attribute-language-importer.ts  Boosts, skills, languages
 │   └── biography-importer.ts      Biography fields, deity, organized play
 │
@@ -604,32 +597,28 @@ graph TD
     FSR --> |"POST"| SE
     FSR --> CR
 
-    PH --> |"4c. item spells"| ISR[item-spell-resolver]
-    ISR --> |"POST"| SE
-    ISR --> CR
-
-    PH --> |"4d. equipment"| EI[equipment-importer]
+    PH --> |"4c. equipment (+ carried spells)"| EI[equipment-importer]
     EI --> CR
 
-    PH --> |"4e. attributes"| ALI[attribute-language-importer]
-    PH --> |"4f. biography"| BI[biography-importer]
+    PH --> |"4d. attributes"| ALI[attribute-language-importer]
+    PH --> |"4e. biography"| BI[biography-importer]
 ```
 
 ### Import Phase Order
 
-| Phase | Component               | What It Does                                                                                              |
-| ----- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| 1     | `ImportOrchestrator`    | Fetch engines, stamp `lastUpdated`/`engineSig` flags                                                      |
-| 2     | `ChoiceSetHandler`      | Install monkey-patch for auto-selection                                                                   |
-| 3     | `LoreItemsPhase`        | Create lore items (must precede ancestry/class)                                                           |
-| 4     | `SequentialItemsPhase`  | Sequential: ancestry → heritage → background → class                                                      |
-| 5     | `ResolveGrantsPhase`    | Resolve pending native grants; exclude from batch                                                         |
-| 6     | `BatchItemsPhase`       | Batch: all feats + equipment                                                                              |
-| 7     | `PostProcessingPhase`   | Identity, boosts, skills, languages, bio, equipment, currency, spells, feature/item spells, session state |
-| 8     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                         |
-| 9     | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                                    |
-| 10    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                          |
-| 11    | `ImportOrchestrator`    | Import "Campaign" journal → `biography.campaignNotes` (needs no monkey-patch; runs after uninstall)       |
+| Phase | Component               | What It Does                                                                                         |
+| ----- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| 1     | `ImportOrchestrator`    | Fetch engines, stamp `lastUpdated`/`engineSig` flags                                                 |
+| 2     | `ChoiceSetHandler`      | Install monkey-patch for auto-selection                                                              |
+| 3     | `LoreItemsPhase`        | Create lore items (must precede ancestry/class)                                                      |
+| 4     | `SequentialItemsPhase`  | Sequential: ancestry → heritage → background → class                                                 |
+| 5     | `ResolveGrantsPhase`    | Resolve pending native grants; exclude from batch                                                    |
+| 6     | `BatchItemsPhase`       | Batch: all feats + equipment                                                                         |
+| 7     | `PostProcessingPhase`   | Identity, boosts, skills, languages, bio, equipment, currency, spells, feature spells, session state |
+| 8     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                    |
+| 9     | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                               |
+| 10    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                     |
+| 11    | `ImportOrchestrator`    | Import "Campaign" journal → `biography.campaignNotes` (needs no monkey-patch; runs after uninstall)  |
 
 The `ImportPhase` pipeline steps (3–8) are implemented in `src/import/phases.ts`
 and driven in order by `ImportOrchestrator.importCharacter` inside its

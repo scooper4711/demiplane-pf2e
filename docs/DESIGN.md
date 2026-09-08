@@ -214,13 +214,12 @@ The wrap is only live during a user-initiated import, so a hard dependency is di
 
 ---
 
-## 8. Three-Resolver Spell Architecture
+## 8. Two-Resolver Spell Architecture
 
-**Decision:** Spell import is split into three independent resolvers, each handling a different spell source:
+**Decision:** Spell import is split into two independent resolvers, each handling a different spell source:
 
 1. **`spell-importer`** — Class spellcasting (prepared, spontaneous, spellbook).
 2. **`feature-spell-resolver`** — Focus and innate spells granted by class features/heritage.
-3. **`item-spell-resolver`** — Spells provided by magical items (staves, wands).
 
 **Rationale:** Each spell source has fundamentally different data shapes, resolution logic, and output requirements:
 
@@ -228,9 +227,17 @@ The wrap is only live during a user-initiated import, so a hard dependency is di
 | ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------ |
 | spell-importer         | Character engines (spell entries) + stream-engines (slot counts) | Spellcasting entry + spells with slot placement  |
 | feature-spell-resolver | Stream-engines (feature modifiers with `add-spell`)              | Separate "Focus Spells" or "Innate Spells" entry |
-| item-spell-resolver    | Stream-engines (item modifiers with `add-staff-spells`)          | Per-item "Charges" type spellcasting entry       |
 
 Combining these into a single function would create a 500+ line monolith with deeply nested conditionals. Splitting allows each to be tested, understood, and modified independently.
+
+**Item spells (scrolls/wands):** a spell-bearing scroll or wand is not a spellcasting
+resolver's job. The `equipment-importer` embeds the carried spell as the consumable's
+own `system.spell`; PF2e then surfaces it on the character sheet's **Activations** tab
+automatically (for characters with a prepared/spontaneous caster statistic), following
+the game's own rules. An earlier `item-spell-resolver` that created a per-item "charges"
+spellcasting entry was removed — it duplicated the Activations behavior and did not honor
+those rules. Staves are intentionally not handled: their charge mechanic doesn't map onto
+prepared/spontaneous casting.
 
 **Spell-importer sub-decisions:**
 
