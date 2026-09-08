@@ -14,11 +14,11 @@ resolvers. Every path that can fail currently pushes a **human-readable string**
 `ImportSummary.unresolved` (`src/import/types.ts:16-23`), which `module.ts:208-212` copies onto the
 actor as an import issue:
 
-| Resolver                                                          | Used by                                                | Failure site                                                                                   |
-| ----------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| `resolveCompendiumItem` (`compendium-resolver.ts:51`)             | ancestry, heritage, background, class, feat, equipment | `phases.ts:144`, `phases.ts:297`                                                               |
-| `resolveSpellFromCompendium` (`compendium-resolver.ts:33`)        | all spell paths                                        | `spell-importer.ts:150,231,481`, `feature-spell-resolver.ts:240`, `item-spell-resolver.ts:149` |
-| `findBySlug` on the equipment index (`equipment-importer.ts:215`) | equipment only                                         | `equipment-importer.ts:230`                                                                    |
+| Resolver                                                          | Used by                                                | Failure site                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------- |
+| `resolveCompendiumItem` (`compendium-resolver.ts:51`)             | ancestry, heritage, background, class, feat, equipment | `phases.ts:144`, `phases.ts:297`                                 |
+| `resolveSpellFromCompendium` (`compendium-resolver.ts:33`)        | all spell paths                                        | `spell-importer.ts:150,231,481`, `feature-spell-resolver.ts:240` |
+| `findBySlug` on the equipment index (`equipment-importer.ts:215`) | equipment only                                         | `equipment-importer.ts:230`                                      |
 
 `resolveCompendiumItem` searches `PACKS` (`types.ts:3-12`) trying `generateSlugCandidates`
 (exact, class-suffix-stripped, `bloodline-` prefixed). Kind is derived from the engine path by
