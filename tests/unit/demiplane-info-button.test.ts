@@ -83,6 +83,42 @@ describe("demiplane-info-button", () => {
     expect(opts.content).not.toContain("Imported Sword");
   });
 
+  it("excludes activities and other unsynced item types from the manual list", async () => {
+    // A player may copy many exploration/downtime/combat activities (all `action`
+    // items) onto their sheet; the module never manages those, so they must not
+    // flood the "not from Demiplane" list. Effects/conditions are transient too.
+    actor.items.push(
+      { id: "a1", name: "Investigate", type: "action", flags: {} },
+      { id: "a2", name: "Repair", type: "action", flags: {} },
+      { id: "e1", name: "Frightened 1", type: "effect", flags: {} },
+      { id: "c1", name: "Off-Guard", type: "condition", flags: {} }
+    );
+
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+
+    // The genuine manual item is still listed…
+    expect(opts.content).toContain("Manual Cloak");
+    // …but activities/effects/conditions are not.
+    expect(opts.content).not.toContain("Investigate");
+    expect(opts.content).not.toContain("Repair");
+    expect(opts.content).not.toContain("Frightened 1");
+    expect(opts.content).not.toContain("Off-Guard");
+    // Count reflects only the one real manual item, not the four excluded ones.
+    expect(opts.content).toContain("Items not from Demiplane</strong> (1)");
+  });
+
+  it("omits the manual-items section entirely when only unsynced items remain", async () => {
+    actor.items = [
+      { id: "i1", name: "Imported Sword", type: "weapon", flags: { "demiplane-pf2e": { imported: true } } },
+      { id: "a1", name: "Investigate", type: "action", flags: {} },
+    ];
+
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as { content: string };
+    expect(opts.content).not.toContain("Items not from Demiplane");
+  });
+
   it("separates unmapped items from sync issues", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     const opts = wait.mock.calls[0][0] as { content: string };
