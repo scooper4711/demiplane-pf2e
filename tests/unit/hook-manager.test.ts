@@ -919,6 +919,153 @@ describe("HookManager", () => {
     });
   });
 
+  describe("updateItem hook — cast/expended spell slots", () => {
+    /**
+     * A spellcasting entry item carrying the import-stamped
+     * `preparedSlotEngineIds` map plus live slot state, so a slots change can be
+     * resolved back to the prepared engine whose `-is-cast` flag to toggle.
+     */
+    function spellcastingEntry(
+      actor: ReturnType<typeof createMockActor>,
+      preparedSlotEngineIds: Record<string, string[]>,
+      slots: Record<string, { prepared?: Array<{ expended?: boolean }> }>
+    ) {
+      return createMockItem(actor, "Arcane Prepared Spells", {
+        type: "spellcastingEntry",
+        system: { slots },
+        flags: { "demiplane-pf2e": { preparedSlotEngineIds } },
+      });
+    }
+
+    it("queues a cast change when a prepared slot is expended", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spellcastingEntry(
+        actor,
+        { slot3: ["fireball-engine-id"] },
+        { slot3: { prepared: [{ expended: true }] } }
+      );
+      const changes = { system: { slots: { slot3: { prepared: { 0: { expended: true } } } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "fireball-engine-id",
+        "fireball-engine-id",
+        "cast",
+        { expended: true },
+        "spell"
+      );
+    });
+
+    it("queues a restore (expended false) when a prepared slot is un-cast", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spellcastingEntry(
+        actor,
+        { slot3: ["fireball-engine-id"] },
+        { slot3: { prepared: [{ expended: false }] } }
+      );
+      const changes = { system: { slots: { slot3: { prepared: { 0: { expended: false } } } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "fireball-engine-id",
+        "fireball-engine-id",
+        "cast",
+        { expended: false },
+        "spell"
+      );
+    });
+
+    it("resolves the correct engine by slot position when a rank has multiple prepared spells", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spellcastingEntry(
+        actor,
+        { slot3: ["engine-a", "engine-b"] },
+        { slot3: { prepared: [{ expended: false }, { expended: true }] } }
+      );
+      const changes = { system: { slots: { slot3: { prepared: { 1: { expended: true } } } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledTimes(1);
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "engine-b",
+        "engine-b",
+        "cast",
+        { expended: true },
+        "spell"
+      );
+    });
+
+    it("does not queue a cast change when the entry has no preparedSlotEngineIds flag", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = createMockItem(actor, "Arcane Prepared Spells", {
+        type: "spellcastingEntry",
+        system: { slots: { slot3: { prepared: [{ expended: true }] } } },
+      });
+      const changes = { system: { slots: { slot3: { prepared: { 0: { expended: true } } } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
+
+    it("does not queue a cast change when the update carries no slots change", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spellcastingEntry(actor, { slot3: ["fireball-engine-id"] }, { slot3: { prepared: [{}] } });
+      const changes = { system: { name: "Renamed Entry" } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the live slot's expended state when the change omits it", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spellcastingEntry(
+        actor,
+        { slot3: ["fireball-engine-id"] },
+        { slot3: { prepared: [{ expended: true }] } }
+      );
+      // The prepared entry changed (e.g. a sibling field) but `expended` is absent
+      // from the diff; the handler should read the live value rather than assume false.
+      const changes = { system: { slots: { slot3: { prepared: { 0: { id: "spell-x" } } } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "fireball-engine-id",
+        "fireball-engine-id",
+        "cast",
+        { expended: true },
+        "spell"
+      );
+    });
+  });
+
   describe("queueCombatResourceChanges", () => {
     it("queues current HP, temp HP, and hero points from the actor", () => {
       const actor = {

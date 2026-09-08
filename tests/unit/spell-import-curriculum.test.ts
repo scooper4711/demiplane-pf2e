@@ -194,6 +194,84 @@ describe("applySpells - curriculum separation", () => {
     expect(preparedCalls.length).toBeGreaterThan(0);
     expect(summary.log.some((l) => l.includes("prepared"))).toBe(true);
   });
+
+  // A cast prepared slot arrives with a `<preparedEngineId>-is-cast` = 1 engine;
+  // the imported slot must be marked expended so the sheet shows it spent.
+  it("marks a cast prepared slot as expended", async () => {
+    const actor = createMockActor();
+    const slotsPayloads: Record<string, unknown>[] = [];
+    actor.items.get = () =>
+      ({
+        update: vi.fn((data: Record<string, unknown>) => {
+          const slots = (data.system as { slots?: Record<string, unknown> } | undefined)?.slots;
+          if (slots) slotsPayloads.push(slots);
+          return Promise.resolve(undefined);
+        }),
+      }) as unknown as undefined;
+
+    const castPrepared = { ...makePreparedEngine("caustic-blast-rm", 0, false), demiplaneEngineId: "prep-1" };
+    const uncastPrepared = { ...makePreparedEngine("air-bubble-rm", 1, false), demiplaneEngineId: "prep-2" };
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/wizard-rm.eng", type: "DemiplaneEngine", args: { tableID: "class" } },
+      makeWizardSpellbookEngine("caustic-blast-rm", 0, false),
+      makeWizardSpellbookEngine("air-bubble-rm", 1, false),
+      castPrepared,
+      uncastPrepared,
+      // The cast marker for the first prepared slot only.
+      { id: "cast", name: "prep-1-is-cast", type: "CustomDemiplaneEngine", args: {}, value: 1 },
+    ];
+
+    await applySpells(actor as never, engines, makeSummary());
+
+    const findSlot = (rank: number) =>
+      slotsPayloads
+        .map((s) => (s as Record<string, { prepared?: Array<{ expended?: boolean }> }>)[`slot${rank}`])
+        .find((s) => s?.prepared);
+    expect(findSlot(0)?.prepared?.[0]?.expended).toBe(true);
+    expect(findSlot(1)?.prepared?.[0]?.expended).toBe(false);
+  });
+
+  // Exercises the cast-tracking guards: an is-cast engine whose value is not 1 is
+  // ignored, a prepared engine without a selectionRank falls back to slot 0, and
+  // a prepared spell whose slug resolves to no compendium item keeps a null slot id.
+  it("ignores a non-1 is-cast marker and defaults rank/id for a partial prepared engine", async () => {
+    const actor = createMockActor();
+    const slotsPayloads: Record<string, unknown>[] = [];
+    actor.items.get = () =>
+      ({
+        update: vi.fn((data: Record<string, unknown>) => {
+          const slots = (data.system as { slots?: Record<string, unknown> } | undefined)?.slots;
+          if (slots) slotsPayloads.push(slots);
+          return Promise.resolve(undefined);
+        }),
+      }) as unknown as undefined;
+
+    // Prepared engine with no selectionRank (rank falls back to 0) and an
+    // unknown slug (no compendium match → slot id stays null).
+    const partialPrepared: DemiplaneEngineEntry = {
+      id: "unknown-spell",
+      name: "tabula/spell/unknown-spell-rm.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "unknown-spell-rm", isPrepare: true, parentSpellFeature: "wizard-spellcasting-rm" },
+      demiplaneEngineId: "prep-partial",
+    };
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/wizard-rm.eng", type: "DemiplaneEngine", args: { tableID: "class" } },
+      makeWizardSpellbookEngine("caustic-blast-rm", 0, false),
+      partialPrepared,
+      // An is-cast marker with value 0 must not mark the slot expended.
+      { id: "cast", name: "prep-partial-is-cast", type: "CustomDemiplaneEngine", args: {}, value: 0 },
+    ];
+
+    await applySpells(actor as never, engines, makeSummary());
+
+    const slot0 = slotsPayloads
+      .map((s) => (s as Record<string, { prepared?: Array<{ id: string | null; expended?: boolean }> }>).slot0)
+      .find((s) => s?.prepared);
+    const partialSlot = slot0?.prepared?.find((p) => p.id === null);
+    expect(partialSlot).toBeDefined();
+    expect(partialSlot?.expended).toBe(false);
+  });
 });
 
 describe("applySpells - signature spells", () => {

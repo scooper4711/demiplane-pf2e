@@ -10,7 +10,16 @@ export interface PendingChange {
   timestamp: number;
 }
 
-export type ItemChangeType = "quantity" | "equipped" | "delete";
+export type ItemChangeType = "quantity" | "equipped" | "delete" | "cast";
+
+/**
+ * A "cast" item change: whether a prepared spell slot has been cast (expended).
+ * Keyed by the prepared spell's Demiplane engine id (passed as the item slug),
+ * pushed back as Demiplane's `<preparedEngineId>-is-cast` flag.
+ */
+export interface CastChange {
+  expended: boolean;
+}
 
 export interface EquippedState {
   carryType: string;
@@ -24,7 +33,7 @@ export interface PendingItemChange {
   itemSlug: string;
   demiplaneSlug: string | undefined;
   changeType: ItemChangeType;
-  value: number | string | EquippedState;
+  value: number | string | EquippedState | CastChange;
   itemType: string | undefined;
   /** True when queued from a user edit (vs. a bulk refresh). Used to gate edit-only warnings. */
   edited?: boolean;
@@ -110,7 +119,7 @@ export class ChangeBuffer {
     itemSlug: string,
     demiplaneSlug: string | undefined,
     changeType: ItemChangeType,
-    value: number | string | EquippedState,
+    value: number | string | EquippedState | CastChange,
     itemType?: string,
     edited?: boolean
   ): void {

@@ -2,7 +2,7 @@ import { normalizeEquipmentSlug, rawEquipmentSlug } from "../import/slug-utils.j
 import { debugLog } from "../import/debug-log.js";
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
-import type { EquippedState, PendingChange, PendingItemChange } from "./change-buffer.js";
+import type { CastChange, EquippedState, PendingChange, PendingItemChange } from "./change-buffer.js";
 
 interface CharacterMetadata {
   name?: string | undefined;
@@ -59,6 +59,7 @@ export class PushPayloadBuilder {
     const resolved = this.resolveItemChanges(fetched, itemChanges);
     updatedEngines = this.applyItemChangeEngines(updatedEngines, resolved);
     updatedEngines = this.applyHandSlotAssignment(updatedEngines, resolved);
+    updatedEngines = this.applyCastChanges(updatedEngines, itemChanges);
 
     return {
       data: {
@@ -73,6 +74,50 @@ export class PushPayloadBuilder {
         editPermission: fetched.editPermission,
         formatedData: fetched.formatedData,
       },
+    };
+  }
+
+  /**
+   * Applies cast/expended changes for prepared spell slots. A cast change's
+   * `itemSlug` is the prepared spell's Demiplane engine id (not a compendium
+   * slug), so it's handled here rather than through slug-based item resolution.
+   * Casting sets the `<engineId>-is-cast` flag to 1 (created if absent); undoing
+   * it removes the flag, matching how the importer reads it (absent = not cast).
+   */
+  private applyCastChanges(
+    updatedEngines: CustomEngine[],
+    itemChanges: Map<string, PendingItemChange>
+  ): CustomEngine[] {
+    let engines = updatedEngines;
+    for (const change of itemChanges.values()) {
+      if (change.changeType !== "cast") continue;
+      const engineId = change.itemSlug;
+      const { expended } = change.value as CastChange;
+      const flagName = `${engineId}-is-cast`;
+      const existing = findCustomEngineByName(engines, flagName);
+
+      if (expended) {
+        engines = existing
+          ? engines.map((e) => (e === existing ? { ...e, value: 1 } : e))
+          : [...engines, this.createCastEngine(flagName, engineId)];
+      } else if (existing) {
+        engines = engines.filter((e) => e !== existing);
+      }
+      debugLog(`[push] cast: ${flagName} → ${expended ? "1" : "removed"}`);
+    }
+    return engines;
+  }
+
+  private createCastEngine(flagName: string, parentEngineId: string): CustomEngine {
+    return {
+      id: `custom_${flagName}`,
+      name: flagName,
+      value: 1,
+      type: "CustomDemiplaneEngine",
+      saveType: "CharacterSheet",
+      storeType: "override",
+      demiplaneEngineId: crypto.randomUUID(),
+      args: { id: null, parentEngine: parentEngineId },
     };
   }
 
