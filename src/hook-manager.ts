@@ -474,53 +474,61 @@ export class HookManager {
   }
 
   /**
-   * Asks the user to confirm propagating an inventory item's deletion to
-   * Demiplane, then writes it if they accept. Only reached for a
+   * Propagates a deleted inventory item to Demiplane. Only reached for a
    * Demiplane-controlled inventory item deleted while the write level permits
    * deletions and no import/sync is in flight.
    *
-   * In soft-delete mode the item's Demiplane quantity is set to 0 (reversible)
-   * rather than removing it outright; the prompt wording reflects which happens.
+   * In soft-delete mode the item's Demiplane quantity is set to 0 — a reversible
+   * change with no data loss (it's restored by raising the quantity), so it
+   * needs no confirmation and is queued immediately. A hard delete is
+   * irreversible from here, so it stays behind an explicit confirmation dialog.
    */
   private async confirmAndQueueDelete(actor: Actor, itemName: string, target: DeletableItem): Promise<void> {
-    const softDelete = isSoftDeleteEnabled();
-    const actionVerb = softDelete ? "Set quantity to 0 on Demiplane" : "Delete on Demiplane";
-    const bodyEffect = softDelete
-      ? `<p>This sets <strong>${itemName}</strong>'s quantity to 0 on the linked Demiplane character, keeping the item so you can restore it later by raising the quantity.</p>`
-      : `<p>This deletes the item from the linked Demiplane character. It can't be undone from here — you'd have to re-add it in Demiplane.</p>` +
-        `<p>If you keep it on Demiplane, it will reappear here the next time this character is updated from Demiplane.</p>`;
-
-    // `DialogV2.wait` with an explicit buttons array (rather than the confirm
-    // shorthand) so `default: true` both focuses "Keep on Demiplane" for Enter
-    // AND gives it the highlighted default-button styling. "Keep" is the safe,
-    // non-destructive choice, so it is the default.
-    const choice = await foundry.applications.api.DialogV2.wait({
-      window: { title: "Delete on Demiplane?" },
-      content:
-        `<div style="display:flex;align-items:flex-start;gap:0.75em;">` +
-        `<img src="${DEMIPLANE_ICON_SRC}" alt="Demiplane" style="height:2.8em;width:2.8em;flex:0 0 auto;border:none;" />` +
-        `<p style="margin:0;">Remove <strong>${itemName}</strong> from <strong>${actor.name}</strong> on Demiplane too?</p>` +
-        `</div>` +
-        bodyEffect,
-      buttons: [
-        { action: "delete", label: actionVerb, icon: "fa-solid fa-trash" },
-        { action: "keep", label: "Keep on Demiplane", icon: "fa-solid fa-cloud", default: true },
-      ],
-    });
-
-    if (choice !== "delete") {
-      debugLog(`Item delete NOT propagated (user declined): ${itemName} (${target.slot})`);
+    if (isSoftDeleteEnabled() && typeof target.slug === "string") {
+      debugLog(`Item soft-deleted (quantity 0) on Demiplane, no prompt: ${itemName} (${target.slot})`);
+      this.exportManager.queueItemChange(actor, target.slug, target.demiplaneSlug, "quantity", 0, target.itemType);
       return;
     }
 
-    if (softDelete && typeof target.slug === "string") {
-      debugLog(`Item soft-deleted (quantity 0) on Demiplane: ${itemName} (${target.slot})`);
-      this.exportManager.queueItemChange(actor, target.slug, target.demiplaneSlug, "quantity", 0, target.itemType);
+    if (!(await this.confirmHardDelete(actor, itemName))) {
+      debugLog(`Item delete NOT propagated (user declined): ${itemName} (${target.slot})`);
       return;
     }
 
     debugLog(`Item deleted from linked actor: ${itemName} (${target.slot})`);
     this.exportManager.queueItemDelete(actor, target.slot);
+  }
+
+  /**
+   * Confirms an irreversible hard delete of an inventory item on Demiplane.
+   * Returns true only when the user explicitly chooses to delete.
+   *
+   * Uses `DialogV2.wait` with an explicit buttons array (rather than the confirm
+   * shorthand) so `default: true` both focuses "Keep on Demiplane" for Enter AND
+   * gives it the highlighted default-button styling. "Keep" is the safe,
+   * non-destructive choice, so it is the default.
+   */
+  private async confirmHardDelete(actor: Actor, itemName: string): Promise<boolean> {
+    const choice = await foundry.applications.api.DialogV2.wait({
+      window: { title: "Delete on Demiplane?" },
+      // Constrain the width so long item/actor names and body text wrap instead
+      // of stretching the dialog across the screen (DialogV2 sizes to content).
+      content:
+        `<div style="max-width:26em;">` +
+        `<div style="display:flex;align-items:flex-start;gap:0.75em;">` +
+        `<img src="${DEMIPLANE_ICON_SRC}" alt="Demiplane" style="height:2.8em;width:2.8em;flex:0 0 auto;border:none;" />` +
+        `<p style="margin:0;">Remove <strong>${itemName}</strong> from <strong>${actor.name}</strong> on Demiplane too?</p>` +
+        `</div>` +
+        `<p>This deletes the item from the linked Demiplane character. It can't be undone from here — you'd have to re-add it in Demiplane.</p>` +
+        `<p>If you keep it on Demiplane, it will reappear here the next time this character is updated from Demiplane.</p>` +
+        `</div>`,
+      buttons: [
+        { action: "delete", label: "Delete on Demiplane", icon: "fa-solid fa-trash" },
+        { action: "keep", label: "Keep on Demiplane", icon: "fa-solid fa-cloud", default: true },
+      ],
+    });
+
+    return choice === "delete";
   }
 
   private isLinkedCharacterActor(actor: Actor): boolean {
