@@ -55,6 +55,8 @@ A fresh install starts at **No writing to Demiplane**, so nothing is ever writte
 
 **Deleting an item is the most invasive write, so it has two safeguards.** It only happens at the top level, and even then, deleting a Demiplane-controlled item from a character's inventory always pops up a confirmation before removing it on Demiplane — you can keep it on Demiplane while removing it locally. Deleting an item you added yourself in Foundry (one that never came from Demiplane) never prompts and never pushes. Deletions caused by the module's own re-import never prompt either.
 
+**Soft-delete (belt and suspenders).** There's a separate **Soft-delete items (set quantity to 0)** option that only takes effect at the deletions write level. With it on, deleting an item sets its Demiplane quantity to 0 instead of removing it, so you can restore it later just by raising the quantity again — and the importer skips quantity-0 items so a soft-deleted item stays gone. With it off (the default), a quantity of 0 is treated as a real quantity and imports as-is, which is handy for consumables you top up in town rather than re-adding from the compendium each time.
+
 Writing happens automatically as you edit (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
 
 Still on the roadmap:

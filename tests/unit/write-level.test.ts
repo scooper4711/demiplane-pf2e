@@ -4,18 +4,27 @@ import {
   canWriteText,
   canWriteQuantity,
   canWriteDeletes,
+  isSoftDeleteEnabled,
   DEFAULT_WRITE_LEVEL,
 } from "../../src/write-level.js";
 
 let settingValue: unknown;
+let softDeleteValue: unknown;
 
 vi.stubGlobal("game", {
-  settings: { get: (_module: string, key: string) => (key === "syncWriteLevel" ? settingValue : undefined) },
+  settings: {
+    get: (_module: string, key: string) => {
+      if (key === "syncWriteLevel") return settingValue;
+      if (key === "syncSoftDelete") return softDeleteValue;
+      return undefined;
+    },
+  },
 });
 
 describe("write-level", () => {
   beforeEach(() => {
     settingValue = undefined;
+    softDeleteValue = undefined;
   });
 
   describe("getWriteLevel", () => {
@@ -65,6 +74,26 @@ describe("write-level", () => {
     it("treats an unknown value as the safe default (no writing)", () => {
       settingValue = "garbage";
       expect(canWriteText()).toBe(false);
+    });
+  });
+
+  describe("isSoftDeleteEnabled", () => {
+    it("is on only when the flag is set AND deletions are permitted", () => {
+      settingValue = "text-quantity-delete";
+      softDeleteValue = true;
+      expect(isSoftDeleteEnabled()).toBe(true);
+    });
+
+    it("is off when the flag is set but the write level is below deletions", () => {
+      settingValue = "text-quantity";
+      softDeleteValue = true;
+      expect(isSoftDeleteEnabled()).toBe(false);
+    });
+
+    it("is off when deletions are permitted but the flag is not set", () => {
+      settingValue = "text-quantity-delete";
+      softDeleteValue = undefined;
+      expect(isSoftDeleteEnabled()).toBe(false);
     });
   });
 });

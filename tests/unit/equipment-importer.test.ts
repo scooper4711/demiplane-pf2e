@@ -191,6 +191,47 @@ describe("applyEquipment", () => {
     expect((itemData.system as Record<string, unknown>).quantity).toBe(3);
   });
 
+  // A Demiplane quantity of 0 is a real quantity (e.g. a consumable the player
+  // tops up in town), not a deletion — import it at 0 rather than coercing to 1.
+  it("imports a quantity-0 item at quantity 0 (not coerced to 1)", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "longsword-rm" },
+        demiplaneEngineId: "eng1",
+      },
+      { id: "2", name: "eng1--quantity", type: "CustomDemiplaneEngine", args: {}, value: 0 },
+    ];
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    const itemData = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
+    expect((itemData.system as Record<string, unknown>).quantity).toBe(0);
+  });
+
+  // With soft-delete on, a quantity of 0 marks a deleted item, so it is skipped.
+  it("skips a quantity-0 item when soft-delete is enabled", async () => {
+    await game.settings.set("demiplane-pf2e", "syncWriteLevel", "text-quantity-delete");
+    await game.settings.set("demiplane-pf2e", "syncSoftDelete", true);
+
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "longsword-rm" },
+        demiplaneEngineId: "eng1",
+      },
+      { id: "2", name: "eng1--quantity", type: "CustomDemiplaneEngine", args: {}, value: 0 },
+    ];
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
   it("sets held state for primary hand", async () => {
     const actor = createMockActor();
     const engines: DemiplaneEngineEntry[] = [

@@ -32,6 +32,7 @@ vi.stubGlobal("game", {
       // `autoSyncEnabled` true = full write (delete tier); false = no writing.
       // Tests that need an intermediate tier set `writeLevel` directly.
       if (key === "syncWriteLevel") return writeLevel ?? (autoSyncEnabled ? "text-quantity-delete" : "none");
+      if (key === "syncSoftDelete") return softDeleteEnabled;
       if (key === "debugImport") return debugEnabled;
       return undefined;
     },
@@ -68,6 +69,7 @@ const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
 /** When set, overrides the autoSyncEnabled→tier mapping for intermediate-tier tests. */
 let writeLevel: string | undefined;
+let softDeleteEnabled = false;
 let debugEnabled = true;
 
 function createMockExportManager() {
@@ -123,6 +125,7 @@ describe("HookManager", () => {
     vi.clearAllMocks();
     autoSyncEnabled = true;
     writeLevel = undefined;
+    softDeleteEnabled = false;
     confirmDelete = true;
     debugEnabled = true;
     for (const key of Object.keys(hookRegistry)) {
@@ -214,6 +217,33 @@ describe("HookManager", () => {
 
       expect(dialogConfirm).toHaveBeenCalledTimes(1);
       expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "armored-coat");
+    });
+
+    it("soft-deletes by pushing quantity 0 instead of removing the item when enabled", async () => {
+      softDeleteEnabled = true;
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const item = importedItem(actor, "Armored Coat", {
+        type: "armor",
+        system: { slug: "armored-coat" },
+        demiplaneSlug: "armored-coat-rm",
+      });
+
+      triggerHook("deleteItem", item);
+      await settle();
+
+      expect(dialogConfirm).toHaveBeenCalledTimes(1);
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "armored-coat",
+        "armored-coat-rm",
+        "quantity",
+        0,
+        "armor"
+      );
     });
 
     it("does NOT queue the deletion when the user declines the prompt", async () => {

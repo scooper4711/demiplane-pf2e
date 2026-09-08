@@ -12,6 +12,7 @@ import { fetchStreamEngineLines } from "./stream-engines.js";
 import { debugLog } from "./debug-log.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
+import { isSoftDeleteEnabled } from "../write-level.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
 import { getPackIndex, type PackIndex } from "./pack-index.js";
 import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
@@ -192,7 +193,11 @@ function collectCustomEngine(
     return;
   }
   if (eng.name.endsWith("--quantity")) {
-    bags.quantityMap.set(eng.name.replace("--quantity", ""), Number(eng.value) || 1);
+    // Preserve a genuine 0 (Demiplane's "deleted" marker) — `Number(v) || 1`
+    // would coerce it to 1. Only a missing or non-numeric value falls back to 1.
+    const parsed = Number(eng.value);
+    const quantity = Number.isFinite(parsed) ? parsed : 1;
+    bags.quantityMap.set(eng.name.replace("--quantity", ""), quantity);
   }
 }
 
@@ -475,12 +480,20 @@ async function finishEquipmentItem(
   demiplaneSlug: string,
   slug: string,
   summary: ImportSummary
-): Promise<PendingItem> {
+): Promise<PendingItem | null> {
   const { state } = ctx;
   const demiplaneId = eng.demiplaneEngineId as string;
   const system = data.system as Record<string, unknown>;
 
-  system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
+  const quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
+  // In soft-delete mode a quantity of 0 marks an item the user "deleted" on the
+  // sheet; skip it so a soft-deleted item stays gone. Otherwise a 0 is a real
+  // quantity (e.g. a consumable the player tops up in town) and imports as-is.
+  if (quantity === 0 && isSoftDeleteEnabled()) {
+    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 with soft-delete enabled`);
+    return null;
+  }
+  system.quantity = quantity;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
   const carriedSpellSlug = state.spellByItemId.get(demiplaneId);
@@ -551,11 +564,19 @@ async function buildFixedSpellConsumable(
   const doc = await ctx.equipPack.getDocument(indexEntry._id);
   if (!doc) return recordUnmapped();
 
+  const quantity = state.quantityMap.get(demiplaneId) ?? 1;
+  // Soft-deleted (quantity 0) items are skipped in soft-delete mode; see
+  // finishEquipmentItem for the rationale.
+  if (quantity === 0 && isSoftDeleteEnabled()) {
+    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 with soft-delete enabled`);
+    return null;
+  }
+
   debugLog(`[equipment] "${demiplaneSlug}" → generic ${genericSlug} carrying ${special.spell} (rank ${special.rank})`);
 
   const data = toPlainData(doc);
   const system = data.system as Record<string, unknown>;
-  system.quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
+  system.quantity = quantity;
   system.equipped = resolveEquippedState(demiplaneId, state, data.type as string);
 
   await attachSpecialItemSpell(system, special);
