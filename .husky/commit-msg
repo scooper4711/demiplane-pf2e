@@ -1,0 +1,4 @@
+MSG_FILE="$1"
+TMP_FILE="$MSG_FILE.tmp"
+grep -viE '^Co-Authored-By:' "$MSG_FILE" > "$TMP_FILE"
+mv "$TMP_FILE" "$MSG_FILE"
