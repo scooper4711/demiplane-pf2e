@@ -3,7 +3,7 @@ import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import type { EquippedState } from "./export/change-buffer.js";
 import { isSyncActive } from "./sync-pause.js";
-import { canWriteText, canWriteQuantity, canWriteDeletes } from "./write-level.js";
+import { canWriteText, canWriteQuantity, canWriteDeletes, isSoftDeleteEnabled } from "./write-level.js";
 import { DEMIPLANE_ICON_SRC } from "./config.js";
 import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 
@@ -61,6 +61,18 @@ const TREASURE_ITEM_MAP: Record<string, string> = {
 
 // INVENTORY_ITEM_TYPES (the physical/inventory item `type`s eligible for delete
 // propagation) is defined in import/types.js as the single source of truth.
+
+/** A deleted inventory item resolved for propagation to Demiplane. */
+interface DeletableItem {
+  /** The slug used to match the item's Demiplane engine (`demiplaneSlug ?? slug`). */
+  slot: string;
+  /** The PF2e system slug, needed to queue a soft-delete quantity change. */
+  slug: string | undefined;
+  /** The stamped Demiplane slug, if any. */
+  demiplaneSlug: string | undefined;
+  /** The PF2e item type (weapon, consumable, …). */
+  itemType: string;
+}
 
 /**
  * Queues current HP, temporary HP, and hero points from a linked actor
@@ -395,27 +407,27 @@ export class HookManager {
     if (isSyncActive(actor)) return;
     if (!this.writeAllowed("delete", actor.name)) return;
 
-    const slot = this.resolveDeletableSlot(item);
-    if (!slot) return;
+    const target = this.resolveDeletableItem(item);
+    if (!target) return;
 
     // The item is already gone from Foundry by the time this hook fires, so the
     // prompt governs only whether the removal is propagated to Demiplane. Guarding
     // a destructive, hard-to-reverse write behind explicit confirmation is the
-    // whole point of this handler; queue the delete only if the user confirms.
-    void this.confirmAndQueueDelete(actor, item.name ?? "item", slot);
+    // whole point of this handler; write to Demiplane only if the user confirms.
+    void this.confirmAndQueueDelete(actor, item.name ?? "item", target);
   }
 
   /**
-   * The Demiplane slot to remove for a deleted item, or `undefined` when the
-   * deletion must not be propagated. Only a Demiplane-controlled inventory item
-   * with a resolvable slug qualifies; each skip is logged with its reason.
+   * The details needed to propagate a deleted item to Demiplane, or `undefined`
+   * when the deletion must not be propagated. Only a Demiplane-controlled
+   * inventory item with a resolvable slug qualifies; each skip is logged.
    *
    * - Non-inventory items (feats, class, deity, …) are never pushed — deity in
    *   particular is build-derived, so a local delete must not clear it remotely.
    * - A homemade item (no `imported` flag) was never on Demiplane, so deleting
    *   it must not push a removal there even if its slug happens to resolve.
    */
-  private resolveDeletableSlot(item: Item): string | undefined {
+  private resolveDeletableItem(item: Item): DeletableItem | undefined {
     const itemType = (item as { type?: string })?.type;
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
       debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
@@ -429,21 +441,32 @@ export class HookManager {
     }
 
     const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
-    const slot = demiplaneSlug ?? itemSystem(item).slug ?? undefined;
+    const slug = itemSystem(item).slug ?? undefined;
+    const slot = demiplaneSlug ?? slug;
     if (!slot) {
       debugLog(`Item deleted from linked actor (no demiplane slug, skipping push): ${item.name}`);
       return undefined;
     }
-    return slot;
+    return { slot, slug, demiplaneSlug, itemType };
   }
 
   /**
    * Asks the user to confirm propagating an inventory item's deletion to
-   * Demiplane, then queues the delete if they accept. Only reached for a
+   * Demiplane, then writes it if they accept. Only reached for a
    * Demiplane-controlled inventory item deleted while the write level permits
    * deletions and no import/sync is in flight.
+   *
+   * In soft-delete mode the item's Demiplane quantity is set to 0 (reversible)
+   * rather than removing it outright; the prompt wording reflects which happens.
    */
-  private async confirmAndQueueDelete(actor: Actor, itemName: string, slot: string): Promise<void> {
+  private async confirmAndQueueDelete(actor: Actor, itemName: string, target: DeletableItem): Promise<void> {
+    const softDelete = isSoftDeleteEnabled();
+    const actionVerb = softDelete ? "Set quantity to 0 on Demiplane" : "Delete on Demiplane";
+    const bodyEffect = softDelete
+      ? `<p>This sets <strong>${itemName}</strong>'s quantity to 0 on the linked Demiplane character, keeping the item so you can restore it later by raising the quantity.</p>`
+      : `<p>This deletes the item from the linked Demiplane character. It can't be undone from here — you'd have to re-add it in Demiplane.</p>` +
+        `<p>If you keep it on Demiplane, it will reappear here the next time this character is updated from Demiplane.</p>`;
+
     // `DialogV2.wait` with an explicit buttons array (rather than the confirm
     // shorthand) so `default: true` both focuses "Keep on Demiplane" for Enter
     // AND gives it the highlighted default-button styling. "Keep" is the safe,
@@ -455,21 +478,26 @@ export class HookManager {
         `<img src="${DEMIPLANE_ICON_SRC}" alt="Demiplane" style="height:2.8em;width:2.8em;flex:0 0 auto;border:none;" />` +
         `<p style="margin:0;">Remove <strong>${itemName}</strong> from <strong>${actor.name}</strong> on Demiplane too?</p>` +
         `</div>` +
-        `<p>This deletes the item from the linked Demiplane character. It can't be undone from here — you'd have to re-add it in Demiplane.</p>` +
-        `<p>If you keep it on Demiplane, it will reappear here the next time this character is updated from Demiplane.</p>`,
+        bodyEffect,
       buttons: [
-        { action: "delete", label: "Delete on Demiplane", icon: "fa-solid fa-trash" },
+        { action: "delete", label: actionVerb, icon: "fa-solid fa-trash" },
         { action: "keep", label: "Keep on Demiplane", icon: "fa-solid fa-cloud", default: true },
       ],
     });
 
     if (choice !== "delete") {
-      debugLog(`Item delete NOT propagated (user declined): ${itemName} (${slot})`);
+      debugLog(`Item delete NOT propagated (user declined): ${itemName} (${target.slot})`);
       return;
     }
 
-    debugLog(`Item deleted from linked actor: ${itemName} (${slot})`);
-    this.exportManager.queueItemDelete(actor, slot);
+    if (softDelete && typeof target.slug === "string") {
+      debugLog(`Item soft-deleted (quantity 0) on Demiplane: ${itemName} (${target.slot})`);
+      this.exportManager.queueItemChange(actor, target.slug, target.demiplaneSlug, "quantity", 0, target.itemType);
+      return;
+    }
+
+    debugLog(`Item deleted from linked actor: ${itemName} (${target.slot})`);
+    this.exportManager.queueItemDelete(actor, target.slot);
   }
 
   private isLinkedCharacterActor(actor: Actor): boolean {

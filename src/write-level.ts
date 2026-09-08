@@ -72,3 +72,24 @@ export function canWriteQuantity(): boolean {
 export function canWriteDeletes(): boolean {
   return permits("text-quantity-delete");
 }
+
+/**
+ * The world-scoped setting key for soft-delete mode. When enabled, deleting an
+ * inventory item sets its Demiplane quantity to 0 (a reversible marker Demiplane
+ * itself supports) instead of removing the item engine outright — and the
+ * importer then skips quantity-0 items so they stay gone until topped back up.
+ *
+ * Only meaningful when deletions are actually written (the top write level);
+ * with soft-delete off, a deletion removes the item as before.
+ */
+export const SOFT_DELETE_SETTING = "syncSoftDelete";
+
+/**
+ * Whether soft-delete mode is active: deletions are written AND the user has
+ * opted to represent them as quantity 0 rather than removing the item. Returns
+ * false unless deletions are permitted, so the flag can't take effect at a lower
+ * write level where deletions aren't written at all.
+ */
+export function isSoftDeleteEnabled(): boolean {
+  return canWriteDeletes() && game.settings.get(MODULE_ID, SOFT_DELETE_SETTING) === true;
+}

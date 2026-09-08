@@ -2,7 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSlugMappingSettings } from "./slug-mapping.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
-import { WRITE_LEVEL_SETTING, WRITE_LEVEL_LABELS, DEFAULT_WRITE_LEVEL } from "./write-level.js";
+import { WRITE_LEVEL_SETTING, WRITE_LEVEL_LABELS, DEFAULT_WRITE_LEVEL, SOFT_DELETE_SETTING } from "./write-level.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -19,6 +19,15 @@ export function registerSettings(): void {
     type: String,
     choices: WRITE_LEVEL_LABELS,
     default: DEFAULT_WRITE_LEVEL,
+  });
+
+  game.settings.register(MODULE_ID, SOFT_DELETE_SETTING, {
+    name: "Soft-delete items (set quantity to 0)",
+    hint: "Only applies when the Write to Demiplane level includes item deletions. When on, deleting an item sets its Demiplane quantity to 0 instead of removing it, so it can be restored later by raising the quantity again; the importer then skips quantity-0 items so a soft-deleted item stays gone. Has no effect at lower write levels, where deletions are not written at all.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false,
   });
 
   game.settings.register(MODULE_ID, "demiplaneToken", {
