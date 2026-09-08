@@ -37,13 +37,19 @@ export interface GroupedSpells {
   main: SpellGroup[];
   innate: DemiplaneEngineEntry[];
   font: DemiplaneEngineEntry[];
+  /** Rituals — spells with no spellcasting entry; PF2e gathers them ephemerally. */
+  rituals: DemiplaneEngineEntry[];
 }
+
+/** The `parentSpellFeature` value Demiplane tags a known ritual with. */
+const RITUAL_FEATURE = "ritual";
 
 export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
   const fontSpells: DemiplaneEngineEntry[] = [];
+  const rituals: DemiplaneEngineEntry[] = [];
 
   for (const eng of spellEngines) {
     if (isDivineFontSpell(eng)) {
@@ -58,6 +64,15 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     }
 
     const parentFeature = eng.args?.parentSpellFeature as string | undefined;
+
+    // A ritual belongs to no class spellbook — PF2e keeps rituals in an
+    // ephemeral entry it builds from the character's ritual-trait spells — so
+    // collect them separately rather than forming a (config-less) spell group.
+    if (parentFeature === RITUAL_FEATURE) {
+      rituals.push(eng);
+      continue;
+    }
+
     // "scroll"/"wand" parent features are spells carried by a scroll or wand
     // consumable (attached to the item by the equipment importer), not entries
     // in a class spellbook — skip them so they don't form a phantom spell group.
@@ -66,7 +81,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     addToGroup(getOrCreateGroup(mainGroups, parentFeature), eng);
   }
 
-  return { main: [...mainGroups.values()], innate: innateSpells, font: fontSpells };
+  return { main: [...mainGroups.values()], innate: innateSpells, font: fontSpells, rituals };
 }
 
 function getOrCreateGroup(groups: Map<string, SpellGroup>, parentFeature: string): SpellGroup {

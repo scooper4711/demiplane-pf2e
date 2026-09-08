@@ -49,7 +49,10 @@ const DEFAULT_RESOLVE_OPTIONS = {
  */
 export async function resolveSpellItems(
   engines: DemiplaneEngineEntry[],
-  entryId: string,
+  // `null` for rituals: they belong to no spellcasting entry, so the spell's
+  // `location.value` is left null and PF2e gathers them into its ephemeral
+  // Rituals entry via the `ritual` trait.
+  entryId: string | null,
   summary: ImportSummary,
   options: {
     logLabel: string;

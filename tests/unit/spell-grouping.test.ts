@@ -28,4 +28,26 @@ describe("groupSpells", () => {
     const { main } = groupSpells([spell("orphan-rm", {})]);
     expect(main).toHaveLength(0);
   });
+
+  it("routes rituals into the rituals bucket, not a spell group", () => {
+    // A ritual belongs to no class spellbook — PF2e keeps it in an ephemeral
+    // Rituals entry — so it must not form a (config-less) main spell group.
+    const { main, rituals } = groupSpells([spell("halt-death-rm", { parentSpellFeature: "ritual" })]);
+
+    expect(main).toHaveLength(0);
+    expect(rituals).toHaveLength(1);
+    expect(rituals[0]!.args?.slug).toBeUndefined();
+    expect(rituals[0]!.name).toBe("tabula/spell/halt-death-rm.eng");
+  });
+
+  it("keeps rituals separate from class spells in the same character", () => {
+    const { main, rituals } = groupSpells([
+      spell("frostbite-rm", { parentSpellFeature: "witch-spellcasting-rm" }),
+      spell("halt-death-rm", { parentSpellFeature: "ritual" }),
+    ]);
+
+    expect(main).toHaveLength(1);
+    expect(main[0]!.spellbook).toHaveLength(1);
+    expect(rituals).toHaveLength(1);
+  });
 });
