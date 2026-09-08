@@ -139,13 +139,13 @@ describe("sync-flows", () => {
 
       const result = await exportLinkedCharacter(actor, deps);
 
-      expect(result).toEqual({ success: false, error: "Auto-sync is off" });
-      expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Auto-sync is off"));
+      expect(result).toEqual({ success: false, error: "Writing to Demiplane is off" });
+      expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("Writing to Demiplane is off"));
     });
 
     it("pushes engines and exports string campaign notes on success", async () => {
       const { deps, exportManager } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "autoSync", true);
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
       const notes = vi.spyOn(exportManager, "exportCampaignNotes").mockResolvedValue(undefined);
       vi.spyOn(exportManager, "flush").mockResolvedValue({ success: true });
       const actor = linkedActor();
@@ -159,7 +159,7 @@ describe("sync-flows", () => {
 
     it("skips the journal push when campaign notes are not a string", async () => {
       const { deps, exportManager } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "autoSync", true);
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
       const notes = vi.spyOn(exportManager, "exportCampaignNotes").mockResolvedValue(undefined);
       vi.spyOn(exportManager, "flush").mockResolvedValue({ success: true });
 
@@ -178,7 +178,7 @@ describe("sync-flows", () => {
       };
       const exportManager = new ExportManager(client);
       const importCharacter = vi.fn().mockResolvedValue(summary());
-      await globalThis.game.settings.set(MODULE_ID, "autoSync", true);
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
 
       const result = await exportLinkedCharacter(linkedActor(), {
         exportManager,

@@ -1,6 +1,7 @@
 import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ImportSummary } from "./import/types.js";
+import { canWriteText } from "./write-level.js";
 import {
   getExportIssues,
   getImportIssues,
@@ -166,13 +167,13 @@ function buildDialogButtons(
  * "pushed" success.
  */
 function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
-  const autoSyncOn = game.settings.get(MODULE_ID, "autoSync") === true;
+  const writingOn = canWriteText();
   return {
     action: "push",
     label: "Push to Demiplane",
     icon: "fa-solid fa-upload",
-    disabled: !autoSyncOn,
-    tooltip: autoSyncOn ? "" : "Enable “Auto-sync on Actor Update” in the module settings to push to Demiplane.",
+    disabled: !writingOn,
+    tooltip: writingOn ? "" : "Set a “Write to Demiplane” level in the module settings to push to Demiplane.",
     callback: () => exportCharacter(actor),
   };
 }

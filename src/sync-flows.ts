@@ -7,6 +7,7 @@ import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges 
 import { characterSystem } from "./pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "./sync-pause.js";
 import { resetImportIssues, addImportIssues, setUnmappedSlugs } from "./sync-issues.js";
+import { canWriteText } from "./write-level.js";
 
 // Re-exported so wiring and tests share one definition.
 export type { ExportResult };
@@ -116,14 +117,14 @@ function scheduleSyncRelease(
 }
 
 export async function exportLinkedCharacter(actor: Actor, deps: SyncFlowDeps): Promise<ExportResult> {
-  // Auto-sync is the master write switch. When it is off the push would be a
+  // The write level is the master write switch. At "none" the push would be a
   // no-op, so tell the user plainly rather than doing the work and reporting a
   // misleading "pushed" success.
-  if (!game.settings.get(MODULE_ID, "autoSync")) {
+  if (!canWriteText()) {
     ui.notifications.warn(
-      `Auto-sync is off, so nothing was pushed for "${actor.name}". Enable it in the module settings to sync to Demiplane.`
+      `Writing to Demiplane is off, so nothing was pushed for "${actor.name}". Set a write level in the module settings to sync to Demiplane.`
     );
-    return { success: false, error: "Auto-sync is off" };
+    return { success: false, error: "Writing to Demiplane is off" };
   }
 
   const result = await pushCharacterEngines(actor, deps);

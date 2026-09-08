@@ -338,7 +338,7 @@ sequenceDiagram
 
     Foundry->>Module: Hooks.once("init")
     Module->>Settings: registerSettings()
-    Note over Settings: Registers: autoSync, demiplaneToken, debugImport
+    Note over Settings: Registers: syncWriteLevel, demiplaneToken, debugImport
 
     Foundry->>Module: Hooks.once("ready")
     Module->>Module: Create DemiplaneClient
@@ -521,7 +521,7 @@ sequenceDiagram
 ```
 src/
 ├── module.ts                      Entry point: hook registration, service wiring, API exposure
-├── settings.ts                    Foundry module settings (token, autoSync, debugImport)
+├── settings.ts                    Foundry module settings (token, syncWriteLevel, debugImport)
 ├── hook-manager.ts                Listens to actor/item hooks, maps fields, queues exports
 ├── export-manager.ts              Push orchestration: flush flow, retry/backoff, wires collaborators
 ├── export/

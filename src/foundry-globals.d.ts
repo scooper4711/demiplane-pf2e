@@ -42,6 +42,8 @@ declare global {
             | ObjectConstructor
             | ArrayConstructor
             | ConstructorOf<unknown>;
+          /** Value→label map; Foundry renders a <select> when present. */
+          choices?: Record<string, string>;
           default?: unknown;
           onChange?: (value: unknown) => void | Promise<void>;
         }
