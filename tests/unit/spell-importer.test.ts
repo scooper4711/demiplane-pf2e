@@ -33,6 +33,12 @@ describe("applySpells", () => {
         { _id: "sp9", name: "Stabilize", system: { slug: "stabilize" }, type: "spell" },
         { _id: "sp10", name: "Bless", system: { slug: "bless" }, type: "spell" },
         { _id: "sp11", name: "Sanctuary", system: { slug: "sanctuary" }, type: "spell" },
+        {
+          _id: "rit1",
+          name: "Halt Death",
+          system: { slug: "halt-death", ritual: { primary: { check: "Warfare Lore" } } },
+          type: "spell",
+        },
       ]),
     });
   });
@@ -120,6 +126,51 @@ describe("applySpells", () => {
     const summary = makeSummary();
     await applySpells(actor as never, engines, summary);
 
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  it("imports a ritual as a spell item with no spellcasting entry", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/spell/halt-death-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "halt-death-rm", parentSpellFeature: "ritual", sourceRow: "manual-sheet-drawer" },
+      },
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    const created = actor.createEmbeddedDocuments.mock.calls.flatMap(
+      (c: unknown[]) => c[1] as Array<Record<string, unknown>>
+    );
+    // No spellcasting entry is made — PF2e's ephemeral Rituals entry gathers it.
+    expect(created.some((i) => i.type === "spellcastingEntry")).toBe(false);
+
+    const ritual = created.find((i) => (i.system as { slug?: string }).slug === "halt-death");
+    expect(ritual).toBeDefined();
+    // location.value is null so the spell belongs to no entry (a ritual).
+    expect((ritual!.system as { location: { value: unknown } }).location.value).toBeNull();
+    // The compendium ritual block is preserved (what makes PF2e treat it as a ritual).
+    expect((ritual!.system as { ritual?: unknown }).ritual).toBeDefined();
+    expect(summary.unmapped).toEqual([]);
+  });
+
+  it("records an unresolved ritual as an unmapped spell", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "tabula/spell/unknown-ritual-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "unknown-ritual-rm", parentSpellFeature: "ritual" },
+      },
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    expect(summary.unmapped).toContainEqual({ slug: "unknown-ritual-rm", kind: "spell" });
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
   });
 

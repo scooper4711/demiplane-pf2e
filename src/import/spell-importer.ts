@@ -1,7 +1,7 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { groupSpells } from "./spell-grouping.js";
 import type { SpellGroup } from "./spell-grouping.js";
-import { createEntry, addSpells, capitalize } from "./spellcasting-entry.js";
+import { createEntry, addSpells, capitalize, resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 import { placePreparedSpells, markSignatureSpells } from "./prepared-spells.js";
 import { importFontSpells } from "./divine-font.js";
 import { applySlotMaximums } from "./spell-slots.js";
@@ -13,8 +13,8 @@ export async function applySpells(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const { main, innate, font } = groupSpells(engines);
-  if (main.length === 0 && innate.length === 0 && font.length === 0) return;
+  const { main, innate, font, rituals } = groupSpells(engines);
+  if (main.length === 0 && innate.length === 0 && font.length === 0 && rituals.length === 0) return;
 
   let totalAdded = 0;
 
@@ -30,9 +30,27 @@ export async function applySpells(
     totalAdded += await importFontSpells(actor, font, summary);
   }
 
+  if (rituals.length > 0) {
+    totalAdded += await importRituals(actor, rituals, summary);
+  }
+
   if (totalAdded > 0) {
     summary.log.push(`+ spells: ${String(totalAdded)} spells across entries`);
   }
+}
+
+/**
+ * Imports the character's known rituals. A ritual isn't part of any class
+ * spellcasting entry: PF2e builds an ephemeral "Rituals" entry from the actor's
+ * ritual-trait spells, so each ritual is created as a plain spell item with no
+ * `location` entry (`value: null`). Resolution is the same compendium lookup as
+ * any spell — the compendium item already carries the `ritual` block that makes
+ * PF2e treat it as one.
+ */
+async function importRituals(actor: Actor, rituals: DemiplaneEngineEntry[], summary: ImportSummary): Promise<number> {
+  const items = await resolveSpellItems(rituals, null, summary, { logLabel: "ritual" });
+  const created = await createSpellItems(actor, items);
+  return created.size;
 }
 
 async function importSpellGroup(
