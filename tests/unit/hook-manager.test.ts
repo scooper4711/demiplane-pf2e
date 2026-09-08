@@ -928,6 +928,21 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 4);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 2);
     });
+
+    it("queues nothing below the text tier", () => {
+      writeLevel = "none";
+      const actor = {
+        ...createMockActor(),
+        system: {
+          attributes: { hp: { value: 22, temp: 4 } },
+          resources: { heroPoints: { value: 2 } },
+        },
+      };
+
+      queueCombatResourceChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
   });
 
   describe("queueAllItemChanges", () => {
@@ -1014,6 +1029,54 @@ describe("HookManager", () => {
         "weapon"
       );
     });
+
+    it("at the text tier queues currency but not quantity or equipped state", () => {
+      writeLevel = "text";
+      const actor = {
+        ...createMockActor(),
+        items: [
+          {
+            type: "weapon",
+            name: "Longsword",
+            system: { slug: "longsword", quantity: 1, equipped: { carryType: "held", handsHeld: 1 } },
+            flags: {},
+          },
+          {
+            type: "treasure",
+            name: "Gold Pieces",
+            system: { slug: "gold-pieces", quantity: 35, equipped: { carryType: "worn", handsHeld: 0 } },
+            flags: {},
+          },
+        ],
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      // Currency is text-tier and still syncs.
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 35);
+      // Quantity and equipped state require the quantity tier.
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
+
+    it("queues nothing below the text tier", () => {
+      writeLevel = "none";
+      const actor = {
+        ...createMockActor(),
+        items: [
+          {
+            type: "treasure",
+            name: "Gold Pieces",
+            system: { slug: "gold-pieces", quantity: 35, equipped: { carryType: "worn", handsHeld: 0 } },
+            flags: {},
+          },
+        ],
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
   });
 
   describe("queueAllDetailChanges", () => {
@@ -1072,6 +1135,15 @@ describe("HookManager", () => {
       queueAllDetailChanges(exportManager as never, actor as never);
 
       expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character_organizedplayid", expect.anything());
+    });
+
+    it("queues nothing below the text tier", () => {
+      writeLevel = "none";
+      const actor = createDetailActor();
+
+      queueAllDetailChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
   });
 

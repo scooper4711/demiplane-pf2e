@@ -316,8 +316,87 @@ export async function withApiRetry<T>(label: string, fn: () => Promise<T>): Prom
   }
 }
 
-/** Waits until our module API is callable — it lands after game.ready. */
-export async function waitForModuleApi(page: Page): Promise<void> {
+/**
+ * Sets the module write level (and soft-delete flag) for mutation tests,
+ * returning the previous values for restoration. Enabling any writing tier
+ * on a dev build pops the pre-release warning — expected here, so it is
+ * accepted. Every mutation spec must restore what it found: the seeded world
+ * default is deliberately the safest tier.
+ */
+export async function setWriteLevel(
+  page: Page,
+  level: string,
+  softDelete: boolean
+): Promise<{ level: string | undefined; softDelete: boolean | undefined }> {
+  return await page.evaluate(
+    async ({ moduleId, level, softDelete }) => {
+      // @ts-expect-error Foundry global
+      const prevLevel = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
+      // @ts-expect-error Foundry global
+      const prevSoft = game.settings.get(moduleId, "syncSoftDelete") as boolean | undefined;
+      // @ts-expect-error Foundry global
+      await game.settings.set(moduleId, "syncWriteLevel", level);
+      // @ts-expect-error Foundry global
+      await game.settings.set(moduleId, "syncSoftDelete", softDelete);
+      await new Promise((r) => setTimeout(r, 2000));
+      // @ts-expect-error Foundry global
+      for (const app of Object.values(ui.windows ?? {})) {
+        const title = (app as { options?: { window?: { title?: string } } })?.options?.window?.title ?? "";
+        if (title.includes("Pre-Release")) await (app as { close: () => Promise<void> }).close();
+      }
+      return { level: prevLevel, softDelete: prevSoft };
+    },
+    { moduleId: MODULE_ID, level, softDelete }
+  );
+}
+
+/**
+ * Waits until an import's grace window has released the actor: imports hold
+ * the export suspension and sync pause for a few seconds AFTER returning (to
+ * swallow late item hooks), and any test mutation inside that window has its
+ * hook queues silently dropped. Deletes are unrecoverable (no full-state
+ * re-queue rescues them), so every spec must wait here after importing and
+ * before mutating. Polls the replicated pause flag rather than sleeping a
+ * fixed duration.
+ */
+export async function waitForSyncRelease(page: Page, characterId: string): Promise<void> {
+  await page.waitForFunction(
+    ({ characterId, moduleId }) => {
+      // @ts-expect-error Foundry global
+      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      if (!actor) return false;
+      // @ts-expect-error Foundry global
+      const tokens = actor.getFlag(moduleId, "syncActiveTokens");
+      return !Array.isArray(tokens) || tokens.length === 0;
+    },
+    { characterId, moduleId: MODULE_ID },
+    { timeout: 30_000 }
+  );
+}
+
+/**
+ * Restores a write level previously saved by setWriteLevel. Best-effort by
+ * design: cleanup must never throw.
+ */ export async function restoreWriteLevel(
+  page: Page,
+  saved: { level: string | undefined; softDelete: boolean | undefined }
+): Promise<void> {
+  await page
+    .evaluate(
+      async ({ moduleId, saved }) => {
+        // @ts-expect-error Foundry global
+        await game.settings.set(moduleId, "syncWriteLevel", saved.level ?? "none");
+        // @ts-expect-error Foundry global
+        await game.settings.set(moduleId, "syncSoftDelete", saved.softDelete ?? false);
+      },
+      { moduleId: MODULE_ID, saved }
+    )
+    .catch(() => {});
+}
+
+/** Waits until our module API is callable — it lands after game.ready. */ export async function waitForModuleApi(
+  page: Page
+): Promise<void> {
   await page.waitForFunction(
     () =>
       typeof (
