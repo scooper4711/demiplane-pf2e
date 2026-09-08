@@ -7,6 +7,9 @@ import {
   createAndImportCharacter,
   stopCoverage,
   withApiRetry,
+  setWriteLevel,
+  restoreWriteLevel,
+  waitForSyncRelease,
 } from "./helpers.js";
 
 const CHARACTER_UUID = process.env.KYRA_UUID ?? "";
@@ -56,7 +59,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
     // failure happened before these were assigned. A masking finally-error
     // that skips the restore is data loss — never let that happen again.
     let page: Page | undefined;
-    let writeLevelWas: string | undefined;
+    let savedSettings: { level: string | undefined; softDelete: boolean | undefined } | undefined;
     try {
       page = await browser.newPage();
       await loginAsGamemaster(page);
@@ -64,6 +67,10 @@ test.describe("Kyra Mutation Round-Trip", () => {
       await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
       const imported = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
       expect(imported.summary.errors).toHaveLength(1);
+      // Imports hold the export suspension for seconds AFTER returning; any
+      // mutation inside that window loses its hook queues (deletes
+      // unrecoverably), so wait it out before touching the actor.
+      await waitForSyncRelease(page, CHARACTER_UUID);
 
       // Discover mutation targets from the live actor (no hardcoded items).
       // Looked up by characterId flag: the import renames the actor to the
@@ -135,25 +142,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
         `Mutation targets: currency=${currency.name} qty=${qtyItem.name} equip=${equipItem.name} delete=${deleteItem.name}`
       );
 
-      // Writing (at the deletion tier) must be on for the push. Dev builds pop
-      // the pre-release warning when writing is enabled — expected here, so
-      // accept it.
-      writeLevelWas = await page.evaluate(
-        async ({ moduleId }) => {
-          // @ts-expect-error Foundry global
-          const was = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
-          // @ts-expect-error Foundry global
-          await game.settings.set(moduleId, "syncWriteLevel", "text-quantity-delete");
-          await new Promise((r) => setTimeout(r, 2000));
-          // @ts-expect-error Foundry global
-          for (const app of Object.values(ui.windows ?? {})) {
-            const title = (app as { options?: { window?: { title?: string } } })?.options?.window?.title ?? "";
-            if (title.includes("Pre-Release")) await (app as { close: () => Promise<void> }).close();
-          }
-          return was;
-        },
-        { moduleId: MODULE_ID }
-      );
+      // Full writing (deletion tier, hard deletes) for the push.
+      savedSettings = await setWriteLevel(page, "text-quantity-delete", false);
 
       // Mutate every pushable field, then read back the actor state as the
       // expectations ( guards against Foundry clamping anything we sent).
@@ -176,7 +166,6 @@ test.describe("Kyra Mutation Round-Trip", () => {
           const carryNew = heldNow ? "worn" : "held";
           const handsNew = heldNow ? 0 : 1;
           const deleteTarget = actor.items.get(deleteItemId);
-          const deletedName = deleteTarget.name as string;
 
           await actor.update({
             "system.attributes.hp.value": 3,
@@ -257,6 +246,13 @@ test.describe("Kyra Mutation Round-Trip", () => {
         },
         { timeout: 120_000 }
       );
+
+      // Deleting at the deletion tier always asks for confirmation — accept
+      // it so the removal is actually queued before pushing. The dialog must
+      // appear: its absence means the confirmation gate regressed.
+      const confirmDelete = page.getByRole("button", { name: "Delete on Demiplane" });
+      await confirmDelete.waitFor({ state: "visible", timeout: 15_000 });
+      await confirmDelete.click();
 
       const pushResult = await page.evaluate(
         async ({ characterId, moduleId }) => {
@@ -398,16 +394,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
       // engineCacheIdsBySource}` data plus the REAL fetched meta. All-null
       // meta makes the server reject the write ("unexpected null value for
       // type 'Int'"), and a full-CharacterData `data` blob is not accepted.
-      if (page) {
-        await page
-          .evaluate(
-            async ({ moduleId, was }) => {
-              // @ts-expect-error Foundry global
-              await game.settings.set(moduleId, "syncWriteLevel", was ?? "none");
-            },
-            { moduleId: MODULE_ID, was: writeLevelWas ?? null }
-          )
-          .catch(() => {});
+      if (page && savedSettings) {
+        await restoreWriteLevel(page, savedSettings);
       }
       // Quiescence: any debounce timer armed before auto-sync went off fires
       // into a disabled writer (a no-op) instead of landing after the restore.

@@ -79,7 +79,10 @@ interface DeletableItem {
  * so they can be flushed immediately (manual push / exportNow).
  */
 export function queueCombatResourceChanges(exportManager: ExportManager, actor: Actor): void {
-  // Callers only pass linked character actors (see exportLinkedCharacter).
+  // HP, hero points, and currency are text-tier fields: a manual push at a
+  // lower tier must not write them (the master switch in exportLinkedCharacter
+  // only blocks level `none`, so each re-queue entry point enforces its own tier).
+  if (!canWriteText()) return;
   const hitPoints = characterSystem(actor).attributes?.hp;
   if (typeof hitPoints?.value === "number") {
     exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
@@ -99,31 +102,49 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
  * slots) rather than only combat resources.
  */
 export function queueAllItemChanges(exportManager: ExportManager, actor: Actor): void {
+  // Levels apply to manual pushes too: currency is text-tier, but quantity
+  // and equipped state require the quantity tier. Without per-kind gating a
+  // manual push at "text fields only" would leak item writes past the bound.
+  const writeText = canWriteText();
+  const writeQuantity = canWriteQuantity();
   // `actor.items` is typed as the common base collection, but at runtime (and
   // in the PF2e system) every entry is a client Item. Narrow once here so the
   // PF2e field reads below type-check.
   // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
   const items = Array.from(actor.items) as unknown as Item[];
   for (const item of items) {
-    const system = itemSystem(item);
-    const slug = system?.slug;
-    if (typeof slug !== "string") continue;
+    queueSingleItemChanges(exportManager, actor, item, writeText, writeQuantity);
+  }
+}
 
-    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
-    const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
+function queueSingleItemChanges(
+  exportManager: ExportManager,
+  actor: Actor,
+  item: Item,
+  writeText: boolean,
+  writeQuantity: boolean
+): void {
+  const system = itemSystem(item);
+  const slug = system?.slug;
+  if (typeof slug !== "string") return;
 
-    if (typeof system?.quantity === "number") {
-      if (slug in TREASURE_ITEM_MAP) {
-        exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, system.quantity);
-      } else {
-        exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", system.quantity);
-      }
+  const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
+  const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
+
+  if (typeof system?.quantity === "number") {
+    if (slug in TREASURE_ITEM_MAP) {
+      if (!writeText) return;
+      exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, system.quantity);
+    } else {
+      if (!writeQuantity) return;
+      exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", system.quantity);
     }
+  }
 
-    const carryType = system?.equipped?.carryType;
-    if (typeof carryType === "string") {
-      queueEquipped(exportManager, actor, item, slug, demiplaneSlug, system.equipped);
-    }
+  const carryType = system?.equipped?.carryType;
+  if (typeof carryType === "string") {
+    if (!writeQuantity) return;
+    queueEquipped(exportManager, actor, item, slug, demiplaneSlug, system.equipped);
   }
 }
 
@@ -159,6 +180,8 @@ function queueEquipped(
  * value the next import overwrites. The import side still reads it.
  */
 export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor): void {
+  // Detail fields are text-tier; a manual push below that tier writes nothing.
+  if (!canWriteText()) return;
   queueMappedDetailFields(exportManager, actor);
   queueOrganizedPlayId(exportManager, actor);
   queueAdditionalLanguages(exportManager, actor);
@@ -246,7 +269,7 @@ export class HookManager {
     if (!this.isLinkedCharacterActor(actor)) return;
     // While any client is importing or pushing this character, actor updates are
     // just the sync echoing to other clients — don't queue them back to Demiplane.
-    // Checked before the auto-sync guard so an import doesn't log a misleading
+    // Checked before the write-level guard so an import doesn't log a misleading
     // "nothing pushed" note for its own writes.
     if (isSyncActive(actor)) return;
     if (!this.writeAllowed("text", actor.name)) return;
