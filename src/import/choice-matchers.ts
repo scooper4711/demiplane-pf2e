@@ -1,5 +1,5 @@
 import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug, generateSlugCandidates, rawEquipmentSlug } from "./slug-utils.js";
+import { toFoundrySlug, generateSlugCandidates, rawEquipmentSlug, isGrantedByElement } from "./slug-utils.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
@@ -227,19 +227,23 @@ function matchAdoptedAncestry(choices: Choice[], engines: DemiplaneEngineEntry[]
 }
 
 /**
- * Matches a ChoiceSet that grants an item the character actually owns, e.g. the
+ * Matches a ChoiceSet that resolves which item an element granted, e.g. the
  * dwarf ancestry's "Clan Dagger vs Clan Pistol" weapon choice. The chosen weapon
  * is present as a `tabula/item/<slug>.eng` engine (here `clan-dagger-rm`), which
  * the broad slug strategies miss: a weapon ChoiceSet's option `value` is usually
  * a compendium UUID, so only the option *label* ("Clan Dagger") identifies it.
  *
- * We collect the character's item-engine slugs and match against both sides —
- * the option value (for slug-valued ChoiceSets) and the slugified label (for the
- * common UUID-valued case) — so it resolves regardless of the option's shape.
+ * Only element-granted item engines are considered — those carrying a
+ * `sourceData` block naming the granting element (see {@link isGrantedByElement}).
+ * A ChoiceSet like this exists precisely to resolve an element's grant, so the
+ * character's manually-added inventory is irrelevant to it and could otherwise
+ * make an unrelated owned item spuriously win a slug match. We match the granted
+ * slugs against both the option value (slug-valued ChoiceSets) and the slugified
+ * label (the common UUID-valued case) so it resolves regardless of shape.
  */
 function matchItemEngines(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
   const itemSlugs = engines
-    .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"))
+    .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/") && isGrantedByElement(e))
     .map((e) => toFoundrySlug(rawEquipmentSlug(e)));
   if (itemSlugs.length === 0) return null;
 

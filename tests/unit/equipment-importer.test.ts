@@ -70,6 +70,58 @@ describe("applyEquipment", () => {
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
   });
 
+  // An item an ancestry/feat grants (e.g. the dwarf's Clan Dagger) is created by
+  // Foundry's own GrantItem rule, so importing its engine too would duplicate it.
+  // Such engines carry a `sourceData` block naming the granting element; manual
+  // inventory has none.
+  it("skips item engines granted by another element", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "granted",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "longsword-rm",
+          parentEngine: "dwarf-engine",
+          sourceData: { name: "Dwarf", slug: "dwarf-rm", category: "ancestry", engineID: "dwarf-engine" },
+        },
+        demiplaneEngineId: "eng-granted",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  it("still imports manually added items alongside a granted one", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "granted",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "longsword-rm",
+          sourceData: { category: "ancestry", engineID: "dwarf-engine" },
+        },
+        demiplaneEngineId: "eng-granted",
+      },
+      {
+        id: "manual",
+        name: "tabula/item/whip-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "whip-rm", sourceRow: "manual-sheet-drawer" },
+        demiplaneEngineId: "eng-manual",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
+  });
+
   // Resolved items must show as editable rows on the mapping screen so a GM can
   // correct one that matched the wrong compendium entry — not just unmapped ones.
   it("records the resolved equipment mapping keyed by the Demiplane slug", async () => {
