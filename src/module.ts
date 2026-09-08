@@ -21,6 +21,7 @@ import type { ExportCharacterFn, ImportCharacterFn, SyncFlowDeps } from "./sync-
 import { buildUpdateFromDemiplaneOption } from "./actor-context-menu.js";
 import { canImportCharacters, onImportButtonClick } from "./directory-import.js";
 import { registerModuleApi } from "./module-api.js";
+import { canWriteText, WRITE_LEVEL_SETTING } from "./write-level.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -50,8 +51,9 @@ Hooks.once("ready", async () => {
 async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
-  // Pre-release warning only applies once the write feature (auto-sync) is enabled.
-  if (game.settings.get(MODULE_ID, "autoSync") && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
+  // Pre-release warning only applies once writing to Demiplane is enabled (any
+  // level other than "none").
+  if (canWriteText() && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
     await showPreReleaseWarning();
   }
 
@@ -118,11 +120,12 @@ function registerTokenSyncHooks(): void {
       }
     }
 
-    // The pre-release warning is tied to the write feature (auto-sync). Show it
-    // whenever auto-sync is switched on so users are re-warned before writing.
+    // The pre-release warning is tied to writing being enabled. Show it whenever
+    // the write level changes to a value that permits writing, so users are
+    // re-warned before writing.
     if (
-      setting.key === `${MODULE_ID}.autoSync` &&
-      game.settings.get(MODULE_ID, "autoSync") &&
+      setting.key === `${MODULE_ID}.${WRITE_LEVEL_SETTING}` &&
+      canWriteText() &&
       isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)
     ) {
       showPreReleaseWarning();

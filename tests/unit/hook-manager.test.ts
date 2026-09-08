@@ -29,7 +29,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
 vi.stubGlobal("game", {
   settings: {
     get: (_moduleId: string, key: string) => {
-      if (key === "autoSync") return autoSyncEnabled;
+      // `autoSyncEnabled` true = full write (delete tier); false = no writing.
+      // Tests that need an intermediate tier set `writeLevel` directly.
+      if (key === "syncWriteLevel") return writeLevel ?? (autoSyncEnabled ? "text-quantity-delete" : "none");
       if (key === "debugImport") return debugEnabled;
       return undefined;
     },
@@ -50,6 +52,11 @@ vi.stubGlobal("CONFIG", {
   },
 });
 
+// The delete handler prompts before propagating; `confirmDelete` controls the answer.
+let confirmDelete = true;
+const dialogConfirm = vi.fn(() => Promise.resolve(confirmDelete ? "delete" : "keep"));
+vi.stubGlobal("foundry", { applications: { api: { DialogV2: { wait: dialogConfirm } } } });
+
 import {
   HookManager,
   queueAllItemChanges,
@@ -59,6 +66,8 @@ import {
 
 const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
+/** When set, overrides the autoSyncEnabled→tier mapping for intermediate-tier tests. */
+let writeLevel: string | undefined;
 let debugEnabled = true;
 
 function createMockExportManager() {
@@ -113,6 +122,8 @@ describe("HookManager", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     autoSyncEnabled = true;
+    writeLevel = undefined;
+    confirmDelete = true;
     debugEnabled = true;
     for (const key of Object.keys(hookRegistry)) {
       delete hookRegistry[key];
@@ -169,96 +180,143 @@ describe("HookManager", () => {
   });
 
   describe("deleteItem hook", () => {
-    it("queues deletion using the item's demiplane slug", () => {
+    /** A Demiplane-controlled inventory item (imported flag set). */
+    function importedItem(
+      actor: ReturnType<typeof createMockActor>,
+      name: string,
+      data: { type: string; system: Record<string, unknown>; demiplaneSlug?: string }
+    ) {
+      const dpFlags: Record<string, unknown> = { imported: true };
+      if (data.demiplaneSlug) dpFlags.demiplaneSlug = data.demiplaneSlug;
+      return createMockItem(actor, name, {
+        type: data.type,
+        system: data.system,
+        flags: { "demiplane-pf2e": dpFlags },
+      });
+    }
+
+    /** Let the async confirm-then-queue microtask settle. */
+    const settle = () => Promise.resolve();
+
+    it("prompts, then queues deletion using the item's demiplane slug when confirmed", async () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
-      const item = createMockItem(actor, "Armored Coat", {
+      const item = importedItem(actor, "Armored Coat", {
         type: "armor",
         system: { slug: "armored-coat" },
-        flags: { "demiplane-pf2e": { demiplaneSlug: "armored-coat" } },
+        demiplaneSlug: "armored-coat",
       });
 
       triggerHook("deleteItem", item);
+      await settle();
 
+      expect(dialogConfirm).toHaveBeenCalledTimes(1);
       expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "armored-coat");
     });
 
-    it("falls back to the system slug when no demiplane slug is stored", () => {
+    it("does NOT queue the deletion when the user declines the prompt", async () => {
+      confirmDelete = false;
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
-      const item = createMockItem(actor, "Longsword", { type: "weapon", system: { slug: "longsword" } });
+      triggerHook(
+        "deleteItem",
+        importedItem(actor, "Armored Coat", { type: "armor", system: { slug: "armored-coat" } })
+      );
+      await settle();
 
-      triggerHook("deleteItem", item);
+      expect(dialogConfirm).toHaveBeenCalledTimes(1);
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the system slug when no demiplane slug is stored", async () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook("deleteItem", importedItem(actor, "Longsword", { type: "weapon", system: { slug: "longsword" } }));
+      await settle();
 
       expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "longsword");
     });
 
-    it("queues deletion for equipment, ammunition, and treasure inventory types", () => {
+    it("queues deletion for equipment, ammunition, and treasure inventory types", async () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
-      triggerHook("deleteItem", createMockItem(actor, "Arrows", { type: "ammo", system: { slug: "arrows" } }));
+      triggerHook("deleteItem", importedItem(actor, "Arrows", { type: "ammo", system: { slug: "arrows" } }));
       triggerHook(
         "deleteItem",
-        createMockItem(actor, "Healing Potion", { type: "consumable", system: { slug: "healing-potion" } })
+        importedItem(actor, "Healing Potion", { type: "consumable", system: { slug: "healing-potion" } })
       );
-      triggerHook("deleteItem", createMockItem(actor, "Gold Bar", { type: "treasure", system: { slug: "gold-bar" } }));
+      triggerHook("deleteItem", importedItem(actor, "Gold Bar", { type: "treasure", system: { slug: "gold-bar" } }));
+      await settle();
 
       expect(exportManager.queueItemDelete).toHaveBeenCalledTimes(3);
     });
 
-    it("does not queue deletion for non-inventory items like feats, classes, and backgrounds", () => {
+    it("does not prompt or queue for a homemade (non-Demiplane) item", async () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      // Inventory type + resolvable slug, but no imported flag: user's own item.
+      triggerHook("deleteItem", createMockItem(actor, "Homebrew Blade", { type: "weapon", system: { slug: "sword" } }));
+      await settle();
+
+      expect(dialogConfirm).not.toHaveBeenCalled();
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("does not queue deletion for non-inventory items like feats, classes, and backgrounds", async () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
       triggerHook(
         "deleteItem",
-        createMockItem(actor, "Power Attack", { type: "feat", system: { slug: "power-attack" } })
+        importedItem(actor, "Power Attack", { type: "feat", system: { slug: "power-attack" } })
       );
-      triggerHook("deleteItem", createMockItem(actor, "Fighter", { type: "class", system: { slug: "fighter" } }));
-      triggerHook(
-        "deleteItem",
-        createMockItem(actor, "Farmhand", { type: "background", system: { slug: "farmhand" } })
-      );
-      triggerHook("deleteItem", createMockItem(actor, "Dwarf", { type: "ancestry", system: { slug: "dwarf" } }));
-      triggerHook("deleteItem", createMockItem(actor, "Fireball", { type: "spell", system: { slug: "fireball" } }));
+      triggerHook("deleteItem", importedItem(actor, "Fighter", { type: "class", system: { slug: "fighter" } }));
+      triggerHook("deleteItem", importedItem(actor, "Farmhand", { type: "background", system: { slug: "farmhand" } }));
+      triggerHook("deleteItem", importedItem(actor, "Dwarf", { type: "ancestry", system: { slug: "dwarf" } }));
+      triggerHook("deleteItem", importedItem(actor, "Fireball", { type: "spell", system: { slug: "fireball" } }));
+      await settle();
 
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
     });
 
-    it("does not queue deletion for an item without a slug", () => {
+    it("does not queue deletion for an item without a slug", async () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = createMockActor();
-      const item = createMockItem(actor, "Mystery Item", { type: "equipment", system: {} });
-
-      triggerHook("deleteItem", item);
+      triggerHook("deleteItem", importedItem(actor, "Mystery Item", { type: "equipment", system: {} }));
+      await settle();
 
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
     });
 
-    it("does not queue deletion for unlinked or non-character actors", () => {
+    it("does not queue deletion for unlinked or non-character actors", async () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
-      const unlinked = createMockItem(createMockActor("character", null), "Sword", {
+      const unlinked = importedItem(createMockActor("character", null), "Sword", {
         type: "weapon",
         system: { slug: "sword" },
       });
       triggerHook("deleteItem", unlinked);
 
-      const nonCharacter = createMockItem(createMockActor("npc"), "Sword", {
+      const nonCharacter = importedItem(createMockActor("npc"), "Sword", {
         type: "weapon",
         system: { slug: "sword" },
       });
       triggerHook("deleteItem", nonCharacter);
+      await settle();
 
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
     });
@@ -615,7 +673,7 @@ describe("HookManager", () => {
       triggerHook("updateActor", createMockActor(), { "system.attributes.hp.value": 20 });
 
       expect(logSpy).toHaveBeenCalledWith(
-        `${MODULE_ID} | [debug] "Test Actor" changed, but auto-sync is off — nothing pushed to Demiplane.`
+        `${MODULE_ID} | [debug] "Test Actor" changed (text), but the write level does not permit it — nothing pushed to Demiplane.`
       );
       logSpy.mockRestore();
     });

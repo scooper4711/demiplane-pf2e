@@ -3,6 +3,8 @@ import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import type { EquippedState } from "./export/change-buffer.js";
 import { isSyncActive } from "./sync-pause.js";
+import { canWriteText, canWriteQuantity, canWriteDeletes } from "./write-level.js";
+import { DEMIPLANE_ICON_SRC } from "./config.js";
 import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 
 /**
@@ -235,7 +237,7 @@ export class HookManager {
     // Checked before the auto-sync guard so an import doesn't log a misleading
     // "nothing pushed" note for its own writes.
     if (isSyncActive(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
+    if (!this.writeAllowed("text", actor.name)) return;
 
     for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
       const value = this.getChangeValue(changes, actorPath);
@@ -300,7 +302,7 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
+    if (!this.writeAllowed("quantity", actor.name)) return;
 
     const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
@@ -362,7 +364,9 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
+    // Creates are never pushed to Demiplane (only logged for diagnostics); the
+    // text-tier gate keeps the console note consistent with the other handlers.
+    if (!this.writeAllowed("text", actor.name)) return;
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
   }
 
@@ -389,28 +393,82 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
-    if (!this.autoSyncEnabled(actor.name)) return;
+    if (!this.writeAllowed("delete", actor.name)) return;
 
+    const slot = this.resolveDeletableSlot(item);
+    if (!slot) return;
+
+    // The item is already gone from Foundry by the time this hook fires, so the
+    // prompt governs only whether the removal is propagated to Demiplane. Guarding
+    // a destructive, hard-to-reverse write behind explicit confirmation is the
+    // whole point of this handler; queue the delete only if the user confirms.
+    void this.confirmAndQueueDelete(actor, item.name ?? "item", slot);
+  }
+
+  /**
+   * The Demiplane slot to remove for a deleted item, or `undefined` when the
+   * deletion must not be propagated. Only a Demiplane-controlled inventory item
+   * with a resolvable slug qualifies; each skip is logged with its reason.
+   *
+   * - Non-inventory items (feats, class, deity, …) are never pushed — deity in
+   *   particular is build-derived, so a local delete must not clear it remotely.
+   * - A homemade item (no `imported` flag) was never on Demiplane, so deleting
+   *   it must not push a removal there even if its slug happens to resolve.
+   */
+  private resolveDeletableSlot(item: Item): string | undefined {
     const itemType = (item as { type?: string })?.type;
-
-    // No deity branch: deity is build-derived and never pushed (a local delete
-    // must not clear the remote value). Deity items fall through to the
-    // non-inventory skip below.
     if (!itemType || !INVENTORY_ITEM_TYPES.has(itemType)) {
       debugLog(`Item deleted from linked actor (not inventory, skipping push): ${item.name} (type=${itemType})`);
-      return;
+      return undefined;
     }
 
-    const slug = itemSystem(item).slug ?? undefined;
-    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
+    const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown; imported?: unknown } | undefined) ?? {};
+    if (dpFlags.imported !== true) {
+      debugLog(`Item deleted from linked actor (not Demiplane-controlled, skipping push): ${item.name}`);
+      return undefined;
+    }
+
     const demiplaneSlug = typeof dpFlags.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
-    const slot = demiplaneSlug ?? slug;
+    const slot = demiplaneSlug ?? itemSystem(item).slug ?? undefined;
     if (!slot) {
       debugLog(`Item deleted from linked actor (no demiplane slug, skipping push): ${item.name}`);
+      return undefined;
+    }
+    return slot;
+  }
+
+  /**
+   * Asks the user to confirm propagating an inventory item's deletion to
+   * Demiplane, then queues the delete if they accept. Only reached for a
+   * Demiplane-controlled inventory item deleted while the write level permits
+   * deletions and no import/sync is in flight.
+   */
+  private async confirmAndQueueDelete(actor: Actor, itemName: string, slot: string): Promise<void> {
+    // `DialogV2.wait` with an explicit buttons array (rather than the confirm
+    // shorthand) so `default: true` both focuses "Keep on Demiplane" for Enter
+    // AND gives it the highlighted default-button styling. "Keep" is the safe,
+    // non-destructive choice, so it is the default.
+    const choice = await foundry.applications.api.DialogV2.wait({
+      window: { title: "Delete on Demiplane?" },
+      content:
+        `<div style="display:flex;align-items:flex-start;gap:0.75em;">` +
+        `<img src="${DEMIPLANE_ICON_SRC}" alt="Demiplane" style="height:2.8em;width:2.8em;flex:0 0 auto;border:none;" />` +
+        `<p style="margin:0;">Remove <strong>${itemName}</strong> from <strong>${actor.name}</strong> on Demiplane too?</p>` +
+        `</div>` +
+        `<p>This deletes the item from the linked Demiplane character. It can't be undone from here — you'd have to re-add it in Demiplane.</p>` +
+        `<p>If you keep it on Demiplane, it will reappear here the next time this character is updated from Demiplane.</p>`,
+      buttons: [
+        { action: "delete", label: "Delete on Demiplane", icon: "fa-solid fa-trash" },
+        { action: "keep", label: "Keep on Demiplane", icon: "fa-solid fa-cloud", default: true },
+      ],
+    });
+
+    if (choice !== "delete") {
+      debugLog(`Item delete NOT propagated (user declined): ${itemName} (${slot})`);
       return;
     }
 
-    debugLog(`Item deleted from linked actor: ${item.name} (${slot})`);
+    debugLog(`Item deleted from linked actor: ${itemName} (${slot})`);
     this.exportManager.queueItemDelete(actor, slot);
   }
 
@@ -421,13 +479,21 @@ export class HookManager {
   }
 
   /**
-   * Whether auto-sync is on. When it is off, logs a calm, reassuring note (so a
-   * reader of the console sees the change was noticed and deliberately not
-   * pushed) rather than staying silent or hinting at a push that never happens.
+   * Whether the active write level permits `kind`. When it doesn't, logs a calm,
+   * reassuring note (so a reader of the console sees the change was noticed and
+   * deliberately not pushed) rather than staying silent or hinting at a push
+   * that never happens.
    */
-  private autoSyncEnabled(actorName: string | null | undefined): boolean {
-    if (game.settings.get(MODULE_ID, "autoSync")) return true;
-    debugLog(`"${actorName ?? "character"}" changed, but auto-sync is off — nothing pushed to Demiplane.`);
+  private writeAllowed(kind: "text" | "quantity" | "delete", actorName: string | null | undefined): boolean {
+    const predicate: Record<typeof kind, () => boolean> = {
+      text: canWriteText,
+      quantity: canWriteQuantity,
+      delete: canWriteDeletes,
+    };
+    if (predicate[kind]()) return true;
+    debugLog(
+      `"${actorName ?? "character"}" changed (${kind}), but the write level does not permit it — nothing pushed to Demiplane.`
+    );
     return false;
   }
 

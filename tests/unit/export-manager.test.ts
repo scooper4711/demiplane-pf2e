@@ -14,7 +14,9 @@ vi.stubGlobal("ui", {
 let autoSyncEnabled = true;
 vi.stubGlobal("game", {
   settings: {
-    get: (_moduleId: string, key: string) => (key === "autoSync" ? autoSyncEnabled : undefined),
+    // autoSyncEnabled true = full write; false = no writing.
+    get: (_moduleId: string, key: string) =>
+      key === "syncWriteLevel" ? (autoSyncEnabled ? "text-quantity-delete" : "none") : undefined,
   },
 });
 

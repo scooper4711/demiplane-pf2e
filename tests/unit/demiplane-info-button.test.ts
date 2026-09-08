@@ -49,7 +49,7 @@ describe("demiplane-info-button", () => {
       settings: {
         get: vi.fn((_m: string, k: string) => {
           if (k === "demiplaneToken") return "tok";
-          if (k === "autoSync") return autoSyncEnabled;
+          if (k === "syncWriteLevel") return autoSyncEnabled ? "text-quantity-delete" : "none";
           return undefined;
         }),
       },
@@ -166,7 +166,7 @@ describe("demiplane-info-button", () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     const push = pushButton();
     expect(push?.disabled).toBe(true);
-    expect(push?.tooltip).toContain("Auto-sync");
+    expect(push?.tooltip).toContain("Write to Demiplane");
   });
 
   it("updates from Demiplane when the update button is clicked", async () => {

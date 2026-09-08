@@ -100,7 +100,7 @@ describe("settings", () => {
   it("registers the user-facing module settings", () => {
     registerSettings();
     const keys = register.mock.calls.map((c) => c[1]);
-    expect(keys).toEqual(expect.arrayContaining(["autoSync", "demiplaneToken", "debugImport"]));
+    expect(keys).toEqual(expect.arrayContaining(["syncWriteLevel", "demiplaneToken", "debugImport"]));
   });
 
   it("registers one slug mapping setting per kind", () => {

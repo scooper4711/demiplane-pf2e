@@ -42,21 +42,20 @@ The import builds your character the same way as if you dragged and dropped each
 
 ## Syncing Back to Demiplane
 
-The module can push session state from Foundry back to the linked Demiplane sheet:
+The module can push session state from Foundry back to the linked Demiplane sheet. How much it pushes is controlled by the **Write to Demiplane** setting, which has four levels — each includes everything the level before it does:
 
-- Current hit points
-- Temporary hit points
-- Hero points
-- Currency
-- Item equipped state (including 1H/2H hand assignment and armor worn-in-slot)
-- Item quantity
-- Deity
-- Languages
-- Biography and appearance details
+| Level                                       | What it pushes                                                                                            |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| **No writing to Demiplane** (default)       | Nothing. The module only ever reads.                                                                      |
+| **Text fields only**                        | Hit points, temporary hit points, hero points, currency, languages, biography and appearance details      |
+| **Text fields + item quantity/equipped**    | The above, plus item quantity and equipped state (including 1H/2H hand assignment and armor worn-in-slot) |
+| **Text fields + quantity + item deletions** | The above, plus propagating an item deletion back to Demiplane                                            |
 
-Adding new items in Foundry currently is _not_ synced back to Demiplane, but deleting them is.
+A fresh install starts at **No writing to Demiplane**, so nothing is ever written until a GM opts in. Deity is build-derived and is never pushed. Adding a new item in Foundry is not synced back to Demiplane.
 
-Turn on **Auto-sync on Actor Update** in module settings to push those fields automatically (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
+**Deleting an item is the most invasive write, so it has two safeguards.** It only happens at the top level, and even then, deleting a Demiplane-controlled item from a character's inventory always pops up a confirmation before removing it on Demiplane — you can keep it on Demiplane while removing it locally. Deleting an item you added yourself in Foundry (one that never came from Demiplane) never prompts and never pushes. Deletions caused by the module's own re-import never prompt either.
+
+Writing happens automatically as you edit (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
 
 Still on the roadmap:
 

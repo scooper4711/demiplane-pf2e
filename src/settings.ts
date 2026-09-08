@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSlugMappingSettings } from "./slug-mapping.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
+import { WRITE_LEVEL_SETTING, WRITE_LEVEL_LABELS, DEFAULT_WRITE_LEVEL } from "./write-level.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -10,13 +11,14 @@ interface SettingsHtml extends HTMLElement {
 export function registerSettings(): void {
   registerSlugMappingSettings();
 
-  game.settings.register(MODULE_ID, "autoSync", {
-    name: "Auto-sync on Actor Update",
-    hint: "Automatically push edits back to Demiplane as you make them: HP and hero points, currency, item quantity and equipped state, languages, and biography/appearance details. (Deity is build-derived and never pushed.)",
+  game.settings.register(MODULE_ID, WRITE_LEVEL_SETTING, {
+    name: "Write to Demiplane",
+    hint: "How much of a linked character to push back to Demiplane as you edit it. Each level includes the ones before it. Deleting an item from a character's inventory is the most invasive write, so it requires the highest level and always asks for confirmation before removing the item on Demiplane. (Deity is build-derived and never pushed.)",
     scope: "world",
     config: true,
-    type: Boolean,
-    default: false,
+    type: String,
+    choices: WRITE_LEVEL_LABELS,
+    default: DEFAULT_WRITE_LEVEL,
   });
 
   game.settings.register(MODULE_ID, "demiplaneToken", {

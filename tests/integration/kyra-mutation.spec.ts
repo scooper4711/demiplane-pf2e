@@ -56,7 +56,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
     // failure happened before these were assigned. A masking finally-error
     // that skips the restore is data loss — never let that happen again.
     let page: Page | undefined;
-    let autoSyncWas: boolean | undefined;
+    let writeLevelWas: string | undefined;
     try {
       page = await browser.newPage();
       await loginAsGamemaster(page);
@@ -135,14 +135,15 @@ test.describe("Kyra Mutation Round-Trip", () => {
         `Mutation targets: currency=${currency.name} qty=${qtyItem.name} equip=${equipItem.name} delete=${deleteItem.name}`
       );
 
-      // Auto-sync must be on for the push. Dev builds pop the pre-release
-      // warning when it is enabled — expected here, so accept it.
-      autoSyncWas = await page.evaluate(
+      // Writing (at the deletion tier) must be on for the push. Dev builds pop
+      // the pre-release warning when writing is enabled — expected here, so
+      // accept it.
+      writeLevelWas = await page.evaluate(
         async ({ moduleId }) => {
           // @ts-expect-error Foundry global
-          const was = game.settings.get(moduleId, "autoSync") === true;
+          const was = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
           // @ts-expect-error Foundry global
-          await game.settings.set(moduleId, "autoSync", true);
+          await game.settings.set(moduleId, "syncWriteLevel", "text-quantity-delete");
           await new Promise((r) => setTimeout(r, 2000));
           // @ts-expect-error Foundry global
           for (const app of Object.values(ui.windows ?? {})) {
@@ -397,14 +398,14 @@ test.describe("Kyra Mutation Round-Trip", () => {
       // engineCacheIdsBySource}` data plus the REAL fetched meta. All-null
       // meta makes the server reject the write ("unexpected null value for
       // type 'Int'"), and a full-CharacterData `data` blob is not accepted.
-      if (page && autoSyncWas !== undefined) {
+      if (page) {
         await page
           .evaluate(
             async ({ moduleId, was }) => {
               // @ts-expect-error Foundry global
-              await game.settings.set(moduleId, "autoSync", was);
+              await game.settings.set(moduleId, "syncWriteLevel", was ?? "none");
             },
-            { moduleId: MODULE_ID, was: autoSyncWas }
+            { moduleId: MODULE_ID, was: writeLevelWas ?? null }
           )
           .catch(() => {});
       }
