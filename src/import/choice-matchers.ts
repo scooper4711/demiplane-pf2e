@@ -1,5 +1,5 @@
 import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
+import { toFoundrySlug, generateSlugCandidates, rawEquipmentSlug } from "./slug-utils.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
@@ -22,6 +22,7 @@ export function findMatchInChoices(
     matchDomain(choices, engines) ??
     matchMuse(choices, engines) ??
     matchAdoptedAncestry(choices, engines) ??
+    matchItemEngines(choices, engines) ??
     matchAllSlugs(choices, engines) ??
     matchClassFeatures(choices, engines) ??
     matchGenericFeatures(choices, engines) ??
@@ -186,6 +187,33 @@ function matchAdoptedAncestry(choices: Choice[], engines: DemiplaneEngineEntry[]
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
     if (ancestrySlugs.includes(val) || ancestrySlugs.includes(toChoiceSlug(choice.label))) return choice;
+  }
+  return null;
+}
+
+/**
+ * Matches a ChoiceSet that grants an item the character actually owns, e.g. the
+ * dwarf ancestry's "Clan Dagger vs Clan Pistol" weapon choice. The chosen weapon
+ * is present as a `tabula/item/<slug>.eng` engine (here `clan-dagger-rm`), which
+ * the broad slug strategies miss: a weapon ChoiceSet's option `value` is usually
+ * a compendium UUID, so only the option *label* ("Clan Dagger") identifies it.
+ *
+ * We collect the character's item-engine slugs and match against both sides —
+ * the option value (for slug-valued ChoiceSets) and the slugified label (for the
+ * common UUID-valued case) — so it resolves regardless of the option's shape.
+ */
+function matchItemEngines(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const itemSlugs = engines
+    .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"))
+    .map((e) => toFoundrySlug(rawEquipmentSlug(e)));
+  if (itemSlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Item-engine strategy - item slugs: [${itemSlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const value = typeof choice.value === "string" ? choice.value : "";
+    const labelSlug = toChoiceSlug(choice.label);
+    if (itemSlugs.some((slug) => slug === value || slug === labelSlug)) return choice;
   }
   return null;
 }

@@ -1,5 +1,5 @@
 import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug } from "./slug-utils.js";
+import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
 import { resolveSlugToUuid } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
@@ -329,7 +329,16 @@ export class ChoiceSetHandler {
         return e.args?.slug && (sourceRow.includes("select-") || e.name.includes("/class-feature/"));
       })
       .map((e) => e.args?.slug as string);
-    return [...new Set(slugs)];
+
+    // Item engines carry a granted weapon/gear choice (e.g. Clan Dagger) whose
+    // slug lives in the engine name rather than a select- sourceRow, so include
+    // them too — otherwise the "Your character had:" dump omits the very item
+    // that identifies the choice.
+    const itemSlugs = this.currentEngines
+      .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"))
+      .map((e) => rawEquipmentSlug(e));
+
+    return [...new Set([...slugs, ...itemSlugs])];
   }
 
   /**

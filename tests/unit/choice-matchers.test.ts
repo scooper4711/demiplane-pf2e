@@ -298,4 +298,32 @@ describe("choice-matchers", () => {
 
     expect(findMatchInChoices(choices, [adoptedAncestryEngine("human-rm")])).toBe(choices[1]);
   });
+
+  // An ancestry weapon choice (Clan Dagger vs Clan Pistol): the chosen weapon is
+  // present as a tabula/item engine, and the option value is a compendium UUID,
+  // so only the label identifies it.
+  function itemEngine(slug) {
+    return { id: `item-${slug}`, name: `tabula/item/${slug}.eng`, type: "DemiplaneEngine", args: { slug } };
+  }
+
+  it("matches an ancestry item choice by label when the value is a compendium UUID", () => {
+    const choices = [
+      { label: "Clan Dagger", value: "Compendium.pf2e.equipment-srd.Item.cd" },
+      { label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" },
+    ];
+
+    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBe(choices[0]);
+  });
+
+  it("matches an item choice by slug value when the ChoiceSet is slug-valued", () => {
+    const choices = [{ label: "Clan Dagger", value: "clan-dagger" }];
+
+    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBe(choices[0]);
+  });
+
+  it("does not match an item choice the character doesn't own", () => {
+    const choices = [{ label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" }];
+
+    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBeNull();
+  });
 });
