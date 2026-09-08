@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0-beta.14] - 2026-09-08
+
+### Added
+
+- soft-delete option and honor Demiplane quantity of zero
+- tiered write-to-Demiplane setting with delete confirmation
+- add a search bar to the Demiplane Mapping screen
+- record resolved item mappings and surface unresolved carried spells
+- attach spells to wands and scrolls, and size items to the actor
+
+### Fixed
+
+- hold sync guard past import to prevent Demiplane data loss
+- keep legitimately-owned duplicate inventory items on import
+
+### Changed
+
+- write-level mutation matrix (tiers, gates, soft-delete)
+- drop per-item charges spellcasting entries; rely on PF2e Activations
+- add UI-interaction integration coverage for module surfaces
+
+[0.2.0-beta.14]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v0.2.0-beta.14
+
 ## [0.2.0-beta.13] - 2026-09-07
 
 ### Added
