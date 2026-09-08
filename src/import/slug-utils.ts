@@ -221,6 +221,19 @@ export function isGrantedByElement(eng: DemiplaneEngineEntry): boolean {
   return eng.args?.sourceData !== undefined && eng.args?.sourceData !== null;
 }
 
+/**
+ * Whether an item engine is a crafting formula rather than a physical item.
+ *
+ * Demiplane sends a known formula as a `tabula/item/*` engine (like equipment)
+ * but tags it with `metaItemType: "formula"`. A formula isn't inventory: PF2e
+ * records it under `system.crafting.formulas` as the UUID of the item it lets
+ * the character craft, so it must be routed there instead of being created as
+ * an item.
+ */
+export function isFormulaEngine(eng: DemiplaneEngineEntry): boolean {
+  return eng.args?.metaItemType === "formula";
+}
+
 export function normalizeEquipmentSlug(demiplaneSlug: string): string {
   const stripped = demiplaneSlug.replace(/-rm$/, "");
 

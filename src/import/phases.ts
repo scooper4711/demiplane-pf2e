@@ -24,6 +24,7 @@ import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";
 import { applyEquipment, applyCurrency } from "./equipment-importer.js";
+import { applyCraftingFormulas } from "./crafting-formulas.js";
 import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
 import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
@@ -341,6 +342,7 @@ export class PostProcessingPhase implements ImportPhase {
     await applyBiography(actor, ctx.engines, ctx.summary);
     await applySkillProficiencies(actor, ctx.engines, ctx.summary);
     await applyEquipment(actor, ctx.engines, ctx.summary);
+    await applyCraftingFormulas(actor, ctx.engines, ctx.summary);
     await applyCurrency(actor, ctx.engines, ctx.summary);
     await applySpells(actor, ctx.engines, ctx.summary);
     await applyFeatureGrantedSpells(actor, ctx.engines, ctx.summary, ctx.cacheEngineIds);
