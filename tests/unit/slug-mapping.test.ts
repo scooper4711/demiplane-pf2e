@@ -8,6 +8,10 @@ import {
   resolveMappedItem,
   isMappingResolvable,
   recordResolvedMapping,
+  exportMappings,
+  parseMappingsExport,
+  importMappings,
+  MAPPINGS_EXPORT_VERSION,
 } from "../../src/slug-mapping.js";
 
 const EQUIPMENT_UUID = "Compendium.pf2e.equipment-srd.Item.hp1";
@@ -86,5 +90,103 @@ describe("slug-mapping", () => {
     await recordResolvedMapping("equipment", "already", { uuid: SPELL_UUID, name: "Auto" });
     // The deliberate entry wins; recording never clobbers it.
     expect(getMapping("equipment", "already")).toEqual({ uuid: EQUIPMENT_UUID, name: "GM Choice" });
+  });
+});
+
+describe("slug-mapping export/import", () => {
+  const MISSING_UUID = "Compendium.pf2e.equipment-srd.Item.gone";
+
+  beforeEach(() => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        { _id: "hp1", name: "Half Plate", system: { slug: "half-plate" }, type: "armor" },
+      ]),
+      "pf2e.spells-srd": createMockPack([{ _id: "sp1", name: "Heal", system: { slug: "heal" }, type: "spell" }]),
+    });
+    registerSlugMappingSettings();
+  });
+
+  it("exports mappings grouped by kind, omitting empty kinds", async () => {
+    await setMapping("equipment", "religious-symbol", { uuid: EQUIPMENT_UUID, name: "Half Plate" });
+    await setMapping("spell", "frostbite-psychic-rm", { uuid: SPELL_UUID, name: "Heal" });
+
+    const data = exportMappings();
+    expect(data.version).toBe(MAPPINGS_EXPORT_VERSION);
+    expect(data.mappings.equipment).toEqual({ "religious-symbol": { uuid: EQUIPMENT_UUID, name: "Half Plate" } });
+    expect(data.mappings.spell).toEqual({ "frostbite-psychic-rm": { uuid: SPELL_UUID, name: "Heal" } });
+    expect(data.mappings.feat).toBeUndefined();
+  });
+
+  it("round-trips through export then parse", async () => {
+    await setMapping("equipment", "religious-symbol", { uuid: EQUIPMENT_UUID, name: "Half Plate" });
+    const text = JSON.stringify(exportMappings());
+
+    const parsed = parseMappingsExport(text);
+    expect(parsed?.mappings.equipment?.["religious-symbol"]).toEqual({ uuid: EQUIPMENT_UUID, name: "Half Plate" });
+  });
+
+  it("rejects malformed or non-export files", () => {
+    expect(parseMappingsExport("{not json")).toBeNull();
+    expect(parseMappingsExport("[]")).toBeNull();
+    expect(parseMappingsExport('{"version":1}')).toBeNull();
+  });
+
+  it("drops unknown kinds and malformed entries when parsing untrusted input", () => {
+    const raw = JSON.stringify({
+      version: 1,
+      mappings: {
+        equipment: { good: { uuid: EQUIPMENT_UUID, name: "Half Plate" }, bad: { uuid: 42 } },
+        bogusKind: { x: { uuid: EQUIPMENT_UUID, name: "X" } },
+      },
+    });
+
+    const parsed = parseMappingsExport(raw);
+    expect(parsed?.mappings.equipment).toEqual({ good: { uuid: EQUIPMENT_UUID, name: "Half Plate" } });
+    expect((parsed?.mappings as Record<string, unknown>).bogusKind).toBeUndefined();
+  });
+
+  it("imports resolvable mappings and skips those whose target is missing", async () => {
+    const parsed = {
+      version: 1,
+      mappings: {
+        equipment: {
+          "res-symbol": { uuid: EQUIPMENT_UUID, name: "Half Plate" },
+          "gone-item": { uuid: MISSING_UUID, name: "Removed" },
+        },
+      },
+    };
+
+    const result = await importMappings(parsed, { overwrite: false });
+
+    expect(result.imported).toBe(1);
+    expect(result.skippedMissing).toBe(1);
+    expect(result.missingSamples).toContain("gone-item → Removed");
+    expect(getMapping("equipment", "res-symbol")).toEqual({ uuid: EQUIPMENT_UUID, name: "Half Plate" });
+    expect(getMapping("equipment", "gone-item")).toBeUndefined();
+  });
+
+  it("does not overwrite an existing mapping unless asked", async () => {
+    await setMapping("equipment", "res-symbol", { uuid: EQUIPMENT_UUID, name: "Local Choice" });
+    const parsed = {
+      version: 1,
+      mappings: { equipment: { "res-symbol": { uuid: SPELL_UUID, name: "Imported" } } },
+    };
+
+    const kept = await importMappings(parsed, { overwrite: false });
+    expect(kept.skippedExisting).toBe(1);
+    expect(kept.imported).toBe(0);
+    expect(getMapping("equipment", "res-symbol")?.name).toBe("Local Choice");
+  });
+
+  it("overwrites an existing mapping when overwrite is set", async () => {
+    await setMapping("equipment", "res-symbol", { uuid: EQUIPMENT_UUID, name: "Local Choice" });
+    const parsed = {
+      version: 1,
+      mappings: { equipment: { "res-symbol": { uuid: SPELL_UUID, name: "Imported" } } },
+    };
+
+    const replaced = await importMappings(parsed, { overwrite: true });
+    expect(replaced.imported).toBe(1);
+    expect(getMapping("equipment", "res-symbol")).toEqual({ uuid: SPELL_UUID, name: "Imported" });
   });
 });

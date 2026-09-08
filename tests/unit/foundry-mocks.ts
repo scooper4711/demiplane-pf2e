@@ -136,6 +136,7 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
   (globalThis as unknown as Record<string, unknown>).game = {
     packs,
     actors: { get: vi.fn(), getName: vi.fn() },
+    world: { id: "test-world" },
     modules: { get: vi.fn() },
     settings: {
       get: vi.fn((_module: string, key: string) => settingStore.get(key)),
@@ -166,6 +167,8 @@ export function installFoundryMocks(packMap: Record<string, ReturnType<typeof cr
         Array.from({ length: 16 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(Math.random() * 36)]).join(
           ""
         ),
+      /** Stubbed so export can be asserted without touching the DOM/filesystem. */
+      saveDataToFile: vi.fn(),
     },
     // Minimal ApplicationV2 surface. Apps resolve their base class at import
     // time, so this must exist for any module declaring one to be importable.

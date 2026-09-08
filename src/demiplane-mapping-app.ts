@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import type { SlugKind } from "./import/types.js";
 import { getUnmappedSlugs } from "./sync-issues.js";
 import { getAllMappings, setMapping, clearMapping } from "./slug-mapping.js";
+import { exportAction, importAction } from "./mapping-share.js";
 
 const TEMPLATE_PATH = `modules/${MODULE_ID}/templates/demiplane-mapping.hbs`;
 
@@ -159,6 +160,8 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
       actions: {
         browse: DemiplaneMappingApp.#onClickBrowse,
         clear: DemiplaneMappingApp.#onClickClear,
+        exportMappings: DemiplaneMappingApp.#onClickExport,
+        importMappings: DemiplaneMappingApp.#onClickImport,
       },
     };
 
@@ -251,6 +254,14 @@ function buildDemiplaneMappingAppClass(): DemiplaneMappingAppConstructor {
 
     static async #onClickClear(_event: PointerEvent, button: HTMLElement): Promise<void> {
       await clearAction(button.dataset);
+    }
+
+    static async #onClickExport(): Promise<void> {
+      await exportAction();
+    }
+
+    static async #onClickImport(): Promise<void> {
+      await importAction(refresh);
     }
 
     async #onDrop(event: DragEvent, row: HTMLElement): Promise<void> {

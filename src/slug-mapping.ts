@@ -103,3 +103,119 @@ export async function resolveMappedItem(kind: SlugKind, slug: string): Promise<R
 export async function isMappingResolvable(mapping: SlugMapping): Promise<boolean> {
   return (await fromUuid(mapping.uuid)) !== null;
 }
+
+// ─── Cross-world export / import ─────────────────────────────────────────────
+
+/** The schema version stamped on an exported mapping file. */
+export const MAPPINGS_EXPORT_VERSION = 1;
+
+/** The serialized form of every mapping, for sharing a mapping set between worlds. */
+export interface MappingsExport {
+  version: number;
+  mappings: Partial<Record<SlugKind, Record<string, SlugMapping>>>;
+}
+
+/** The outcome of importing a mapping file, for the summary shown to the GM. */
+export interface MappingsImportResult {
+  /** Mappings written to this world. */
+  imported: number;
+  /** Entries skipped because their target doesn't exist in this world. */
+  skippedMissing: number;
+  /** Entries skipped because a mapping for that slug already existed (non-overwrite). */
+  skippedExisting: number;
+  /** A short sample of the skipped-missing entries, for the summary (slug + name). */
+  missingSamples: string[];
+}
+
+/** Collects every kind's mappings into a single serializable object. */
+export function exportMappings(): MappingsExport {
+  const mappings: Partial<Record<SlugKind, Record<string, SlugMapping>>> = {};
+  for (const kind of SLUG_KINDS) {
+    const forKind = getAllMappings(kind);
+    if (Object.keys(forKind).length > 0) mappings[kind] = forKind;
+  }
+  return { version: MAPPINGS_EXPORT_VERSION, mappings };
+}
+
+/** Whether a value is a well-formed {uuid, name} mapping entry (both non-empty strings). */
+function isSlugMapping(value: unknown): value is SlugMapping {
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.uuid === "string" && entry.uuid.length > 0 && typeof entry.name === "string";
+}
+
+/**
+ * Parses untrusted file content into a {@link MappingsExport}, or returns null
+ * when it isn't a recognizable export. Validates the envelope and drops any
+ * unknown kind key or malformed entry rather than trusting the file's shape.
+ */
+export function parseMappingsExport(raw: string): MappingsExport | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const candidate = parsed as { version?: unknown; mappings?: unknown };
+  if (typeof candidate.mappings !== "object" || candidate.mappings === null) return null;
+
+  const source = candidate.mappings as Record<string, unknown>;
+  const mappings: Partial<Record<SlugKind, Record<string, SlugMapping>>> = {};
+  for (const kind of SLUG_KINDS) {
+    const forKind = source[kind];
+    if (typeof forKind !== "object" || forKind === null) continue;
+    const clean: Record<string, SlugMapping> = {};
+    for (const [slug, entry] of Object.entries(forKind as Record<string, unknown>)) {
+      if (typeof slug === "string" && slug.length > 0 && isSlugMapping(entry)) clean[slug] = entry;
+    }
+    if (Object.keys(clean).length > 0) mappings[kind] = clean;
+  }
+
+  const version = typeof candidate.version === "number" ? candidate.version : MAPPINGS_EXPORT_VERSION;
+  return { version, mappings };
+}
+
+/**
+ * Merges an imported mapping set into this world. An entry is skipped when its
+ * target doesn't resolve here (a pack the world lacks) so the store never gains
+ * a broken mapping. When `overwrite` is false an entry whose slug is already
+ * mapped locally is also skipped, so importing never silently replaces a
+ * deliberate local choice. Returns counts and a sample of what was skipped.
+ */
+export async function importMappings(
+  parsed: MappingsExport,
+  options: { overwrite: boolean }
+): Promise<MappingsImportResult> {
+  const result: MappingsImportResult = { imported: 0, skippedMissing: 0, skippedExisting: 0, missingSamples: [] };
+
+  for (const kind of SLUG_KINDS) {
+    const forKind = parsed.mappings[kind];
+    if (!forKind) continue;
+
+    for (const [slug, mapping] of Object.entries(forKind)) {
+      if (!options.overwrite && getMapping(kind, slug)) {
+        result.skippedExisting++;
+        continue;
+      }
+      if (!(await isMappingResolvable(mapping))) {
+        result.skippedMissing++;
+        if (result.missingSamples.length < MISSING_SAMPLE_LIMIT) {
+          result.missingSamples.push(`${slug} → ${mapping.name}`);
+        }
+        continue;
+      }
+      await setMapping(kind, slug, mapping);
+      result.imported++;
+    }
+  }
+
+  debugLog(
+    `[slug-mapping] import: ${result.imported} written, ${result.skippedMissing} missing, ${result.skippedExisting} already mapped`
+  );
+  return result;
+}
+
+/** How many skipped-missing entries to name in the import summary before "…and N more". */
+const MISSING_SAMPLE_LIMIT = 10;
