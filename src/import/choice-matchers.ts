@@ -13,7 +13,8 @@ import type { Choice } from "./choice-set-types.js";
 export function findMatchInChoices(
   choices: Choice[],
   engines: DemiplaneEngineEntry[],
-  itemName?: string
+  itemName?: string,
+  grantedFeatsByElement?: Map<string, Set<string>>
 ): Choice | null {
   const match =
     matchSkillSlugs(choices, engines) ??
@@ -23,6 +24,7 @@ export function findMatchInChoices(
     matchMuse(choices, engines) ??
     matchAdoptedAncestry(choices, engines) ??
     matchItemEngines(choices, engines) ??
+    matchGrantedFeats(choices, grantedFeatsByElement, itemName) ??
     matchAllSlugs(choices, engines) ??
     matchClassFeatures(choices, engines) ??
     matchGenericFeatures(choices, engines) ??
@@ -31,6 +33,39 @@ export function findMatchInChoices(
 
   if (!match) debugLog("[ChoiceSet match] No match found across all strategies");
   return match;
+}
+
+/**
+ * Matches a ChoiceSet whose owning element grants a fixed feat that Foundry
+ * models as a player choice — the Total Power background is the canonical case.
+ *
+ * Demiplane's Total Power grants the "troll" classification's Bone Spikes feat
+ * outright (its element definition carries `feats: ["bone-spikes", ...]`),
+ * whereas Foundry presents a "Blasting Beams vs Bone Spikes" ChoiceSet. Neither
+ * a slug engine nor a feat engine exists for the grant — the only signal is the
+ * granting element's own definition — so the generic strategies can't resolve
+ * it. We look up the granting element by the ChoiceSet item's slug
+ * ("Total Power" → `total-power`) and match its granted feat slugs against each
+ * option's value and slugified label.
+ */
+function matchGrantedFeats(
+  choices: Choice[],
+  grantedFeatsByElement: Map<string, Set<string>> | undefined,
+  itemName?: string
+): Choice | null {
+  if (!grantedFeatsByElement || !itemName) return null;
+
+  const grantedFeats = grantedFeatsByElement.get(toChoiceSlug(itemName));
+  if (!grantedFeats || grantedFeats.size === 0) return null;
+
+  debugLog(`[ChoiceSet match] Granted-feats strategy for "${itemName}": [${Array.from(grantedFeats).join(", ")}]`);
+
+  for (const choice of choices) {
+    const value = typeof choice.value === "string" ? toFoundrySlug(choice.value) : "";
+    const labelSlug = toChoiceSlug(choice.label);
+    if (grantedFeats.has(value) || grantedFeats.has(labelSlug)) return choice;
+  }
+  return null;
 }
 
 /**

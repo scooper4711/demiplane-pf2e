@@ -87,6 +87,13 @@ export class ChoiceSetHandler {
   private usingLibWrapper = false;
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
+  /**
+   * Maps a granting element's slug to the feat slugs it confers outright (e.g.
+   * `total-power` → {`bone-spikes`, `intimidating-glare`}). Used to resolve a
+   * ChoiceSet whose owning element grants a fixed feat Foundry models as a
+   * choice. Empty until {@link setGrantedFeats} is called.
+   */
+  private grantedFeatsByElement: Map<string, Set<string>> = new Map();
   /** Fallbacks accumulated during the current import; drained by the orchestrator. */
   private fallbacks: ChoiceSetFallback[] = [];
   /** A stored player sanctification preference to honor over the default, if any. */
@@ -98,6 +105,15 @@ export class ChoiceSetHandler {
     this.currentEngines = engines;
     this.fallbacks = [];
     this.sanctificationDecision = undefined;
+  }
+
+  /**
+   * Provides the granting-element-to-granted-feats map so ChoiceSets whose
+   * owning element grants a fixed feat (e.g. Total Power → Bone Spikes) resolve
+   * to that feat rather than defaulting to the first option.
+   */
+  setGrantedFeats(grantedFeatsByElement: Map<string, Set<string>>): void {
+    this.grantedFeatsByElement = grantedFeatsByElement;
   }
 
   /**
@@ -238,7 +254,12 @@ export class ChoiceSetHandler {
       `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
     );
 
-    const matched = findMatchInChoices(context.choices, this.currentEngines, context.item.name);
+    const matched = findMatchInChoices(
+      context.choices,
+      this.currentEngines,
+      context.item.name,
+      this.grantedFeatsByElement
+    );
     const selected = matched ?? context.choices[0];
     if (selected) {
       this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
