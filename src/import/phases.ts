@@ -390,9 +390,7 @@ export class RemoveDuplicatesPhase implements ImportPhase {
     const toDelete: string[] = [];
 
     for (const item of items) {
-      const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
-      const core = (flags.core || {}) as { sourceId?: string };
-      const key = core.sourceId || `${String(item.type)}::${String(item.name)}`;
+      const key = this.duplicateKey(item);
 
       const existing = seen.get(key);
       if (!existing) {
@@ -414,6 +412,28 @@ export class RemoveDuplicatesPhase implements ImportPhase {
       await actor.deleteEmbeddedDocuments("Item", toDelete);
       ctx.summary.log.push(`- removed ${toDelete.length} duplicate item(s)`);
     }
+  }
+
+  /**
+   * The key by which two items are considered the same for dedup.
+   *
+   * Normally the compendium source id (falling back to type::name). Spells add
+   * their spellcasting-entry id: the same compendium spell legitimately belongs
+   * to two entries — a wizard's curriculum spell lives in both the main
+   * spellbook and the Curriculum entry — so those copies must key differently or
+   * one would be collapsed away (and, with it, its prepared placement).
+   */
+  private duplicateKey(item: Record<string, unknown>): string {
+    const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
+    const core = (flags.core || {}) as { sourceId?: string };
+    const base = core.sourceId || `${String(item.type)}::${String(item.name)}`;
+
+    if (item.type === "spell") {
+      const system = (item.system || {}) as { location?: { value?: unknown } };
+      const entryId = system.location?.value;
+      if (typeof entryId === "string") return `${base}@${entryId}`;
+    }
+    return base;
   }
 
   /**

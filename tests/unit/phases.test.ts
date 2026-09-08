@@ -697,5 +697,41 @@ describe("import phases", () => {
 
       expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["2"]);
     });
+
+    /** A spell item located in a given spellcasting entry. */
+    function spellIn(id: string, entryId: string) {
+      return {
+        _id: id,
+        id,
+        type: "spell",
+        name: "Fireball",
+        flags: { core: { sourceId: "Compendium.pf2e.spells-srd.Item.fireball" }, [MODULE_ID]: { imported: true } },
+        system: { location: { value: entryId } },
+      };
+    }
+
+    it("keeps the same spell that lives in two spellcasting entries", async () => {
+      // A wizard's curriculum spell belongs to both the main spellbook and the
+      // Curriculum entry. Same compendium source, both stamped — but different
+      // entries, so both must survive (else the curriculum copy vanishes after
+      // being placed).
+      const actor = createMockActor({
+        items: [spellIn("main", "entry-main"), spellIn("curriculum", "entry-curriculum")],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+    });
+
+    it("still collapses the same spell duplicated within one entry", async () => {
+      const actor = createMockActor({
+        items: [spellIn("1", "entry-main"), spellIn("2", "entry-main")],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["2"]);
+    });
   });
 });
