@@ -203,6 +203,24 @@ export function rawEquipmentSlug(eng: { args?: { slug?: unknown } | null; name: 
   return (eng.args?.slug as string | undefined) ?? (eng.name.split("/").pop() ?? "").replace(/\.eng$/, "");
 }
 
+/**
+ * Whether an item engine was granted by another element (an ancestry, heritage,
+ * background, class, or feat) rather than added to inventory by the player.
+ *
+ * A granted item engine carries a `sourceData` block naming the granting element
+ * (its `category` and `engineID`), e.g. the dwarf's Clan Dagger records
+ * `sourceData: { category: "ancestry", engineID: "<dwarf engine>" }`. A
+ * player-added item has no `sourceData` — it carries `sourceRow:
+ * "manual-sheet-drawer"` instead.
+ *
+ * The importer skips these: Foundry's own ancestry/feat rule elements (a
+ * ChoiceSet resolving the pick, then a GrantItem creating the item) already add
+ * the granted item, so importing the engine too would create a duplicate.
+ */
+export function isGrantedByElement(eng: DemiplaneEngineEntry): boolean {
+  return eng.args?.sourceData !== undefined && eng.args?.sourceData !== null;
+}
+
 export function normalizeEquipmentSlug(demiplaneSlug: string): string {
   const stripped = demiplaneSlug.replace(/-rm$/, "");
 

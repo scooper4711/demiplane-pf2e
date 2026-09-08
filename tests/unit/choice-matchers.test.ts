@@ -300,10 +300,27 @@ describe("choice-matchers", () => {
   });
 
   // An ancestry weapon choice (Clan Dagger vs Clan Pistol): the chosen weapon is
-  // present as a tabula/item engine, and the option value is a compendium UUID,
-  // so only the label identifies it.
-  function itemEngine(slug) {
-    return { id: `item-${slug}`, name: `tabula/item/${slug}.eng`, type: "DemiplaneEngine", args: { slug } };
+  // present as an element-granted tabula/item engine (it carries a sourceData
+  // block naming the granting ancestry), and the option value is a compendium
+  // UUID, so only the label identifies it.
+  function grantedItemEngine(slug) {
+    return {
+      id: `item-${slug}`,
+      name: `tabula/item/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: { slug, sourceData: { category: "ancestry", engineID: "dwarf-engine" } },
+    };
+  }
+
+  // A player-added item carries no sourceData (it has sourceRow
+  // "manual-sheet-drawer"); it must not resolve an element's grant ChoiceSet.
+  function manualItemEngine(slug) {
+    return {
+      id: `item-${slug}`,
+      name: `tabula/item/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: { slug, sourceRow: "manual-sheet-drawer" },
+    };
   }
 
   it("matches an ancestry item choice by label when the value is a compendium UUID", () => {
@@ -312,19 +329,30 @@ describe("choice-matchers", () => {
       { label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" },
     ];
 
-    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBe(choices[0]);
   });
 
   it("matches an item choice by slug value when the ChoiceSet is slug-valued", () => {
     const choices = [{ label: "Clan Dagger", value: "clan-dagger" }];
 
-    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBe(choices[0]);
   });
 
   it("does not match an item choice the character doesn't own", () => {
     const choices = [{ label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" }];
 
-    expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBeNull();
+    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBeNull();
+  });
+
+  it("ignores a manually-added item when resolving an element's grant choice", () => {
+    const choices = [
+      { label: "Clan Dagger", value: "Compendium.pf2e.equipment-srd.Item.cd" },
+      { label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" },
+    ];
+
+    // The character bought a Clan Dagger by hand, but the ancestry didn't grant
+    // one — the grant ChoiceSet must not be resolved off manual inventory.
+    expect(findMatchInChoices(choices, [manualItemEngine("clan-dagger-rm")])).toBeNull();
   });
 
   // A background (Total Power) that grants a fixed feat Foundry models as a

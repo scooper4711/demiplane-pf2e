@@ -2,6 +2,7 @@ import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import {
   genericConsumableSlug,
+  isGrantedByElement,
   normalizeEquipmentSlug,
   parseRankedConsumable,
   rawEquipmentSlug,
@@ -273,12 +274,39 @@ async function createBackpackFirst(actor: Actor, items: PendingItem[], state: Eq
   return 1;
 }
 
+/**
+ * Whether to skip importing an item engine because another element granted it.
+ *
+ * Foundry's ancestry/heritage/background/class/feat rule elements grant their
+ * fixed items themselves (a ChoiceSet resolves the pick, a GrantItem creates the
+ * item), so importing the Demiplane engine for the same item would leave the
+ * character with two copies — e.g. a dwarf's Clan Dagger appearing once from the
+ * ancestry grant and once from this importer. Logs the skip for traceability.
+ */
+function skipElementGrantedItem(eng: DemiplaneEngineEntry): boolean {
+  if (!isGrantedByElement(eng)) return false;
+  const category = (eng.args?.sourceData as { category?: string } | undefined)?.category ?? "element";
+  debugLog(`[equipment] "${rawEquipmentSlug(eng)}" skipped: granted by ${category} (Foundry grants it natively)`);
+  return true;
+}
+
+/**
+ * The item engines this importer should create as inventory: `tabula/item`
+ * engines, minus those another element grants (which Foundry creates itself; see
+ * {@link skipElementGrantedItem}).
+ */
+function collectImportableItemEngines(engines: DemiplaneEngineEntry[]): DemiplaneEngineEntry[] {
+  return engines.filter(
+    (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/") && !skipElementGrantedItem(e)
+  );
+}
+
 export async function applyEquipment(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const allItemEngines = engines.filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"));
+  const allItemEngines = collectImportableItemEngines(engines);
   if (allItemEngines.length === 0) return;
 
   // Runes are affixed to a parent weapon (weapon.system.runes), not created as
