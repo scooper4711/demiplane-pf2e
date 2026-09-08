@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { parseDomainLine, parseEngineLine, resolveFeatEngineIdsBySlug } from "../../src/import/stream-engines.js";
+import {
+  parseDomainLine,
+  parseEngineLine,
+  parseGrantedFeatsLine,
+  resolveFeatEngineIdsBySlug,
+  resolveGrantedFeatsBySlug,
+} from "../../src/import/stream-engines.js";
 
 /** Builds an NDJSON engine line with a top-level engineName and modifier payload. */
 function engineLine(id: string, engineName: string, modifiers: unknown[]): string {
@@ -129,6 +135,88 @@ describe("resolveFeatEngineIdsBySlug", () => {
 
   it("returns an empty map when given no ids", async () => {
     const map = await resolveFeatEngineIdsBySlug([]);
+    expect(map.size).toBe(0);
+  });
+});
+
+/** Builds an NDJSON line for an element that grants feats via its `feats` array. */
+function grantedFeatsLine(slug: string, feats: unknown[]): string {
+  return JSON.stringify({
+    id: `def-${slug}`,
+    engineName: `tabula/background/${slug}.eng`,
+    data: {
+      nodes: {
+        "1": { name: "StringObject", data: { string: JSON.stringify({ slug, feats }) } },
+      },
+    },
+  });
+}
+
+describe("parseGrantedFeatsLine", () => {
+  it("extracts the element slug and its granted feat slugs", () => {
+    expect(parseGrantedFeatsLine(grantedFeatsLine("total-power", ["bone-spikes", "intimidating-glare"]))).toEqual({
+      slug: "total-power",
+      feats: ["bone-spikes", "intimidating-glare"],
+    });
+  });
+
+  it("ignores non-string entries in the feats array", () => {
+    expect(parseGrantedFeatsLine(grantedFeatsLine("total-power", ["bone-spikes", 42, null]))).toEqual({
+      slug: "total-power",
+      feats: ["bone-spikes"],
+    });
+  });
+
+  it("returns null when the element grants no feats", () => {
+    expect(parseGrantedFeatsLine(grantedFeatsLine("some-background", []))).toBeNull();
+    expect(parseGrantedFeatsLine(engineLine("x", "tabula/feat/foxfire.eng", []))).toBeNull();
+  });
+
+  it("returns null for malformed lines", () => {
+    expect(parseGrantedFeatsLine("{not json")).toBeNull();
+  });
+});
+
+describe("resolveGrantedFeatsBySlug", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("maps each granting element slug to its granted feat slugs", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            grantedFeatsLine("total-power", ["bone-spikes", "intimidating-glare"]),
+            engineLine("spell-1", "tabula/spell/daze-rm.eng", []),
+          ].join("\n"),
+      })
+    );
+
+    const map = await resolveGrantedFeatsBySlug(["def-total-power", "spell-1"]);
+
+    expect(map.get("total-power")).toEqual(new Set(["bone-spikes", "intimidating-glare"]));
+    expect(map.size).toBe(1);
+  });
+
+  it("normalizes reworked (-rm) slugs to their foundry form", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () => grantedFeatsLine("total-power-rm", ["bone-spikes-rm"]),
+      })
+    );
+
+    const map = await resolveGrantedFeatsBySlug(["def-total-power-rm"]);
+
+    expect(map.get("total-power")).toEqual(new Set(["bone-spikes"]));
+  });
+
+  it("returns an empty map when given no ids", async () => {
+    const map = await resolveGrantedFeatsBySlug([]);
     expect(map.size).toBe(0);
   });
 });

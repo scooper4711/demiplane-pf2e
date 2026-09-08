@@ -326,4 +326,51 @@ describe("choice-matchers", () => {
 
     expect(findMatchInChoices(choices, [itemEngine("clan-dagger-rm")])).toBeNull();
   });
+
+  // A background (Total Power) that grants a fixed feat Foundry models as a
+  // choice ("Blasting Beams" vs "Bone Spikes"). The granting element's
+  // definition names the feat outright, keyed by the element slug.
+  function grantedFeats(elementSlug, feats) {
+    return new Map([[elementSlug, new Set(feats)]]);
+  }
+
+  it("matches a granted feat by label when the element grants it outright", () => {
+    const choices = [
+      { label: "Blasting Beams", value: "Compendium.pf2e.feats-srd.Item.Blasting Beams" },
+      { label: "Bone Spikes", value: "Compendium.pf2e.feats-srd.Item.Bone Spikes" },
+    ];
+    const map = grantedFeats("total-power", ["bone-spikes", "intimidating-glare"]);
+
+    expect(findMatchInChoices(choices, [], "Total Power", map)).toBe(choices[1]);
+  });
+
+  it("matches a granted feat by slug value when the ChoiceSet is slug-valued", () => {
+    const choices = [
+      { label: "Blasting Beams", value: "blasting-beams" },
+      { label: "Bone Spikes", value: "bone-spikes" },
+    ];
+    const map = grantedFeats("total-power", ["bone-spikes"]);
+
+    expect(findMatchInChoices(choices, [], "Total Power", map)).toBe(choices[1]);
+  });
+
+  it("ignores granted feats when the ChoiceSet item is a different element", () => {
+    const choices = [
+      { label: "Blasting Beams", value: "Compendium.pf2e.feats-srd.Item.Blasting Beams" },
+      { label: "Bone Spikes", value: "Compendium.pf2e.feats-srd.Item.Bone Spikes" },
+    ];
+    const map = grantedFeats("some-other-background", ["bone-spikes"]);
+
+    expect(findMatchInChoices(choices, [], "Total Power", map)).toBeNull();
+  });
+
+  it("does not resolve when neither option is a granted feat", () => {
+    const choices = [
+      { label: "Blasting Beams", value: "Compendium.pf2e.feats-srd.Item.Blasting Beams" },
+      { label: "Titan Swing", value: "Compendium.pf2e.feats-srd.Item.Titan Swing" },
+    ];
+    const map = grantedFeats("total-power", ["bone-spikes"]);
+
+    expect(findMatchInChoices(choices, [], "Total Power", map)).toBeNull();
+  });
 });

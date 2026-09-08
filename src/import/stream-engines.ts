@@ -1,4 +1,5 @@
 import { debugLog } from "./debug-log.js";
+import { toFoundrySlug } from "./slug-utils.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
@@ -207,6 +208,75 @@ export async function resolveFeatEngineIdsBySlug(cacheEngineIds: string[]): Prom
 /** Parses a full NDJSON stream-engines payload into per-line modifier records. */
 export function parseEngineLines(ndjsonText: string): RawEngineLine[] {
   return splitNdjson(ndjsonText).map(parseEngineLine);
+}
+
+/** The feat slugs a single element (background, feat, class feature) grants outright. */
+export interface GrantedFeatsEntry {
+  /** The granting element's own slug, e.g. `total-power`. */
+  slug: string;
+  /** The feat slugs it grants, e.g. `["bone-spikes", "intimidating-glare"]`. */
+  feats: string[];
+}
+
+/** Reads a StringObject's `slug` and `feats` array, if both are present and well-formed. */
+function extractGrantedFeats(object: Record<string, unknown>): GrantedFeatsEntry | null {
+  const slug = object.slug;
+  const feats = object.feats;
+  if (typeof slug !== "string" || !Array.isArray(feats)) return null;
+
+  const featSlugs = feats.filter((feat): feat is string => typeof feat === "string");
+  if (featSlugs.length === 0) return null;
+
+  return { slug, feats: featSlugs };
+}
+
+/**
+ * Parses a single NDJSON line looking for an element that grants feats outright.
+ *
+ * Some elements — notably backgrounds like Total Power — grant specific feats
+ * via a `feats` array on their StringObject definition rather than via
+ * `engineModifiers`. That grant is authoritative: it names exactly which feat
+ * the element confers. Foundry, by contrast, may model the same element as a
+ * player *choice* (Total Power offers "Blasting Beams" vs "Bone Spikes"), so the
+ * grant list is what disambiguates the choice during import. Returns null for
+ * lines that declare no `feats`.
+ */
+export function parseGrantedFeatsLine(line: string): GrantedFeatsEntry | null {
+  try {
+    const parsed = JSON.parse(line) as { data?: { nodes?: Record<string, EngineNode> } };
+    const objects = parseStringObjects(Object.values(parsed.data?.nodes ?? {}));
+
+    for (const object of objects) {
+      const entry = extractGrantedFeats(object);
+      if (entry) return entry;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Builds a map from a granting element's slug to the set of feat slugs it grants.
+ *
+ * Fetches the character's cached engine definitions and collects every element
+ * that carries a `feats` array (e.g. the Total Power background granting
+ * `bone-spikes`). The importer consults this when resolving a ChoiceSet whose
+ * owning element grants a fixed feat, so the choice matches Demiplane's grant
+ * instead of defaulting to the first option.
+ */
+export async function resolveGrantedFeatsBySlug(cacheEngineIds: string[]): Promise<Map<string, Set<string>>> {
+  const bySlug = new Map<string, Set<string>>();
+  if (cacheEngineIds.length === 0) return bySlug;
+
+  const text = await postStreamEngines(cacheEngineIds, "granted-feats");
+  if (!text) return bySlug;
+
+  for (const line of splitNdjson(text)) {
+    const entry = parseGrantedFeatsLine(line);
+    if (entry) bySlug.set(toFoundrySlug(entry.slug), new Set(entry.feats.map(toFoundrySlug)));
+  }
+  return bySlug;
 }
 
 /** Domain spell slugs carried by a `tabula/domain/*` engine definition. */

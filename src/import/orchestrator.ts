@@ -25,6 +25,7 @@ import { getSanctification, recordSanctificationChoice } from "../sanctification
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
+import { resolveGrantedFeatsBySlug } from "./stream-engines.js";
 import {
   buildSelectionData,
   categorizeEngines,
@@ -91,7 +92,7 @@ export class ImportOrchestrator {
     // eslint-disable-next-line no-console -- single always-on log per pull
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
 
-    this.prepareChoiceSetHandler(actor, engines);
+    await this.prepareChoiceSetHandler(actor, engines, cacheEngineIds);
     const selectionData = buildSelectionData(engines);
     const categorized = categorizeEngines(engines);
     const ctx: ImportContext = {
@@ -161,9 +162,14 @@ export class ImportOrchestrator {
    * previously chosen sanctification, so a re-import honors the player's choice
    * instead of reverting to the affirmative default.
    */
-  private prepareChoiceSetHandler(actor: Actor, engines: DemiplaneEngineEntry[]): void {
+  private async prepareChoiceSetHandler(
+    actor: Actor,
+    engines: DemiplaneEngineEntry[],
+    cacheEngineIds: string[]
+  ): Promise<void> {
     this.choiceSetHandler.setEngines(engines);
     this.choiceSetHandler.setSanctificationPreference(getSanctification(actor)?.selected);
+    this.choiceSetHandler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
   }
 
   private async persistSanctification(actor: Actor, summary: ImportSummary): Promise<void> {
