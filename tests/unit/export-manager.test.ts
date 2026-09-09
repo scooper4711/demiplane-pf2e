@@ -506,7 +506,7 @@ describe("ExportManager", () => {
         "dagger-rm",
         "dagger-rm",
         "container",
-        { containerSlug: "backpack-rm" },
+        { containerEngineId: "de-backpack" },
         "weapon"
       );
       const result = await manager.flush(actor as never);
@@ -518,6 +518,37 @@ describe("ExportManager", () => {
       expect(link?.value).toBe("de-backpack");
       expect(link?.type).toBe("CustomDemiplaneEngine");
       expect((link?.args as { parentEngine?: string }).parentEngine).toBe("de-dagger");
+    });
+
+    it("writes distinct links for two containers that share a slug", async () => {
+      // Two backpacks (same slug) with distinct engine ids: the change carries
+      // the target's engine id, so the item lands in the RIGHT one — the case
+      // the old slug-based resolution couldn't express.
+      const client = containerClient([
+        {
+          id: "backpack2",
+          name: "tabula/item/backpack-rm.eng",
+          type: "DemiplaneEngine",
+          saveType: "CharacterSheet",
+          demiplaneEngineId: "de-backpack-2",
+          args: { slug: "backpack-rm" },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: "de-backpack-2" },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const link = pushedEngines(client).find((e) => e.name === "de-dagger-container");
+      expect(link?.value).toBe("de-backpack-2");
     });
 
     it("updates an existing container link when moved to another container", async () => {
@@ -549,7 +580,7 @@ describe("ExportManager", () => {
         "dagger-rm",
         "dagger-rm",
         "container",
-        { containerSlug: "backpack-rm" },
+        { containerEngineId: "de-backpack" },
         "weapon"
       );
       await manager.flush(actor as never);
@@ -575,13 +606,22 @@ describe("ExportManager", () => {
       const manager = new ExportManager(client as never);
       const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
 
-      manager.queueItemChange(actor as never, "dagger-rm", "dagger-rm", "container", { containerSlug: null }, "weapon");
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: null },
+        "weapon"
+      );
       await manager.flush(actor as never);
 
       expect(pushedEngines(client).some((e) => e.name === "de-dagger-container")).toBe(false);
     });
 
-    it("skips the move when the target container can't be resolved", async () => {
+    it("leaves a top-level item with no link when it has no container engine", async () => {
+      // A re-sync queues a null container for every top-level item; when the
+      // item has no existing -container engine, that's a harmless no-op.
       const client = containerClient();
       const manager = new ExportManager(client as never);
       const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
@@ -591,7 +631,7 @@ describe("ExportManager", () => {
         "dagger-rm",
         "dagger-rm",
         "container",
-        { containerSlug: "nonexistent-rm" },
+        { containerEngineId: null },
         "weapon"
       );
       const result = await manager.flush(actor as never);

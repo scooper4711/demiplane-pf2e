@@ -18,6 +18,7 @@ import { isSoftDeleteEnabled } from "../write-level.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
 import { getPackIndex, type PackIndex } from "./pack-index.js";
 import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
+import { createContainersFirst } from "./container-placement.js";
 
 /** A fixed spell a scroll/wand carries, taken from its `add-special-item-spell` modifier. */
 interface SpecialItemSpell {
@@ -258,23 +259,6 @@ export function findBySlug(equipIndex: PackIndex, slug: string): { _id: string }
   return undefined;
 }
 
-async function createBackpackFirst(actor: Actor, items: PendingItem[], state: EquipmentState): Promise<number> {
-  const backpackIdx = items.findIndex((i) => (i.data.type as string) === "backpack");
-  if (backpackIdx < 0) return 0;
-
-  const backpackEntry = items.splice(backpackIdx, 1)[0]!;
-  const created = await actor.createEmbeddedDocuments("Item", [backpackEntry.data]);
-  const backpackFoundryId = created[0]?.id;
-  if (!backpackFoundryId) throw new Error("Failed to create backpack item");
-
-  for (const item of items) {
-    if (state.containerMap.get(item.demiplaneId) === backpackEntry.demiplaneId) {
-      (item.data.system as Record<string, unknown>).containerId = backpackFoundryId;
-    }
-  }
-  return 1;
-}
-
 /**
  * Whether to skip importing an item engine because another element granted it.
  *
@@ -358,7 +342,7 @@ export async function applyEquipment(
 
   resizeItemsForActor(items, actor);
 
-  const backpackCount = await createBackpackFirst(actor, items, ctx.state);
+  const backpackCount = await createContainersFirst(actor, items, ctx.state.containerMap);
 
   if (items.length > 0) {
     await actor.createEmbeddedDocuments(
@@ -545,7 +529,7 @@ async function finishEquipmentItem(
     data.name = spellConsumableName(carried.kind, carried.spellName, carried.rank);
   }
 
-  return { data: stampImported(data, slug), demiplaneId };
+  return { data: stampImported(data, slug, demiplaneId), demiplaneId };
 }
 
 /**
@@ -619,7 +603,7 @@ async function buildFixedSpellConsumable(
   // than the generic "Scroll of 2nd-rank Spell", preferring an explicit override.
   data.name = state.nameById.get(demiplaneId) ?? deriveFixedSpellItemName(eng, special.itemType);
 
-  return { data: stampImported(data, genericSlug), demiplaneId };
+  return { data: stampImported(data, genericSlug, demiplaneId), demiplaneId };
 }
 
 /**

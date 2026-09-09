@@ -903,35 +903,50 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
 
-    /** An actor whose `items.get` resolves a single backpack container by id. */
+    /**
+     * An actor whose `items.get` resolves two backpacks sharing a slug but
+     * carrying distinct Demiplane engine ids — the case slug-based matching
+     * couldn't tell apart.
+     */
     function actorWithContainer() {
-      const backpack = {
-        id: "backpack-foundry-id",
+      const leftPouch = {
+        id: "left-pouch-foundry-id",
         type: "backpack",
         system: { slug: "backpack" },
-        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm" } },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "left-engine-id" } },
+      };
+      const rightPouch = {
+        id: "right-pouch-foundry-id",
+        type: "backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "right-engine-id" } },
+      };
+      const byId: Record<string, unknown> = {
+        [leftPouch.id]: leftPouch,
+        [rightPouch.id]: rightPouch,
       };
       return {
         ...createMockActor(),
-        items: { get: (id: string) => (id === backpack.id ? backpack : undefined) },
+        items: { get: (id: string) => byId[id] },
       };
     }
 
-    it("queues a container move into a container by the container's demiplane slug", () => {
+    it("queues a container move by the container's unique engine id, distinguishing same-slug containers", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
 
       const actor = actorWithContainer();
       const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
 
-      triggerHook("updateItem", item, { system: { containerId: "backpack-foundry-id" } });
+      // Moved into the RIGHT pouch (same slug as the left one).
+      triggerHook("updateItem", item, { system: { containerId: "right-pouch-foundry-id" } });
 
       expect(exportManager.queueItemChange).toHaveBeenCalledWith(
         actor,
         "dagger",
         undefined,
         "container",
-        { containerSlug: "backpack-rm" },
+        { containerEngineId: "right-engine-id" },
         "weapon"
       );
     });
@@ -951,7 +966,7 @@ describe("HookManager", () => {
         "dagger",
         undefined,
         "container",
-        { containerSlug: null },
+        { containerEngineId: null },
         "weapon"
       );
     });
@@ -1206,13 +1221,13 @@ describe("HookManager", () => {
       );
     });
 
-    it("queues the container slug for a stowed item and a null container for a top-level item", () => {
+    it("queues the container engine id for a stowed item and a null container for a top-level item", () => {
       const backpack = {
         id: "backpack-foundry-id",
         type: "backpack",
         name: "Backpack",
         system: { slug: "backpack" },
-        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm" } },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "backpack-engine-id" } },
       };
       const stowed = {
         type: "weapon",
@@ -1236,13 +1251,13 @@ describe("HookManager", () => {
 
       queueAllItemChanges(exportManager as never, actor as never);
 
-      // Stowed item resolves to its container's demiplane slug.
+      // Stowed item resolves to its container's unique engine id (not its slug).
       expect(exportManager.queueItemChange).toHaveBeenCalledWith(
         actor,
         "asp-coil",
         undefined,
         "container",
-        { containerSlug: "backpack-rm" },
+        { containerEngineId: "backpack-engine-id" },
         "weapon"
       );
       // Top-level item queues a null container so a re-sync CLEARS a stale
@@ -1253,7 +1268,7 @@ describe("HookManager", () => {
         "arbalest",
         undefined,
         "container",
-        { containerSlug: null },
+        { containerEngineId: null },
         "weapon"
       );
     });

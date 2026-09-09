@@ -31,12 +31,13 @@ export interface EquippedState {
 
 /**
  * A "container" item change: which container an item was moved into, identified
- * by the container's Demiplane/equipment slug so the push can resolve it to the
- * container's engine id. `null` means the item was moved out to the top level
- * (no container).
+ * by the container's unique Demiplane engine id (stamped on the container item at
+ * import). An id — not a slug — is used so two containers of the same base type
+ * (two backpacks, "left pouch"/"right pouch") stay distinct. `null` means the
+ * item was moved out to the top level (no container).
  */
 export interface ContainerChange {
-  containerSlug: string | null;
+  containerEngineId: string | null;
 }
 
 export interface PendingItemChange {

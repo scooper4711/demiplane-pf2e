@@ -71,6 +71,67 @@ describe("applyEquipment", () => {
     expect(summary.log.some((l) => l.includes("equipment: 1 items"))).toBe(true);
   });
 
+  // Two backpacks share the slug `backpack`, so they can only be told apart by
+  // their unique Demiplane engine ids. Each backpack's `<id>-container` engine
+  // must place its own item into that specific container, not collapse both into
+  // one. Regression: the importer previously created only the first backpack.
+  it("places items into the correct one of two same-slug containers", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "b1",
+        name: "tabula/item/backpack-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "backpack-rm" },
+        demiplaneEngineId: "bp-left",
+      },
+      {
+        id: "b2",
+        name: "tabula/item/backpack-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "backpack-rm" },
+        demiplaneEngineId: "bp-right",
+      },
+      {
+        id: "w1",
+        name: "tabula/item/longsword-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "longsword-rm" },
+        demiplaneEngineId: "sword-in-left",
+      },
+      {
+        id: "w2",
+        name: "tabula/item/whip-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "whip-rm" },
+        demiplaneEngineId: "whip-in-right",
+      },
+      // The two container-link engines: sword → left backpack, whip → right.
+      { id: "c1", name: "sword-in-left-container", type: "CustomDemiplaneEngine", value: "bp-left", args: {} },
+      { id: "c2", name: "whip-in-right-container", type: "CustomDemiplaneEngine", value: "bp-right", args: {} },
+    ];
+
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    // Resolve each created backpack's Foundry id, then confirm each weapon's
+    // containerId points at the correct backpack instance.
+    const created = [...actor.items];
+    const findBySlug = (slug: string) => created.filter((i) => (i.system as { slug?: string })?.slug === slug);
+    const backpacks = findBySlug("backpack");
+    expect(backpacks).toHaveLength(2);
+    const sword = created.find((i) => (i.system as { slug?: string })?.slug === "longsword");
+    const whip = created.find((i) => (i.system as { slug?: string })?.slug === "whip");
+
+    // The sword and whip are stowed in different backpacks.
+    const swordContainer = (sword?.system as { containerId?: string })?.containerId;
+    const whipContainer = (whip?.system as { containerId?: string })?.containerId;
+    expect(swordContainer).toBeDefined();
+    expect(whipContainer).toBeDefined();
+    expect(swordContainer).not.toBe(whipContainer);
+    expect(backpacks.map((b) => b.id)).toContain(swordContainer);
+    expect(backpacks.map((b) => b.id)).toContain(whipContainer);
+  });
+
   // An item an ancestry/feat grants (e.g. the dwarf's Clan Dagger) is created by
   // Foundry's own GrantItem rule, so importing its engine too would duplicate it.
   // Such engines carry a `sourceData` block naming the granting element; manual

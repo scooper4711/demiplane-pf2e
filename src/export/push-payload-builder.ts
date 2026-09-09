@@ -31,8 +31,10 @@ interface ResolvedItemChange {
 /**
  * Finds the `tabula/item` engine matching a Demiplane/equipment slug. Class-kit
  * items carry no `args.slug`, so fall back to the engine name — exactly like the
- * import side does when stamping items. Shared by item-change resolution and
- * container-target resolution.
+ * import side does when stamping items. Used to resolve the item a change
+ * targets by its own slug (which is unambiguous — the change carries that item's
+ * slug). Container *targets* are resolved by engine id instead (see
+ * applyContainerEngine), since several containers can share one slug.
  */
 function findItemEngineBySlug(engines: CharacterData["engines"], slug: string): CustomEngine | undefined {
   const normalized = normalizeEquipmentSlug(slug);
@@ -247,34 +249,30 @@ export class PushPayloadBuilder {
     itemChange: PendingItemChange,
     demiplaneId: string
   ): CustomEngine[] {
-    const { containerSlug } = itemChange.value as ContainerChange;
+    const { containerEngineId } = itemChange.value as ContainerChange;
     const engineName = `${demiplaneId}-container`;
     const existing = findCustomEngineByName(engines, engineName);
 
-    if (containerSlug === null) {
+    if (containerEngineId === null) {
       // Moved out to the top level: drop the container link if present.
       if (!existing) return engines;
       debugLog(`[push] container: ${itemChange.itemSlug} moved to top level (removed ${engineName})`);
       return engines.filter((e) => e !== existing);
     }
 
-    const containerEngine = findItemEngineBySlug(engines, containerSlug);
-    if (!containerEngine) {
-      debugLog(`[push] container: target "${containerSlug}" for ${itemChange.itemSlug} not found; skipping`);
-      return engines;
-    }
-    const containerId = containerEngine.demiplaneEngineId;
-
-    debugLog(`[push] container: ${itemChange.itemSlug} → ${containerSlug} (${engineName}=${containerId})`);
+    // The change already carries the target container's unique engine id (from
+    // the container item's import stamp), so the link is written directly — no
+    // slug lookup, which couldn't tell two same-type containers apart.
+    debugLog(`[push] container: ${itemChange.itemSlug} → ${engineName}=${containerEngineId}`);
     if (existing) {
-      return engines.map((e) => (e === existing ? { ...e, value: containerId } : e));
+      return engines.map((e) => (e === existing ? { ...e, value: containerEngineId } : e));
     }
     return [
       ...engines,
       {
         id: `custom_${engineName}`,
         name: engineName,
-        value: containerId,
+        value: containerEngineId,
         type: "CustomDemiplaneEngine",
         saveType: "CharacterSheet",
         storeType: "override",

@@ -85,11 +85,24 @@ export function formatUnmapped(record: UnmappedSlug): string {
   return `Could not import ${record.kind} "${record.slug}"${suffix}: not found in compendium`;
 }
 
-/** Stamp an item data object with the imported flag before creation. */
-export function stampImported(itemData: Record<string, unknown>, demiplaneSlug?: string): Record<string, unknown> {
+/**
+ * Stamp an item data object with the imported flag before creation.
+ *
+ * `demiplaneEngineId` is the item engine's unique Demiplane id. Unlike the slug
+ * (shared by every item of the same base type — two backpacks are both
+ * `backpack-rm`), it identifies this specific item instance, so the export can
+ * resolve which container an item was stowed in even when several containers
+ * share a slug.
+ */
+export function stampImported(
+  itemData: Record<string, unknown>,
+  demiplaneSlug?: string,
+  demiplaneEngineId?: string
+): Record<string, unknown> {
   const flags = (itemData.flags || {}) as Record<string, Record<string, unknown>>;
   const dpFlags: Record<string, unknown> = { ...flags["demiplane-pf2e"], imported: true };
   if (demiplaneSlug) dpFlags.demiplaneSlug = demiplaneSlug;
+  if (demiplaneEngineId) dpFlags.demiplaneEngineId = demiplaneEngineId;
   flags["demiplane-pf2e"] = dpFlags;
   itemData.flags = flags;
   return itemData;
