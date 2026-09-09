@@ -358,11 +358,29 @@ export class PostProcessingPhase implements ImportPhase {
     const tempHp = Number(findCustomValue("character_hit-points_temp")?.value) || 0;
     const heroPoints = Number(findCustomValue("character_hero-points")?.value) || 1;
 
-    await actor.update({
+    const updates: Record<string, unknown> = {
       "system.attributes.hp.value": Math.min(currentHp, maxHp),
       "system.attributes.hp.temp": tempHp,
       "system.resources.heroPoints.value": Math.min(heroPoints, MAX_HERO_POINTS),
-    });
+    };
+    this.addFocusUpdate(actor, findCustomValue("character_focus_current")?.value, updates);
+
+    await actor.update(updates);
+  }
+
+  /**
+   * Adds the current focus-pool value to the actor update, clamped to the pool's
+   * derived max. The max is computed by the PF2e system from the character's
+   * focus spells/feats (not written here), so a character with no focus pool
+   * (max 0) gets no focus update. Demiplane omits the `character_focus_current`
+   * engine when the pool is full, so an absent value means "full" (= max).
+   */
+  private addFocusUpdate(actor: Actor, rawFocus: unknown, updates: Record<string, unknown>): void {
+    const focusMax = characterSystem(actor).resources.focus?.max ?? 0;
+    if (focusMax <= 0) return;
+    const current = rawFocus === undefined ? focusMax : Number(rawFocus);
+    if (!Number.isFinite(current)) return;
+    updates["system.resources.focus.value"] = Math.min(Math.max(current, 0), focusMax);
   }
 
   private async setActorIdentity(actor: Actor, engines: DemiplaneEngineEntry[]): Promise<void> {
