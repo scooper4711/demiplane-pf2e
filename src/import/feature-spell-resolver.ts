@@ -21,6 +21,8 @@ export interface GrantedSpell {
   level: number;
   isInnate: boolean;
   isFocus: boolean;
+  /** True when added to the character's spell repertoire (a known, slot-cast spell). */
+  isKnown: boolean;
   spellLevel: number;
 }
 
@@ -37,12 +39,12 @@ export async function resolveFeatureGrantedSpells(
   characterLevel: number,
   maxSpellRank: number,
   cacheEngineIds: string[] = []
-): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[] }> {
+): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[]; known: GrantedSpell[] }> {
   const featureEngineIds = collectFeatureEngineIds(engines);
   const domainEngineIds = collectDomainEngineIds(engines);
 
   if (featureEngineIds.length === 0 && domainEngineIds.length === 0) {
-    return { innate: [], focus: [] };
+    return { innate: [], focus: [], known: [] };
   }
 
   const [modifiers, domainData] = await Promise.all([
@@ -50,10 +52,10 @@ export async function resolveFeatureGrantedSpells(
     fetchDomainEngineData(domainEngineIds),
   ]);
 
-  const { innate, focus } = categorizeGrantedSpells(modifiers, characterLevel);
+  const { innate, focus, known } = categorizeGrantedSpells(modifiers, characterLevel);
   focus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
 
-  return { innate, focus };
+  return { innate, focus, known };
 }
 
 function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
@@ -145,34 +147,50 @@ async function fetchGrantedFeatSpellModifiers(
 
 // ─── Categorization ──────────────────────────────────────────────────────────
 
+/**
+ * Sorts feature-granted `add-spell` modifiers into three kinds, distinguished by
+ * flags on the grant:
+ *
+ * - **innate** (`isInnate: true`): cast at will from an Innate Spells entry
+ *   (e.g. Seer Elf → Detect Magic).
+ * - **known** (`isKnown: true`, not innate): added to the class's spell
+ *   repertoire, cast with normal slots (e.g. bard Maestro muse → Soothe).
+ * - **focus** (neither): a focus-pool spell whose grant points at a focus group
+ *   via `parentFeature` (e.g. an archetype dedication's focus spell).
+ *
+ * The previous logic had no `known` bucket and treated every non-innate grant as
+ * focus, so repertoire spells like Soothe were wrongly filed under Focus Spells.
+ */
 function categorizeGrantedSpells(
   modifiers: EngineModifier[],
   characterLevel: number
-): { innate: GrantedSpell[]; focus: GrantedSpell[] } {
+): { innate: GrantedSpell[]; focus: GrantedSpell[]; known: GrantedSpell[] } {
   const innate: GrantedSpell[] = [];
   const focus: GrantedSpell[] = [];
+  const known: GrantedSpell[] = [];
 
   for (const mod of modifiers) {
     if (mod.type !== "add-spell") continue;
     if (mod.level > characterLevel) continue;
 
+    const isInnate = mod.isInnate === true;
+    const isKnown = !isInnate && mod.isKnown === true;
     const spell: GrantedSpell = {
       slug: mod.addSpell,
       tradition: mod.tradition ?? "arcane",
       level: mod.level,
-      isInnate: mod.isInnate === true,
-      isFocus: mod.isInnate !== true,
+      isInnate,
+      isKnown,
+      isFocus: !isInnate && !isKnown,
       spellLevel: mod.spellLevel ?? 0,
     };
 
-    if (spell.isInnate) {
-      innate.push(spell);
-    } else {
-      focus.push(spell);
-    }
+    if (isInnate) innate.push(spell);
+    else if (isKnown) known.push(spell);
+    else focus.push(spell);
   }
 
-  return { innate, focus };
+  return { innate, focus, known };
 }
 
 /**
@@ -187,10 +205,15 @@ export async function applyFeatureGrantedSpells(
 ): Promise<void> {
   const characterLevel = getCharacterLevel(engines);
   const maxSpellRank = getMaxAccessibleSpellRank(actor, characterLevel);
-  const { innate, focus } = await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank, cacheEngineIds);
+  const { innate, focus, known } = await resolveFeatureGrantedSpells(
+    engines,
+    characterLevel,
+    maxSpellRank,
+    cacheEngineIds
+  );
 
   debugLog(
-    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells (max rank ${String(maxSpellRank)})`
+    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus, ${String(known.length)} known spells (max rank ${String(maxSpellRank)})`
   );
 
   // Focus points are deliberately not written here: the PF2e system derives the
@@ -201,6 +224,10 @@ export async function applyFeatureGrantedSpells(
 
   if (focus.length > 0) {
     await addFeatureFocusSpells(actor, focus, engines, summary);
+  }
+
+  if (known.length > 0) {
+    await addFeatureKnownSpells(actor, known, summary);
   }
 }
 
@@ -222,6 +249,43 @@ async function addFeatureFocusSpells(
   const entryId = await createFeatureEntry(actor, entryName, tradition, "focus");
 
   await addGrantedSpellsToEntry(actor, entryId, spells, summary, "focus");
+}
+
+/**
+ * Adds feature-granted *known* spells to the character's repertoire. A known
+ * spell belongs in an existing spontaneous spellcasting entry of the same
+ * tradition (the bard Maestro muse's Soothe joins the bard's occult repertoire);
+ * if the character has no such entry, a new spontaneous entry of that tradition
+ * is created to hold them.
+ */
+async function addFeatureKnownSpells(actor: Actor, spells: GrantedSpell[], summary: ImportSummary): Promise<void> {
+  const tradition = spells[0]?.tradition ?? "arcane";
+  const entryId =
+    findRepertoireEntryId(actor, tradition) ??
+    (await createFeatureEntry(actor, `${capitalize(tradition)} Spells`, tradition, "spontaneous"));
+
+  await addGrantedSpellsToEntry(actor, entryId, spells, summary, "known");
+}
+
+/**
+ * Finds an existing spontaneous (repertoire) spellcasting entry matching the
+ * tradition, so a granted known spell joins the class's own repertoire rather
+ * than a separate entry. Returns undefined when the character has none.
+ */
+function findRepertoireEntryId(actor: Actor, tradition: string): string | undefined {
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spellcastingEntry") continue;
+    const system = itemSystem(item);
+    if (system.prepared?.value === "spontaneous" && system.tradition?.value === tradition) {
+      return item.id ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Title-cases a tradition slug for a generated entry name (e.g. "occult" → "Occult"). */
+function capitalize(text: string): string {
+  return text.length > 0 ? text[0]!.toUpperCase() + text.slice(1) : text;
 }
 
 function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
@@ -333,6 +397,7 @@ async function collectDomainFocusSpells(domainData: DomainEngineData[], maxSpell
       level: 0,
       isInnate: false,
       isFocus: true,
+      isKnown: false,
       spellLevel: 0,
     }));
 }

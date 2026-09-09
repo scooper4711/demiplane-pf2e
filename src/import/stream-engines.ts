@@ -23,6 +23,13 @@ export interface AddSpellModifier {
   addSpell: string;
   tradition: string;
   isInnate?: boolean;
+  /**
+   * True when the feature adds the spell to the character's spell repertoire (a
+   * known spell castable with normal slots), e.g. the bard Maestro muse granting
+   * Soothe. Distinct from focus (`parentFeature` points at a focus group) and
+   * innate (`isInnate`).
+   */
+  isKnown?: boolean;
   spellLevel?: number;
   parentFeature?: string;
   autoScaleSpellLevel?: boolean;

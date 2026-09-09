@@ -86,18 +86,23 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [] });
   });
 
-  it("categorizes innate vs focus spells", async () => {
+  it("categorizes innate vs focus vs known spells", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
         text: async () =>
-          [ndjsonLine("feat-1", [ADD_SPELL("mage-hand-rm", 1, { isInnate: true }), ADD_SPELL("shield-rm", 1)])].join(
-            "\n"
-          ),
+          [
+            ndjsonLine("feat-1", [
+              ADD_SPELL("mage-hand-rm", 1, { isInnate: true }),
+              ADD_SPELL("shield-rm", 1),
+              // A known repertoire spell (e.g. bard Maestro muse → Soothe).
+              ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" }),
+            ]),
+          ].join("\n"),
       })
     );
 
@@ -110,9 +115,15 @@ describe("feature-spell-resolver", () => {
     expect(result.innate).toHaveLength(1);
     expect(result.innate[0].slug).toBe("mage-hand-rm");
     expect(result.innate[0].isInnate).toBe(true);
+    // A non-innate grant with no isKnown flag stays focus.
     expect(result.focus).toHaveLength(1);
     expect(result.focus[0].slug).toBe("shield-rm");
     expect(result.focus[0].isFocus).toBe(true);
+    // isKnown grants become repertoire (known) spells, not focus.
+    expect(result.known).toHaveLength(1);
+    expect(result.known[0].slug).toBe("soothe-rm");
+    expect(result.known[0].isKnown).toBe(true);
+    expect(result.known[0].isFocus).toBe(false);
   });
 
   it("drops spells above the character level", async () => {
@@ -138,7 +149,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [] });
   });
 
   describe("add-feat grant expansion", () => {
@@ -401,6 +412,79 @@ describe("feature-spell-resolver", () => {
       );
       const entryNames = entries.flat().map((i) => i.name);
       expect(entryNames.some((n) => n === "Evocation Focus Spells")).toBe(true);
+    });
+
+    it("adds a known spell to the existing spontaneous entry of the same tradition", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Soothe", system: { slug: "soothe", level: { value: 1 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [ndjsonLine("feat-1", [ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" })])].join("\n"),
+        })
+      );
+
+      // The bard's occult repertoire entry already exists (created by applySpells).
+      const bardEntry = {
+        id: "bard-entry",
+        type: "spellcastingEntry",
+        system: { prepared: { value: "spontaneous" }, tradition: { value: "occult" } },
+      };
+      const actor = createMockActor({ items: [bardEntry] });
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [featureEngine("tabula/class-feature/maestro-rm.eng", "feat-1")],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      // No new spellcasting entry was created — the known spell joined the bard's.
+      expect(created.flat().some((i) => i.type === "spellcastingEntry")).toBe(false);
+      const soothe = created.flat().find((i) => (i.system as { slug?: string })?.slug === "soothe");
+      expect((soothe?.system as { location: { value: string } }).location.value).toBe("bard-entry");
+    });
+
+    it("creates a spontaneous entry for a known spell when no matching entry exists", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Soothe", system: { slug: "soothe", level: { value: 1 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [ndjsonLine("feat-1", [ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" })])].join("\n"),
+        })
+      );
+
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [featureEngine("tabula/class-feature/maestro-rm.eng", "feat-1")],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      const entry = created.flat().find((i) => i.type === "spellcastingEntry");
+      expect(entry).toBeDefined();
+      expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("spontaneous");
+      expect((entry?.system as { tradition: { value: string } }).tradition.value).toBe("occult");
+      expect(entry?.name).toBe("Occult Spells");
     });
   });
 });
