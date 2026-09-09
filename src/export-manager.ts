@@ -6,7 +6,13 @@ import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
 import { canWriteText } from "./write-level.js";
 import { isClientElectedWriter } from "./sync-election.js";
-import { ChangeBuffer, type EquippedState, type ItemChangeType, type PendingChange } from "./export/change-buffer.js";
+import {
+  ChangeBuffer,
+  type CastChange,
+  type EquippedState,
+  type ItemChangeType,
+  type PendingChange,
+} from "./export/change-buffer.js";
 import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
 import { ConflictResolver } from "./export/conflict-resolver.js";
 
@@ -26,7 +32,13 @@ function isWritingEnabled(): boolean {
   return canWriteText();
 }
 
-export type { EquippedState, ItemChangeType, PendingChange, PendingItemChange } from "./export/change-buffer.js";
+export type {
+  CastChange,
+  EquippedState,
+  ItemChangeType,
+  PendingChange,
+  PendingItemChange,
+} from "./export/change-buffer.js";
 export type { FetchedCharacter } from "./export/push-payload-builder.js";
 
 export interface ExportResult {
@@ -104,7 +116,7 @@ export class ExportManager {
     itemSlug: string,
     demiplaneSlug: string | undefined,
     changeType: ItemChangeType,
-    value: number | string | EquippedState,
+    value: number | string | EquippedState | CastChange,
     itemType?: string,
     edited?: boolean
   ): void {

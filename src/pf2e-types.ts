@@ -143,7 +143,19 @@ export interface Pf2eItemSystem {
   proficient?: ValueOf<number>;
   trainedSkills?: { lore?: string[] };
   /** Spellcasting entries track slots per rank. */
-  slots?: Record<string, { prepared: Record<string, unknown>; value: number; max: number }>;
+  slots?: Record<string, Pf2eSpellSlotRank>;
+}
+
+/**
+ * One rank's spell slots on a prepared spellcasting entry
+ * (pf2e/src/module/item/spellcasting-entry/data.ts). `prepared` is an array of
+ * slot positions; each carries the prepared spell's id and whether it's expended
+ * (cast). Read on export to detect cast/restore toggles.
+ */
+export interface Pf2eSpellSlotRank {
+  prepared: Array<{ id?: string | null; expended?: boolean }>;
+  value: number;
+  max: number;
 }
 
 /** PF2e writes ChoiceSet results here; GrantItem rules resolve against them. */

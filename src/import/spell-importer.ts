@@ -76,7 +76,7 @@ async function importSpellGroup(
   await applySlotMaximums(actor, entryId, engines, group.source, "", summary);
 
   if (preparedType === "prepared") {
-    await placePreparedSpells(actor, entryId, group.prepared, slugToId, summary);
+    await placePreparedSpells(actor, entryId, group.prepared, slugToId, engines, summary);
   }
 
   if (preparedType === "spontaneous") {
@@ -106,7 +106,7 @@ async function importCurriculumSpells(
   await applySlotMaximums(actor, entryId, engines, group.source, CURRICULUM_SLOT_SLUG, summary);
 
   if (group.curriculumPrepared.length > 0) {
-    await placePreparedSpells(actor, entryId, group.curriculumPrepared, slugToId, summary);
+    await placePreparedSpells(actor, entryId, group.curriculumPrepared, slugToId, engines, summary);
   }
 
   return slugToId.size;

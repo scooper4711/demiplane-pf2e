@@ -401,6 +401,68 @@ describe("ExportManager", () => {
     });
   });
 
+  describe("cast/expended spell slots", () => {
+    it("creates a <engineId>-is-cast engine when a prepared slot is cast", async () => {
+      const client = createMockClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      // A cast change keys on the prepared spell's Demiplane engine id, not a slug.
+      manager.queueItemChange(
+        actor as never,
+        "fireball-engine-id",
+        "fireball-engine-id",
+        "cast",
+        { expended: true },
+        "spell"
+      );
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      const engines = client.updateCharacter.mock.calls[0][0].data.engines as Array<Record<string, unknown>>;
+      const cast = engines.find((e) => e.name === "fireball-engine-id-is-cast");
+      expect(cast).toBeDefined();
+      expect(cast?.value).toBe(1);
+      expect(cast?.type).toBe("CustomDemiplaneEngine");
+      expect((cast?.args as { parentEngine?: string }).parentEngine).toBe("fireball-engine-id");
+    });
+
+    it("removes the <engineId>-is-cast engine when a prepared slot is restored", async () => {
+      const client = createMockClient({
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [
+            {
+              id: "cast",
+              name: "fireball-engine-id-is-cast",
+              value: 1,
+              type: "CustomDemiplaneEngine",
+              saveType: "CharacterSheet",
+              storeType: "override",
+              demiplaneEngineId: "de-cast",
+              args: { id: null, parentEngine: "fireball-engine-id" },
+            },
+          ],
+          updated: "2026-08-27T00:00:00.000Z",
+        }),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "fireball-engine-id",
+        "fireball-engine-id",
+        "cast",
+        { expended: false },
+        "spell"
+      );
+      await manager.flush(actor as never);
+
+      const engines = client.updateCharacter.mock.calls[0][0].data.engines as Array<Record<string, unknown>>;
+      expect(engines.find((e) => e.name === "fireball-engine-id-is-cast")).toBeUndefined();
+    });
+  });
+
   describe("flush detects conflicts via updated timestamp", () => {
     it("returns conflict when server updated differs from stored lastUpdated", async () => {
       const client = createMockClient({
