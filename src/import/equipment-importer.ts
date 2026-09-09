@@ -166,6 +166,22 @@ function collectCarriedSpell(eng: DemiplaneEngineEntry, spellByItemId: Map<strin
 /** Prefix Demiplane uses for the per-item "invested" flag: `value--is-invested--<engineId>`. */
 const INVESTED_PREFIX = "value--is-invested--";
 
+/**
+ * Whether an engine holds an item's custom display name. Demiplane stores a
+ * renamed item's name in an override engine whose `value` is the new name and
+ * whose `args.parentEngine` is the item's engine id — but the suffix differs by
+ * item kind: most items use `<id>-override-name`, while containers use
+ * `<id>-name`. Both must be honored, or a renamed container (a pouch labeled
+ * "left pouch") imports with its generic name.
+ *
+ * Each rename also emits a sibling boolean marker `<...>-name--overridden` = 1;
+ * that carries no name, so it's excluded.
+ */
+function isItemNameEngine(eng: DemiplaneEngineEntry): boolean {
+  if (eng.name.endsWith("--overridden")) return false;
+  return eng.name.endsWith("-override-name") || eng.name.endsWith("-name");
+}
+
 function collectCustomEngine(
   eng: DemiplaneEngineEntry,
   bags: {
@@ -176,7 +192,7 @@ function collectCustomEngine(
     nameById: Map<string, string>;
   }
 ): void {
-  if (eng.name.endsWith("-override-name")) {
+  if (isItemNameEngine(eng)) {
     const parentId = eng.args?.parentEngine as string | undefined;
     if (parentId && typeof eng.value === "string" && eng.value) bags.nameById.set(parentId, eng.value);
     return;

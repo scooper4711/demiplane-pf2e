@@ -132,6 +132,43 @@ describe("applyEquipment", () => {
     expect(backpacks.map((b) => b.id)).toContain(whipContainer);
   });
 
+  // A renamed container carries its custom name in a `<id>-name` engine, unlike
+  // most items which use `<id>-override-name`. Both must import; a container's
+  // rename was previously dropped (only `-override-name` was recognized).
+  it("imports a container's custom name from its -name engine", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "b1",
+        name: "tabula/item/backpack-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "backpack-rm" },
+        demiplaneEngineId: "bp-1",
+      },
+      // The container rename engine (note the `-name` suffix, not `-override-name`).
+      {
+        id: "n1",
+        name: "bp-1-name",
+        type: "CustomDemiplaneEngine",
+        args: { parentEngine: "bp-1" },
+        value: "Left Pouch",
+      },
+      // The sibling boolean marker must NOT be treated as a name.
+      {
+        id: "n1o",
+        name: "bp-1-name--overridden",
+        type: "CustomDemiplaneEngine",
+        args: { parentEngine: "bp-1-name" },
+        value: 1,
+      },
+    ];
+
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    const backpack = [...actor.items].find((i) => (i.system as { slug?: string })?.slug === "backpack");
+    expect(backpack?.name).toBe("Left Pouch");
+  });
+
   // An item an ancestry/feat grants (e.g. the dwarf's Clan Dagger) is created by
   // Foundry's own GrantItem rule, so importing its engine too would duplicate it.
   // Such engines carry a `sourceData` block naming the granting element; manual
