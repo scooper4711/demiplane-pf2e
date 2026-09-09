@@ -128,15 +128,36 @@ async function fetchFeatureModifiers(engineIds: string[], cacheEngineIds: string
   const modifiers: EngineModifier[] = [];
   const grantedFeatSlugs: string[] = [];
   for (const line of lines) {
+    modifiers.push(...collectSpellModifiers(line.modifiers));
     for (const mod of line.modifiers) {
-      if (mod.type === "add-spell" || mod.type === "v2-add-spellcasting-feature") modifiers.push(mod);
-      else if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
+      if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
     }
   }
 
   modifiers.push(...(await fetchGrantedFeatSpellModifiers(grantedFeatSlugs, cacheEngineIds)));
 
   return modifiers;
+}
+
+/**
+ * Keeps the spell-bearing modifiers from a single engine's modifier list. An
+ * `add-spell` grant is tagged `forcesFocus` when the same engine also grants a
+ * focus point, since that pairing marks it as a focus-pool spell (e.g. a wizard
+ * curriculum granting Force Bolt alongside `add-focus-point`).
+ */
+function collectSpellModifiers(lineModifiers: EngineModifier[]): EngineModifier[] {
+  const grantsFocusPoint = lineModifiers.some((mod) => mod.type === "add-focus-point");
+  const spellModifiers: EngineModifier[] = [];
+
+  for (const mod of lineModifiers) {
+    if (mod.type === "add-spell") {
+      spellModifiers.push(grantsFocusPoint ? { ...mod, forcesFocus: true } : mod);
+    } else if (mod.type === "v2-add-spellcasting-feature") {
+      spellModifiers.push(mod);
+    }
+  }
+
+  return spellModifiers;
 }
 
 /**
@@ -167,9 +188,7 @@ async function fetchGrantedFeatSpellModifiers(
   const lines = await fetchStreamEngineLines(grantedFeatEngineIds);
   const modifiers: EngineModifier[] = [];
   for (const line of lines) {
-    for (const mod of line.modifiers) {
-      if (mod.type === "add-spell") modifiers.push(mod);
-    }
+    modifiers.push(...collectSpellModifiers(line.modifiers));
   }
 
   debugLog(
@@ -202,9 +221,12 @@ const INHERIT_TRADITION = "inherit";
  *   whereas composition/focus spells inherit it (`"inherit"` or unset).
  * - **No focus group**: a `parentFeature` pointing at a focus group (e.g.
  *   `"composition-spells"`) marks the grant as a focus spell.
+ *
+ * A grant that {@link forcesFocus} (its engine also granted a focus point) is
+ * never a repertoire spell.
  */
 function isRepertoireGrant(mod: AddSpellModifier): boolean {
-  if (mod.isKnown !== true) return false;
+  if (mod.isKnown !== true || mod.forcesFocus === true) return false;
   const tradition = mod.tradition ?? "";
   const hasConcreteTradition = tradition !== "" && tradition !== INHERIT_TRADITION;
   const belongsToFocusGroup = (mod.parentFeature ?? "") !== "";
@@ -214,13 +236,14 @@ function isRepertoireGrant(mod: AddSpellModifier): boolean {
 /**
  * Sorts feature-granted `add-spell` modifiers into three kinds:
  *
- * - **innate** (`isInnate: true`): cast at will from an Innate Spells entry
- *   (e.g. Seer Elf → Detect Magic).
+ * - **innate** (`isInnate: true`, and no forced focus): cast at will from an
+ *   Innate Spells entry (e.g. Seer Elf → Detect Magic).
  * - **known** (a repertoire grant per {@link isRepertoireGrant}): added to the
  *   class's spell repertoire, cast with normal slots (e.g. Maestro muse → Soothe).
- * - **focus** (everything else): a focus-pool spell, including `isKnown` grants
- *   that inherit their tradition or belong to a focus group (e.g. the bard's
- *   composition spells).
+ * - **focus** (everything else): a focus-pool spell. This includes `isKnown`
+ *   grants that inherit their tradition or belong to a focus group (the bard's
+ *   composition spells) and any grant sharing an engine with an `add-focus-point`
+ *   (`forcesFocus`, e.g. a wizard curriculum's Force Bolt).
  *
  * The previous logic had no `known` bucket and treated every non-innate grant as
  * focus, so repertoire spells like Soothe were wrongly filed under Focus Spells.
@@ -237,7 +260,7 @@ function categorizeGrantedSpells(
     if (mod.type !== "add-spell") continue;
     if (mod.level > characterLevel) continue;
 
-    const isInnate = mod.isInnate === true;
+    const isInnate = mod.isInnate === true && mod.forcesFocus !== true;
     const isKnown = !isInnate && isRepertoireGrant(mod);
     const spell: GrantedSpell = {
       slug: mod.addSpell,

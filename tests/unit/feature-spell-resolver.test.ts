@@ -141,6 +141,35 @@ describe("feature-spell-resolver", () => {
     expect(result.known[0].isFocus).toBe(false);
   });
 
+  it("routes a spell to focus when its engine also grants a focus point", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            // A wizard curriculum's focus spell: concrete tradition, no isKnown,
+            // but the same engine grants a focus point (Force Bolt).
+            ndjsonLine("feat-1", [
+              ADD_SPELL("force-bolt-rm", 1, { tradition: "arcane" }),
+              { type: "add-focus-point", addFocus: 1 },
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [featureEngine("tabula/class-feature/school-of-battle-magic-rm.eng", "feat-1")],
+      5,
+      3
+    );
+
+    expect(result.known).toHaveLength(0);
+    expect(result.focus).toHaveLength(1);
+    expect(result.focus[0].slug).toBe("force-bolt-rm");
+    expect(result.focus[0].isFocus).toBe(true);
+  });
+
   it("drops spells above the character level", async () => {
     vi.stubGlobal(
       "fetch",
@@ -575,6 +604,53 @@ describe("feature-spell-resolver", () => {
       const spellLocations = spells.map((i) => (i.system as { location?: { value?: string } }).location?.value);
       expect(new Set(spellLocations).size).toBe(1);
       expect(spellLocations[0]).toBeDefined();
+    });
+
+    it("puts a wizard curriculum focus spell in a focus entry, not the repertoire", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Force Bolt", system: { slug: "force-bolt", level: { value: 1 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              // School of Battle Magic grants Force Bolt alongside a focus point.
+              ndjsonLine("feat-1", [
+                ADD_SPELL("force-bolt-rm", 1, { tradition: "arcane" }),
+                { type: "add-focus-point", addFocus: 1 },
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [
+          {
+            id: "feat-1",
+            name: "tabula/class-feature/school-of-battle-magic-rm.eng",
+            type: "DemiplaneEngine",
+            args: { name: "School of Battle Magic" },
+          } as DemiplaneEngineEntry,
+        ],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      const entry = created.flat().find((i) => i.type === "spellcastingEntry");
+      expect(entry?.name).toBe("Battle Magic Focus Spells");
+      expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("focus");
+      const forceBolt = created.flat().find((i) => (i.system as { slug?: string })?.slug === "force-bolt");
+      expect(forceBolt).toBeDefined();
     });
   });
 });
