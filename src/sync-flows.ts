@@ -68,6 +68,11 @@ export async function importLinkedCharacter(
   deps: SyncFlowDeps,
   options: { wipe?: boolean } = {}
 ): Promise<ImportSummary> {
+  // Every import path funnels through here, so the start/completion toasts live
+  // here too — one place, shown consistently for a sidebar import, a manual
+  // "Update from Demiplane", or a conflict-triggered re-import alike (the last
+  // used to be silent).
+  notifyImportStarting(actor);
   resetImportIssues(actor);
   deps.exportManager.suspend(characterId);
   // Mark the character as syncing so every connected client (including this one)
@@ -96,6 +101,7 @@ export async function importLinkedCharacter(
     const summary = await deps.importOrchestrator.importCharacter(actor, characterId, { token });
     setUnmappedSlugs(actor, summary.unmapped);
     await addImportIssues(actor, summary.errors);
+    notifyImportComplete(actor, summary);
     return summary;
   } finally {
     // Release the guard AFTER a grace window, not immediately: the import's own
@@ -105,6 +111,31 @@ export async function importLinkedCharacter(
     // promptly; the suspend ref-count and the sync token stay held meanwhile.
     scheduleSyncRelease(actor, characterId, syncToken, deps.exportManager);
   }
+}
+
+/**
+ * Toast shown as an import begins, warning the user not to touch the actor while
+ * it runs. The import rewrites items and actor data, and local edits made during
+ * that window race the import's writes (and can be pushed back to Demiplane), so
+ * the guidance to wait is the point of this notification.
+ */
+function notifyImportStarting(actor: Actor): void {
+  ui.notifications.info(
+    `Importing "${actor.name}" from Demiplane — please don't modify this character until the import completes.`
+  );
+}
+
+/**
+ * Toast shown once an import finishes: a clear "completed" message with the item
+ * count, or an error summary when the import reported problems. Paired with
+ * {@link notifyImportStarting} so every import bookends with a start and an end.
+ */
+function notifyImportComplete(actor: Actor, summary: ImportSummary): void {
+  if (summary.errors.length > 0) {
+    ui.notifications.error(`Import of "${actor.name}" completed with errors: ${summary.errors.join("; ")}`);
+    return;
+  }
+  ui.notifications.info(`Import of "${actor.name}" complete — ${String(summary.itemsImported)} items.`);
 }
 
 /**
@@ -261,8 +292,10 @@ export async function handlePushConflict(actor: Actor, deps: SyncFlowDeps): Prom
  * Re-imports an actor from Demiplane after a push conflict, refreshing both its
  * actor state and the stored `lastUpdated`/`engineSig` baseline (which resolves
  * the conflict). Only used at the quantity-or-higher write level, where session
- * info has already been pushed — see {@link handlePushConflict}. A toast tells
- * the user why their character was refreshed.
+ * info has already been pushed — see {@link handlePushConflict}.
+ *
+ * A warn toast explains *why* the character is being refreshed (a conflict);
+ * the generic import start/complete toasts come from importLinkedCharacter.
  */
 export async function reimportActorOnConflict(actor: Actor, deps: SyncFlowDeps): Promise<void> {
   const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
@@ -271,11 +304,10 @@ export async function reimportActorOnConflict(actor: Actor, deps: SyncFlowDeps):
     ui.notifications.warn(`Unable to re-import "${actor.name}": missing character link or token.`);
     return;
   }
-  ui.notifications.info(
+  ui.notifications.warn(
     `"${actor.name}" was changed on Demiplane since your last import — re-importing to stay in sync.`
   );
-  const summary = await importLinkedCharacter(actor, characterId, token, deps, { wipe: true });
-  ui.notifications.info(`Re-imported "${actor.name}" from Demiplane — ${summary.itemsImported} items.`);
+  await importLinkedCharacter(actor, characterId, token, deps, { wipe: true });
 }
 
 /**

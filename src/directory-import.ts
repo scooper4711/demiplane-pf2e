@@ -64,17 +64,11 @@ export async function onImportButtonClick(importCharacter: ImportCharacterFn): P
     return;
   }
 
-  ui.notifications?.info("Importing character from Demiplane...");
-
   const actor = await Actor.create({ name: "Importing...", type: "character" });
   if (!actor) return;
 
   await actor.setFlag(MODULE_ID, "characterId", characterId);
-  const summary = await importCharacter(actor, characterId, token);
-
-  if (summary.errors.length > 0) {
-    ui.notifications?.error(`Import errors: ${summary.errors.join("; ")}`);
-  } else {
-    ui.notifications?.info(`Imported "${actor.name}" — ${summary.itemsImported} items.`);
-  }
+  // The start ("importing, don't modify…") and completion/error toasts are shown
+  // by importLinkedCharacter, so every import path reports consistently.
+  await importCharacter(actor, characterId, token);
 }

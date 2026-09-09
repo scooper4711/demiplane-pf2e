@@ -115,7 +115,7 @@ describe("actor-context-menu", () => {
       expect(importCharacter).not.toHaveBeenCalled();
     });
 
-    it("re-imports with wipe and reports errors on confirm", async () => {
+    it("re-imports with wipe after the user confirms", async () => {
       const importCharacter = vi.fn().mockResolvedValue(summary({ errors: ["bad"] }));
       const actor = linkedActor("a1");
       globalThis.game.actors.contents = [actor];
@@ -125,20 +125,9 @@ describe("actor-context-menu", () => {
 
       await option.onClick({}, entryElement("a1"));
 
+      // The menu confirms then delegates; start/completion/error toasts are the
+      // shared importLinkedCharacter's job now.
       expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, TOKEN, { wipe: true });
-      expect(globalThis.ui.notifications.error).toHaveBeenCalledWith("Update errors: bad");
-    });
-
-    it("reports the item count on a clean update", async () => {
-      const importCharacter = vi.fn().mockResolvedValue(summary({ itemsImported: 7 }));
-      globalThis.game.actors.contents = [linkedActor("a1")];
-      await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", TOKEN);
-      globalThis.foundry.applications.api.DialogV2.confirm.mockResolvedValue(true);
-      const option = buildUpdateFromDemiplaneOption(importCharacter);
-
-      await option.onClick({}, entryElement("a1"));
-
-      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("7 items"));
     });
   });
 });
