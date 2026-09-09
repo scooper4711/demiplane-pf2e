@@ -1206,6 +1206,78 @@ describe("HookManager", () => {
       );
     });
 
+    it("queues the container slug for a stowed item and a null container for a top-level item", () => {
+      const backpack = {
+        id: "backpack-foundry-id",
+        type: "backpack",
+        name: "Backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm" } },
+      };
+      const stowed = {
+        type: "weapon",
+        name: "Asp Coil",
+        system: { slug: "asp-coil", quantity: 1, containerId: "backpack-foundry-id" },
+        flags: {},
+      };
+      const topLevel = {
+        type: "weapon",
+        name: "Arbalest",
+        system: { slug: "arbalest", quantity: 1 },
+        flags: {},
+      };
+      const items = [backpack, stowed, topLevel];
+      const actor = {
+        ...createMockActor(),
+        items: Object.assign(items, {
+          get: (id: string) => items.find((i) => (i as { id?: string }).id === id),
+        }),
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      // Stowed item resolves to its container's demiplane slug.
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "asp-coil",
+        undefined,
+        "container",
+        { containerSlug: "backpack-rm" },
+        "weapon"
+      );
+      // Top-level item queues a null container so a re-sync CLEARS a stale
+      // container link (an item pulled out of a bag in Foundry). This is the
+      // regression: without it, a full push could add links but never remove them.
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "arbalest",
+        undefined,
+        "container",
+        { containerSlug: null },
+        "weapon"
+      );
+    });
+
+    it("does not queue a container change for non-inventory items", () => {
+      const items = [
+        {
+          type: "feat",
+          name: "Power Attack",
+          system: { slug: "power-attack" },
+          flags: {},
+        },
+      ];
+      const actor = {
+        ...createMockActor(),
+        items: Object.assign(items, { get: () => undefined }),
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      const containerCalls = exportManager.queueItemChange.mock.calls.filter((c: unknown[]) => c[3] === "container");
+      expect(containerCalls).toHaveLength(0);
+    });
+
     it("routes treasure items to currency engines", () => {
       const actor = {
         ...createMockActor(),
