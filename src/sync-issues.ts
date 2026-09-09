@@ -7,6 +7,7 @@ type IssueSetKind = "import" | "export";
 
 const UNMAPPED_FLAG = "unmappedSlugs";
 const ACKNOWLEDGED_FLAG = "issuesAcknowledged";
+const CONFLICT_NOTIFIED_FLAG = "conflictNotified";
 
 /**
  * Reads the two sync-issue sets stored on the actor.
@@ -85,6 +86,9 @@ export function resetImportIssues(actor: Actor): void {
   void writeIssueSet(actor, "import", new Set());
   void actor.setFlag(MODULE_ID, UNMAPPED_FLAG, []);
   void actor.setFlag(MODULE_ID, ACKNOWLEDGED_FLAG, false);
+  // An import re-baselines the character (fresh lastUpdated/engineSig), so any
+  // prior conflict is resolved — re-arm the conflict warning for the future.
+  void actor.setFlag(MODULE_ID, CONFLICT_NOTIFIED_FLAG, false);
   notifyChanged(actor);
 }
 
@@ -131,6 +135,31 @@ export function addExportIssue(actor: Actor, message: string): void {
   void writeIssueSet(actor, "export", issues);
   markUnacknowledged(actor);
   notifyChanged(actor);
+}
+
+/**
+ * Whether the user has already been warned about the current unresolved push
+ * conflict. Auto-pushes retry about every two seconds, so the conflict handler
+ * checks this before toasting to avoid warning on every retry. The flag is
+ * cleared by {@link resetImportIssues} on the next import, which re-baselines
+ * the character and re-arms the warning for a future conflict.
+ */
+export function hasNotifiedConflict(actor: Actor): boolean {
+  return actor.getFlag(MODULE_ID, CONFLICT_NOTIFIED_FLAG) === true;
+}
+
+/** Records that the user has now been warned about the current push conflict. */
+export function markConflictNotified(actor: Actor): void {
+  void actor.setFlag(MODULE_ID, CONFLICT_NOTIFIED_FLAG, true);
+}
+
+/**
+ * Re-arms the conflict warning so the next detected conflict warns again. Used
+ * before an explicit manual push so the user always gets direct feedback, even
+ * if a background auto-push already warned for the same conflict.
+ */
+export function clearConflictNotified(actor: Actor): void {
+  void actor.setFlag(MODULE_ID, CONFLICT_NOTIFIED_FLAG, false);
 }
 
 function isAcknowledged(actor: Actor): boolean {

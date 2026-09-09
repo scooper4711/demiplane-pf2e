@@ -6,8 +6,16 @@ import type { ExportManager, ExportResult } from "./export-manager.js";
 import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
 import { characterSystem } from "./pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "./sync-pause.js";
-import { resetImportIssues, addImportIssues, setUnmappedSlugs } from "./sync-issues.js";
-import { canWriteText } from "./write-level.js";
+import {
+  resetImportIssues,
+  addImportIssues,
+  setUnmappedSlugs,
+  addExportIssue,
+  hasNotifiedConflict,
+  markConflictNotified,
+  clearConflictNotified,
+} from "./sync-issues.js";
+import { canWriteText, canWriteQuantity } from "./write-level.js";
 
 // Re-exported so wiring and tests share one definition.
 export type { ExportResult };
@@ -156,6 +164,9 @@ export async function pushCharacterEngines(actor: Actor, deps: SyncFlowDeps): Pr
   if (!(await waitForSyncIdle(actor))) {
     return { success: false, error: "Timed out waiting for an in-flight sync to finish; nothing was pushed." };
   }
+  // Re-arm the conflict warning so an explicit push always surfaces a conflict,
+  // even if a prior background auto-push already warned and set the guard.
+  clearConflictNotified(actor);
   const syncToken = await beginSyncPause(actor);
   try {
     queueCombatResourceChanges(deps.exportManager, actor);
@@ -164,12 +175,11 @@ export async function pushCharacterEngines(actor: Actor, deps: SyncFlowDeps): Pr
     const result = await deps.exportManager.flush(actor);
     if (result.success) {
       ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
-    } else if (result.conflict) {
-      ui.notifications.warn(
-        `Demiplane character changed on the server since last import — re-importing "${actor.name}" to avoid overwriting. Your pending changes were not pushed; please re-apply them after the re-import.`
-      );
-      // Re-import is performed by the registered conflict handler.
     }
+    // A conflict is recovered by the registered conflict handler
+    // (handlePushConflict), which flush invokes: re-import at the quantity tier,
+    // warn-only at text-only. The manual path adds no separate handling so the
+    // two paths recover identically.
     return result;
   } finally {
     await endSyncPause(actor, syncToken);
@@ -197,10 +207,62 @@ async function waitForSyncIdle(actor: Actor, timeoutMs = 15_000): Promise<boolea
 }
 
 /**
- * Re-imports an actor from Demiplane after an optimistic-concurrency conflict,
- * refreshing both its actor state and the stored `lastUpdated` timestamp.
- * Registered on the ExportManager so that both manual exports and debounced
- * auto-pushes recover identically on conflict.
+ * Handles an optimistic-concurrency conflict (the Demiplane character changed on
+ * the server since our last import) by warning the user instead of re-importing.
+ *
+ * A silent auto re-import used to run here, but it wiped and recreated the
+ * imported items — discarding local session state the user cares about (spells
+ * cast, ammo spent, HP). We now leave the actor untouched and tell the user to
+ * re-import from Demiplane when convenient, warning that doing so overwrites
+ * local changes. The conflict is also recorded as an export issue so the sync
+ * indicator lights up until the next import clears it.
+ *
+ * Auto-pushes retry roughly every two seconds, so the warning is shown at most
+ * once per conflict (guarded by the `conflictNotified` flag) to avoid spamming
+ * the user; the next import re-baselines the character and re-arms the warning.
+ */
+export function notifyConflict(actor: Actor): void {
+  const message =
+    `"${actor.name}" was changed on Demiplane since your last import. Local changes were not pushed. ` +
+    `Re-import from Demiplane when convenient — note that re-importing overwrites your local changes.`;
+  addExportIssue(actor, message);
+
+  if (hasNotifiedConflict(actor)) return;
+  markConflictNotified(actor);
+  ui.notifications.warn(message);
+}
+
+/**
+ * Recovers from a push conflict, choosing between re-import and warn-only based
+ * on the active write level.
+ *
+ * The concern that motivated warn-only is losing local *session* state (HP,
+ * spells cast, ammo spent) to a silent re-import. But that state is only at risk
+ * when it isn't being pushed: at the text-only tier the module never writes it,
+ * so a re-import would clobber unsynced session info. At `text-quantity` and
+ * above the session info is pushed to Demiplane as it changes, so it already
+ * lives on the server — a re-import pulls it right back. Only the handful of
+ * edits still buffered in the current debounce window are lost (and the user is
+ * looking right at the field they just changed), so an automatic re-import is
+ * safe and keeps both sides consistent.
+ *
+ * Therefore: re-import when quantity (or higher) is being written; otherwise
+ * warn and leave the actor untouched for the user to re-import when convenient.
+ */
+export async function handlePushConflict(actor: Actor, deps: SyncFlowDeps): Promise<void> {
+  if (canWriteQuantity()) {
+    await reimportActorOnConflict(actor, deps);
+    return;
+  }
+  notifyConflict(actor);
+}
+
+/**
+ * Re-imports an actor from Demiplane after a push conflict, refreshing both its
+ * actor state and the stored `lastUpdated`/`engineSig` baseline (which resolves
+ * the conflict). Only used at the quantity-or-higher write level, where session
+ * info has already been pushed — see {@link handlePushConflict}. A toast tells
+ * the user why their character was refreshed.
  */
 export async function reimportActorOnConflict(actor: Actor, deps: SyncFlowDeps): Promise<void> {
   const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
@@ -209,6 +271,9 @@ export async function reimportActorOnConflict(actor: Actor, deps: SyncFlowDeps):
     ui.notifications.warn(`Unable to re-import "${actor.name}": missing character link or token.`);
     return;
   }
+  ui.notifications.info(
+    `"${actor.name}" was changed on Demiplane since your last import — re-importing to stay in sync.`
+  );
   const summary = await importLinkedCharacter(actor, characterId, token, deps, { wipe: true });
   ui.notifications.info(`Re-imported "${actor.name}" from Demiplane — ${summary.itemsImported} items.`);
 }

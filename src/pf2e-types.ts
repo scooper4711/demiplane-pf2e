@@ -178,6 +178,13 @@ export interface DemiplaneActorFlags {
   issuesAcknowledged?: boolean;
   /** Tokens for in-flight imports/pushes, replicated across clients. */
   syncActiveTokens?: string[];
+  /**
+   * Set once the user has been warned about the current unresolved push
+   * conflict, so the every-2s auto-push retries don't re-toast the same warning.
+   * Cleared on the next import (see `resetImportIssues`), which re-baselines the
+   * character and re-arms the warning for a future conflict.
+   */
+  conflictNotified?: boolean;
 }
 
 export interface DemiplaneItemFlags {
