@@ -1,7 +1,7 @@
 import { MODULE_ID } from "../import/types.js";
 import type { ExportManager } from "../export-manager.js";
 import { itemSystem, type Pf2eSpellSlotRank } from "../pf2e-types.js";
-import { canWriteQuantity, canWriteText } from "../write-level.js";
+import { canWriteQuantity } from "../write-level.js";
 
 /**
  * Export sync for spellcasting-entry slot state. Two independent concerns share
@@ -57,10 +57,10 @@ function changedSlotsOf(changes: Record<string, unknown>): Record<string, unknow
 }
 
 /**
- * Queues the slot changes carried by a spellcasting-entry update, routing each
- * concern to its own write tier. Called from the item-update hook after the
- * actor/sync-active guards but before the physical-item quantity guard, so each
- * tier is enforced here.
+ * Queues the slot changes carried by a spellcasting-entry update. Both concerns
+ * are spent-resource tracking ("spell ammo"), so both ride the quantity tier —
+ * gated here since the caller routes spellcasting entries around the
+ * physical-item quantity guard.
  */
 export function queueSpellcastingEntryChanges(
   exportManager: ExportManager,
@@ -68,13 +68,14 @@ export function queueSpellcastingEntryChanges(
   item: Item,
   changes: Record<string, unknown>
 ): void {
+  if (!canWriteQuantity()) return;
   const changedSlots = changedSlotsOf(changes);
   if (!changedSlots) return;
 
-  if (preparedSlotEngineIds(item) && canWriteQuantity()) {
+  if (preparedSlotEngineIds(item)) {
     queueCastChanges(exportManager, actor, item, changedSlots);
   }
-  if (readSpellFeature(item) && canWriteText()) {
+  if (readSpellFeature(item)) {
     queueSpontaneousSlotChanges(exportManager, actor, item, changedSlots);
   }
 }
@@ -136,7 +137,7 @@ function queueSpontaneousSlotChanges(
 /**
  * Queues a spontaneous entry's current remaining slot counts for a full re-sync
  * push (the manual "Update to Demiplane"). Only entries stamped with a feature
- * slug contribute. The caller enforces the text tier.
+ * slug contribute. The caller enforces the quantity tier.
  */
 export function queueSpellSlotResync(exportManager: ExportManager, actor: Actor, item: Item): void {
   if ((item as { type?: string }).type !== "spellcastingEntry") return;

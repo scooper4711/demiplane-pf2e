@@ -120,7 +120,7 @@ export function queueAllItemChanges(exportManager: ExportManager, actor: Actor):
   const items = Array.from(actor.items) as unknown as Item[];
   for (const item of items) {
     queueSingleItemChanges(exportManager, actor, item, writeText, writeQuantity);
-    if (writeText) queueSpellSlotResync(exportManager, actor, item);
+    if (writeQuantity) queueSpellSlotResync(exportManager, actor, item);
   }
 }
 

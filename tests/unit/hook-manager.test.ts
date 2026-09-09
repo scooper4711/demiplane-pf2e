@@ -1242,9 +1242,9 @@ describe("HookManager", () => {
       );
     });
 
-    it("rides the text tier — queues even when quantity writes are off", () => {
-      // Spell slots are the lowest (text) tier, unlike prepared cast tracking
-      // which needs the quantity tier.
+    it("rides the quantity tier — does not queue at the text-only tier", () => {
+      // Spell slots are spent-resource tracking ("spell ammo"), so they need the
+      // quantity tier, same as prepared cast tracking and item quantity.
       writeLevel = "text";
       const manager = new HookManager(exportManager as never);
       manager.register();
@@ -1255,11 +1255,7 @@ describe("HookManager", () => {
 
       triggerHook("updateItem", entry, changes);
 
-      expect(exportManager.queueChange).toHaveBeenCalledWith(
-        actor,
-        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-1_current",
-        1
-      );
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
   });
 
