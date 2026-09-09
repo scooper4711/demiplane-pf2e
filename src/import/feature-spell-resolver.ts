@@ -6,6 +6,7 @@ import {
   fetchStreamEngineLines,
   fetchDomainEngineData,
   resolveFeatEngineIdsBySlug,
+  type AddSpellModifier,
   type EngineModifier,
   type DomainEngineData,
 } from "./stream-engines.js";
@@ -21,6 +22,8 @@ export interface GrantedSpell {
   level: number;
   isInnate: boolean;
   isFocus: boolean;
+  /** True when added to the character's spell repertoire (a known, slot-cast spell). */
+  isKnown: boolean;
   spellLevel: number;
 }
 
@@ -32,17 +35,25 @@ const SLOT_KEY_RE = /^slot(\d+)$/;
  * Handles class features, heritage, ancestry feats and domains. Only spells
  * within `maxSpellRank` are returned.
  */
+export interface FeatureGrantedSpells {
+  innate: GrantedSpell[];
+  focus: GrantedSpell[];
+  known: GrantedSpell[];
+  /** The class's focus-entry label (e.g. "Composition Spells"), when declared. */
+  focusEntryName?: string;
+}
+
 export async function resolveFeatureGrantedSpells(
   engines: DemiplaneEngineEntry[],
   characterLevel: number,
   maxSpellRank: number,
   cacheEngineIds: string[] = []
-): Promise<{ innate: GrantedSpell[]; focus: GrantedSpell[] }> {
+): Promise<FeatureGrantedSpells> {
   const featureEngineIds = collectFeatureEngineIds(engines);
   const domainEngineIds = collectDomainEngineIds(engines);
 
   if (featureEngineIds.length === 0 && domainEngineIds.length === 0) {
-    return { innate: [], focus: [] };
+    return { innate: [], focus: [], known: [] };
   }
 
   const [modifiers, domainData] = await Promise.all([
@@ -50,11 +61,36 @@ export async function resolveFeatureGrantedSpells(
     fetchDomainEngineData(domainEngineIds),
   ]);
 
-  const { innate, focus } = categorizeGrantedSpells(modifiers, characterLevel);
+  const { innate, focus, known } = categorizeGrantedSpells(modifiers, characterLevel);
   focus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
 
-  return { innate, focus };
+  const focusEntryName = findFocusEntryName(modifiers);
+  return focusEntryName !== undefined ? { innate, focus, known, focusEntryName } : { innate, focus, known };
 }
+
+/**
+ * Reads the class's declared focus-entry label from a `v2-add-spellcasting-feature`
+ * modifier (e.g. the bard's "Composition Spells"), used to name the Foundry focus
+ * spellcasting entry. Returns undefined when no class feature declares one.
+ */
+function findFocusEntryName(modifiers: EngineModifier[]): string | undefined {
+  for (const mod of modifiers) {
+    if (mod.type === "v2-add-spellcasting-feature" && mod.hasFocusGroup === true) {
+      const name = mod.focusName;
+      if (typeof name === "string" && name !== "") return name;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Engine-name prefixes whose definitions carry feature-granted `add-spell`
+ * modifiers. `tabula/class/` is included because a class's automatic
+ * sub-features (e.g. the bard's Composition Spells / Composition Cantrips
+ * granting Counter Performance and Courageous Anthem) live inside the class
+ * engine definition rather than as top-level engines on the character.
+ */
+const FEATURE_ENGINE_PREFIXES = ["tabula/class/", "tabula/class-feature/", "tabula/heritage/"] as const;
 
 function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
   const ids: string[] = [];
@@ -63,7 +99,7 @@ function collectFeatureEngineIds(engines: DemiplaneEngineEntry[]): string[] {
     if (!eng.id || eng.type !== "DemiplaneEngine") continue;
 
     const name = eng.name as string;
-    if (name.startsWith("tabula/class-feature/") || name.startsWith("tabula/heritage/")) {
+    if (FEATURE_ENGINE_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       ids.push(eng.id as string);
     }
   }
@@ -92,15 +128,36 @@ async function fetchFeatureModifiers(engineIds: string[], cacheEngineIds: string
   const modifiers: EngineModifier[] = [];
   const grantedFeatSlugs: string[] = [];
   for (const line of lines) {
+    modifiers.push(...collectSpellModifiers(line.modifiers));
     for (const mod of line.modifiers) {
-      if (mod.type === "add-spell") modifiers.push(mod);
-      else if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
+      if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
     }
   }
 
   modifiers.push(...(await fetchGrantedFeatSpellModifiers(grantedFeatSlugs, cacheEngineIds)));
 
   return modifiers;
+}
+
+/**
+ * Keeps the spell-bearing modifiers from a single engine's modifier list. An
+ * `add-spell` grant is tagged `forcesFocus` when the same engine also grants a
+ * focus point, since that pairing marks it as a focus-pool spell (e.g. a wizard
+ * curriculum granting Force Bolt alongside `add-focus-point`).
+ */
+function collectSpellModifiers(lineModifiers: EngineModifier[]): EngineModifier[] {
+  const grantsFocusPoint = lineModifiers.some((mod) => mod.type === "add-focus-point");
+  const spellModifiers: EngineModifier[] = [];
+
+  for (const mod of lineModifiers) {
+    if (mod.type === "add-spell") {
+      spellModifiers.push(grantsFocusPoint ? { ...mod, forcesFocus: true } : mod);
+    } else if (mod.type === "v2-add-spellcasting-feature") {
+      spellModifiers.push(mod);
+    }
+  }
+
+  return spellModifiers;
 }
 
 /**
@@ -131,9 +188,7 @@ async function fetchGrantedFeatSpellModifiers(
   const lines = await fetchStreamEngineLines(grantedFeatEngineIds);
   const modifiers: EngineModifier[] = [];
   for (const line of lines) {
-    for (const mod of line.modifiers) {
-      if (mod.type === "add-spell") modifiers.push(mod);
-    }
+    modifiers.push(...collectSpellModifiers(line.modifiers));
   }
 
   debugLog(
@@ -145,34 +200,84 @@ async function fetchGrantedFeatSpellModifiers(
 
 // ─── Categorization ──────────────────────────────────────────────────────────
 
+/**
+ * Tradition sentinel used by focus/composition spells that take the tradition of
+ * the class that grants them (e.g. a bard's Composition Spells are occult). Such
+ * a grant is a focus spell, never a standalone repertoire spell.
+ */
+const INHERIT_TRADITION = "inherit";
+
+/**
+ * Decides whether an `isKnown` grant is a true *repertoire* spell (added to the
+ * class's normal, slot-cast spell list) versus a *focus* spell that merely
+ * carries the same flag.
+ *
+ * The `isKnown` flag alone is ambiguous: the bard Maestro muse's Soothe (a real
+ * repertoire spell) and the bard's composition spells (Courageous Anthem,
+ * Counter Performance, Lingering Composition — all focus spells) are all flagged
+ * `isKnown: true`. Two signals separate them:
+ *
+ * - **Concrete tradition**: a repertoire grant names its tradition (`"occult"`),
+ *   whereas composition/focus spells inherit it (`"inherit"` or unset).
+ * - **No focus group**: a `parentFeature` pointing at a focus group (e.g.
+ *   `"composition-spells"`) marks the grant as a focus spell.
+ *
+ * A grant that {@link forcesFocus} (its engine also granted a focus point) is
+ * never a repertoire spell.
+ */
+function isRepertoireGrant(mod: AddSpellModifier): boolean {
+  if (mod.isKnown !== true || mod.forcesFocus === true) return false;
+  const tradition = mod.tradition ?? "";
+  const hasConcreteTradition = tradition !== "" && tradition !== INHERIT_TRADITION;
+  const belongsToFocusGroup = (mod.parentFeature ?? "") !== "";
+  return hasConcreteTradition && !belongsToFocusGroup;
+}
+
+/**
+ * Sorts feature-granted `add-spell` modifiers into three kinds:
+ *
+ * - **innate** (`isInnate: true`, and no forced focus): cast at will from an
+ *   Innate Spells entry (e.g. Seer Elf → Detect Magic).
+ * - **known** (a repertoire grant per {@link isRepertoireGrant}): added to the
+ *   class's spell repertoire, cast with normal slots (e.g. Maestro muse → Soothe).
+ * - **focus** (everything else): a focus-pool spell. This includes `isKnown`
+ *   grants that inherit their tradition or belong to a focus group (the bard's
+ *   composition spells) and any grant sharing an engine with an `add-focus-point`
+ *   (`forcesFocus`, e.g. a wizard curriculum's Force Bolt).
+ *
+ * The previous logic had no `known` bucket and treated every non-innate grant as
+ * focus, so repertoire spells like Soothe were wrongly filed under Focus Spells.
+ */
 function categorizeGrantedSpells(
   modifiers: EngineModifier[],
   characterLevel: number
-): { innate: GrantedSpell[]; focus: GrantedSpell[] } {
+): { innate: GrantedSpell[]; focus: GrantedSpell[]; known: GrantedSpell[] } {
   const innate: GrantedSpell[] = [];
   const focus: GrantedSpell[] = [];
+  const known: GrantedSpell[] = [];
 
   for (const mod of modifiers) {
     if (mod.type !== "add-spell") continue;
     if (mod.level > characterLevel) continue;
 
+    const isInnate = mod.isInnate === true && mod.forcesFocus !== true;
+    const isKnown = !isInnate && isRepertoireGrant(mod);
     const spell: GrantedSpell = {
       slug: mod.addSpell,
       tradition: mod.tradition ?? "arcane",
       level: mod.level,
-      isInnate: mod.isInnate === true,
-      isFocus: mod.isInnate !== true,
+      isInnate,
+      isKnown,
+      isFocus: !isInnate && !isKnown,
       spellLevel: mod.spellLevel ?? 0,
     };
 
-    if (spell.isInnate) {
-      innate.push(spell);
-    } else {
-      focus.push(spell);
-    }
+    if (isInnate) innate.push(spell);
+    else if (isKnown) known.push(spell);
+    else focus.push(spell);
   }
 
-  return { innate, focus };
+  return { innate, focus, known };
 }
 
 /**
@@ -187,10 +292,15 @@ export async function applyFeatureGrantedSpells(
 ): Promise<void> {
   const characterLevel = getCharacterLevel(engines);
   const maxSpellRank = getMaxAccessibleSpellRank(actor, characterLevel);
-  const { innate, focus } = await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank, cacheEngineIds);
+  const { innate, focus, known, focusEntryName } = await resolveFeatureGrantedSpells(
+    engines,
+    characterLevel,
+    maxSpellRank,
+    cacheEngineIds
+  );
 
   debugLog(
-    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus spells (max rank ${String(maxSpellRank)})`
+    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus, ${String(known.length)} known spells (max rank ${String(maxSpellRank)})`
   );
 
   // Focus points are deliberately not written here: the PF2e system derives the
@@ -200,7 +310,11 @@ export async function applyFeatureGrantedSpells(
   }
 
   if (focus.length > 0) {
-    await addFeatureFocusSpells(actor, focus, engines, summary);
+    await addFeatureFocusSpells(actor, focus, engines, summary, focusEntryName);
+  }
+
+  if (known.length > 0) {
+    await addFeatureKnownSpells(actor, known, summary);
   }
 }
 
@@ -215,13 +329,72 @@ async function addFeatureFocusSpells(
   actor: Actor,
   spells: GrantedSpell[],
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  focusEntryName?: string
 ): Promise<void> {
-  const tradition = spells[0]?.tradition ?? "arcane";
-  const entryName = deriveFocusEntryName(engines);
+  const tradition = resolveFocusTradition(actor, spells[0]?.tradition);
+  const entryName = focusEntryName ?? deriveFocusEntryName(engines);
   const entryId = await createFeatureEntry(actor, entryName, tradition, "focus");
 
   await addGrantedSpellsToEntry(actor, entryId, spells, summary, "focus");
+}
+
+/**
+ * Resolves the tradition for a focus entry. Composition and other class focus
+ * spells inherit their tradition (`"inherit"` or unset); resolve that to the
+ * character's own spellcasting tradition (already imported by applySpells) so
+ * the focus entry matches the class, falling back to "arcane" when unknown.
+ */
+function resolveFocusTradition(actor: Actor, granted: string | undefined): string {
+  if (granted !== undefined && granted !== "" && granted !== INHERIT_TRADITION) return granted;
+  return primarySpellcastingTradition(actor) ?? "arcane";
+}
+
+/** The tradition of the character's first repertoire/prepared spellcasting entry, if any. */
+function primarySpellcastingTradition(actor: Actor): string | undefined {
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spellcastingEntry") continue;
+    const tradition = itemSystem(item).tradition?.value;
+    if (typeof tradition === "string" && tradition !== "") return tradition;
+  }
+  return undefined;
+}
+
+/**
+ * Adds feature-granted *known* spells to the character's repertoire. A known
+ * spell belongs in an existing spontaneous spellcasting entry of the same
+ * tradition (the bard Maestro muse's Soothe joins the bard's occult repertoire);
+ * if the character has no such entry, a new spontaneous entry of that tradition
+ * is created to hold them.
+ */
+async function addFeatureKnownSpells(actor: Actor, spells: GrantedSpell[], summary: ImportSummary): Promise<void> {
+  const tradition = spells[0]?.tradition ?? "arcane";
+  const entryId =
+    findRepertoireEntryId(actor, tradition) ??
+    (await createFeatureEntry(actor, `${capitalize(tradition)} Spells`, tradition, "spontaneous"));
+
+  await addGrantedSpellsToEntry(actor, entryId, spells, summary, "known");
+}
+
+/**
+ * Finds an existing spontaneous (repertoire) spellcasting entry matching the
+ * tradition, so a granted known spell joins the class's own repertoire rather
+ * than a separate entry. Returns undefined when the character has none.
+ */
+function findRepertoireEntryId(actor: Actor, tradition: string): string | undefined {
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spellcastingEntry") continue;
+    const system = itemSystem(item);
+    if (system.prepared?.value === "spontaneous" && system.tradition?.value === tradition) {
+      return item.id ?? undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Title-cases a tradition slug for a generated entry name (e.g. "occult" → "Occult"). */
+function capitalize(text: string): string {
+  return text.length > 0 ? text[0]!.toUpperCase() + text.slice(1) : text;
 }
 
 function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
@@ -333,6 +506,7 @@ async function collectDomainFocusSpells(domainData: DomainEngineData[], maxSpell
       level: 0,
       isInnate: false,
       isFocus: true,
+      isKnown: false,
       spellLevel: 0,
     }));
 }

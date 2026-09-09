@@ -146,6 +146,10 @@ export interface Pf2eItemSystem {
   trainedSkills?: { lore?: string[] };
   /** Spellcasting entries track slots per rank. */
   slots?: Record<string, Pf2eSpellSlotRank>;
+  /** Spellcasting entries: "spontaneous" | "prepared" | "innate" | "focus". */
+  prepared?: ValueOf<string>;
+  /** Spellcasting entries: the magic tradition ("occult", "arcane", …). */
+  tradition?: ValueOf<string>;
 }
 
 /**
