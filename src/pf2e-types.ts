@@ -136,6 +136,8 @@ export interface Pf2eItemSystem {
   description?: ValueOf<string>;
   quantity?: number;
   equipped?: Pf2eEquipped;
+  /** The id of the container item this item is stowed in, or null at top level. */
+  containerId?: string | null;
   level?: ValueOf<number> & { taken?: number };
   location?: string | null | { value?: string | null };
   boosts?: Record<string, { value: string[]; selected: string | null }>;

@@ -903,6 +903,87 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).not.toHaveBeenCalled();
     });
 
+    /**
+     * An actor whose `items.get` resolves two backpacks sharing a slug but
+     * carrying distinct Demiplane engine ids — the case slug-based matching
+     * couldn't tell apart.
+     */
+    function actorWithContainer() {
+      const leftPouch = {
+        id: "left-pouch-foundry-id",
+        type: "backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "left-engine-id" } },
+      };
+      const rightPouch = {
+        id: "right-pouch-foundry-id",
+        type: "backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "right-engine-id" } },
+      };
+      const byId: Record<string, unknown> = {
+        [leftPouch.id]: leftPouch,
+        [rightPouch.id]: rightPouch,
+      };
+      return {
+        ...createMockActor(),
+        items: { get: (id: string) => byId[id] },
+      };
+    }
+
+    it("queues a container move by the container's unique engine id, distinguishing same-slug containers", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      // Moved into the RIGHT pouch (same slug as the left one).
+      triggerHook("updateItem", item, { system: { containerId: "right-pouch-foundry-id" } });
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "dagger",
+        undefined,
+        "container",
+        { containerEngineId: "right-engine-id" },
+        "weapon"
+      );
+    });
+
+    it("queues a move to the top level as a null container", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      // containerId cleared (moved out of a container).
+      triggerHook("updateItem", item, { system: { containerId: null } });
+
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "dagger",
+        undefined,
+        "container",
+        { containerEngineId: null },
+        "weapon"
+      );
+    });
+
+    it("does not queue a container change when containerId is untouched", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = actorWithContainer();
+      const item = createMockItem(actor, "Dagger", { type: "weapon", system: { slug: "dagger" } });
+
+      triggerHook("updateItem", item, { system: { quantity: 2 } });
+
+      const containerCalls = exportManager.queueItemChange.mock.calls.filter((c: unknown[]) => c[3] === "container");
+      expect(containerCalls).toHaveLength(0);
+    });
+
     it("does not queue for unlinked actors", () => {
       const manager = new HookManager(exportManager as never);
       manager.register();
@@ -1138,6 +1219,78 @@ describe("HookManager", () => {
         { carryType: "worn", handsHeld: 0 },
         "armor"
       );
+    });
+
+    it("queues the container engine id for a stowed item and a null container for a top-level item", () => {
+      const backpack = {
+        id: "backpack-foundry-id",
+        type: "backpack",
+        name: "Backpack",
+        system: { slug: "backpack" },
+        flags: { "demiplane-pf2e": { demiplaneSlug: "backpack-rm", demiplaneEngineId: "backpack-engine-id" } },
+      };
+      const stowed = {
+        type: "weapon",
+        name: "Asp Coil",
+        system: { slug: "asp-coil", quantity: 1, containerId: "backpack-foundry-id" },
+        flags: {},
+      };
+      const topLevel = {
+        type: "weapon",
+        name: "Arbalest",
+        system: { slug: "arbalest", quantity: 1 },
+        flags: {},
+      };
+      const items = [backpack, stowed, topLevel];
+      const actor = {
+        ...createMockActor(),
+        items: Object.assign(items, {
+          get: (id: string) => items.find((i) => (i as { id?: string }).id === id),
+        }),
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      // Stowed item resolves to its container's unique engine id (not its slug).
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "asp-coil",
+        undefined,
+        "container",
+        { containerEngineId: "backpack-engine-id" },
+        "weapon"
+      );
+      // Top-level item queues a null container so a re-sync CLEARS a stale
+      // container link (an item pulled out of a bag in Foundry). This is the
+      // regression: without it, a full push could add links but never remove them.
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "arbalest",
+        undefined,
+        "container",
+        { containerEngineId: null },
+        "weapon"
+      );
+    });
+
+    it("does not queue a container change for non-inventory items", () => {
+      const items = [
+        {
+          type: "feat",
+          name: "Power Attack",
+          system: { slug: "power-attack" },
+          flags: {},
+        },
+      ];
+      const actor = {
+        ...createMockActor(),
+        items: Object.assign(items, { get: () => undefined }),
+      };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      const containerCalls = exportManager.queueItemChange.mock.calls.filter((c: unknown[]) => c[3] === "container");
+      expect(containerCalls).toHaveLength(0);
     });
 
     it("routes treasure items to currency engines", () => {

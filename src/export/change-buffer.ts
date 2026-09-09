@@ -10,7 +10,7 @@ export interface PendingChange {
   timestamp: number;
 }
 
-export type ItemChangeType = "quantity" | "equipped" | "delete" | "cast";
+export type ItemChangeType = "quantity" | "equipped" | "delete" | "cast" | "container";
 
 /**
  * A "cast" item change: whether a prepared spell slot has been cast (expended).
@@ -29,11 +29,22 @@ export interface EquippedState {
   invested?: boolean | undefined;
 }
 
+/**
+ * A "container" item change: which container an item was moved into, identified
+ * by the container's unique Demiplane engine id (stamped on the container item at
+ * import). An id — not a slug — is used so two containers of the same base type
+ * (two backpacks, "left pouch"/"right pouch") stay distinct. `null` means the
+ * item was moved out to the top level (no container).
+ */
+export interface ContainerChange {
+  containerEngineId: string | null;
+}
+
 export interface PendingItemChange {
   itemSlug: string;
   demiplaneSlug: string | undefined;
   changeType: ItemChangeType;
-  value: number | string | EquippedState | CastChange;
+  value: number | string | EquippedState | CastChange | ContainerChange;
   itemType: string | undefined;
   /** True when queued from a user edit (vs. a bulk refresh). Used to gate edit-only warnings. */
   edited?: boolean;
@@ -119,7 +130,7 @@ export class ChangeBuffer {
     itemSlug: string,
     demiplaneSlug: string | undefined,
     changeType: ItemChangeType,
-    value: number | string | EquippedState | CastChange,
+    value: number | string | EquippedState | CastChange | ContainerChange,
     itemType?: string,
     edited?: boolean
   ): void {

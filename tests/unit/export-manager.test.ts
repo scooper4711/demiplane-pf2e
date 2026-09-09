@@ -463,6 +463,208 @@ describe("ExportManager", () => {
     });
   });
 
+  describe("container moves", () => {
+    /** A character holding a dagger and a backpack (the container), plus helpers. */
+    function containerClient(extraEngines: Array<Record<string, unknown>> = []) {
+      return createMockClient({
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [
+            {
+              id: "dagger",
+              name: "tabula/item/dagger-rm.eng",
+              type: "DemiplaneEngine",
+              saveType: "CharacterSheet",
+              demiplaneEngineId: "de-dagger",
+              args: { slug: "dagger-rm" },
+            },
+            {
+              id: "backpack",
+              name: "tabula/item/backpack-rm.eng",
+              type: "DemiplaneEngine",
+              saveType: "CharacterSheet",
+              demiplaneEngineId: "de-backpack",
+              args: { slug: "backpack-rm" },
+            },
+            ...extraEngines,
+          ],
+          updated: "2026-08-27T00:00:00.000Z",
+        }),
+      });
+    }
+
+    function pushedEngines(client: ReturnType<typeof createMockClient>): Array<Record<string, unknown>> {
+      return client.updateCharacter.mock.calls[0][0].data.engines as Array<Record<string, unknown>>;
+    }
+
+    it("creates a <item>-container engine pointing at the target container", async () => {
+      const client = containerClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: "de-backpack" },
+        "weapon"
+      );
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      const link = pushedEngines(client).find((e) => e.name === "de-dagger-container");
+      expect(link).toBeDefined();
+      // Value is the target container's engine id, matching the import representation.
+      expect(link?.value).toBe("de-backpack");
+      expect(link?.type).toBe("CustomDemiplaneEngine");
+      expect((link?.args as { parentEngine?: string }).parentEngine).toBe("de-dagger");
+    });
+
+    it("writes distinct links for two containers that share a slug", async () => {
+      // Two backpacks (same slug) with distinct engine ids: the change carries
+      // the target's engine id, so the item lands in the RIGHT one — the case
+      // the old slug-based resolution couldn't express.
+      const client = containerClient([
+        {
+          id: "backpack2",
+          name: "tabula/item/backpack-rm.eng",
+          type: "DemiplaneEngine",
+          saveType: "CharacterSheet",
+          demiplaneEngineId: "de-backpack-2",
+          args: { slug: "backpack-rm" },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: "de-backpack-2" },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const link = pushedEngines(client).find((e) => e.name === "de-dagger-container");
+      expect(link?.value).toBe("de-backpack-2");
+    });
+
+    it("updates an existing container link when moved to another container", async () => {
+      const client = containerClient([
+        {
+          id: "sack",
+          name: "tabula/item/sack-rm.eng",
+          type: "DemiplaneEngine",
+          saveType: "CharacterSheet",
+          demiplaneEngineId: "de-sack",
+          args: { slug: "sack-rm" },
+        },
+        {
+          id: "link",
+          name: "de-dagger-container",
+          value: "de-sack",
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-link",
+          args: { id: null, parentEngine: "de-dagger" },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: "de-backpack" },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      const links = pushedEngines(client).filter((e) => e.name === "de-dagger-container");
+      expect(links).toHaveLength(1);
+      expect(links[0].value).toBe("de-backpack");
+    });
+
+    it("removes the container link when the item is moved to the top level", async () => {
+      const client = containerClient([
+        {
+          id: "link",
+          name: "de-dagger-container",
+          value: "de-backpack",
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-link",
+          args: { id: null, parentEngine: "de-dagger" },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: null },
+        "weapon"
+      );
+      await manager.flush(actor as never);
+
+      expect(pushedEngines(client).some((e) => e.name === "de-dagger-container")).toBe(false);
+    });
+
+    it("leaves a top-level item with no link when it has no container engine", async () => {
+      // A re-sync queues a null container for every top-level item; when the
+      // item has no existing -container engine, that's a harmless no-op.
+      const client = containerClient();
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemChange(
+        actor as never,
+        "dagger-rm",
+        "dagger-rm",
+        "container",
+        { containerEngineId: null },
+        "weapon"
+      );
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(pushedEngines(client).some((e) => e.name === "de-dagger-container")).toBe(false);
+    });
+
+    it("strips the container link when the item is deleted", async () => {
+      const client = containerClient([
+        {
+          id: "link",
+          name: "de-dagger-container",
+          value: "de-backpack",
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-link",
+          args: { id: null, parentEngine: "de-dagger" },
+        },
+      ]);
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueItemDelete(actor as never, "dagger-rm");
+      await manager.flush(actor as never);
+
+      const engines = pushedEngines(client);
+      expect(engines.some((e) => e.name === "tabula/item/dagger-rm.eng")).toBe(false);
+      expect(engines.some((e) => e.name === "de-dagger-container")).toBe(false);
+    });
+  });
+
   describe("flush detects conflicts via updated timestamp", () => {
     it("returns conflict when server updated differs from stored lastUpdated", async () => {
       const client = createMockClient({

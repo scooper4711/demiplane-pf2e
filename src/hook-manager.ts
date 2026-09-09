@@ -144,11 +144,74 @@ function queueSingleItemChanges(
     }
   }
 
-  const carryType = system?.equipped?.carryType;
-  if (typeof carryType === "string") {
-    if (!writeQuantity) return;
-    queueEquipped(exportManager, actor, item, slug, demiplaneSlug, system.equipped);
+  if (writeQuantity) {
+    queueEquippedIfChanged(exportManager, actor, item, slug, demiplaneSlug, system);
+    queueContainerState(exportManager, actor, item, slug, demiplaneSlug, system);
   }
+}
+
+/** Queues the item's equipped state when it carries one. */
+function queueEquippedIfChanged(
+  exportManager: ExportManager,
+  actor: Actor,
+  item: Item,
+  slug: string,
+  demiplaneSlug: string | undefined,
+  system: ReturnType<typeof itemSystem>
+): void {
+  if (typeof system?.equipped?.carryType !== "string") return;
+  queueEquipped(exportManager, actor, item, slug, demiplaneSlug, system.equipped);
+}
+
+/**
+ * Queues an inventory item's current container placement for a full re-sync
+ * push: the container's slug when stowed, or `null` when at the top level.
+ *
+ * The null case matters — it's how a re-sync removes a stale `-container` link
+ * for an item that was pulled out of a container in Foundry. Without it, the
+ * full push could add container links but never clear them, so an item moved
+ * out of a bag stayed "in" the bag on Demiplane. (An earlier version only
+ * queued stowed items, which is exactly that gap.)
+ *
+ * Scoped to inventory item types, since only physical items live in containers;
+ * a stowed item whose container can't be resolved is skipped rather than writing
+ * a dangling link.
+ */
+function queueContainerState(
+  exportManager: ExportManager,
+  actor: Actor,
+  item: Item,
+  slug: string,
+  demiplaneSlug: string | undefined,
+  system: ReturnType<typeof itemSystem>
+): void {
+  if (!INVENTORY_ITEM_TYPES.has(item.type)) return;
+
+  const containerId = system?.containerId;
+  const isStowed = typeof containerId === "string" && containerId.length > 0;
+  if (!isStowed) {
+    exportManager.queueItemChange(actor, slug, demiplaneSlug, "container", { containerEngineId: null }, item.type);
+    return;
+  }
+
+  const containerEngineId = resolveContainerEngineId(actor, containerId);
+  if (containerEngineId === null) return;
+  exportManager.queueItemChange(actor, slug, demiplaneSlug, "container", { containerEngineId }, item.type);
+}
+
+/**
+ * Resolves a Foundry container item id to the container's unique Demiplane engine
+ * id (stamped on the container at import), which the push matches against the
+ * character's item engines. Returns null when the container can't be resolved or
+ * wasn't imported from Demiplane. An engine id — not a slug — is used so two
+ * containers sharing a base type (two backpacks, two pouches) stay distinct.
+ * Shared by the per-edit hook and the full re-sync path.
+ */
+function resolveContainerEngineId(actor: Actor, containerId: string): string | null {
+  const container = actor.items.get(containerId);
+  if (!container) return null;
+  const flags = (container.flags?.[MODULE_ID] as { demiplaneEngineId?: unknown } | undefined) ?? {};
+  return typeof flags.demiplaneEngineId === "string" ? flags.demiplaneEngineId : null;
 }
 
 function queueEquipped(
@@ -363,6 +426,47 @@ export class HookManager {
     }
 
     this.handleEquippedChange(item, actor, slug, demiplaneSlug, changes);
+    this.handleContainerChange(item, actor, slug, demiplaneSlug, changes);
+  }
+
+  /**
+   * Queues a container move when an item's `system.containerId` changes: moved
+   * into a container, out to the top level, or from one container to another.
+   * This is an item update (not a delete), so it rides the same quantity tier as
+   * equipped/quantity edits — the guard is already applied in `onItemUpdate`.
+   *
+   * The queued value carries the target container's unique Demiplane engine id
+   * (read from the container item's import stamp) so the push writes the right
+   * container even when several share a base type; `null` means top-level (moved
+   * out of any container).
+   */
+  private handleContainerChange(
+    item: Item,
+    actor: Actor,
+    slug: string | undefined,
+    demiplaneSlug: string | undefined,
+    changes: Record<string, unknown>
+  ): void {
+    if (!this.containerIdChanged(changes) || typeof slug !== "string") return;
+
+    const containerId = this.resolveContainerIdChange(changes);
+    const containerEngineId = containerId === null ? null : resolveContainerEngineId(actor, containerId);
+
+    debugLog(`Container change: ${slug} -> container=${containerEngineId ?? "(top level)"}`);
+    this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "container", { containerEngineId }, item.type);
+  }
+
+  /** Whether an item update touched `system.containerId` (as a flat key or nested). */
+  private containerIdChanged(changes: Record<string, unknown>): boolean {
+    if (Object.prototype.hasOwnProperty.call(changes, "system.containerId")) return true;
+    const system = changes.system;
+    return typeof system === "object" && system !== null && "containerId" in system;
+  }
+
+  /** The new `containerId` from an update: a string when moved into a container, null for top level. */
+  private resolveContainerIdChange(changes: Record<string, unknown>): string | null {
+    const value = this.getNestedValue(changes, "system.containerId");
+    return typeof value === "string" && value.length > 0 ? value : null;
   }
 
   private handleEquippedChange(
