@@ -74,6 +74,16 @@
   max-width: 50vw;
 }
 
+/* Keep the dialog within the viewport and let its content scroll as a whole if
+   it still overflows (e.g. many sync issues, unmapped items, and manual items
+   at once). Without this the window grows past the screen and its top — the
+   header with the "Open sheet on Demiplane" link — is unreachable. The inner
+   lists are individually bounded below; this is the outer backstop. */
+.demiplane-sync-dialog .window-content {
+  max-height: 85vh;
+  overflow: auto;
+}
+
 /* The sync-issues and unmapped-items sections share one scrollable region: from
    the "Sync issues" heading down to the divider before the next section. A long
    combination of issues and unmapped names scrolls together as a bounded panel
@@ -81,6 +91,16 @@
    manual items, Ko-fi) stays fixed. */
 .demiplane-info-dialog .demiplane-scroll-region {
   max-height: 40vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}
+
+/* The "not from Demiplane" list can be long (a player may copy many activities
+   onto their sheet). Bound it so it scrolls internally instead of growing the
+   dialog past the viewport — which would push the header (and its "Open sheet
+   on Demiplane" link) off the top with no way to scroll back up. */
+.demiplane-info-dialog .demiplane-manual-items {
+  max-height: 30vh;
   overflow: auto;
   overflow-wrap: anywhere;
 }

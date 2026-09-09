@@ -88,10 +88,7 @@ export async function showDemiplaneInfoDialog(
   const sanctificationSection = buildSanctificationSection(actor);
   const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
-  const manualItems = actor.items.filter((item) => {
-    const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
-    return moduleFlags === undefined;
-  });
+  const manualItems = actor.items.filter(isUnmanagedManualItem);
   const manualItemsSection = buildManualItemsSection(manualItems);
 
   const content = buildDialogContent({
@@ -321,6 +318,27 @@ function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.a
     if (!isSanctification(value)) return;
     void setSanctificationSelection(actor, value);
   });
+}
+
+/**
+ * PF2e item types this module never imports and doesn't sync, so they should not
+ * appear in the "not from Demiplane" list. Actions cover exploration, downtime,
+ * and encounter (combat) activities — a player may copy many onto their sheet,
+ * and none are Demiplane-managed. Effects and conditions are transient state,
+ * likewise never synced.
+ */
+const UNSYNCED_ITEM_TYPES = new Set(["action", "effect", "condition"]);
+
+/**
+ * Whether an item should be listed as "not from Demiplane". Excludes items this
+ * module created (they carry its flag) and item types it never manages (see
+ * {@link UNSYNCED_ITEM_TYPES}), so a sheet full of copied activities doesn't
+ * flood the list with things the sync will never touch.
+ */
+function isUnmanagedManualItem(item: { type: string; flags?: Record<string, unknown> }): boolean {
+  const moduleFlags = item.flags?.[MODULE_ID] as Record<string, unknown> | undefined;
+  if (moduleFlags !== undefined) return false;
+  return !UNSYNCED_ITEM_TYPES.has(item.type);
 }
 
 function buildManualItemsSection(items: Array<{ name: string; type: string }>): string {
