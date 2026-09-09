@@ -6,7 +6,9 @@ import {
   importLinkedCharacter,
   pushCharacterEngines,
   recoverStaleSyncPauses,
+  notifyConflict,
   reimportActorOnConflict,
+  handlePushConflict,
 } from "../../src/sync-flows.js";
 import { isSyncActive } from "../../src/sync-pause.js";
 import { MODULE_ID } from "../../src/import/types.js";
@@ -191,15 +193,20 @@ describe("sync-flows", () => {
   });
 
   describe("pushCharacterEngines", () => {
-    it("warns on an optimistic-concurrency conflict", async () => {
-      const { deps } = makeDeps();
+    it("returns the conflict result and defers recovery to the registered handler", async () => {
+      // Conflict recovery is owned by the handler flush fires (handlePushConflict);
+      // the manual path re-arms the warn guard and returns the conflict result
+      // without its own recovery, so both paths behave identically.
+      const { deps, importCharacter } = makeDeps();
       const actor = linkedActor();
       vi.spyOn(deps.exportManager, "flush").mockResolvedValue({ success: false, conflict: true });
 
       const result = await pushCharacterEngines(actor, deps);
 
       expect(result).toEqual({ success: false, conflict: true });
-      expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("changed on the server"));
+      expect(importCharacter).not.toHaveBeenCalled();
+      // Re-armed the guard so the handler will surface this conflict to the user.
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "conflictNotified", false);
       expect(isSyncActive(actor)).toBe(false);
     });
 
@@ -213,6 +220,34 @@ describe("sync-flows", () => {
       expect(result).toEqual({ success: false, error: "offline" });
       expect(globalThis.ui.notifications.info).not.toHaveBeenCalled();
       expect(globalThis.ui.notifications.warn).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("notifyConflict", () => {
+    it("warns the user and records an export issue without re-importing", async () => {
+      const actor = linkedActor();
+
+      notifyConflict(actor);
+
+      expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(
+        expect.stringContaining("re-importing overwrites your local changes")
+      );
+      // Persisted as an export issue so the sync indicator lights up.
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "exportIssues", [expect.stringContaining("Re-import")]);
+      // The once-per-conflict guard is set so retries don't re-toast.
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "conflictNotified", true);
+    });
+
+    it("does not re-warn while the conflict is still unresolved", async () => {
+      const actor = linkedActor();
+      actor.flags[MODULE_ID].conflictNotified = true;
+
+      notifyConflict(actor);
+
+      // Repeat auto-pushes (~every 2s) must not spam the toast...
+      expect(globalThis.ui.notifications.warn).not.toHaveBeenCalled();
+      // ...but the issue is still recorded so the indicator stays lit.
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "exportIssues", [expect.stringContaining("Re-import")]);
     });
   });
 
@@ -245,6 +280,43 @@ describe("sync-flows", () => {
 
       expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, { token: TOKEN });
       expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("Re-imported"));
+    });
+  });
+
+  describe("handlePushConflict", () => {
+    beforeEach(() => vi.useFakeTimers());
+    afterEach(() => {
+      vi.runAllTimers();
+      vi.useRealTimers();
+    });
+
+    it("re-imports (not warn-only) when quantity or higher is being written", async () => {
+      const { deps, importCharacter } = makeDeps();
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity");
+      await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", TOKEN);
+      const actor = linkedActor();
+
+      await handlePushConflict(actor, deps);
+
+      // Session info is already on Demiplane at this tier, so a re-import is safe
+      // and keeps both sides consistent.
+      expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, { token: TOKEN });
+      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("re-importing to stay"));
+      await vi.runAllTimersAsync();
+    });
+
+    it("warns without re-importing at the text-only tier", async () => {
+      const { deps, importCharacter } = makeDeps();
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text");
+      const actor = linkedActor();
+
+      await handlePushConflict(actor, deps);
+
+      // At text-only, session info is NOT pushed, so a re-import would clobber it.
+      expect(importCharacter).not.toHaveBeenCalled();
+      expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(
+        expect.stringContaining("re-importing overwrites your local changes")
+      );
     });
   });
 

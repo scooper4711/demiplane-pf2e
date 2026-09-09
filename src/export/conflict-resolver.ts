@@ -63,9 +63,9 @@ export class ConflictResolver {
         return { status: "ok" };
       }
 
-      const error = "Conflict: Demiplane character was updated elsewhere. Re-importing.";
+      const error = "Conflict: Demiplane character was updated elsewhere. Re-import when convenient.";
       debugLog(
-        `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, will re-import`
+        `[push] conflict detected stored=${storedUpdated} server=${serverUpdated} — aborting push, warning user`
       );
       return { status: "conflict", error };
     } catch (error) {

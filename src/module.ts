@@ -15,7 +15,7 @@ import {
   exportLinkedCharacter,
   importLinkedCharacter,
   recoverStaleSyncPauses,
-  reimportActorOnConflict,
+  handlePushConflict,
 } from "./sync-flows.js";
 import type { ExportCharacterFn, ImportCharacterFn, SyncFlowDeps } from "./sync-flows.js";
 import { buildUpdateFromDemiplaneOption } from "./actor-context-menu.js";
@@ -65,7 +65,11 @@ async function initializeModule(): Promise<void> {
 
   importOrchestrator = new ImportOrchestrator(client);
   exportManager = new ExportManager(client);
-  exportManager.setOnConflictHandler((actor) => reimportActorOnConflict(actor, flowDeps()));
+  // On a push conflict, recover based on the write level: re-import when session
+  // info (quantity/equipped/cast) is being pushed and therefore already lives on
+  // Demiplane, or warn-only at the text tier where a silent re-import would
+  // clobber unsynced local session state. See handlePushConflict.
+  exportManager.setOnConflictHandler((actor) => handlePushConflict(actor, flowDeps()));
   hookManager = new HookManager(exportManager);
   new CharacterLinkDialog(client);
 
