@@ -66,6 +66,7 @@ Still on the roadmap:
 
 - Adding inventory items in Foundry pushing to Demiplane
 - Pets/Familiars/Summons
+- Per-character choice resolution: when the importer can't determine which option a build made, pick it from the available choices, save it to the actor, and re-import
 - Starfinder support
 
 ## How It Works
