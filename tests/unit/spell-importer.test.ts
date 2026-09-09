@@ -1,7 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { applySpells } from "../../src/import/spell-importer.js";
+import { applySpells, deriveClassEntryName } from "../../src/import/spell-importer.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+
+describe("deriveClassEntryName", () => {
+  it("names an entry after its class and tradition", () => {
+    expect(deriveClassEntryName("sorcerer-spellcasting-rm", "arcane")).toBe("Sorcerer Spells (Arcane)");
+    expect(deriveClassEntryName("bard-spellcasting-rm", "occult")).toBe("Bard Spells (Occult)");
+  });
+
+  it("falls back to the tradition alone for an unrecognized source", () => {
+    expect(deriveClassEntryName("some-other-source", "primal")).toBe("Primal Spells");
+  });
+});
 
 describe("applySpells", () => {
   beforeEach(() => {
@@ -233,7 +244,7 @@ describe("applySpells", () => {
     await applySpells(actor as never, engines, summary);
 
     const entry = (actor.items as unknown as Array<Record<string, unknown>>).find(
-      (i) => i.type === "spellcastingEntry" && i.name === "Divine Prepared Spells"
+      (i) => i.type === "spellcastingEntry" && i.name === "Cleric Spells (Divine)"
     );
     expect(entry).toBeDefined();
 

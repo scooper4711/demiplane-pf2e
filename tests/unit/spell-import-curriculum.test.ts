@@ -116,7 +116,7 @@ describe("applySpells - curriculum separation", () => {
 
     // First entry: regular
     const regularEntry = (entryCalls[0][1] as Array<Record<string, unknown>>)[0];
-    expect(regularEntry.name).toBe("Arcane Prepared Spells");
+    expect(regularEntry.name).toBe("Wizard Spells (Arcane)");
 
     // Second entry: curriculum (named after school)
     const curriculumEntry = (entryCalls[1][1] as Array<Record<string, unknown>>)[0];

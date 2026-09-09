@@ -99,8 +99,19 @@ describe("feature-spell-resolver", () => {
             ndjsonLine("feat-1", [
               ADD_SPELL("mage-hand-rm", 1, { isInnate: true }),
               ADD_SPELL("shield-rm", 1),
-              // A known repertoire spell (e.g. bard Maestro muse → Soothe).
+              // A known repertoire spell (bard Maestro muse → Soothe): concrete
+              // tradition, no focus group.
               ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" }),
+              // Composition cantrip (Courageous Anthem): isKnown but inherits its
+              // tradition, so it is a focus spell, not repertoire.
+              ADD_SPELL("courageous-anthem-rm", 1, { isKnown: true, tradition: "inherit" }),
+              // Composition spell (Counter Performance): isKnown but belongs to a
+              // focus group, so it is a focus spell.
+              ADD_SPELL("counter-performance-rm", 1, {
+                isKnown: true,
+                tradition: "inherit",
+                parentFeature: "composition-spells",
+              }),
             ]),
           ].join("\n"),
       })
@@ -115,11 +126,15 @@ describe("feature-spell-resolver", () => {
     expect(result.innate).toHaveLength(1);
     expect(result.innate[0].slug).toBe("mage-hand-rm");
     expect(result.innate[0].isInnate).toBe(true);
-    // A non-innate grant with no isKnown flag stays focus.
-    expect(result.focus).toHaveLength(1);
-    expect(result.focus[0].slug).toBe("shield-rm");
-    expect(result.focus[0].isFocus).toBe(true);
-    // isKnown grants become repertoire (known) spells, not focus.
+    // Non-innate grants without a concrete-tradition repertoire signal are focus:
+    // plain shield, plus the two composition spells flagged isKnown.
+    expect(result.focus.map((f) => f.slug).sort()).toEqual([
+      "counter-performance-rm",
+      "courageous-anthem-rm",
+      "shield-rm",
+    ]);
+    expect(result.focus.every((f) => f.isFocus && !f.isKnown)).toBe(true);
+    // Only the concrete-tradition, non-focus grant becomes a repertoire spell.
     expect(result.known).toHaveLength(1);
     expect(result.known[0].slug).toBe("soothe-rm");
     expect(result.known[0].isKnown).toBe(true);
@@ -485,6 +500,81 @@ describe("feature-spell-resolver", () => {
       expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("spontaneous");
       expect((entry?.system as { tradition: { value: string } }).tradition.value).toBe("occult");
       expect(entry?.name).toBe("Occult Spells");
+    });
+
+    it("collects the bard's composition spells into one occult focus entry named from the class feature", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Courageous Anthem", system: { slug: "courageous-anthem", level: { value: 0 } } },
+          { _id: "s2", name: "Counter Performance", system: { slug: "counter-performance", level: { value: 0 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [
+                // The class feature declares the focus entry's name and tradition.
+                {
+                  type: "v2-add-spellcasting-feature",
+                  focusName: "Composition Spells",
+                  focusSlug: "composition-spells",
+                  tradition: "occult",
+                  hasFocusGroup: true,
+                },
+                // Composition cantrip: isKnown but inherits tradition -> focus.
+                ADD_SPELL("courageous-anthem-rm", 1, { isKnown: true, tradition: "inherit" }),
+                // Composition spell: isKnown but belongs to the focus group -> focus.
+                ADD_SPELL("counter-performance-rm", 1, {
+                  isKnown: true,
+                  tradition: "inherit",
+                  parentFeature: "composition-spells",
+                }),
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      // The bard's occult repertoire entry already exists (from applySpells), so
+      // the focus tradition resolves to occult.
+      const bardEntry = {
+        id: "bard-entry",
+        type: "spellcastingEntry",
+        system: { prepared: { value: "spontaneous" }, tradition: { value: "occult" } },
+      };
+      const actor = createMockActor({ items: [bardEntry] });
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [
+          {
+            id: "class-1",
+            name: "tabula/class/bard-rm.eng",
+            type: "DemiplaneEngine",
+            args: {},
+          } as DemiplaneEngineEntry,
+        ],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      const focusEntry = created.flat().find((i) => i.type === "spellcastingEntry");
+      expect(focusEntry?.name).toBe("Composition Spells");
+      expect((focusEntry?.system as { prepared: { value: string } }).prepared.value).toBe("focus");
+      expect((focusEntry?.system as { tradition: { value: string } }).tradition.value).toBe("occult");
+
+      // Both composition spells are added, and share a single focus entry.
+      const spells = created.flat().filter((i) => i.type !== "spellcastingEntry");
+      const spellSlugs = spells.map((i) => (i.system as { slug?: string }).slug);
+      expect(spellSlugs.sort()).toEqual(["counter-performance", "courageous-anthem"]);
+      const spellLocations = spells.map((i) => (i.system as { location?: { value?: string } }).location?.value);
+      expect(new Set(spellLocations).size).toBe(1);
+      expect(spellLocations[0]).toBeDefined();
     });
   });
 });

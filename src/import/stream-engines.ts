@@ -79,9 +79,28 @@ export interface AddSpellSlotsModifier {
   slots?: DemiplaneSlotEntry[];
 }
 
+/**
+ * Declares a class's spellcasting feature, including its focus spell group. The
+ * `focusName` (e.g. "Composition Spells") is the label Demiplane gives the
+ * class's focus spellcasting entry, and `focusSlug` (e.g. "composition-spells")
+ * is the group that focus `add-spell` grants reference via `parentFeature`.
+ */
+export interface AddSpellcastingFeatureModifier {
+  type: "v2-add-spellcasting-feature";
+  focusName?: string;
+  focusSlug?: string;
+  tradition?: string;
+  hasFocusGroup?: boolean;
+}
+
 /** Discriminated union of every engineModifier type we understand. */
 export type EngineModifier =
-  AddSpellModifier | AddFeatModifier | AddStaffSpellsModifier | AddSpecialItemSpellModifier | AddSpellSlotsModifier;
+  | AddSpellModifier
+  | AddFeatModifier
+  | AddStaffSpellsModifier
+  | AddSpecialItemSpellModifier
+  | AddSpellSlotsModifier
+  | AddSpellcastingFeatureModifier;
 
 /** One NDJSON response line: the engine id, its display name, and parsed modifiers. */
 export interface RawEngineLine {
@@ -120,6 +139,10 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "v2-add-spell-slots":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellSlotsModifier);
+        break;
+      case "v2-add-spellcasting-feature":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        results.push(mod as unknown as AddSpellcastingFeatureModifier);
         break;
       default:
         break;

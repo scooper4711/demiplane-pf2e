@@ -53,6 +53,22 @@ async function importRituals(actor: Actor, rituals: DemiplaneEngineEntry[], summ
   return created.size;
 }
 
+/** Suffix Demiplane appends to a class's spellcasting-feature slug. */
+const SPELLCASTING_SUFFIX = "-spellcasting-rm";
+
+/**
+ * Names the main class spellcasting entry after its class and tradition, e.g.
+ * `bard-spellcasting-rm` + `occult` -> "Bard Spells (Occult)". Falls back to the
+ * tradition alone when the source slug isn't a recognizable class feature.
+ */
+export function deriveClassEntryName(source: string, tradition: string): string {
+  const className = source.endsWith(SPELLCASTING_SUFFIX)
+    ? capitalize(source.slice(0, -SPELLCASTING_SUFFIX.length))
+    : "";
+  const traditionLabel = capitalize(tradition);
+  return className !== "" ? `${className} Spells (${traditionLabel})` : `${traditionLabel} Spells`;
+}
+
 async function importSpellGroup(
   actor: Actor,
   group: SpellGroup,
@@ -67,8 +83,8 @@ async function importSpellGroup(
   const { tradition, preparedType, ability } = group.config;
   let totalAdded = 0;
 
-  // Main spellcasting entry
-  const entryName = `${capitalize(tradition)} ${capitalize(preparedType)} Spells`;
+  // Main spellcasting entry, e.g. "Sorcerer Spells (Arcane)".
+  const entryName = deriveClassEntryName(group.source, tradition);
   const entryId = await createEntry(actor, entryName, tradition, preparedType, ability);
   const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
   totalAdded += slugToId.size;
