@@ -59,7 +59,7 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
         deity: {},
       },
       attributes: { hp: { value: 50, max: 50, temp: 0 } },
-      resources: { heroPoints: { value: 1, max: 3 } },
+      resources: { heroPoints: { value: 1, max: 3 }, focus: { value: 3, max: 3 } },
       skills: {} as Record<string, { rank: number }>,
       abilities: {
         str: { mod: 0 },

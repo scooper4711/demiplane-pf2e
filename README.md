@@ -35,6 +35,7 @@ https://github.com/user-attachments/assets/dfca47d2-0786-4bfa-8812-0b4a8aea0f58
 - Equipment and weapons
 - Attribute boosts and skill proficiencies
 - Spells and focus spells
+- Rituals and crafting formulas
 - Languages
 - Biography and appearance
 
@@ -58,6 +59,8 @@ A fresh install starts at **No writing to Demiplane**, so nothing is ever writte
 **Soft-delete (belt and suspenders).** There's a separate **Soft-delete items (set quantity to 0)** option that only takes effect at the deletions write level. With it on, deleting an item sets its Demiplane quantity to 0 instead of removing it, so you can restore it later just by raising the quantity again — and the importer skips quantity-0 items so a soft-deleted item stays gone. With it off (the default), a quantity of 0 is treated as a real quantity and imports as-is, which is handy for consumables you top up in town rather than re-adding from the compendium each time.
 
 Writing happens automatically as you edit (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
+
+Spell usage syncs back too: prepared slots you cast, spontaneous slots you spend, and focus points you use are all reflected on the Demiplane sheet, so it tracks the adventuring day. Inventory organization also survives the round trip — moving items in and out of containers, including multiple and renamed containers, syncs both ways.
 
 Still on the roadmap:
 
@@ -99,7 +102,7 @@ To create a mapping:
 2. Find the correct Foundry item.
 3. Drag it onto the row. The module remembers the match and the row updates to show the mapped item.
 
-Once mapped, the Demiplane name resolves on its own from then on — no need to remap it per character or per import.
+Once mapped, the Demiplane name resolves on its own from then on — no need to remap it per character or per import. Mappings can also be exported and imported across worlds, so a table starting fresh doesn't reteach them.
 
 **Quickly adopt new classes and sourcebooks:** this is the fast path when a new class, ancestry, or sourcebook lands. Rather than waiting for the module to catch up, a GM can map the new Demiplane content onto the corresponding Foundry compendium entries once, and the whole table can import those characters right away.
 
@@ -157,7 +160,7 @@ The token is stored as a world setting so players can import characters they own
 
 **"No Demiplane token configured"** — Ask the GM to configure the authorization token. See the [Getting the Demiplane Token](#getting-the-demiplane-token) section above.
 
-**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. The Demiplane icon shifts appearance to red on the linked actor's titlebar while such sync issues are outstanding. A GM can also resolve them for everyone using the [Demiplane Mapping](#mapping-unknown-items-gm-only) screen so future imports pick them up automatically.
+**Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. The Demiplane icon shifts appearance to red on the linked actor's titlebar while such sync issues are outstanding. A GM can also resolve them for everyone using the [Demiplane Mapping](#mapping-unknown-items-gm-only) screen so future imports pick them up automatically. Feat-granting and ancestry choices increasingly resolve on their own, and a push that conflicts with newer Demiplane edits recovers according to your write level instead of always forcing a re-import.
 
 ## Pre-Release Notice
 

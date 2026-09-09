@@ -534,6 +534,7 @@ describe("import phases", () => {
         customEngine("character_avatar", "avatars/valeros.webp"),
         customEngine("character_hit-points_current", 20),
         customEngine("character_hero-points", 2),
+        customEngine("character_focus_current", 1),
       ];
     }
 
@@ -556,8 +557,21 @@ describe("import phases", () => {
           "system.attributes.hp.value": 20,
           "system.attributes.hp.temp": 0,
           "system.resources.heroPoints.value": 2,
+          // Current focus imported from character_focus_current (pool max is 3).
+          "system.resources.focus.value": 1,
         })
       );
+    });
+
+    it("defaults focus to the full pool when Demiplane omits the current value", async () => {
+      // Demiplane drops character_focus_current when the pool is full, so an
+      // absent engine imports as max (here the mock's focus.max = 3).
+      const actor = createMockActor();
+      const ctx = makeCtx([customEngine("character_hero-points", 2)]);
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.update).toHaveBeenCalledWith(expect.objectContaining({ "system.resources.focus.value": 3 }));
     });
 
     it("falls back to defaults without engines", async () => {

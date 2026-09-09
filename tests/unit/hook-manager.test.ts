@@ -411,6 +411,20 @@ describe("HookManager", () => {
     });
   });
 
+  describe("updateActor hook — focus points", () => {
+    it("calls queueChange with character_focus_current when focus changes", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const changes = { system: { resources: { focus: { value: 2 } } } };
+
+      triggerHook("updateActor", actor, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_focus_current", 2);
+    });
+  });
+
   describe("updateActor hook — biography fields", () => {
     it("queues string biography fields", () => {
       const manager = new HookManager(exportManager as never);
@@ -1147,13 +1161,111 @@ describe("HookManager", () => {
     });
   });
 
+  describe("updateItem hook — spontaneous spell slots", () => {
+    /**
+     * A spontaneous spellcasting entry: stamped with the feature slug (so the
+     * remaining-slot engine name can be built) and live per-rank slot state.
+     */
+    function spontaneousEntry(
+      actor: ReturnType<typeof createMockActor>,
+      feature: string,
+      slots: Record<string, { value?: number; max?: number }>
+    ) {
+      return createMockItem(actor, "Bard Spontaneous Spells", {
+        type: "spellcastingEntry",
+        system: { slots },
+        flags: { "demiplane-pf2e": { spellFeature: feature } },
+      });
+    }
+
+    it("queues the remaining count as the feature's rank-N current engine", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spontaneousEntry(actor, "bard-spellcasting-rm", { slot1: { value: 1, max: 2 } });
+      const changes = { system: { slots: { slot1: { value: 1 } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-1_current",
+        1
+      );
+    });
+
+    it("does not queue a rank-0 (cantrip) change — cantrips are at-will", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spontaneousEntry(actor, "bard-spellcasting-rm", { slot0: { value: 5, max: 5 } });
+      const changes = { system: { slots: { slot0: { value: 4 } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("does not queue when the entry has no spellFeature flag", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = createMockItem(actor, "Unstamped Entry", {
+        type: "spellcastingEntry",
+        system: { slots: { slot1: { value: 1, max: 2 } } },
+      });
+      const changes = { system: { slots: { slot1: { value: 1 } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the live slot value when the change omits it", () => {
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spontaneousEntry(actor, "bard-spellcasting-rm", { slot2: { value: 0, max: 3 } });
+      // A sibling field of slot2 changed but `value` is absent from the diff.
+      const changes = { system: { slots: { slot2: { max: 3 } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-2_current",
+        0
+      );
+    });
+
+    it("rides the quantity tier — does not queue at the text-only tier", () => {
+      // Spell slots are spent-resource tracking ("spell ammo"), so they need the
+      // quantity tier, same as prepared cast tracking and item quantity.
+      writeLevel = "text";
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      const entry = spontaneousEntry(actor, "bard-spellcasting-rm", { slot1: { value: 1, max: 2 } });
+      const changes = { system: { slots: { slot1: { value: 1 } } } };
+
+      triggerHook("updateItem", entry, changes);
+
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+    });
+  });
+
   describe("queueCombatResourceChanges", () => {
-    it("queues current HP, temp HP, and hero points from the actor", () => {
+    it("queues current HP, temp HP, hero points, and focus from the actor", () => {
       const actor = {
         ...createMockActor(),
         system: {
           attributes: { hp: { value: 22, temp: 4 } },
-          resources: { heroPoints: { value: 2 } },
+          resources: { heroPoints: { value: 2 }, focus: { value: 1 } },
         },
       };
 
@@ -1162,6 +1274,7 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 22);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_temp", 4);
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hero-points", 2);
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_focus_current", 1);
     });
 
     it("queues nothing below the text tier", () => {
@@ -1383,6 +1496,35 @@ describe("HookManager", () => {
 
       expect(exportManager.queueChange).not.toHaveBeenCalled();
       expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
+
+    it("re-syncs a spontaneous entry's remaining slots by rank (skipping cantrips)", () => {
+      const entry = {
+        type: "spellcastingEntry",
+        name: "Bard Spontaneous Spells",
+        system: { slots: { slot0: { value: 5, max: 5 }, slot1: { value: 1, max: 2 }, slot2: { value: 0, max: 1 } } },
+        flags: { "demiplane-pf2e": { spellFeature: "bard-spellcasting-rm" } },
+      };
+      const actor = { ...createMockActor(), items: [entry] };
+
+      queueAllItemChanges(exportManager as never, actor as never);
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-1_current",
+        1
+      );
+      expect(exportManager.queueChange).toHaveBeenCalledWith(
+        actor,
+        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-2_current",
+        0
+      );
+      // Cantrips (rank 0) are at-will and never pushed.
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_spell-feature_bard-spellcasting-rm_spell-slots_rank-0_current",
+        expect.anything()
+      );
     });
   });
 

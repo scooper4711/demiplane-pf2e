@@ -5,7 +5,8 @@ import type { EquippedState } from "./export/change-buffer.js";
 import { isSyncActive } from "./sync-pause.js";
 import { canWriteText, canWriteQuantity, canWriteDeletes, isSoftDeleteEnabled } from "./write-level.js";
 import { DEMIPLANE_ICON_SRC } from "./config.js";
-import { characterSystem, itemSystem, localizeLanguage, type Pf2eSpellSlotRank } from "./pf2e-types.js";
+import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
+import { queueSpellcastingEntryChanges, queueSpellSlotResync } from "./export/spellcasting-entry-sync.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.
@@ -33,6 +34,7 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.attributes.hp.value": "character_hit-points_current",
   "system.attributes.hp.temp": "character_hit-points_temp",
   "system.resources.heroPoints.value": "character_hero-points",
+  "system.resources.focus.value": "character_focus_current",
   "system.details.gender.value": "character_appearance_gender",
   "system.details.age.value": "character_appearance_age",
   "system.details.ethnicity.value": "character_appearance_ethnicity",
@@ -61,9 +63,6 @@ const TREASURE_ITEM_MAP: Record<string, string> = {
 
 // INVENTORY_ITEM_TYPES (the physical/inventory item `type`s eligible for delete
 // propagation) is defined in import/types.js as the single source of truth.
-
-/** A spellcasting entry's prepared slots, keyed `slot{rank}`, as read for cast tracking. */
-type LiveSlots = Record<string, Pf2eSpellSlotRank>;
 
 /** A deleted inventory item resolved for propagation to Demiplane. */
 interface DeletableItem {
@@ -97,6 +96,10 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
   if (typeof heroPoints === "number") {
     exportManager.queueChange(actor, "character_hero-points", heroPoints);
   }
+  const focus = characterSystem(actor).resources?.focus?.value;
+  if (typeof focus === "number") {
+    exportManager.queueChange(actor, "character_focus_current", focus);
+  }
 }
 
 /**
@@ -117,6 +120,7 @@ export function queueAllItemChanges(exportManager: ExportManager, actor: Actor):
   const items = Array.from(actor.items) as unknown as Item[];
   for (const item of items) {
     queueSingleItemChanges(exportManager, actor, item, writeText, writeQuantity);
+    if (writeQuantity) queueSpellSlotResync(exportManager, actor, item);
   }
 }
 
@@ -403,14 +407,17 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
-    if (!this.writeAllowed("quantity", actor.name)) return;
 
     // A spellcasting entry has no slug; its updates carry cast/expended slot
-    // changes, handled separately from physical-item quantity/equipped edits.
+    // changes (prepared casters) or remaining-slot changes (spontaneous casters),
+    // which ride different write tiers — gated inside the extracted handler
+    // rather than by the physical-item quantity guard below.
     if ((item as { type?: string }).type === "spellcastingEntry") {
-      this.handleCastChange(item, actor, changes);
+      queueSpellcastingEntryChanges(this.exportManager, actor, item, changes);
       return;
     }
+
+    if (!this.writeAllowed("quantity", actor.name)) return;
 
     const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
@@ -507,61 +514,6 @@ export class HookManager {
       inSlot: typeof live?.inSlot === "boolean" ? (live.inSlot as boolean) : undefined,
       invested: typeof changeInvested === "boolean" ? changeInvested : (live?.invested ?? undefined),
     };
-  }
-
-  /**
-   * Queues cast/expended changes when a prepared spellcasting entry's slots are
-   * updated (a slot cast or restored on the sheet). Demiplane tracks a cast slot
-   * with a `<preparedEngineId>-is-cast` flag; the entry carries a
-   * `preparedSlotEngineIds` map (stamped on import) so each slot position resolves
-   * to the engine whose flag to set. Rides the quantity tier (guarded in
-   * `onItemUpdate`).
-   */
-  private handleCastChange(item: Item, actor: Actor, changes: Record<string, unknown>): void {
-    const changedSlots = this.getNestedValue(changes, "system.slots");
-    if (typeof changedSlots !== "object" || changedSlots === null) return;
-
-    const slotEngineIds = this.preparedSlotEngineIds(item);
-    if (!slotEngineIds) return;
-
-    const liveSlots: LiveSlots | undefined = itemSystem(item).slots;
-
-    for (const [slotKey, slotChange] of Object.entries(changedSlots as Record<string, unknown>)) {
-      const prepared = (slotChange as { prepared?: Record<string, { expended?: boolean }> }).prepared;
-      const engineIds = slotEngineIds[slotKey];
-      if (!prepared || !engineIds) continue;
-
-      // `prepared` may arrive as an array or an index-keyed object; iterate entries.
-      for (const [indexKey, slot] of Object.entries(prepared)) {
-        const engineId = engineIds[Number(indexKey)];
-        if (!engineId) continue;
-        const expended = this.resolveExpended(slot, liveSlots, slotKey, Number(indexKey));
-        this.exportManager.queueItemChange(actor, engineId, engineId, "cast", { expended }, "spell");
-      }
-    }
-  }
-
-  /** The import-stamped `slot{rank}` → prepared-engine-id map on a spellcasting entry. */
-  private preparedSlotEngineIds(item: Item): Record<string, string[]> | undefined {
-    const flags = (item.flags?.[MODULE_ID] as { preparedSlotEngineIds?: unknown } | undefined) ?? {};
-    const map = flags.preparedSlotEngineIds;
-    return typeof map === "object" && map !== null ? (map as Record<string, string[]>) : undefined;
-  }
-
-  /**
-   * The effective expended state for a changed slot: the changed value if present,
-   * else the live slot's value. A partial update may omit `expended`, so fall back
-   * to the item's current state rather than assuming false.
-   */
-  private resolveExpended(
-    slotChange: { expended?: boolean },
-    liveSlots: LiveSlots | undefined,
-    slotKey: string,
-    index: number
-  ): boolean {
-    if (typeof slotChange.expended === "boolean") return slotChange.expended;
-    const live = liveSlots?.[slotKey]?.prepared?.[index]?.expended;
-    return typeof live === "boolean" ? live : false;
   }
 
   private onItemCreate(item: Item): void {
