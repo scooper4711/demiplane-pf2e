@@ -48,14 +48,9 @@ export function buildUpdateFromDemiplaneOption(importCharacter: ImportCharacterF
       });
       if (!confirmed) return;
 
-      ui.notifications.info(`Updating ${actor.name} from Demiplane...`);
-
-      const summary = await importCharacter(actor, characterId, token, { wipe: true });
-      if (summary.errors.length > 0) {
-        ui.notifications.error(`Update errors: ${summary.errors.join("; ")}`);
-      } else {
-        ui.notifications.info(`Updated "${actor.name}" — ${summary.itemsImported} items.`);
-      }
+      // Start ("importing, don't modify…") and completion/error toasts come from
+      // importLinkedCharacter, shared by every import path.
+      await importCharacter(actor, characterId, token, { wipe: true });
     },
   };
 }

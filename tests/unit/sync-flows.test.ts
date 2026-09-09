@@ -70,6 +70,42 @@ describe("sync-flows", () => {
       expect(isSyncActive(actor)).toBe(false);
     });
 
+    it("toasts that the import is starting and warns not to modify the actor", async () => {
+      const { deps } = makeDeps();
+      const actor = linkedActor();
+
+      await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps);
+      await vi.runAllTimersAsync();
+
+      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("please don't modify"));
+    });
+
+    it("toasts that the import completed with the item count", async () => {
+      const { deps, importCharacter } = makeDeps();
+      const actor = linkedActor();
+      importCharacter.mockResolvedValue(summary({ itemsImported: 7 }));
+
+      await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps);
+      await vi.runAllTimersAsync();
+
+      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(
+        expect.stringContaining('Import of "Valeros" complete — 7 items.')
+      );
+    });
+
+    it("toasts an error summary when the import reported problems", async () => {
+      const { deps, importCharacter } = makeDeps();
+      const actor = linkedActor();
+      importCharacter.mockResolvedValue(summary({ errors: ["boom", "bang"] }));
+
+      await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps);
+      await vi.runAllTimersAsync();
+
+      expect(globalThis.ui.notifications.error).toHaveBeenCalledWith(
+        expect.stringContaining("completed with errors: boom; bang")
+      );
+    });
+
     it("keeps the sync guard active through the grace window after import returns", async () => {
       // Regression: an import creates/deletes items, but Foundry fires the item
       // hooks (and PF2e re-prepares) on later ticks. If the guard released the
@@ -271,7 +307,7 @@ describe("sync-flows", () => {
       expect(globalThis.ui.notifications.warn).toHaveBeenCalled();
     });
 
-    it("re-imports with wipe and reports the item count", async () => {
+    it("re-imports with wipe and warns why the character is being refreshed", async () => {
       const { deps, importCharacter } = makeDeps();
       await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", TOKEN);
       const actor = linkedActor();
@@ -279,7 +315,10 @@ describe("sync-flows", () => {
       await reimportActorOnConflict(actor, deps);
 
       expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, { token: TOKEN });
-      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("Re-imported"));
+      // The conflict reason is a warn; the import start/complete toasts (info)
+      // come from importLinkedCharacter.
+      expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("re-importing to stay"));
+      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("Import of"));
     });
   });
 
@@ -301,7 +340,7 @@ describe("sync-flows", () => {
       // Session info is already on Demiplane at this tier, so a re-import is safe
       // and keeps both sides consistent.
       expect(importCharacter).toHaveBeenCalledWith(actor, CHARACTER_ID, { token: TOKEN });
-      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining("re-importing to stay"));
+      expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("re-importing to stay"));
       await vi.runAllTimersAsync();
     });
 

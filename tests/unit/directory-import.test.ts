@@ -130,7 +130,7 @@ describe("directory-import", () => {
       expect(importCharacter).not.toHaveBeenCalled();
     });
 
-    it("links the new actor and reports the import", async () => {
+    it("links the new actor and delegates the import", async () => {
       const importCharacter = vi.fn().mockResolvedValue(summary({ itemsImported: 5 }));
       dialogInput({ characterRef: `  ${UUID}  ` });
       globalThis.game.actors.contents = [];
@@ -142,21 +142,9 @@ describe("directory-import", () => {
 
       expect(globalThis.Actor.create).toHaveBeenCalledWith({ name: "Importing...", type: "character" });
       expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "characterId", UUID);
+      // Start/completion toasts are the shared importLinkedCharacter's job now,
+      // so the button flow just links and delegates.
       expect(importCharacter).toHaveBeenCalledWith(actor, UUID, TOKEN);
-      expect(globalThis.ui.notifications.info).toHaveBeenCalledWith(expect.stringContaining('Imported "Importing..."'));
-    });
-
-    it("reports import errors from the summary", async () => {
-      const importCharacter = vi.fn().mockResolvedValue(summary({ errors: ["bad", "worse"] }));
-      dialogInput({ characterRef: UUID });
-      globalThis.game.actors.contents = [];
-      await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", TOKEN);
-      const actor = createMockActor({ name: "Importing..." });
-      globalThis.Actor.create.mockResolvedValue(actor);
-
-      await onImportButtonClick(importCharacter);
-
-      expect(globalThis.ui.notifications.error).toHaveBeenCalledWith("Import errors: bad; worse");
     });
   });
 });
