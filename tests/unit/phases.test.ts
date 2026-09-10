@@ -5,6 +5,7 @@ import {
   buildSelectionData,
   categorizeEngines,
   collectLoreNames,
+  EquipmentPhase,
   LoreItemsPhase,
   PostProcessingPhase,
   RemoveDuplicatesPhase,
@@ -238,6 +239,28 @@ describe("import phases", () => {
 
       expect(actor.createEmbeddedDocuments).toHaveBeenCalledTimes(1);
       expect(ctx.summary.log).toContain("+ lore: [Sailing Lore]");
+    });
+  });
+
+  describe("EquipmentPhase", () => {
+    it("creates carried equipment from tabula/item engines", async () => {
+      const actor = createMockActor();
+      const ctx = makeCtx([
+        demiEngine("tabula/item/longsword.eng", { slug: "longsword", sourceRow: "manual-sheet-drawer" }),
+      ]);
+
+      await new EquipmentPhase().run(actor, ctx);
+
+      expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    });
+
+    it("does nothing when the character carries no equipment", async () => {
+      const actor = createMockActor();
+      const ctx = makeCtx([]);
+
+      await new EquipmentPhase().run(actor, ctx);
+
+      expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
     });
   });
 

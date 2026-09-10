@@ -4,6 +4,19 @@ export interface Choice {
   label: string;
 }
 
+/** A weapon a ChoiceSet's owning actor holds, as the ikon resolver reads it. */
+export interface OwnedWeapon {
+  id: string;
+  category?: string;
+  getRollOptions: (prefix: string) => string[];
+}
+
+/** An item being created in the same batch (a `tempItems` entry). */
+export interface TempItem {
+  slug: string | null;
+  system: { rules: Array<Record<string, unknown>> };
+}
+
 /** The `this` context PF2e binds when invoking a ChoiceSet's `preCreate`. */
 export interface ChoiceSetContext {
   choices: Choice[];
@@ -13,8 +26,14 @@ export interface ChoiceSetContext {
     getRollOptions: (s: string) => string[];
     rules: Array<{ ignored: boolean }>;
     name: string;
+    /** The owning item's slug (an ikon's slug identifies its weapon assignment). */
+    slug?: string | null;
   };
-  actor: { getRollOptions: () => string[] };
+  actor: {
+    getRollOptions: () => string[];
+    /** Owned items by type; the ikon resolver reads `weapon`. */
+    itemTypes?: { weapon?: OwnedWeapon[] };
+  };
   resolveInjectedProperties: (p: unknown) => {
     test: (r: Set<string>) => boolean;
   };
@@ -29,5 +48,6 @@ export interface ChoiceSetContext {
 export interface PreCreateParams {
   ruleSource: Record<string, unknown>;
   itemSource: { name: string } & Record<string, unknown>;
+  /** Every item being created in this batch, including sibling granted ikons. */
   tempItems: unknown;
 }

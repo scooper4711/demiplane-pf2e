@@ -313,3 +313,18 @@ export function builtinRuleElement(name: string): { prototype: Record<string, un
   const builtin = game.pf2e?.RuleElements?.builtin?.[name];
   return builtin as { prototype: Record<string, unknown> } | undefined;
 }
+
+/** A PF2e predicate instance: tests whether a set of roll options satisfies it. */
+export interface Pf2ePredicate {
+  test: (options: string[] | Set<string>) => boolean;
+}
+
+/**
+ * Constructs a PF2e `Predicate` from a raw predicate array, or `undefined` when
+ * the system isn't available. Exposed as `game.pf2e.Predicate` at runtime; the
+ * published Foundry types don't include it, so this is the one narrowing point.
+ */
+export function pf2ePredicate(raw: unknown[]): Pf2ePredicate | undefined {
+  const Predicate = (game.pf2e as { Predicate?: new (raw: unknown[]) => Pf2ePredicate } | undefined)?.Predicate;
+  return Predicate ? new Predicate(raw) : undefined;
+}

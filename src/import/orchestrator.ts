@@ -30,6 +30,7 @@ import {
   buildSelectionData,
   categorizeEngines,
   LoreItemsPhase,
+  EquipmentPhase,
   SequentialItemsPhase,
   ResolveGrantsPhase,
   BatchItemsPhase,
@@ -190,6 +191,7 @@ export class ImportOrchestrator {
   private buildPipeline(): ImportPhase[] {
     return [
       new LoreItemsPhase(),
+      new EquipmentPhase(),
       new SequentialItemsPhase(),
       new ResolveGrantsPhase(),
       new BatchItemsPhase(),

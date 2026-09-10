@@ -356,6 +356,409 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     expect(builtin.ChoiceSet.prototype.preCreate).toBe(otherModuleWrapper);
     expect(builtin.ChoiceSet.prototype.preCreate).not.toBe(original);
   });
+
+  // --- Exemplar weapon-ikon resolution ---------------------------------------
+
+  /** Minimal PF2e Predicate supporting the string / {or} forms ikon filters use. */
+  class FakePredicate {
+    constructor(private readonly raw: unknown[]) {}
+    test(options: string[] | Set<string>): boolean {
+      const set = new Set(options);
+      const holds = (stmt: unknown): boolean => {
+        if (typeof stmt === "string") return set.has(stmt);
+        if (stmt && typeof stmt === "object" && Array.isArray((stmt as { or?: unknown[] }).or)) {
+          return (stmt as { or: unknown[] }).or.some(holds);
+        }
+        return false;
+      };
+      return this.raw.every(holds);
+    }
+  }
+
+  function installIkonPrototype() {
+    const builtin = { ChoiceSet: { prototype: { preCreate: vi.fn().mockResolvedValue(undefined) } } };
+    ((globalThis as unknown as { game: Record<string, unknown> }).game as Record<string, unknown>).pf2e = {
+      RuleElements: { builtin },
+      Predicate: FakePredicate,
+    };
+    return builtin;
+  }
+
+  const SLASHING_MELEE = ["item:melee", { or: ["item:damage:type:slashing", "item:damage:type:piercing"] }];
+  const POLEARM = [{ or: ["item:group:polearm", "item:group:axe"] }];
+
+  const weaponIkonItem = (slug: string, predicate: unknown[]) => ({
+    slug,
+    system: { rules: [{ key: "ChoiceSet", flag: "existingIkon", choices: { ownedItems: true, predicate } }] },
+  });
+
+  function ikonActor() {
+    return {
+      getRollOptions: () => [],
+      itemTypes: {
+        weapon: [
+          {
+            id: "falchion",
+            category: "martial",
+            getRollOptions: () => ["item:melee", "item:group:sword", "item:damage:type:slashing"],
+          },
+          {
+            id: "fauchard",
+            category: "martial",
+            getRollOptions: () => ["item:melee", "item:group:polearm", "item:damage:type:slashing"],
+          },
+        ],
+      },
+    };
+  }
+
+  /** The sibling ikons created in the same batch (PF2e passes these as tempItems). */
+  function ikonTempItems() {
+    return [weaponIkonItem("barrows-edge", SLASHING_MELEE), weaponIkonItem("mortal-harvest", POLEARM)];
+  }
+
+  it("selects 'existing' for a weapon ikon's origin choice", async () => {
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [
+      { value: "granted", label: "Grant me a new item." },
+      { value: "existing", label: "Use an existing item in my inventory." },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: ikonActor(),
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: ikonTempItems(),
+    });
+
+    expect(ctx.selection).toBe("existing");
+  });
+
+  it("selects the assigned owned weapon for the existingIkon choice", async () => {
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    // Mortal Harvest accepts only the fauchard (polearm), so it resolves there.
+    const choices = [
+      { value: "falchion", label: "Falchion" },
+      { value: "fauchard", label: "Fauchard" },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      flag: "existingIkon",
+      rollOption: "",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: ikonActor(),
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: ikonTempItems(),
+    });
+
+    expect(ctx.selection).toBe("fauchard");
+  });
+
+  it("defers the existingIkon choice when the ikon got no assignment", async () => {
+    // Only a bow is owned; the polearm ikon is unassigned, so its existingIkon
+    // choice falls through rather than picking a weapon.
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [{ value: "bow", label: "Shortbow" }];
+    const bowActor = {
+      getRollOptions: () => [],
+      itemTypes: {
+        weapon: [{ id: "bow", category: "martial", getRollOptions: () => ["item:ranged", "item:group:bow"] }],
+      },
+    };
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      flag: "existingIkon",
+      rollOption: "",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: bowActor,
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: [weaponIkonItem("mortal-harvest", POLEARM)],
+    });
+
+    // Fell through to the generic path (first option), not the ikon path.
+    expect(ctx.selection).toBe("bow");
+  });
+
+  it("defers the existingIkon choice when the assigned weapon is absent from the options", async () => {
+    // The resolver assigns the fauchard, but the offered choices don't include
+    // it, so the ikon path defers rather than selecting a non-option.
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [{ value: "some-other-id", label: "Other" }];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      flag: "existingIkon",
+      rollOption: "",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: ikonActor(),
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: ikonTempItems(),
+    });
+
+    expect(ctx.selection).toBe("some-other-id");
+  });
+
+  it("defers the origin choice when no 'existing' option is offered", async () => {
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    // Assigned by the resolver, but the origin ChoiceSet only offers "granted".
+    const choices = [{ value: "granted", label: "Grant me a new item." }];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: ikonActor(),
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: ikonTempItems(),
+    });
+
+    expect(ctx.selection).toBe("granted");
+  });
+
+  it("handles an actor with no weapons and non-array tempItems", async () => {
+    // Defensive: itemTypes.weapon absent and tempItems not an array. The origin
+    // choice simply defers (no assignment possible) instead of throwing.
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [
+      { value: "granted", label: "Grant me a new item." },
+      { value: "existing", label: "Use an existing item in my inventory." },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: { getRollOptions: () => [] }, // no itemTypes at all
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: undefined, // non-array
+    });
+
+    expect(ctx.selection).toBe("granted");
+  });
+
+  it("handles an actor whose itemTypes lacks a weapon list", async () => {
+    // Defensive: itemTypes present but no `weapon` array (the `?? []` fallback).
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [
+      { value: "granted", label: "Grant me a new item." },
+      { value: "existing", label: "Use an existing item in my inventory." },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: { getRollOptions: () => [], itemTypes: {} },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: [weaponIkonItem("mortal-harvest", POLEARM)],
+    });
+
+    expect(ctx.selection).toBe("granted");
+  });
+
+  it("skips a tempItem that has no rules when collecting weapon ikons", async () => {
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [
+      { value: "granted", label: "Grant me a new item." },
+      { value: "existing", label: "Use an existing item in my inventory." },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: ikonActor(),
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      // A malformed tempItem (no system) alongside the real ikon must be skipped.
+      tempItems: [{ slug: "junk" }, weaponIkonItem("mortal-harvest", POLEARM)],
+    });
+
+    expect(ctx.selection).toBe("existing");
+  });
+
+  it("ignores a non-ikon ChoiceSet on a slugged item", async () => {
+    // The item has a slug but the ChoiceSet is neither the origin (-origin
+    // rollOption) nor the existingIkon flag, so ikon handling defers and the
+    // generic path resolves it.
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.enable();
+
+    const choices = [
+      { value: "society", label: "Society" },
+      { value: "crafting", label: "Crafting" },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      flag: "choice",
+      rollOption: "foo",
+      item: { flags: {}, getRollOptions: () => [], rules: [{ ignored: true }], name: "Some Feat", slug: "some-feat" },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Some Feat" }, tempItems: [] });
+
+    expect(ctx.selection).toBe("society");
+  });
+
+  it("defers a weapon ikon's origin choice when no owned weapon matches", async () => {
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([]);
+    handler.enable();
+
+    const choices = [
+      { value: "granted", label: "Grant me a new item." },
+      { value: "existing", label: "Use an existing item in my inventory." },
+    ];
+    // Actor owns only a bow: the polearm filter matches nothing, so the origin
+    // choice is left to fall back to the default (first option, "granted").
+    const bowActor = {
+      getRollOptions: () => [],
+      itemTypes: {
+        weapon: [{ id: "bow", category: "martial", getRollOptions: () => ["item:ranged", "item:group:bow"] }],
+      },
+    };
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      rollOption: "mortal-harvest-origin",
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Mortal Harvest",
+        slug: "mortal-harvest",
+      },
+      actor: bowActor,
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, {
+      ruleSource: {},
+      itemSource: { name: "Mortal Harvest" },
+      tempItems: [weaponIkonItem("mortal-harvest", POLEARM)],
+    });
+
+    // Fell through to the generic path, which defaults to the first option.
+    expect(ctx.selection).toBe("granted");
+  });
 });
 
 describe("ChoiceSetHandler with libWrapper active", () => {

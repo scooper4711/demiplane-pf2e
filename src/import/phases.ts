@@ -132,7 +132,29 @@ export class LoreItemsPhase implements ImportPhase {
   }
 }
 
-// ─── Phase 2: Sequential ancestry → heritage → background → class items ──────
+// ─── Phase 2: Inventory (before the class grant chain that reads owned items) ─
+
+/**
+ * Creates the character's carried equipment.
+ *
+ * Runs before the ABC/class items so an owned weapon exists when a class
+ * feature's grant chain inspects the inventory. The Exemplar's weapon ikons are
+ * the motivating case: their "attach to an existing weapon" ChoiceSet is an
+ * `ownedItems` query, so the weapon must already be embedded (and data-prepared)
+ * when the class feature resolves — otherwise the choice sees nothing and falls
+ * back to granting a new weapon.
+ *
+ * Equipment creation depends only on the Demiplane engines, the compendium, and
+ * the actor's size, none of which require the ABC items, so moving it earlier is
+ * safe. Currency, crafting formulas, and other post-processing stay late.
+ */
+export class EquipmentPhase implements ImportPhase {
+  async run(actor: Actor, ctx: ImportContext): Promise<void> {
+    await applyEquipment(actor, ctx.engines, ctx.summary);
+  }
+}
+
+// ─── Phase 3: Sequential ancestry → heritage → background → class items ──────
 
 export class SequentialItemsPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
@@ -163,7 +185,7 @@ export class SequentialItemsPhase implements ImportPhase {
   }
 }
 
-// ─── Phase 3: Resolve native PF2e pending grants ────────────────────────────
+// ─── Phase 4: Resolve native PF2e pending grants ────────────────────────────
 
 export class ResolveGrantsPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
@@ -273,7 +295,7 @@ export class ResolveGrantsPhase implements ImportPhase {
   }
 }
 
-// ─── Phase 4: Batch feat/equipment import ───────────────────────────────────
+// ─── Phase 5: Batch feat/equipment import ───────────────────────────────────
 
 export class BatchItemsPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
@@ -332,7 +354,7 @@ export class BatchItemsPhase implements ImportPhase {
   }
 }
 
-// ─── Phase 5: Post-import attribute/identity/spell processing ───────────────
+// ─── Phase 6: Post-import attribute/identity/spell processing ───────────────
 
 export class PostProcessingPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
@@ -341,7 +363,9 @@ export class PostProcessingPhase implements ImportPhase {
     await applyLanguages(actor, ctx.engines, ctx.summary);
     await applyBiography(actor, ctx.engines, ctx.summary);
     await applySkillProficiencies(actor, ctx.engines, ctx.summary);
-    await applyEquipment(actor, ctx.engines, ctx.summary);
+    // Equipment is created earlier (EquipmentPhase) so owned items exist before
+    // the class grant chain; crafting formulas reference items only by UUID and
+    // stay here.
     await applyCraftingFormulas(actor, ctx.engines, ctx.summary);
     await applyCurrency(actor, ctx.engines, ctx.summary);
     await applySpells(actor, ctx.engines, ctx.summary);
@@ -398,7 +422,7 @@ export class PostProcessingPhase implements ImportPhase {
   }
 }
 
-// ─── Phase 6: Remove duplicate (import-stamped + native-granted) items ──────
+// ─── Phase 7: Remove duplicate (import-stamped + native-granted) items ──────
 
 export class RemoveDuplicatesPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {

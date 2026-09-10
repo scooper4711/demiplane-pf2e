@@ -5,6 +5,7 @@ import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
+import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
 import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
 import { builtinRuleElement } from "../pf2e-types.js";
 import { isSanctification, type Sanctification } from "../sanctification.js";
@@ -100,11 +101,18 @@ export class ChoiceSetHandler {
   private sanctificationPreference: Sanctification | undefined;
   /** The sanctification decision made this import (multi-option deities only). */
   private sanctificationDecision: SanctificationDecision | undefined;
+  /**
+   * The Exemplar ikon → owned-weapon assignment, computed lazily the first time
+   * an ikon ChoiceSet is seen (so every sibling ikon and the owned weapons
+   * already exist) and reused for the rest of the import.
+   */
+  private ikonResolver: IkonWeaponResolver | undefined;
 
   setEngines(engines: DemiplaneEngineEntry[]): void {
     this.currentEngines = engines;
     this.fallbacks = [];
     this.sanctificationDecision = undefined;
+    this.ikonResolver = undefined;
   }
 
   /**
@@ -247,6 +255,8 @@ export class ChoiceSetHandler {
       return;
     }
 
+    if (this.resolveIkonChoice(context, params)) return;
+
     if (this.resolveForcedSingleChoice(context, params)) return;
 
     const candidateSlugs = this.candidateSelectionSlugs();
@@ -289,6 +299,79 @@ export class ChoiceSetHandler {
     );
     this.applySelectedChoice(context, params, context.choices[0]!, true, []);
     return true;
+  }
+
+  /** The `flag` PF2e's weapon-ikon "use an existing weapon" ChoiceSet declares. */
+  private static readonly EXISTING_IKON_FLAG = "existingIkon";
+  /** The suffix PF2e's weapon-ikon origin ChoiceSet uses for its `rollOption`. */
+  private static readonly IKON_ORIGIN_SUFFIX = "-origin";
+  /** The origin ChoiceSet value meaning "attach the ikon to an owned weapon". */
+  private static readonly IKON_ORIGIN_EXISTING = "existing";
+
+  /**
+   * Resolves an Exemplar weapon ikon's two ChoiceSets from the owned-weapon
+   * assignment (see {@link IkonWeaponResolver}). Demiplane records neither the
+   * grant-vs-existing choice nor which weapon each ikon claims, so without this
+   * both fall back to the first option ("grant a new item"), which is wrong for a
+   * character who built their ikons on weapons they already carry.
+   *
+   * - **Origin choice** (`<ikon>-origin`, options granted/existing): select
+   *   "existing" when the resolver assigned this ikon a weapon; otherwise defer
+   *   so it falls back to the default "granted" path.
+   * - **Existing-weapon choice** (`flag: existingIkon`): select the assigned
+   *   weapon's id.
+   *
+   * Returns true when it handled the ChoiceSet.
+   */
+  private resolveIkonChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
+    const ikonSlug = context.item.slug ?? null;
+    if (!ikonSlug) return false;
+
+    if (context.flag === ChoiceSetHandler.EXISTING_IKON_FLAG) {
+      return this.resolveExistingIkonWeapon(context, params, ikonSlug);
+    }
+    if (context.rollOption.endsWith(ChoiceSetHandler.IKON_ORIGIN_SUFFIX)) {
+      return this.resolveIkonOrigin(context, params, ikonSlug);
+    }
+    return false;
+  }
+
+  /** Picks "existing" for an ikon the resolver placed on an owned weapon. */
+  private resolveIkonOrigin(context: ChoiceSetContext, params: PreCreateParams, ikonSlug: string): boolean {
+    if (!this.ikonAssignments(context, params).assignsExistingWeapon(ikonSlug)) return false;
+    const existing = context.choices.find((c) => c.value === ChoiceSetHandler.IKON_ORIGIN_EXISTING);
+    if (!existing) return false;
+    this.applySelectedChoice(context, params, existing, true, []);
+    return true;
+  }
+
+  /** Picks the assigned owned weapon for an ikon's "existing weapon" ChoiceSet. */
+  private resolveExistingIkonWeapon(context: ChoiceSetContext, params: PreCreateParams, ikonSlug: string): boolean {
+    const weaponId = this.ikonAssignments(context, params).assignedWeaponId(ikonSlug);
+    if (weaponId === undefined) return false;
+    const choice = context.choices.find((c) => c.value === weaponId);
+    if (!choice) return false;
+    this.applySelectedChoice(context, params, choice, true, []);
+    return true;
+  }
+
+  /**
+   * The memoized ikon → weapon assignment. Built on first use so every sibling
+   * ikon (all present in `tempItems`) and the owned weapons are already in place.
+   */
+  private ikonAssignments(context: ChoiceSetContext, params: PreCreateParams): IkonWeaponResolver {
+    if (!this.ikonResolver) {
+      const weapons = (context.actor.itemTypes?.weapon ?? []) as WeaponItem[];
+      const ikons = this.weaponIkonsFromTempItems(params.tempItems);
+      this.ikonResolver = new IkonWeaponResolver(weapons, context.actor.getRollOptions(), ikons);
+    }
+    return this.ikonResolver;
+  }
+
+  /** The weapon ikons among the items being created in this batch. */
+  private weaponIkonsFromTempItems(tempItems: unknown): IkonItem[] {
+    if (!Array.isArray(tempItems)) return [];
+    return (tempItems as IkonItem[]).filter((item) => item?.system?.rules !== undefined && isWeaponIkon(item));
   }
 
   /**
