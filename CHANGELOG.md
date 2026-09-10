@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.4] - 2026-09-10
+
+### Fixed
+
+- import background lore subjects named via a _lore_name override
+- import the class key attribute for choice classes
+- import Master rank for skills trained outside a selection engine
+- resolve feat skill-training choices with non-slug option values
+- don't block module init on the pre-release warning dialog
+- import skill proficiency ranks by counting selection engines
+
+### Changed
+
+- add statement on AI use to README
+- add per-character choice resolution to the roadmap
+
+[1.0.0-beta.4]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v1.0.0-beta.4
+
 ## [1.0.0-beta.3] - 2026-09-09
 
 ### Added
