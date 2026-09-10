@@ -17,6 +17,7 @@ export function findMatchInChoices(
   grantedFeatsByElement?: Map<string, Set<string>>
 ): Choice | null {
   const match =
+    matchFeatScopedSkill(choices, engines, itemName) ??
     matchSkillSlugs(choices, engines) ??
     matchCustomSelectionLore(choices, engines, itemName) ??
     matchDeity(choices, engines) ??
@@ -120,6 +121,62 @@ function matchDomain(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice
     if (domainSlugs.includes(val) || domainSlugs.includes(toChoiceSlug(choice.label))) return choice;
   }
   return null;
+}
+
+/** Matches a ChoiceSet option value of the form `system.skills.<skill>.rank`. */
+const SKILL_RANK_PATH_RE = /^system\.skills\.([a-z]+)\.rank$/;
+/** Matches a proficiency-suffixed skill value like `deception-trained` / `stealth-expert`. */
+const SKILL_PROFICIENCY_VALUE_RE = /^([a-z]+)-(?:trained|expert|master|legendary)$/;
+
+/**
+ * Extracts the bare skill slug a ChoiceSet option refers to, handling the
+ * non-slug value shapes PF2e uses for "train a skill" choices:
+ *
+ * - a rank path (Rogue Dedication: `system.skills.stealth.rank`)
+ * - a proficiency-suffixed value (Captivator Dedication: `deception-trained`)
+ * - a plain slug in the value or the label ("Stealth" -> `stealth`)
+ *
+ * Returns null when the option isn't a skill reference.
+ */
+function skillSlugFromChoice(choice: Choice): string | null {
+  const value = typeof choice.value === "string" ? choice.value : "";
+  const pathMatch = SKILL_RANK_PATH_RE.exec(value);
+  if (pathMatch?.[1]) return pathMatch[1];
+  const profMatch = SKILL_PROFICIENCY_VALUE_RE.exec(value);
+  if (profMatch?.[1]) return profMatch[1];
+  return choice.label ? toChoiceSlug(choice.label) : null;
+}
+
+/**
+ * Resolves a feat's "train a skill" ChoiceSet using the feat-scoped skill
+ * selection the character actually made. The Rogue Dedication and Captivator
+ * Dedication choices carry option values that are not bare slugs (a rank path
+ * like `system.skills.stealth.rank`, or a suffixed `deception-trained`), so the
+ * generic slug strategies can't see them — and when the character is trained in
+ * more than one offered skill, only the feat-scoped selection disambiguates.
+ *
+ * Demiplane records that pick as a `select-skill-<featSlug>` skill-increase
+ * engine (e.g. `..._select-skill-rogue-dedication-rm_...` -> `stealth`). We match
+ * that slug against each option's derived skill so the player's own decision
+ * wins instead of the blind first-option fallback.
+ */
+function matchFeatScopedSkill(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
+  if (!itemName) return null;
+  const featSlug = toChoiceSlug(itemName);
+  const marker = `select-skill-${featSlug}`;
+
+  const chosen = engines.find(
+    (e) =>
+      e.name === "core/selection/skill/increase/index.eng" &&
+      typeof e.args?.slug === "string" &&
+      (e.args.sourceRow as string | undefined)?.includes(marker)
+  );
+  if (!chosen) return null;
+
+  const chosenSkill = toFoundrySlug(chosen.args!.slug as string);
+  debugLog(`[ChoiceSet match] feat-scoped skill for "${itemName}": ${chosenSkill}`);
+
+  return choices.find((choice) => skillSlugFromChoice(choice) === chosenSkill) ?? null;
 }
 
 function matchSkillSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {

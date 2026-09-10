@@ -52,6 +52,58 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices([{ label: "X", value: 42 }], [skillEngine("arcana")])).toBeNull();
   });
 
+  // A skill-increase engine scoped to a specific feat: sourceRow includes
+  // `select-skill-<featSlug>`, matching how Demiplane records the pick.
+  function featSkillEngine(featSlug, skillSlug) {
+    return {
+      id: `sel-${featSlug}-${skillSlug}`,
+      name: "core/selection/skill/increase/index.eng",
+      type: "DemiplaneEngine",
+      args: { slug: skillSlug, sourceRow: `abc123_select-skill-${featSlug}-1bd2ed71` },
+    };
+  }
+
+  it("resolves a Rogue Dedication rank-path choice via the feat-scoped selection", () => {
+    // Options carry rank paths, not slugs; the character trained BOTH stealth and
+    // thievery, so only the feat-scoped engine disambiguates.
+    const choices = [
+      { label: "Stealth", value: "system.skills.stealth.rank" },
+      { label: "Thievery", value: "system.skills.thievery.rank" },
+    ];
+    const engines = [
+      featSkillEngine("rogue-dedication-rm", "stealth"),
+      skillEngine("thievery"), // trained elsewhere; must not win
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Rogue Dedication")).toBe(choices[0]);
+  });
+
+  it("resolves a Captivator proficiency-suffixed choice via the feat-scoped selection", () => {
+    // Captivator options are `deception-trained` / `diplomacy-trained` etc.
+    const choices = [
+      { label: "Deception", value: "deception-trained" },
+      { label: "Deception", value: "deception-expert" },
+      { label: "Diplomacy", value: "diplomacy-trained" },
+      { label: "Diplomacy", value: "diplomacy-expert" },
+    ];
+    const engines = [featSkillEngine("captivator-dedication", "diplomacy")];
+
+    // First option whose skill is diplomacy (the trained variant).
+    expect(findMatchInChoices(choices, engines, "Captivator Dedication")).toBe(choices[2]);
+  });
+
+  it("falls through when the feat-scoped skill is not among the options", () => {
+    // Data quirk: the feat-scoped engine names a skill the feat can't grant
+    // (stealth for Captivator). The strategy must NOT force a wrong pick.
+    const choices = [
+      { label: "Deception", value: "deception-trained" },
+      { label: "Diplomacy", value: "diplomacy-trained" },
+    ];
+    const engines = [featSkillEngine("captivator-dedication", "stealth")];
+
+    expect(findMatchInChoices(choices, engines, "Captivator Dedication")).toBeNull();
+  });
+
   it("matches custom-selection lore scoped to the originating feat", () => {
     const choices = [{ label: "Forest Lore", value: "forest-lore" }];
     const engines = [loreEngine("Forest Lore", "assurance-rm-grant")];
