@@ -330,7 +330,9 @@ export class ChoiceSetHandler {
     if (context.flag === ChoiceSetHandler.EXISTING_IKON_FLAG) {
       return this.resolveExistingIkonWeapon(context, params, ikonSlug);
     }
-    if (context.rollOption.endsWith(ChoiceSetHandler.IKON_ORIGIN_SUFFIX)) {
+    // Most ChoiceSets carry no rollOption (it's null); only the ikon origin
+    // choice sets `<ikon>-origin`, so guard before matching the suffix.
+    if (context.rollOption?.endsWith(ChoiceSetHandler.IKON_ORIGIN_SUFFIX)) {
       return this.resolveIkonOrigin(context, params, ikonSlug);
     }
     return false;

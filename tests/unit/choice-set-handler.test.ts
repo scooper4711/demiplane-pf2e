@@ -692,6 +692,37 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     expect(ctx.selection).toBe("existing");
   });
 
+  it("does not crash when a slugged item's ChoiceSet has a null rollOption", async () => {
+    // PF2e leaves rollOption null for most ChoiceSets; the ikon origin check
+    // must guard it rather than calling endsWith on null (which aborted imports).
+    const builtin = installIkonPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.enable();
+
+    const choices = [
+      { value: "society", label: "Society" },
+      { value: "crafting", label: "Crafting" },
+    ];
+    const ctx = makeContext({
+      choices,
+      inflateChoices: async () => choices,
+      flag: "choice",
+      rollOption: null,
+      item: {
+        flags: {},
+        getRollOptions: () => [],
+        rules: [{ ignored: true }],
+        name: "Some Feature",
+        slug: "some-feature",
+      },
+    });
+    const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Some Feature" }, tempItems: [] });
+
+    expect(ctx.selection).toBe("society");
+  });
+
   it("ignores a non-ikon ChoiceSet on a slugged item", async () => {
     // The item has a slug but the ChoiceSet is neither the origin (-origin
     // rollOption) nor the existingIkon flag, so ikon handling defers and the

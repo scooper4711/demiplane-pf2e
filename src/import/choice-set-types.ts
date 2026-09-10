@@ -41,7 +41,8 @@ export interface ChoiceSetContext {
   prompt?: unknown;
   inflateChoices: (r: Set<string>, t: unknown) => Promise<Choice[]>;
   flag: string;
-  rollOption: string;
+  /** PF2e leaves this null for ChoiceSets that declare no `rollOption`. */
+  rollOption: string | null;
 }
 
 /** The parameters PF2e passes to a ChoiceSet's `preCreate`. */
