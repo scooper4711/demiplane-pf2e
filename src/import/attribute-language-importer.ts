@@ -1,6 +1,6 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { characterSystem, pf2eLanguages } from "../pf2e-types.js";
-import { PROFICIENCY_TRAINED, PROFICIENCY_EXPERT } from "./pf2e-ranks.js";
+import { PROFICIENCY_LEGENDARY } from "./pf2e-ranks.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
 export const VALID_ATTRIBUTES: readonly string[] = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -47,10 +47,14 @@ export async function applySkillProficiencies(
   summary: ImportSummary
 ): Promise<void> {
   const skillEngines = engines.filter((e) => e.name === "core/selection/skill/increase/index.eng" && e.args?.slug);
-  if (skillEngines.length === 0) return;
-
   const { profOverrides, overriddenFlags } = collectProfKnowledge(engines);
   const activeOverrides = computeActiveOverrides(overriddenFlags, profOverrides);
+
+  // A character can carry a manual proficiency override with no skill-increase
+  // engines at all (a rank set directly in the builder), so bail out only when
+  // there is nothing of either kind to apply.
+  if (skillEngines.length === 0 && Object.keys(activeOverrides).length === 0) return;
+
   const ranks = computeSkillRanks(skillEngines, activeOverrides);
 
   const currentSkills = characterSystem(actor).skills;
@@ -99,11 +103,29 @@ function computeActiveOverrides(
   return activeOverrides;
 }
 
+/**
+ * Derives each skill's proficiency rank by counting its skill-selection engines.
+ *
+ * Demiplane emits one `core/selection/skill/increase/index.eng` per proficiency
+ * step: the first is the initial training (Trained) and each subsequent one is a
+ * skill increase, so the rank equals the number of distinct steps — one → Trained,
+ * two → Expert, three → Master, four → Legendary. Counting (not a binary
+ * increase/trained flag) is what lets Master and Legendary skills import at their
+ * true rank instead of capping at Expert.
+ *
+ * Steps are de-duplicated by `sourceRow` because the character dump can repeat the
+ * same engine; a genuine additional increase always carries a distinct sourceRow
+ * (e.g. `skill-increase-level-9-rm`), while a duplicate repeats one.
+ *
+ * Class-intrinsic progression (e.g. a bard's Performance reaching Legendary via
+ * class features) is set by the PF2e class item itself, not these engines, and is
+ * preserved by the caller's upgrade-only write.
+ */
 function computeSkillRanks(
   skillEngines: DemiplaneEngineEntry[],
   activeOverrides: Record<string, number>
 ): Record<string, number> {
-  const ranks: Record<string, number> = {};
+  const stepsBySkill = new Map<string, Set<string>>();
   for (const eng of skillEngines) {
     const slug = eng.args.slug as string;
     const sourceRow = (eng.args.sourceRow as string) || "";
@@ -112,9 +134,12 @@ function computeSkillRanks(
     if (sourceRow.includes("select-skill-") && /heritage|human-rm/.exec(sourceRow)) continue;
     if (slug in activeOverrides) continue;
 
-    const isIncrease = sourceRow.includes("skill-increase");
-    const rank = isIncrease ? PROFICIENCY_EXPERT : PROFICIENCY_TRAINED;
-    ranks[slug] = Math.max(ranks[slug] || 0, rank);
+    (stepsBySkill.get(slug) ?? stepsBySkill.set(slug, new Set()).get(slug)!).add(sourceRow);
+  }
+
+  const ranks: Record<string, number> = {};
+  for (const [slug, steps] of stepsBySkill) {
+    ranks[slug] = Math.min(steps.size, PROFICIENCY_LEGENDARY);
   }
   return ranks;
 }

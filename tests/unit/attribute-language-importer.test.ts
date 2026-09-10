@@ -52,25 +52,115 @@ describe("applySkillProficiencies", () => {
     );
   });
 
-  it("sets expert rank for skill-increase sourceRow", async () => {
+  it("ranks a skill by counting its selection engines: Trained/Expert/Master/Legendary", async () => {
+    // Modeled on the level-20 bard "Kirakira Boshi": each skill's rank equals the
+    // number of distinct skill-selection engines (initial training + increases).
     const actor = createMockActor();
-    actor.system.skills = { athletics: { rank: 1 } };
+    actor.system.skills = {
+      society: { rank: 0 },
+      deception: { rank: 0 },
+      diplomacy: { rank: 0 },
+    };
+    const increase = (slug: string, sourceRow: string, id: string): DemiplaneEngineEntry => ({
+      id,
+      name: "core/selection/skill/increase/index.eng",
+      type: "DemiplaneEngine",
+      args: { slug, sourceRow },
+    });
     const engines: DemiplaneEngineEntry[] = [
-      {
-        id: "1",
-        name: "core/selection/skill/increase/index.eng",
-        type: "DemiplaneEngine",
-        args: { slug: "athletics", sourceRow: "skill-increase-level-3-rm" },
-      },
+      // society: 1 step -> Trained
+      increase("society", "skill-training-bard-rm", "1"),
+      // deception: training + 2 increases -> Master
+      increase("deception", "skill-training-bard-rm", "2"),
+      increase("deception", "skill-increase-level-13-rm", "3"),
+      increase("deception", "skill-increase-level-19-rm", "4"),
+      // diplomacy: 4 steps (a feat-granted one + three leveled increases) -> Legendary
+      increase("diplomacy", "select-skill-performance", "5"),
+      increase("diplomacy", "skill-increase-level-5-rm", "6"),
+      increase("diplomacy", "skill-increase-level-9-rm", "7"),
+      increase("diplomacy", "skill-increase-level-15-rm", "8"),
     ];
     const summary = makeSummary();
     await applySkillProficiencies(actor as never, engines, summary);
 
     expect(actor.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        "system.skills.athletics.rank": 2,
+        "system.skills.society.rank": 1,
+        "system.skills.deception.rank": 3,
+        "system.skills.diplomacy.rank": 4,
       })
     );
+  });
+
+  it("counts a duplicated selection engine once (deduped by sourceRow)", async () => {
+    const actor = createMockActor();
+    actor.system.skills = { deception: { rank: 0 } };
+    const dupe = (id: string): DemiplaneEngineEntry => ({
+      id,
+      name: "core/selection/skill/increase/index.eng",
+      type: "DemiplaneEngine",
+      // Same sourceRow repeated (the dump can list an engine twice) must not inflate rank.
+      args: { slug: "deception", sourceRow: "skill-training-bard-rm" },
+    });
+    const summary = makeSummary();
+    await applySkillProficiencies(actor as never, [dupe("1"), dupe("2")], summary);
+
+    expect(actor.update).toHaveBeenCalledWith(expect.objectContaining({ "system.skills.deception.rank": 1 }));
+  });
+
+  it("does not downgrade a skill the class item already ranked higher", async () => {
+    // Performance is Legendary from the PF2e class item; a single selection engine
+    // would compute Trained, but the upgrade-only write must leave it alone.
+    const actor = createMockActor();
+    actor.system.skills = { performance: { rank: 4 } };
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "core/selection/skill/increase/index.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "performance", sourceRow: "skill-training-bard-rm" },
+      },
+    ];
+    const summary = makeSummary();
+    await applySkillProficiencies(actor as never, engines, summary);
+
+    const downgraded = actor.update.mock.calls.some((c: unknown[]) => {
+      const data = c[0] as Record<string, unknown>;
+      return "system.skills.performance.rank" in data;
+    });
+    expect(downgraded).toBe(false);
+  });
+
+  it("applies a manual proficiency override as the absolute rank", async () => {
+    // Demiplane lets a builder override a skill's rank directly (e.g. Acrobatics
+    // set to Legendary): character_{skill}_prof carries the final 0-4 value,
+    // gated by character_{skill}_prof--overridden.
+    const actor = createMockActor();
+    actor.system.skills = { acrobatics: { rank: 0 } };
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "character_acrobatics_prof",
+        type: "CustomDemiplaneEngine",
+        args: {},
+        value: 4,
+      },
+      {
+        id: "2",
+        name: "character_acrobatics_prof--overridden",
+        type: "CustomDemiplaneEngine",
+        args: {},
+        value: 1,
+      },
+    ];
+    const summary = makeSummary();
+    await applySkillProficiencies(actor as never, engines, summary);
+
+    const overrideCall = actor.update.mock.calls.find((c: unknown[]) => {
+      const data = c[0] as Record<string, unknown>;
+      return "system.skills.acrobatics.rank" in data;
+    });
+    expect((overrideCall?.[0] as Record<string, number>)["system.skills.acrobatics.rank"]).toBe(4);
   });
 
   it("applies overrides when --overridden flag is set", async () => {
