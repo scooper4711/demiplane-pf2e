@@ -250,9 +250,13 @@ test.describe("Kyra Write Levels", () => {
         { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name },
         { timeout: 120_000 }
       );
-      await page.waitForTimeout(3000);
-      expect(await page.getByRole("button", { name: "Delete on Demiplane" }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: "Set quantity to 0 on Demiplane" }).count()).toBe(0);
+      // The gate rejects the delete before any prompt, so no dialog may
+      // appear. The delete hook runs synchronously inside delete(), so only
+      // the dialog's own async render needs flushing — two animation frames,
+      // no fixed sleep.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Set quantity to 0 on Demiplane" })).toHaveCount(0);
       const stillThere = await page.evaluate(
         ({ characterId, moduleId, deleteName }) => {
           // @ts-expect-error Foundry global

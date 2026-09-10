@@ -103,10 +103,12 @@ test.describe("Kyra Soft Delete", () => {
 
       // Soft-delete is reversible, so it deliberately prompts nothing: the
       // quantity-0 change queues immediately. Assert no dialog appears (a
-      // prompt here would mean the skip regressed), then push.
-      await page.waitForTimeout(3000);
-      expect(await page.getByRole("button", { name: "Set quantity to 0 on Demiplane" }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: "Delete on Demiplane" }).count()).toBe(0);
+      // prompt here would mean the skip regressed), then push. The delete
+      // hook runs synchronously inside delete(), so only the dialog's own
+      // async render needs flushing — two animation frames, no fixed sleep.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      await expect(page.getByRole("button", { name: "Set quantity to 0 on Demiplane" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
 
       const pushResult = await page.evaluate(
         async ({ characterId, moduleId }) => {
