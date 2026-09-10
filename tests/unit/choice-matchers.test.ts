@@ -407,6 +407,55 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices(choices, [manualItemEngine("clan-dagger-rm")])).toBeNull();
   });
 
+  // The Inventor's Weapon Innovation ChoiceSet offers every weapon; the base
+  // weapon is the (manually-added) weapon the character owns.
+  const weaponInnovationChoices = () => [
+    { label: "Adze", value: "Compendium.pf2e.equipment-srd.Item.adze" },
+    { label: "Gnome Hooked Hammer", value: "Compendium.pf2e.equipment-srd.Item.ghh" },
+    { label: "Longsword", value: "Compendium.pf2e.equipment-srd.Item.ls" },
+  ];
+
+  it("resolves Weapon Innovation to the character's owned weapon (by label)", () => {
+    const choices = weaponInnovationChoices();
+    const engines = [manualItemEngine("gnome-hooked-hammer-rm"), manualItemEngine("breastplate-rm")];
+
+    expect(findMatchInChoices(choices, engines, "Weapon Innovation")).toBe(choices[1]);
+  });
+
+  it("resolves Weapon Innovation by slug value when the ChoiceSet is slug-valued", () => {
+    const choices = [
+      { label: "Adze", value: "adze" },
+      { label: "Gnome Hooked Hammer", value: "gnome-hooked-hammer" },
+    ];
+
+    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Weapon Innovation")).toBe(
+      choices[1]
+    );
+  });
+
+  it("does not apply the Weapon Innovation strategy to other ChoiceSets", () => {
+    // Same owned weapon, but the choice is not Weapon Innovation: the owned-item
+    // fallback must not fire here (it would defeat the isGrantedByElement guard).
+    const choices = weaponInnovationChoices();
+
+    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Some Other Choice")).toBeNull();
+  });
+
+  it("returns null for Weapon Innovation when the character owns no items", () => {
+    expect(findMatchInChoices(weaponInnovationChoices(), [], "Weapon Innovation")).toBeNull();
+  });
+
+  it("returns null for Weapon Innovation when no owned item is among the options", () => {
+    // Owned weapon isn't in the offered list (and a non-string option value must
+    // be skipped rather than throw).
+    const choices = [
+      { label: "Adze", value: "adze" },
+      { label: "Longsword", value: 42 },
+    ];
+
+    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Weapon Innovation")).toBeNull();
+  });
+
   // A background (Total Power) that grants a fixed feat Foundry models as a
   // choice ("Blasting Beams" vs "Bone Spikes"). The granting element's
   // definition names the feat outright, keyed by the element slug.

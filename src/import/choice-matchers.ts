@@ -16,24 +16,35 @@ export function findMatchInChoices(
   itemName?: string,
   grantedFeatsByElement?: Map<string, Set<string>>
 ): Choice | null {
-  const match =
-    matchFeatScopedSkill(choices, engines, itemName) ??
-    matchSkillSlugs(choices, engines) ??
-    matchCustomSelectionLore(choices, engines, itemName) ??
-    matchDeity(choices, engines) ??
-    matchDomain(choices, engines) ??
-    matchMuse(choices, engines) ??
-    matchAdoptedAncestry(choices, engines) ??
-    matchItemEngines(choices, engines) ??
-    matchGrantedFeats(choices, grantedFeatsByElement, itemName) ??
-    matchAllSlugs(choices, engines) ??
-    matchClassFeatures(choices, engines) ??
-    matchGenericFeatures(choices, engines) ??
-    matchFeatSlugs(choices, engines, itemName) ??
-    matchGenericChoice(choices, engines, itemName);
+  // Strategies run in order from most specific (an explicit selection engine) to
+  // most generic (keyword matching), so a precise engine wins over a broad
+  // fallback. Expressed as an ordered list rather than a `??` chain to keep this
+  // dispatcher flat as strategies are added.
+  const strategies: Array<() => Choice | null> = [
+    () => matchFeatScopedSkill(choices, engines, itemName),
+    () => matchSkillSlugs(choices, engines),
+    () => matchCustomSelectionLore(choices, engines, itemName),
+    () => matchDeity(choices, engines),
+    () => matchDomain(choices, engines),
+    () => matchMuse(choices, engines),
+    () => matchAdoptedAncestry(choices, engines),
+    () => matchWeaponInnovation(choices, engines, itemName),
+    () => matchItemEngines(choices, engines),
+    () => matchGrantedFeats(choices, grantedFeatsByElement, itemName),
+    () => matchAllSlugs(choices, engines),
+    () => matchClassFeatures(choices, engines),
+    () => matchGenericFeatures(choices, engines),
+    () => matchFeatSlugs(choices, engines, itemName),
+    () => matchGenericChoice(choices, engines, itemName),
+  ];
 
-  if (!match) debugLog("[ChoiceSet match] No match found across all strategies");
-  return match;
+  for (const strategy of strategies) {
+    const match = strategy();
+    if (match) return match;
+  }
+
+  debugLog("[ChoiceSet match] No match found across all strategies");
+  return null;
 }
 
 /**
@@ -298,6 +309,40 @@ function matchAdoptedAncestry(choices: Choice[], engines: DemiplaneEngineEntry[]
  * slugs against both the option value (slug-valued ChoiceSets) and the slugified
  * label (the common UUID-valued case) so it resolves regardless of shape.
  */
+/**
+ * Matches the Inventor's "Weapon Innovation" ChoiceSet against the weapon the
+ * character's innovation is built on.
+ *
+ * PF2e presents Weapon Innovation as a ChoiceSet of every weapon (hundreds of
+ * options), so the blind first-option fallback picks the alphabetically first
+ * ("Adze"). Demiplane doesn't emit a selection engine naming the base weapon; the
+ * only signal is that the innovation is built on a weapon the character owns,
+ * present as a `tabula/item/<slug>.eng` inventory engine.
+ *
+ * Unlike {@link matchItemEngines}, this deliberately considers player-added
+ * inventory (the weapon is bought, not element-granted). It is gated to the
+ * Weapon Innovation ChoiceSet by item name so manual inventory can't leak into
+ * unrelated choices. Because every option here is a weapon, only the character's
+ * weapon(s) can match — toolkits, armor, and gear never appear in the list.
+ */
+function matchWeaponInnovation(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
+  if (!itemName || toChoiceSlug(itemName) !== "weapon-innovation") return null;
+
+  const ownedItemSlugs = engines
+    .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/"))
+    .map((e) => toFoundrySlug(rawEquipmentSlug(e)));
+  if (ownedItemSlugs.length === 0) return null;
+
+  debugLog(`[ChoiceSet match] Weapon Innovation - owned item slugs: [${ownedItemSlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const value = typeof choice.value === "string" ? choice.value : "";
+    const labelSlug = toChoiceSlug(choice.label);
+    if (ownedItemSlugs.some((slug) => slug === value || slug === labelSlug)) return choice;
+  }
+  return null;
+}
+
 function matchItemEngines(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
   const itemSlugs = engines
     .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/item/") && isGrantedByElement(e))
