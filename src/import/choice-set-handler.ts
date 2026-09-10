@@ -1,6 +1,6 @@
 import type { DemiplaneEngineEntry } from "./types.js";
 import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
-import { resolveSlugToUuid } from "./compendium-resolver.js";
+import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
@@ -255,7 +255,7 @@ export class ChoiceSetHandler {
       return;
     }
 
-    if (this.resolveIkonChoice(context, params)) return;
+    if (await this.resolveIkonChoice(context, params)) return;
 
     if (this.resolveForcedSingleChoice(context, params)) return;
 
@@ -323,7 +323,7 @@ export class ChoiceSetHandler {
    *
    * Returns true when it handled the ChoiceSet.
    */
-  private resolveIkonChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
+  private async resolveIkonChoice(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
     const ikonSlug = context.item.slug ?? null;
     if (!ikonSlug) return false;
 
@@ -339,8 +339,13 @@ export class ChoiceSetHandler {
   }
 
   /** Picks "existing" for an ikon the resolver placed on an owned weapon. */
-  private resolveIkonOrigin(context: ChoiceSetContext, params: PreCreateParams, ikonSlug: string): boolean {
-    if (!this.ikonAssignments(context, params).assignsExistingWeapon(ikonSlug)) return false;
+  private async resolveIkonOrigin(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    ikonSlug: string
+  ): Promise<boolean> {
+    const resolver = await this.ikonAssignments(context);
+    if (!resolver.assignsExistingWeapon(ikonSlug)) return false;
     const existing = context.choices.find((c) => c.value === ChoiceSetHandler.IKON_ORIGIN_EXISTING);
     if (!existing) return false;
     this.applySelectedChoice(context, params, existing, true, []);
@@ -348,8 +353,13 @@ export class ChoiceSetHandler {
   }
 
   /** Picks the assigned owned weapon for an ikon's "existing weapon" ChoiceSet. */
-  private resolveExistingIkonWeapon(context: ChoiceSetContext, params: PreCreateParams, ikonSlug: string): boolean {
-    const weaponId = this.ikonAssignments(context, params).assignedWeaponId(ikonSlug);
+  private async resolveExistingIkonWeapon(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    ikonSlug: string
+  ): Promise<boolean> {
+    const resolver = await this.ikonAssignments(context);
+    const weaponId = resolver.assignedWeaponId(ikonSlug);
     if (weaponId === undefined) return false;
     const choice = context.choices.find((c) => c.value === weaponId);
     if (!choice) return false;
@@ -358,24 +368,42 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * The memoized ikon → weapon assignment. Built on first use so every sibling
-   * ikon (all present in `tempItems`) and the owned weapons are already in place.
+   * The memoized ikon → weapon assignment.
+   *
+   * Built from the Demiplane engine list rather than the items being created:
+   * an Exemplar's ikons are granted one at a time by the parent's chained
+   * firstIkon/secondIkon/thirdIkon ChoiceSets, so when the first ikon's origin
+   * choice resolves the later ikons don't exist yet. The engine list names all
+   * chosen ikons up front; each one's `existingIkon` weapon filter is read from
+   * its compendium item so the solver sees the whole set at once.
    */
-  private ikonAssignments(context: ChoiceSetContext, params: PreCreateParams): IkonWeaponResolver {
+  private async ikonAssignments(context: ChoiceSetContext): Promise<IkonWeaponResolver> {
     if (!this.ikonResolver) {
       const weapons = (context.actor.itemTypes?.weapon ?? []) as WeaponItem[];
-      const ikons = this.weaponIkonsFromTempItems(params.tempItems);
+      const ikons = await this.weaponIkonsFromEngines();
       this.ikonResolver = new IkonWeaponResolver(weapons, context.actor.getRollOptions(), ikons);
     }
     return this.ikonResolver;
   }
 
-  /** The weapon ikons among the items being created in this batch. */
-  private weaponIkonsFromTempItems(tempItems: unknown): IkonItem[] {
-    if (!Array.isArray(tempItems)) return [];
-    return (tempItems as IkonItem[]).filter(
-      (item) => (item?._source?.system.rules ?? item?.system?.rules) !== undefined && isWeaponIkon(item)
-    );
+  /**
+   * The character's chosen weapon ikons, resolved from the engine list to their
+   * compendium items so their `existingIkon` weapon filters are available.
+   */
+  private async weaponIkonsFromEngines(): Promise<IkonItem[]> {
+    const ikonSlugs = this.currentEngines
+      .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/class-feature/") && e.args?.slug)
+      .map((e) => e.args!.slug as string);
+
+    const ikons: IkonItem[] = [];
+    for (const slug of [...new Set(ikonSlugs)]) {
+      const item = await resolveCompendiumItem(slug, "feat");
+      const rules = (item?.system as { rules?: Array<Record<string, unknown>> } | undefined)?.rules;
+      if (!rules) continue;
+      const ikon: IkonItem = { slug: toFoundrySlug(slug), system: { rules } };
+      if (isWeaponIkon(ikon)) ikons.push(ikon);
+    }
+    return ikons;
   }
 
   /**
