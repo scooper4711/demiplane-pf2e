@@ -333,12 +333,13 @@ export class BatchItemsPhase implements ImportPhase {
       return null;
     }
 
-    await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug);
+    const engineId = typeof eng.demiplaneEngineId === "string" ? eng.demiplaneEngineId : undefined;
+    await ctx.choiceSetHandler.presetChoiceSelections(itemData, eng._slug, engineId);
     if ((itemData as { type: string }).type === "feat" && eng.args?.sourceRow) {
       this.applyFeatSlot(itemData, eng.args.sourceRow as string);
     }
 
-    const stamped = stampImported(itemData, eng._slug);
+    const stamped = stampImported(itemData, eng._slug, engineId);
     ctx.summary.log.push(`+ ${category}: ${(itemData as { name: string }).name}`);
     ctx.summary.itemsImported++;
     return stamped;
@@ -464,6 +465,12 @@ export class RemoveDuplicatesPhase implements ImportPhase {
    * to two entries — a wizard's curriculum spell lives in both the main
    * spellbook and the Curriculum entry — so those copies must key differently or
    * one would be collapsed away (and, with it, its prepared placement).
+   *
+   * Feats add their slot location for the same reason: a feat you can take more
+   * than once (e.g. Energized Spark at levels 1 and 2) is one compendium source
+   * but two real feats in different slots (`class-1` vs `class-2`). Keying by
+   * slot keeps both while still collapsing a same-slot import-vs-native-grant
+   * pair, which shares a location.
    */
   private duplicateKey(item: Record<string, unknown>): string {
     const flags = (item.flags || {}) as Record<string, Record<string, unknown>>;
@@ -474,6 +481,10 @@ export class RemoveDuplicatesPhase implements ImportPhase {
       const system = (item.system || {}) as { location?: { value?: unknown } };
       const entryId = system.location?.value;
       if (typeof entryId === "string") return `${base}@${entryId}`;
+    }
+    if (item.type === "feat") {
+      const system = (item.system || {}) as { location?: unknown };
+      if (typeof system.location === "string") return `${base}@${system.location}`;
     }
     return base;
   }

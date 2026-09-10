@@ -670,6 +670,53 @@ describe("import phases", () => {
       expect(neitherStamped.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["2"]);
     });
 
+    function featAtSlot(id, sourceId, location) {
+      return {
+        _id: id,
+        id,
+        type: "feat",
+        name: "Energized Spark",
+        flags: { core: { sourceId }, [MODULE_ID]: { imported: true } },
+        system: { location },
+      };
+    }
+
+    it("keeps two copies of a multi-take feat in different slots", async () => {
+      // Energized Spark taken at level 1 and level 2: same compendium source, but
+      // distinct slots (class-1 vs class-2) — both are real feats.
+      const actor = createMockActor({
+        items: [
+          featAtSlot("1", "Compendium.pf2e.feats-srd.Item.SPARK", "class-1"),
+          featAtSlot("2", "Compendium.pf2e.feats-srd.Item.SPARK", "class-2"),
+        ],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).not.toHaveBeenCalled();
+    });
+
+    it("still collapses an import-vs-native feat pair in the same slot", async () => {
+      // Same source AND same slot: the import copy duplicates the native grant.
+      const actor = createMockActor({
+        items: [
+          {
+            _id: "native",
+            id: "native",
+            type: "feat",
+            name: "Energized Spark",
+            flags: { core: { sourceId: "Compendium.pf2e.feats-srd.Item.SPARK" } },
+            system: { location: "class-1" },
+          },
+          featAtSlot("import", "Compendium.pf2e.feats-srd.Item.SPARK", "class-1"),
+        ],
+      });
+
+      await new RemoveDuplicatesPhase().run(actor, makeCtx());
+
+      expect(actor.deleteEmbeddedDocuments).toHaveBeenCalledWith("Item", ["import"]);
+    });
+
     it("keys duplicates by compendium source id", async () => {
       const actor = createMockActor({
         items: [
