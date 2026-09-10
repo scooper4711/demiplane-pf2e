@@ -62,6 +62,26 @@ describe("IkonWeaponResolver", () => {
     expect(isWeaponIkon({ slug: "skin-hard-as-horn", system: { rules: [] } })).toBe(false);
   });
 
+  it("reads the predicate from _source, not the prepared rules (live PF2e item)", () => {
+    // A live item's prepared system.rules has its ChoiceSet `choices` inflated
+    // (the raw ownedItems/predicate gone); _source keeps the authored predicate.
+    const liveIkon = {
+      slug: "mortal-harvest",
+      _source: {
+        system: {
+          rules: [{ key: "ChoiceSet", flag: "existingIkon", choices: { ownedItems: true, predicate: POLEARM } }],
+        },
+      },
+      system: {
+        rules: [{ key: "ChoiceSet", flag: "existingIkon", choices: [{ value: "fauchard", label: "Fauchard" }] }],
+      },
+    };
+    expect(isWeaponIkon(liveIkon)).toBe(true);
+
+    const resolver = new IkonWeaponResolver([falchion(), fauchard()], [], [liveIkon]);
+    expect(resolver.assignedWeaponId("mortal-harvest")).toBe("fauchard");
+  });
+
   it("resolves Zatash: Mortal Harvest -> fauchard forces Barrow's Edge -> falchion", () => {
     const resolver = new IkonWeaponResolver(
       [falchion(), fauchard()],

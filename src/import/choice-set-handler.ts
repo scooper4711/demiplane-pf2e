@@ -373,7 +373,9 @@ export class ChoiceSetHandler {
   /** The weapon ikons among the items being created in this batch. */
   private weaponIkonsFromTempItems(tempItems: unknown): IkonItem[] {
     if (!Array.isArray(tempItems)) return [];
-    return (tempItems as IkonItem[]).filter((item) => item?.system?.rules !== undefined && isWeaponIkon(item));
+    return (tempItems as IkonItem[]).filter(
+      (item) => (item?._source?.system.rules ?? item?.system?.rules) !== undefined && isWeaponIkon(item)
+    );
   }
 
   /**

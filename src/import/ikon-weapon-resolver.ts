@@ -44,7 +44,19 @@ export interface WeaponItem {
 export interface IkonItem {
   /** The ikon's identifier (its slug); used as the solver key and the query key. */
   slug: string | null;
+  /**
+   * Authored rules. Read from `_source` when present: a live PF2e item mutates
+   * `system.rules` during preparation (a ChoiceSet's `choices` are inflated,
+   * dropping the raw `ownedItems`/`predicate`), whereas `_source.system.rules`
+   * keeps the predicate verbatim. Plain-object test doubles supply only `system`.
+   */
+  _source?: { system: { rules: Array<Record<string, unknown>> } };
   system: { rules: Array<Record<string, unknown>> };
+}
+
+/** The authored rules for an ikon item, preferring the untouched `_source` copy. */
+function ikonRules(ikon: IkonItem): Array<Record<string, unknown>> {
+  return ikon._source?.system.rules ?? ikon.system.rules;
 }
 
 /**
@@ -114,7 +126,7 @@ export function isWeaponIkon(ikon: IkonItem): boolean {
 
 /** The raw `ownedItems` predicate from an ikon's `existingIkon` ChoiceSet, if any. */
 function existingIkonPredicate(ikon: IkonItem): unknown[] | undefined {
-  const rule = ikon.system.rules.find((r) => r.key === "ChoiceSet" && r.flag === EXISTING_IKON_FLAG) as
+  const rule = ikonRules(ikon).find((r) => r.key === "ChoiceSet" && r.flag === EXISTING_IKON_FLAG) as
     ChoiceSetRule | undefined;
   const choices = rule?.choices as { ownedItems?: unknown; predicate?: unknown } | undefined;
   if (!choices?.ownedItems || !Array.isArray(choices.predicate)) return undefined;
