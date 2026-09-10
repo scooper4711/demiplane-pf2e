@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-beta.5] - 2026-09-10
+
+### Added
+
+- auto-resolve Exemplar weapon-ikon 'existing weapon' choices
+
+### Fixed
+
+- soft-delete spec for prompt-less soft deletes
+- scope a multi-take feat's generic choice to its own instance
+- keep both copies of a feat taken more than once
+- build ikon resolver from the engine list, not tempItems
+- read ikon existingIkon predicate from _source, not prepared rules
+- guard null rollOption in the ikon origin ChoiceSet check
+- match ChoiceSet options whose label has a possessive apostrophe
+- resolve the Inventor Weapon Innovation choice to the owned weapon
+
+[1.0.0-beta.5]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v1.0.0-beta.5
+
 ## [1.0.0-beta.4] - 2026-09-10
 
 ### Fixed
