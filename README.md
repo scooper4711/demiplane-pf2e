@@ -11,6 +11,8 @@
 
 # Demiplane PF2e Sync for Foundry VTT
 
+_Written with AI assistance. See [below](#-regarding-the-use-of-ai) for a statement about the use of AI in this project._
+
 Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.com), then bring it straight into your Foundry game. No copy-pasting stats, no manual data entry, no "wait, what level did I take Fleet at?"
 
 Level up on Demiplane, click update in Foundry, and you're good to go.
@@ -185,3 +187,13 @@ Huge thanks to the beta testers whose feedback shaped this module: **AKA_Kira**,
 If this module saves you time at the table, consider supporting development:
 
 [Support on Ko-fi](https://ko-fi.com/coop207627)
+
+---
+
+## 🦾 Regarding the use of AI:
+
+I used AI as a coding assistant while building this. I'm a software engineer with decades of professional experience. I could have written every line myself, but AI let me move faster. I drove the architecture and design decisions, followed industry best practices for code quality, and made sure everything is human-readable and maintainable. The project has SonarCloud quality gates and a full test suite that must pass before any release.
+
+Think of it like driving a car instead of walking. I plan the route, decide the stops along the way, and AI gets me to the destination faster than I could on foot. But I'm still the one behind the wheel.
+
+If you don't want to use tools written with AI assistance, then I respect that decision. That's why I'm transparent about it. You can make up your own mind.
