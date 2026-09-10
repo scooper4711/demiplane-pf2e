@@ -43,32 +43,16 @@ describe("write-level", () => {
   });
 
   describe("cumulative predicates", () => {
-    it("permits nothing at level none", () => {
-      settingValue = "none";
-      expect(canWriteText()).toBe(false);
-      expect(canWriteQuantity()).toBe(false);
-      expect(canWriteDeletes()).toBe(false);
-    });
-
-    it("permits only text at level text", () => {
-      settingValue = "text";
-      expect(canWriteText()).toBe(true);
-      expect(canWriteQuantity()).toBe(false);
-      expect(canWriteDeletes()).toBe(false);
-    });
-
-    it("permits text and quantity at level text-quantity", () => {
-      settingValue = "text-quantity";
-      expect(canWriteText()).toBe(true);
-      expect(canWriteQuantity()).toBe(true);
-      expect(canWriteDeletes()).toBe(false);
-    });
-
-    it("permits everything at level text-quantity-delete", () => {
-      settingValue = "text-quantity-delete";
-      expect(canWriteText()).toBe(true);
-      expect(canWriteQuantity()).toBe(true);
-      expect(canWriteDeletes()).toBe(true);
+    it.each([
+      ["none", false, false, false],
+      ["text", true, false, false],
+      ["text-quantity", true, true, false],
+      ["text-quantity-delete", true, true, true],
+    ])("permits the right tiers at level %s", (level, text, quantity, deletes) => {
+      settingValue = level;
+      expect(canWriteText()).toBe(text);
+      expect(canWriteQuantity()).toBe(quantity);
+      expect(canWriteDeletes()).toBe(deletes);
     });
 
     it("treats an unknown value as the safe default (no writing)", () => {

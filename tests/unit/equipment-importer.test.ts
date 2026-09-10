@@ -1121,28 +1121,15 @@ describe("applyEquipment", () => {
       return { summary, name };
     }
 
-    it("resolves -9th-rank-rm to the -9th-rank-spell compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-widening-9th-rank-rm");
+    it.each([
+      ["wand-of-widening-9th-rank-rm", "Wand of Widening (9th-Rank Spell)"],
+      ["wand-of-spiritual-warfare-8th-level-spell", "Wand of Spiritual Warfare (8th-Rank Spell)"],
+      ["wand-of-the-snowfields-5th-level-spell", "Wand of the Snowfields (5th-Rank Spell)"],
+      ["wand-of-legerdemain-9th-level-spell", "Wand of Legerdemain (9th-rank)"],
+    ])("resolves %s to the compendium item", async (input, expected) => {
+      const { summary, name } = await importNamedWand(input);
       expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Widening (9th-Rank Spell)");
-    });
-
-    it("resolves -8th-level-spell to the -8th-rank-spell compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-spiritual-warfare-8th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Spiritual Warfare (8th-Rank Spell)");
-    });
-
-    it("resolves the Snowfields -level-spell shell to the real -rank-spell item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-the-snowfields-5th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of the Snowfields (5th-Rank Spell)");
-    });
-
-    it("resolves Legerdemain -level-spell to the bare -rank compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-legerdemain-9th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Legerdemain (9th-rank)");
+      expect(name).toBe(expected);
     });
   });
 
