@@ -502,6 +502,11 @@ export class RemoveDuplicatesPhase implements ImportPhase {
  * Obsession) arrives as a `core/selection/skill/custom-selection/index.eng`
  * engine whose `args.name` holds the Lore name. Custom lore skills may also
  * arrive as `core/selection/skill/custom-skill/index.eng`.
+ *
+ * A background's chosen lore subject (e.g. Emissary → "Absalom") arrives instead
+ * as a `CustomDemiplaneEngine` override whose name ends in `lore_name` (e.g.
+ * `character_emissary-rm-...-0-lore_name`) and whose `value` is the
+ * player-entered subject — a separate encoding that carries no `args.name`.
  */
 export function collectLoreNames(engines: DemiplaneEngineEntry[], backgroundLores: string[] = []): string[] {
   const loreNames = [...backgroundLores];
@@ -525,5 +530,30 @@ export function collectLoreNames(engines: DemiplaneEngineEntry[], backgroundLore
     if (!loreNames.includes(name)) loreNames.push(name);
   }
 
+  for (const name of collectNamedLoreSubjects(engines)) {
+    if (!loreNames.includes(name)) loreNames.push(name);
+  }
+
   return loreNames;
+}
+
+/**
+ * Lore subject names entered for a background/feature lore slot.
+ *
+ * Demiplane stores the player's chosen subject in a `CustomDemiplaneEngine`
+ * override whose name ends in `lore_name` (e.g. Emissary's
+ * `character_emissary-rm-...-0-lore_name` → "Absalom"). Unlike the
+ * custom-selection encoding these carry the subject in `value`, not `args.name`,
+ * so they are collected separately.
+ */
+function collectNamedLoreSubjects(engines: DemiplaneEngineEntry[]): string[] {
+  const subjects: string[] = [];
+  for (const eng of engines) {
+    if (eng.type !== "CustomDemiplaneEngine") continue;
+    if (!eng.name.endsWith("lore_name")) continue;
+    if (typeof eng.value !== "string") continue;
+    const subject = eng.value.trim();
+    if (subject.length > 0) subjects.push(subject);
+  }
+  return subjects;
 }

@@ -321,4 +321,25 @@ describe("collectLoreNames", () => {
     const engines = [mkEngine("core/selection/skill/custom-selection/index.eng", { name: "Forest Lore" })];
     expect(collectLoreNames(engines, ["Forest Lore"])).toEqual(["Forest Lore"]);
   });
+
+  const mkCustomEngine = (name: string, value: unknown) =>
+    ({ name, type: "CustomDemiplaneEngine", value, args: {} }) as unknown as DemiplaneEngineEntry;
+
+  it("captures a background lore subject from a _lore_name override (e.g. Emissary → Absalom)", () => {
+    const engines = [mkCustomEngine("character_emissary-rm-73c1822b-0-lore_name", "Absalom")];
+    expect(collectLoreNames(engines)).toEqual(["Absalom"]);
+  });
+
+  it("ignores an empty or non-string _lore_name value", () => {
+    const engines = [
+      mkCustomEngine("character_emissary-rm-0-lore_name", "   "),
+      mkCustomEngine("character_emissary-rm-1-lore_name", 0),
+    ];
+    expect(collectLoreNames(engines)).toEqual([]);
+  });
+
+  it("deduplicates a _lore_name subject already provided by the background", () => {
+    const engines = [mkCustomEngine("character_emissary-rm-0-lore_name", "Absalom")];
+    expect(collectLoreNames(engines, ["Absalom"])).toEqual(["Absalom"]);
+  });
 });
