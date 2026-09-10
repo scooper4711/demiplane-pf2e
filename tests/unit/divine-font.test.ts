@@ -5,7 +5,7 @@ import { importFontSpells } from "../../src/import/divine-font.js";
 const HEAL = { _id: "sp-heal", name: "Heal", type: "spell", system: { slug: "heal", level: { value: 1 } } };
 
 function summary() {
-  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
 }
 
 function fontEngine(slug, selectionRank) {

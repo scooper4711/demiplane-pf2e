@@ -36,6 +36,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Manual Push Waits for Sync Idle](#28-manual-push-waits-for-sync-idle)
 - [Overview Subtitle Preservation](#29-overview-subtitle-preservation)
 - [Shared Slug Derivation for Slug-Less Engines](#30-shared-slug-derivation-for-slug-less-engines)
+- [User-Specified Choice Resolution](#31-user-specified-choice-resolution)
 
 ---
 
@@ -638,3 +639,18 @@ The hook-callback `(...args: unknown[]) => void` boundary casts and the module-A
 **Decision:** Import and push resolve an item engine's Demiplane slug with one shared helper (`rawEquipmentSlug`: `args.slug`, falling back to the `tabula/item/<slug>-rm.eng` name).
 
 **Rationale:** Class-kit item engines carry no `args.slug`. The import side already fell back to the engine name when stamping items, but the push matched queued quantity/equipped/delete changes by `args.slug` only — so every push-side change to a class-kit item (e.g. Kyra's scimitar) was silently dropped at resolution. Sharing the derivation guarantees both sides resolve the same slug for the same engine.
+
+---
+
+## 31. User-Specified Choice Resolution
+
+**Decision:** When no automatic ChoiceSet strategy matches, the player (or GM) can pick the correct option per character in the sync dialog; the pick persists on the actor and is honored on re-imports — strictly as a last resort, after the matchers.
+
+**Rationale:** A wrong blind guess (e.g. wrong bloodline, wrong skill) could previously only be fixed by hand in Foundry, and the fix was wiped on the next clean-slate re-import. This mirrors the slug-mapping gap (§18–22), but choices are per-character, not world-global, so the solution is per-actor rather than a world setting.
+
+**Mechanism:**
+
+- Resolution order per ChoiceSet is matchers → stored override → blind `choices[0]`. The override is consulted only when matching fails, so it can never win over a successful automatic match, and single-option ChoiceSets never consult it at all.
+- Overrides live in one `choiceOverrides` actor flag (`key -> option value`), keyed by owning-item slug plus the rule's selection flag; unresolved ChoiceSets are captured as structured records in a sibling flag, replaced wholesale each import exactly like `unmappedSlugs`.
+- The sync dialog renders one dropdown per unresolved record (defaulting to the stored pick or an explicit not-chosen state); picking persists immediately and the existing Update button re-imports to apply it. Stale picks (value no longer offered) are ignored and the record reappears for re-picking — inert data, never errors, matching §22's stale-mapping behavior.
+- The pure matching helpers live in `src/import/choice-overrides.ts` (no Foundry dependencies); the handler owns the override map's lifecycle. Matchers in `choice-matchers.ts` stay pure and untouched.

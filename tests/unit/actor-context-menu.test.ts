@@ -7,7 +7,7 @@ const CHARACTER_ID = "char-123";
 const TOKEN = "token-abc";
 
 function summary(overrides = {}) {
-  return { itemsImported: 4, itemsSkipped: 0, unmapped: [], errors: [], log: [], ...overrides };
+  return { itemsImported: 4, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [], ...overrides };
 }
 
 function linkedActor(id: string) {

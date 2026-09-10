@@ -10,6 +10,7 @@ import {
   resetImportIssues,
   addImportIssues,
   setUnmappedSlugs,
+  setUnresolvedChoices,
   addExportIssue,
   hasNotifiedConflict,
   markConflictNotified,
@@ -100,6 +101,7 @@ export async function importLinkedCharacter(
 
     const summary = await deps.importOrchestrator.importCharacter(actor, characterId, { token });
     setUnmappedSlugs(actor, summary.unmapped);
+    setUnresolvedChoices(actor, summary.unresolvedChoices);
     await addImportIssues(actor, summary.errors);
     notifyImportComplete(actor, summary);
     return summary;

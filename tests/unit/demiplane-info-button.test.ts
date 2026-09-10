@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { showDemiplaneInfoDialog, registerDemiplaneInfoButton } from "../../src/demiplane-info-button.js";
+import { MODULE_ID } from "../../src/import/types.js";
 
 const DEMI_UUID = "12345678-1234-1234-1234-123456789012";
 
@@ -266,6 +267,102 @@ describe("demiplane-info-button", () => {
     expect(opts.classes).not.toContain("has-sync-errors");
     expect(opts.content).toContain("imp issue");
     expect(opts.content).toContain("goblin-blade");
+  });
+
+  describe("unresolved choice dropdowns", () => {
+    const choiceRecord = {
+      key: "feat::choice",
+      prompt: "Choose a skill",
+      options: [
+        { value: "acrobatics", label: "Acrobatics" },
+        { value: "crafting", label: "Crafting" },
+      ],
+      guessedValue: "acrobatics",
+    };
+
+    function actorWithChoices(records: unknown[], overrides: Record<string, string>) {
+      actor.getFlag = vi.fn((_m: string, k: string) => {
+        if (k === "characterId") return DEMI_UUID;
+        if (k === "importIssues") return [];
+        if (k === "exportIssues") return [];
+        if (k === "unmappedSlugs") return [];
+        if (k === "unresolvedChoices") return records;
+        if (k === "choiceOverrides") return overrides;
+        return undefined;
+      });
+    }
+
+    function dialogWithSelects(selects: Array<{ dataset: Record<string, string>; value: string }>) {
+      const listeners: Record<string, Array<() => void>> = {};
+      const fakeSelects = selects.map((select) => ({
+        ...select,
+        addEventListener: (event: string, fn: () => void) => {
+          listeners[event] = [...(listeners[event] ?? []), fn];
+        },
+      }));
+      const fakeDialog = {
+        element: {
+          querySelector: () => null,
+          querySelectorAll: () => fakeSelects,
+        },
+      };
+      return { fakeDialog, listeners };
+    }
+
+    async function openDialogWith(fakeDialog: unknown) {
+      wait.mockImplementationOnce(async (opts: { render?: (event: unknown, dialog: unknown) => void }) => {
+        opts.render?.({}, fakeDialog);
+        return "close";
+      });
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    }
+
+    it("renders one dropdown per unresolved choice with the stored pick preselected", async () => {
+      actorWithChoices([choiceRecord], { "feat::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Choices needing your input");
+      expect(opts.content).toContain('data-choice-key="feat::choice"');
+      // Explicit not-chosen state first, so a blind guess is never presented
+      // as the user's decision.
+      expect(opts.content).toContain("— choose —");
+      expect(opts.content).toContain('value="crafting" selected');
+      expect(opts.content).toContain("Guessed");
+    });
+
+    it("omits the choices section when nothing is unresolved", async () => {
+      actorWithChoices([], {});
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).not.toContain("demiplane-choice-select");
+      expect(opts.content).not.toContain("Choices needing your input");
+    });
+
+    it("persists a dropdown pick to the actor flag", async () => {
+      actorWithChoices([choiceRecord], {});
+      const { fakeDialog, listeners } = dialogWithSelects([
+        { dataset: { choiceKey: "feat::choice" }, value: "crafting" },
+      ]);
+      await openDialogWith(fakeDialog);
+
+      for (const fn of listeners["change"] ?? []) fn();
+
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", { "feat::choice": "crafting" });
+    });
+
+    it("removes the override when reset to not-chosen", async () => {
+      actorWithChoices([choiceRecord], { "feat::choice": "crafting" });
+      const { fakeDialog, listeners } = dialogWithSelects([{ dataset: { choiceKey: "feat::choice" }, value: "" }]);
+      await openDialogWith(fakeDialog);
+
+      for (const fn of listeners["change"] ?? []) fn();
+
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", {});
+    });
   });
 });
 

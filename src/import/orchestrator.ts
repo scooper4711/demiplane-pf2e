@@ -22,6 +22,7 @@ import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
 import { getSanctification, recordSanctificationChoice } from "../sanctification.js";
+import { getChoiceOverrides } from "../sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
@@ -74,7 +75,14 @@ export class ImportOrchestrator {
 
   async importCharacter(actor: Actor, characterId: string, options: ImportOptions = {}): Promise<ImportSummary> {
     const { token } = options;
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
 
     const fetched = await this.fetchCharacterEngines(characterId, token, summary);
     if (!fetched) return summary;
@@ -133,6 +141,11 @@ export class ImportOrchestrator {
       summary.errors.push(formatChoiceSetFallback(fallback));
     }
 
+    // Structured unresolved-choice records for the sync dialog's dropdowns.
+    // Drained here (not in a phase) because the handler accumulates them
+    // across the whole pipeline, exactly like the fallbacks above.
+    summary.unresolvedChoices = this.choiceSetHandler.drainUnresolvedChoices();
+
     await this.persistSanctification(actor, summary);
 
     // Flag variant rules the character relies on that aren't enabled in the
@@ -159,9 +172,9 @@ export class ImportOrchestrator {
    * acknowledged and this stops flagging it.
    */
   /**
-   * Primes the ChoiceSet handler for this import: seeds the engine data and any
-   * previously chosen sanctification, so a re-import honors the player's choice
-   * instead of reverting to the affirmative default.
+   * Primes the ChoiceSet handler for this import: seeds the engine data, any
+   * previously chosen sanctification, and the actor's stored choice overrides,
+   * so a re-import honors the player's past decisions instead of re-guessing.
    */
   private async prepareChoiceSetHandler(
     actor: Actor,
@@ -170,6 +183,7 @@ export class ImportOrchestrator {
   ): Promise<void> {
     this.choiceSetHandler.setEngines(engines);
     this.choiceSetHandler.setSanctificationPreference(getSanctification(actor)?.selected);
+    this.choiceSetHandler.setChoiceOverrides(getChoiceOverrides(actor));
     this.choiceSetHandler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
   }
 

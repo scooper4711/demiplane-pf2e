@@ -834,6 +834,119 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     // Fell through to the generic path, which defaults to the first option.
     expect(ctx.selection).toBe("granted");
   });
+
+  describe("user choice overrides (last resort)", () => {
+    const twoSkills = () => [
+      { value: "acrobatics", label: "Acrobatics" },
+      { value: "crafting", label: "Crafting" },
+    ];
+
+    async function runPreCreate(handler: ChoiceSetHandler, ctx: Record<string, unknown>): Promise<void> {
+      const builtin = installChoiceSetPrototype();
+      handler.enable();
+      const proto = builtin.ChoiceSet.prototype as unknown as {
+        preCreate: (this: unknown, p: unknown) => Promise<void>;
+      };
+      await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Test Feat" }, tempItems: [] });
+    }
+
+    function unmatchedHandler(): ChoiceSetHandler {
+      const handler = new ChoiceSetHandler();
+      handler.setEngines([eng({ args: {} })]);
+      return handler;
+    }
+
+    it("applies a stored override when automatic matching fails", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "crafting" });
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("crafting");
+      // Applied as a decision, not a guess: no fallback, no unresolved record.
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+
+    it("lets an automatic match win over a stored override", async () => {
+      const handler = new ChoiceSetHandler();
+      handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+      handler.setChoiceOverrides({ "test-feat::choice": "crafting" });
+      const choices = [
+        { value: "society", label: "Society" },
+        { value: "crafting", label: "Crafting" },
+      ];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      // The override names a valid option, but the matchers found society —
+      // automatic resolution always wins.
+      expect(ctx.selection).toBe("society");
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+
+    it("ignores a stale override and records the ChoiceSet as unresolved", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "survival" });
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      // "survival" is not among today's options: blind guess, flagged both ways.
+      expect(ctx.selection).toBe("acrobatics");
+      expect(handler.drainFallbacks()).toHaveLength(1);
+      expect(handler.drainUnresolvedChoices()).toEqual([
+        {
+          key: "test-feat::choice",
+          prompt: "Test Feat",
+          options: [
+            { value: "acrobatics", label: "Acrobatics" },
+            { value: "crafting", label: "Crafting" },
+          ],
+          guessedValue: "acrobatics",
+        },
+      ]);
+    });
+
+    it("labels the record with the ChoiceSet prompt when present", async () => {
+      const handler = unmatchedHandler();
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices, prompt: "Choose a skill" });
+      await runPreCreate(handler, ctx);
+
+      const [record] = handler.drainUnresolvedChoices();
+      expect(record?.prompt).toBe("Choose a skill");
+    });
+
+    it("keys by item slug when the item has one", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "domain-initiate::choice": "crafting" });
+      const choices = twoSkills();
+      const ctx = makeContext({
+        choices,
+        inflateChoices: async () => choices,
+        item: { flags: {}, getRollOptions: () => [], rules: [], name: "Domain Initiate", slug: "domain-initiate" },
+      });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("crafting");
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+
+    it("records nothing for a predicate-narrowed sole option, even with an override stored", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "other" });
+      const choices = [{ value: "heavy", label: "Heavy" }];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("heavy");
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+  });
 });
 
 describe("ChoiceSetHandler with libWrapper active", () => {

@@ -59,6 +59,7 @@ describe("applySpells", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };

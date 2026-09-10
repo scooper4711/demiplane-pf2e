@@ -1,10 +1,12 @@
 import type { DemiplaneEngineEntry } from "./types.js";
+import type { ChoiceOverrides, UnresolvedChoice } from "./types.js";
 import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
 import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
+import { resolveUserOverride, unresolvedChoiceRecord } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
 import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
 import { builtinRuleElement } from "../pf2e-types.js";
@@ -97,6 +99,14 @@ export class ChoiceSetHandler {
   private grantedFeatsByElement: Map<string, Set<string>> = new Map();
   /** Fallbacks accumulated during the current import; drained by the orchestrator. */
   private fallbacks: ChoiceSetFallback[] = [];
+  /**
+   * Per-actor user picks for ChoiceSets (`key -> option value`), loaded per
+   * import. Consulted only when automatic matching fails — never consulted,
+   * let alone preferred, when the matchers succeed.
+   */
+  private choiceOverrides: ChoiceOverrides = {};
+  /** Unresolved ChoiceSets recorded during the current import; drained by the orchestrator. */
+  private unresolvedChoices: UnresolvedChoice[] = [];
   /** A stored player sanctification preference to honor over the default, if any. */
   private sanctificationPreference: Sanctification | undefined;
   /** The sanctification decision made this import (multi-option deities only). */
@@ -111,6 +121,7 @@ export class ChoiceSetHandler {
   setEngines(engines: DemiplaneEngineEntry[]): void {
     this.currentEngines = engines;
     this.fallbacks = [];
+    this.unresolvedChoices = [];
     this.sanctificationDecision = undefined;
     this.ikonResolver = undefined;
   }
@@ -137,6 +148,22 @@ export class ChoiceSetHandler {
   drainFallbacks(): ChoiceSetFallback[] {
     const drained = this.fallbacks;
     this.fallbacks = [];
+    return drained;
+  }
+
+  /**
+   * Provides the actor's stored choice overrides for this import. Like the
+   * sanctification preference, these persist across imports on the actor and
+   * are loaded per import — deliberately NOT reset by {@link setEngines}.
+   */
+  setChoiceOverrides(overrides: ChoiceOverrides): void {
+    this.choiceOverrides = overrides;
+  }
+
+  /** Returns and clears the unresolved choices recorded since the last {@link setEngines}. */
+  drainUnresolvedChoices(): UnresolvedChoice[] {
+    const drained = this.unresolvedChoices;
+    this.unresolvedChoices = [];
     return drained;
   }
 
@@ -270,9 +297,29 @@ export class ChoiceSetHandler {
       context.item.name,
       this.grantedFeatsByElement
     );
-    const selected = matched ?? context.choices[0];
-    if (selected) {
-      this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
+    this.resolveFallbackChoice(context, params, matched, candidateSlugs);
+  }
+
+  /**
+   * Applies the fallback path when automatic matching fails: a stored user
+   * override wins if it names a current option, else the blind first option
+   * with an unresolved-choice record for the dialog. Extracted from
+   * `handlePreCreate` to keep that method under the complexity budget.
+   */
+  private resolveFallbackChoice(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    matched: Choice | null,
+    candidateSlugs: string[]
+  ): void {
+    // User overrides are strictly last-resort: consulted only when the
+    // matchers fail, so they can never win over a successful automatic match.
+    const override = matched === null ? resolveUserOverride(context, this.choiceOverrides) : null;
+    const selected = matched ?? override ?? context.choices[0];
+    if (!selected) return;
+    this.applySelectedChoice(context, params, selected, matched !== null || override !== null, candidateSlugs);
+    if (matched === null && override === null) {
+      this.unresolvedChoices.push(unresolvedChoiceRecord(context, selected));
     }
   }
 

@@ -19,6 +19,7 @@ describe("applySkillProficiencies", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -283,6 +284,7 @@ describe("applyLanguages", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -338,6 +340,7 @@ describe("applyAttributeBoosts", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };

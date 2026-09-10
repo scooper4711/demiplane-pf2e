@@ -6,6 +6,11 @@ import {
   shouldShowIndicator,
   acknowledgeIssues,
   setUnmappedSlugs,
+  getUnresolvedChoices,
+  setUnresolvedChoices,
+  getChoiceOverrides,
+  setChoiceOverride,
+  removeChoiceOverride,
   resetImportIssues,
   clearAllIssues,
   addImportIssue,
@@ -215,5 +220,96 @@ describe("sync-issues indicator (acknowledgement)", () => {
     const actor = createFlagActor() as unknown as Actor;
     setUnmappedSlugs(actor, []);
     expect(shouldShowIndicator(actor)).toBe(false);
+  });
+});
+
+describe("sync-issues choice overrides", () => {
+  it("round-trips one pick per key", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setChoiceOverride(actor, "feat::choice", "crafting");
+    setChoiceOverride(actor, "other::deity", "sarenrae");
+
+    expect(getChoiceOverrides(actor)).toEqual({ "feat::choice": "crafting", "other::deity": "sarenrae" });
+  });
+
+  it("removes a single pick without touching the rest", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setChoiceOverride(actor, "feat::choice", "crafting");
+    setChoiceOverride(actor, "other::deity", "sarenrae");
+
+    removeChoiceOverride(actor, "feat::choice");
+
+    expect(getChoiceOverrides(actor)).toEqual({ "other::deity": "sarenrae" });
+  });
+
+  it("ignores non-string stored values", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    void actor.setFlag("demiplane-pf2e", "choiceOverrides", { good: "crafting", bad: 42 });
+
+    expect(getChoiceOverrides(actor)).toEqual({ good: "crafting" });
+  });
+
+  it("storing a pick does not light the indicator", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setChoiceOverride(actor, "feat::choice", "crafting");
+
+    // An override answers an issue; it is not itself an issue.
+    expect(shouldShowIndicator(actor)).toBe(false);
+  });
+
+  it("resetImportIssues keeps overrides (they persist across imports)", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setChoiceOverride(actor, "feat::choice", "crafting");
+
+    resetImportIssues(actor);
+
+    expect(getChoiceOverrides(actor)).toEqual({ "feat::choice": "crafting" });
+  });
+});
+
+describe("sync-issues unresolved choices", () => {
+  const record = {
+    key: "feat::choice",
+    prompt: "Choose a skill",
+    options: [
+      { value: "acrobatics", label: "Acrobatics" },
+      { value: "crafting", label: "Crafting" },
+    ],
+    guessedValue: "acrobatics",
+  };
+
+  it("round-trips records", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [record]);
+
+    expect(getUnresolvedChoices(actor)).toEqual([record]);
+  });
+
+  it("replaces records wholesale so resolved choices drop out", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [record]);
+    setUnresolvedChoices(actor, []);
+
+    expect(getUnresolvedChoices(actor)).toEqual([]);
+  });
+
+  it("lights the indicator for unanswered choices", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [record]);
+
+    expect(hasActiveIssues(actor)).toBe(true);
+    expect(shouldShowIndicator(actor)).toBe(true);
+  });
+
+  it("resetImportIssues clears records but keeps overrides", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [record]);
+    setChoiceOverride(actor, "feat::choice", "crafting");
+
+    resetImportIssues(actor);
+
+    expect(getUnresolvedChoices(actor)).toEqual([]);
+    expect(getChoiceOverrides(actor)).toEqual({ "feat::choice": "crafting" });
+    expect(hasActiveIssues(actor)).toBe(false);
   });
 });

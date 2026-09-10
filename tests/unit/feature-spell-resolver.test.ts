@@ -69,7 +69,7 @@ function clericEntryWithSlots(rank: number) {
 }
 
 function emptySummary(): ImportSummary {
-  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
 }
 
 describe("feature-spell-resolver", () => {

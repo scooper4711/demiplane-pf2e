@@ -1,12 +1,16 @@
 import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
-import type { ImportSummary } from "./import/types.js";
+import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
 import { canWriteText } from "./write-level.js";
 import {
+  acknowledgeIssues,
+  getChoiceOverrides,
   getExportIssues,
   getImportIssues,
   getUnmappedSlugs,
-  acknowledgeIssues,
+  getUnresolvedChoices,
+  removeChoiceOverride,
+  setChoiceOverride,
   shouldShowIndicator,
 } from "./sync-issues.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
@@ -86,6 +90,10 @@ export async function showDemiplaneInfoDialog(
 
   const syncIssuesSection = buildSyncIssuesSection(syncIssues);
   const sanctificationSection = buildSanctificationSection(actor);
+  const unresolvedChoicesSection = buildUnresolvedChoicesSection(
+    getUnresolvedChoices(actor),
+    getChoiceOverrides(actor)
+  );
   const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
   const manualItems = actor.items.filter(isUnmanagedManualItem);
@@ -97,6 +105,7 @@ export async function showDemiplaneInfoDialog(
     lastExportDisplay,
     syncIssuesSection,
     sanctificationSection,
+    unresolvedChoicesSection,
     unmappedItemsSection,
     manualItemsSection,
   });
@@ -109,6 +118,7 @@ export async function showDemiplaneInfoDialog(
     render: (event, dialog) => {
       attachMappingEditorButton(event, dialog);
       attachSanctificationSelect(actor, dialog);
+      attachChoicesSelects(actor, dialog);
     },
   });
 }
@@ -181,6 +191,7 @@ interface DialogContentOptions {
   lastExportDisplay: string;
   syncIssuesSection: string;
   sanctificationSection: string;
+  unresolvedChoicesSection: string;
   unmappedItemsSection: string;
   manualItemsSection: string;
 }
@@ -211,6 +222,7 @@ function buildDialogContent(opts: DialogContentOptions): string {
       </section>
       ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
       ${opts.sanctificationSection}
+      ${opts.unresolvedChoicesSection}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -317,6 +329,60 @@ function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.a
     const value = select.value;
     if (!isSanctification(value)) return;
     void setSanctificationSelection(actor, value);
+  });
+}
+
+/**
+ * Renders one dropdown per ChoiceSet the last import could not resolve. Each
+ * lists the ChoiceSet's options plus an explicit "not chosen" empty state, so
+ * a blind `choices[0]` guess is never presented as the user's decision; a
+ * stored override pre-selects. Absent when nothing is unresolved.
+ */
+function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: ChoiceOverrides): string {
+  if (records.length === 0) return "";
+
+  const selects = records
+    .map((record) => {
+      const current = overrides[record.key];
+      const options = record.options
+        .map((option) => {
+          const selected = option.value === current ? " selected" : "";
+          return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+        })
+        .join("");
+      const guessedLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
+      return `
+      <p><strong>${escapeHtml(record.prompt)}:</strong>
+        <select class="demiplane-choice-select" data-choice-key="${escapeHtml(record.key)}">
+          <option value="">— choose —</option>${options}
+        </select>
+      </p>
+      <p class="hint">Guessed "${escapeHtml(guessedLabel ?? "?")}" on import. Pick the right one, then Update from Demiplane to apply it.</p>`;
+    })
+    .join("\n");
+
+  return `
+    <hr>
+    <section class="demiplane-choices">
+      <p><strong>Choices needing your input</strong> (${String(records.length)}):</p>
+      ${selects}
+    </section>`;
+}
+
+/**
+ * Wires each choice `<select>` to persist the player's pick immediately (like
+ * the sanctification selector). The pick applies on the next "Update from
+ * Demiplane", which consults stored overrides before guessing. Choosing the
+ * empty option removes a previously stored pick.
+ */
+function attachChoicesSelects(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
+  dialog.element.querySelectorAll<HTMLSelectElement>(".demiplane-choice-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      const key = select.dataset.choiceKey;
+      if (!key) return;
+      if (select.value === "") removeChoiceOverride(actor, key);
+      else setChoiceOverride(actor, key, select.value);
+    });
   });
 }
 

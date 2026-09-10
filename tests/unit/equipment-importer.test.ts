@@ -48,6 +48,7 @@ describe("applyEquipment", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -1235,6 +1236,7 @@ describe("applyCurrency", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -1300,7 +1302,7 @@ describe("applyCraftingFormulas", () => {
   });
 
   function makeSummary(): ImportSummary {
-    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
   }
 
   function formulaEngine(slug: string, name = ""): DemiplaneEngineEntry {
