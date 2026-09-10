@@ -125,6 +125,28 @@ describe("module entrypoint", () => {
     await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "none");
   });
 
+  it("finishes initialization even while the pre-release warning is still open", async () => {
+    await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "text");
+    globalThis.game.modules.get = () => ({ version: "0.9.0-beta.1" });
+    const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
+    // The warning never resolves (user hasn't dismissed it). Initialization must
+    // still complete so an import started meanwhile runs against wired singletons.
+    prompt.mockClear();
+    prompt.mockReturnValue(new Promise<void>(() => undefined));
+
+    await onceHook("ready")?.();
+
+    expect(prompt).toHaveBeenCalled();
+    // HookManager and the rest registered despite the un-dismissed dialog.
+    expect(typeof onHook("updateItem")).toBe("function");
+    expect(typeof onHook("createItem")).toBe("function");
+    expect(typeof onHook("deleteItem")).toBe("function");
+
+    prompt.mockResolvedValue(undefined);
+    globalThis.game.modules.get = () => undefined;
+    await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "none");
+  });
+
   it.each([
     ["1.0.0", false],
     ["#{VERSION}#", true],

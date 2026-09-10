@@ -51,12 +51,6 @@ Hooks.once("ready", async () => {
 async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
-  // Pre-release warning only applies once writing to Demiplane is enabled (any
-  // level other than "none").
-  if (canWriteText() && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
-    await showPreReleaseWarning();
-  }
-
   client = new DemiplaneClient();
   const storedToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
   if (storedToken) {
@@ -88,6 +82,15 @@ async function initializeModule(): Promise<void> {
   registerModuleApi(importFn, exportFn);
 
   debugLog(`API registered`);
+
+  // Show the pre-release warning last and do NOT await it: initialization
+  // (client, orchestrator, hook manager, module API) must be complete before
+  // the user can act, so an import started while the dialog is still open runs
+  // against fully-wired singletons instead of half-initialized ones. Only
+  // applies once writing to Demiplane is enabled (any level other than "none").
+  if (canWriteText() && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
+    void showPreReleaseWarning();
+  }
 }
 
 /**
