@@ -104,6 +104,31 @@ function computeActiveOverrides(
 }
 
 /**
+ * A skill-increase step whose sourceRow encodes a character level, e.g.
+ * `skill-increase-level-9` or `skill-increase-level-13-rm`. These are pure
+ * increases — they raise an already-trained skill by one rank and never
+ * represent the initial Trained step.
+ */
+const LEVELED_SKILL_INCREASE_RE = /skill-increase-level-\d+/;
+
+/**
+ * Whether a skill's steps include an explicit initial-training step.
+ *
+ * Demiplane represents initial training either as a class row
+ * (`skill-training-<class>`) or a feat-granted pick (`select-skill-<feat>`).
+ * A leveled `skill-increase-level-<n>` row is never initial training. When a
+ * skill has *only* leveled increases, its Trained step came from a source that
+ * emits no selection engine (a class's spell-tradition skill, or a background's
+ * `trainedSkills`), and the count is therefore short by that one step.
+ */
+function hasInitialTrainingStep(sourceRows: Iterable<string>): boolean {
+  for (const row of sourceRows) {
+    if (!LEVELED_SKILL_INCREASE_RE.test(row)) return true;
+  }
+  return false;
+}
+
+/**
  * Derives each skill's proficiency rank by counting its skill-selection engines.
  *
  * Demiplane emits one `core/selection/skill/increase/index.eng` per proficiency
@@ -116,6 +141,13 @@ function computeActiveOverrides(
  * Steps are de-duplicated by `sourceRow` because the character dump can repeat the
  * same engine; a genuine additional increase always carries a distinct sourceRow
  * (e.g. `skill-increase-level-9-rm`), while a duplicate repeats one.
+ *
+ * Some initial-training steps emit no selection engine at all: a class's
+ * spell-tradition skill (Psychic → Occultism) and a background's `trainedSkills`
+ * (Total Power → Intimidation) are set on the actor directly by the PF2e item, so
+ * Demiplane only sends the leveled increases stacked on top. Those skills would
+ * count one step short (Master importing as Expert), so a skill whose steps are
+ * all leveled increases gets +1 for the unrepresented Trained step.
  *
  * Class-intrinsic progression (e.g. a bard's Performance reaching Legendary via
  * class features) is set by the PF2e class item itself, not these engines, and is
@@ -139,7 +171,8 @@ function computeSkillRanks(
 
   const ranks: Record<string, number> = {};
   for (const [slug, steps] of stepsBySkill) {
-    ranks[slug] = Math.min(steps.size, PROFICIENCY_LEGENDARY);
+    const implicitTrainingStep = hasInitialTrainingStep(steps) ? 0 : 1;
+    ranks[slug] = Math.min(steps.size + implicitTrainingStep, PROFICIENCY_LEGENDARY);
   }
   return ranks;
 }

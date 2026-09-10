@@ -108,6 +108,63 @@ describe("applySkillProficiencies", () => {
     expect(actor.update).toHaveBeenCalledWith(expect.objectContaining({ "system.skills.deception.rank": 1 }));
   });
 
+  it("adds the implicit Trained step for a skill trained outside a selection engine", async () => {
+    // Kormir (L10 Psychic, Total Power background): Occultism is trained by the
+    // Psychic spell tradition and Intimidation by the background, neither of which
+    // emits a skill-training engine. Demiplane sends only the leveled increases, so
+    // each skill has two increase steps that must resolve to Master (Trained + 2),
+    // not Expert.
+    const actor = createMockActor();
+    actor.system.skills = {
+      intimidation: { rank: 1 },
+      occultism: { rank: 1 },
+    };
+    const increase = (slug: string, sourceRow: string, id: string): DemiplaneEngineEntry => ({
+      id,
+      name: "core/selection/skill/increase/index.eng",
+      type: "DemiplaneEngine",
+      args: { slug, sourceRow },
+    });
+    const engines: DemiplaneEngineEntry[] = [
+      increase("intimidation", "skill-increase-level-3", "1"),
+      increase("intimidation", "skill-increase-level-9", "2"),
+      increase("occultism", "skill-increase-level-5", "3"),
+      increase("occultism", "skill-increase-level-7", "4"),
+    ];
+    const summary = makeSummary();
+    await applySkillProficiencies(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        "system.skills.intimidation.rank": 3,
+        "system.skills.occultism.rank": 3,
+      })
+    );
+  });
+
+  it("caps an externally-trained skill at Legendary despite the implicit step", async () => {
+    // Three leveled increases on an externally-trained skill would be Trained + 3 = 4,
+    // which is already Legendary; a fourth increase must not overflow past the cap.
+    const actor = createMockActor();
+    actor.system.skills = { occultism: { rank: 1 } };
+    const increase = (sourceRow: string, id: string): DemiplaneEngineEntry => ({
+      id,
+      name: "core/selection/skill/increase/index.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "occultism", sourceRow },
+    });
+    const engines: DemiplaneEngineEntry[] = [
+      increase("skill-increase-level-5", "1"),
+      increase("skill-increase-level-7", "2"),
+      increase("skill-increase-level-11", "3"),
+      increase("skill-increase-level-15", "4"),
+    ];
+    const summary = makeSummary();
+    await applySkillProficiencies(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith(expect.objectContaining({ "system.skills.occultism.rank": 4 }));
+  });
+
   it("does not downgrade a skill the class item already ranked higher", async () => {
     // Performance is Legendary from the PF2e class item; a single selection engine
     // would compute Trained, but the upgrade-only write must leave it alone.
