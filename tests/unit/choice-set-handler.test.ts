@@ -138,6 +138,60 @@ describe("ChoiceSetHandler.presetChoiceSelections", () => {
     await handler.presetChoiceSelections(itemData, "fighter-rm");
     expect((itemData.system as { rules: Array<Record<string, unknown>> }).rules[0].selection).toBeUndefined();
   });
+
+  // A feat taken more than once (Energized Spark at L1 and L2) yields one
+  // generic-choice engine per copy, each linked to its feat instance by
+  // parentEngine === the feat engine's demiplaneEngineId.
+  function sparkChoice(name: string, parentEngineId: string) {
+    return eng({
+      name: "shared/selection/generic-choice/index.eng",
+      args: {
+        name,
+        slug: `energized-spark-rm-choice-${name.toLowerCase()}`,
+        choiceID: "energized-spark-rm-choice",
+        parentEngine: parentEngineId,
+      },
+    });
+  }
+
+  it("scopes a multi-take feat's generic choice to the matching feat instance", async () => {
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([sparkChoice("Vitality", "engine-L1"), sparkChoice("Electricity", "engine-L2")]);
+
+    const itemData: Record<string, unknown> = {
+      name: "Energized Spark",
+      system: { rules: [{ key: "ChoiceSet", flag: "energizedSpark" }] },
+    };
+    // The level-2 instance (engine id engine-L2) must resolve to Electricity,
+    // not the first-in-list Vitality.
+    await handler.presetChoiceSelections(itemData, "energized-spark-rm", "engine-L2");
+    expect((itemData.system as { rules: Array<Record<string, unknown>> }).rules[0].selection).toBe("electricity");
+  });
+
+  it("scopes the other instance of the same feat to its own choice", async () => {
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([sparkChoice("Vitality", "engine-L1"), sparkChoice("Electricity", "engine-L2")]);
+
+    const itemData: Record<string, unknown> = {
+      name: "Energized Spark",
+      system: { rules: [{ key: "ChoiceSet", flag: "energizedSpark" }] },
+    };
+    await handler.presetChoiceSelections(itemData, "energized-spark-rm", "engine-L1");
+    expect((itemData.system as { rules: Array<Record<string, unknown>> }).rules[0].selection).toBe("vitality");
+  });
+
+  it("falls back to slug matching when the feat instance has no scoped choice", async () => {
+    // No generic-choice engine points at this feat instance; the slug-based
+    // path resolves the selection instead (a single-take feat's normal flow).
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ args: { sourceRow: "select-feat-fighter-rm", slug: "power-attack-rm" } })]);
+    const itemData: Record<string, unknown> = {
+      name: "Foo",
+      system: { rules: [{ key: "ChoiceSet", flag: "choice" }] },
+    };
+    await handler.presetChoiceSelections(itemData, "fighter-rm", "engine-unmatched");
+    expect((itemData.system as { rules: Array<Record<string, unknown>> }).rules[0].selection).toBe("power-attack");
+  });
 });
 
 describe("ChoiceSetHandler preCreate monkey-patch", () => {

@@ -586,7 +586,11 @@ export class ChoiceSetHandler {
   /**
    * Pre-set ChoiceSet selections on item data before adding to actor.
    */
-  async presetChoiceSelections(itemData: Record<string, unknown>, demiplaneSlug: string): Promise<void> {
+  async presetChoiceSelections(
+    itemData: Record<string, unknown>,
+    demiplaneSlug: string,
+    featEngineId?: string
+  ): Promise<void> {
     const system = itemData.system as { rules?: Array<Record<string, unknown>> } | undefined;
     if (!system?.rules) return;
 
@@ -599,17 +603,19 @@ export class ChoiceSetHandler {
 
     for (const rule of system.rules) {
       if (rule.key !== "ChoiceSet") continue;
-      await this.presetSingleRule(itemData, rule, demiplaneSlug);
+      await this.presetSingleRule(itemData, rule, demiplaneSlug, featEngineId);
     }
   }
 
   private async presetSingleRule(
     itemData: Record<string, unknown>,
     rule: Record<string, unknown>,
-    demiplaneSlug: string
+    demiplaneSlug: string,
+    featEngineId?: string
   ): Promise<void> {
     const flagText = typeof rule.flag === "string" ? (rule.flag as string) : "choice";
-    const selection = await this.findChoiceSelection(demiplaneSlug, rule);
+    const selection =
+      this.instanceScopedGenericChoice(rule, featEngineId) ?? (await this.findChoiceSelection(demiplaneSlug, rule));
     if (selection === null) {
       debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
       return;
@@ -625,6 +631,37 @@ export class ChoiceSetHandler {
     rulesSelections[flagText] = selection;
     flags.pf2e.rulesSelections = rulesSelections;
     itemData.flags = flags;
+  }
+
+  /**
+   * Resolves a generic-choice ChoiceSet scoped to one feat instance.
+   *
+   * A feat you can take more than once (e.g. Energized Spark, once per level)
+   * yields several `shared/selection/generic-choice/index.eng` engines that all
+   * share the feat's slug — so a slug-only match gives every copy the same
+   * option. Each choice engine's `parentEngine`, however, equals the specific
+   * feat engine's `demiplaneEngineId`, so with the feat instance's id in hand we
+   * select exactly the choice made for that copy (level 1 → Vitality, level 2 →
+   * Electricity). Its trait value is the engine's name, lowercased, matching how
+   * the ChoiceSet's options are valued (e.g. "Electricity" → `electricity`).
+   *
+   * Returns null when no instance-scoped choice applies, so the caller falls
+   * back to the slug-based {@link findChoiceSelection} (single-take feats).
+   */
+  private instanceScopedGenericChoice(rule: Record<string, unknown>, featEngineId?: string): string | null {
+    if (!featEngineId || this.isCompendiumChoiceSet(rule.choices)) return null;
+
+    const choice = this.currentEngines.find(
+      (e) =>
+        e.name === "shared/selection/generic-choice/index.eng" &&
+        e.args?.parentEngine === featEngineId &&
+        typeof e.args?.name === "string"
+    );
+    if (!choice) return null;
+
+    const value = (choice.args!.name as string).toLowerCase().replace(/\s+/g, "-");
+    debugLog(`[ChoiceSet] instance-scoped generic choice for feat ${featEngineId}: ${value}`);
+    return value;
   }
 
   private async findChoiceSelection(parentSlug: string, rule: Record<string, unknown>): Promise<string | null> {
