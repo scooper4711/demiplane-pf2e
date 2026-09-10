@@ -554,10 +554,9 @@ export class HookManager {
     const target = this.resolveDeletableItem(item);
     if (!target) return;
 
-    // The item is already gone from Foundry by the time this hook fires, so the
-    // prompt governs only whether the removal is propagated to Demiplane. Guarding
-    // a destructive, hard-to-reverse write behind explicit confirmation is the
-    // whole point of this handler; write to Demiplane only if the user confirms.
+    // The item is already gone from Foundry by the time this hook fires, so this
+    // governs only whether the removal is propagated to Demiplane. Soft-delete
+    // queues immediately (reversible); hard delete prompts first (below).
     void this.confirmAndQueueDelete(actor, item.name ?? "item", target);
   }
 

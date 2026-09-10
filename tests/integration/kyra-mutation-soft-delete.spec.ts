@@ -101,11 +101,12 @@ test.describe("Kyra Soft Delete", () => {
         { timeout: 120_000 }
       );
 
-      // The dialog must offer the soft wording (proves the mode is reflected
-      // in the UI), and confirming must queue the quantity-0 change.
-      const softButton = page.getByRole("button", { name: "Set quantity to 0 on Demiplane" });
-      await softButton.waitFor({ state: "visible", timeout: 15_000 });
-      await softButton.click();
+      // Soft-delete is reversible, so it deliberately prompts nothing: the
+      // quantity-0 change queues immediately. Assert no dialog appears (a
+      // prompt here would mean the skip regressed), then push.
+      await page.waitForTimeout(3000);
+      expect(await page.getByRole("button", { name: "Set quantity to 0 on Demiplane" }).count()).toBe(0);
+      expect(await page.getByRole("button", { name: "Delete on Demiplane" }).count()).toBe(0);
 
       const pushResult = await page.evaluate(
         async ({ characterId, moduleId }) => {
