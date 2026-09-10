@@ -273,9 +273,34 @@ export async function applyAttributeBoosts(
 
   const categories = categorizeBoosts(boostEngines);
 
+  await applyClassKeyAttribute(actor, categories.classKeyAttribute, summary);
   await applyAncestryBoosts(actor, categories.ancestryBoosts, usesAlternateAncestryBoosts(engines), summary);
   await applyItemBoosts(actor, "background", categories.backgroundBoosts, summary);
   await applyLevelBoosts(actor, categories.levelBoosts, summary);
+}
+
+/**
+ * Records the character's chosen class key attribute on the class item.
+ *
+ * The key attribute is not one of the leveling boost buckets; PF2e derives the
+ * actor's `system.build.attributes.boosts.class` from the class item's
+ * `system.keyAbility.selected` every prep cycle, so that field is the single
+ * source of truth. Classes offering a single key attribute (e.g. Wizard → Int)
+ * auto-resolve `selected`, but choice classes (e.g. Champion → Str or Dex) leave
+ * it `null` until written — dropping the +1 and importing the attribute one boost
+ * short.
+ */
+async function applyClassKeyAttribute(
+  actor: Actor,
+  keyAttribute: string | undefined,
+  summary: ImportSummary
+): Promise<void> {
+  if (keyAttribute === undefined) return;
+  const item = actor.items.find((i: { type: string }) => i.type === "class");
+  if (!item) return;
+
+  await item.update({ "system.keyAbility.selected": keyAttribute });
+  summary.log.push(`+ boosts: class key attribute [${keyAttribute}]`);
 }
 
 /**
@@ -321,7 +346,17 @@ interface BoostCategories {
   ancestryBoosts: string[];
   backgroundBoosts: string[];
   levelBoosts: Record<string, string[]>;
+  /** The class key attribute (e.g. "dex" for a Champion who chose Dexterity), if any. */
+  classKeyAttribute: string | undefined;
 }
+
+/**
+ * Demiplane sourceRow for the class key-attribute boost. Unlike leveling boosts,
+ * this one is not stored in Foundry's `system.build.attributes.boosts` buckets;
+ * it lives on the class item as `system.keyAbility.selected` (see
+ * {@link applyClassKeyAttribute}).
+ */
+const CLASS_KEY_ATTRIBUTE_SOURCE_ROW = "class-key-attribute";
 
 /** Foundry stores leveling attribute boosts only at these milestone levels. */
 const BOOST_MILESTONES = [1, 5, 10, 15, 20] as const;
@@ -388,6 +423,7 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
   const ancestryBoosts: string[] = [];
   const backgroundBoosts: string[] = [];
   const levelBoosts: Record<string, string[]> = {};
+  let classKeyAttribute: string | undefined;
 
   for (const eng of boostEngines) {
     const slug = attrMap[eng.args.slug as string] || (eng.args.slug as string);
@@ -399,6 +435,8 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
       ancestryBoosts.push(slug);
     } else if (sourceRow === "background-boosts") {
       backgroundBoosts.push(slug);
+    } else if (sourceRow === CLASS_KEY_ATTRIBUTE_SOURCE_ROW) {
+      classKeyAttribute = slug;
     } else {
       const selectionGroup = (eng.args.selectionGroup as string) || "";
       const bucket = resolveBoostBucket(sourceRow, selectionGroup);
@@ -409,7 +447,7 @@ function categorizeBoosts(boostEngines: DemiplaneEngineEntry[]): BoostCategories
     }
   }
 
-  return { ancestryBoosts, backgroundBoosts, levelBoosts };
+  return { ancestryBoosts, backgroundBoosts, levelBoosts, classKeyAttribute };
 }
 
 async function applyItemBoosts(actor: Actor, type: string, boosts: string[], summary: ImportSummary): Promise<void> {

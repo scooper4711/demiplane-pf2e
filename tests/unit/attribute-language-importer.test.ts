@@ -424,6 +424,54 @@ describe("applyAttributeBoosts", () => {
     );
   });
 
+  it("records the class key attribute on the class item", async () => {
+    // Ser Andric (Champion who chose Dexterity): the class-key-attribute boost is
+    // stored on the class item as system.keyAbility.selected, not in the leveling
+    // boost buckets. A choice class leaves selected null until written, dropping
+    // the +1 (Dex imports as +2 instead of +3).
+    const actor = createMockActor();
+    const itemUpdate = vi.fn();
+    const classItem = {
+      type: "class",
+      id: "cls1",
+      system: { keyAbility: { value: ["dex", "str"] } },
+      update: itemUpdate,
+    };
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [classItem].find(fn)) as never;
+
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "dexterity", sourceRow: "class-key-attribute" },
+      },
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(itemUpdate).toHaveBeenCalledWith({ "system.keyAbility.selected": "dex" });
+    expect(summary.log.some((l) => l.includes("class key attribute"))).toBe(true);
+  });
+
+  it("skips the class key attribute when the actor has no class item", async () => {
+    const actor = createMockActor();
+    actor.items.find = ((fn: (i: Record<string, unknown>) => boolean) => [].find(fn)) as never;
+
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "core/selection/attribute/boost.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "dexterity", sourceRow: "class-key-attribute" },
+      },
+    ];
+    const summary = makeSummary();
+    await applyAttributeBoosts(actor as never, engines, summary);
+
+    expect(summary.log.some((l) => l.includes("class key attribute"))).toBe(false);
+  });
+
   it("applies level boosts to actor", async () => {
     const actor = createMockActor();
     const engines: DemiplaneEngineEntry[] = [
