@@ -163,6 +163,19 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices([{ label: "Abjuration", value: "zzz" }], engines)).toBeNull();
   });
 
+  it("resolves an Exemplar ikon whose label carries a possessive apostrophe", () => {
+    // The Divine Spark and Ikons ChoiceSet offers ikons by label (compendium
+    // UUID values); the chosen ikon is a class-feature engine (barrows-edge-rm).
+    // "Barrow's Edge" must slugify to barrows-edge to match, not barrow-s-edge.
+    const choices = [
+      { label: "Bands of Imprisonment", value: "Compendium.pf2e.class-features.Item.bands" },
+      { label: "Barrow’s Edge", value: "Compendium.pf2e.class-features.Item.barrows" },
+    ];
+    const engines = [demiEngine("tabula/class-feature/barrows-edge-rm.eng", "barrows-edge-rm")];
+
+    expect(findMatchInChoices(choices, engines)).toBe(choices[1]);
+  });
+
   it("matches generic features by substring, skipping compendium and empty values", () => {
     const engines = [demiEngine("tabula/generic-feature/darkvision.eng", "darkvision-low-light")];
 

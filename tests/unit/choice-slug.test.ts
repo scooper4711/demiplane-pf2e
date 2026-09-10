@@ -13,4 +13,12 @@ describe("toChoiceSlug", () => {
   it("falls back to the full label when nothing follows the colon", () => {
     expect(toChoiceSlug("Skill:")).toBe("skill");
   });
+
+  it("elides a possessive apostrophe instead of splitting on it", () => {
+    // The PF2e/Demiplane slug is barrows-edge, not barrow-s-edge, so the ikon
+    // ChoiceSet resolves. Both straight and curly apostrophes are handled.
+    expect(toChoiceSlug("Barrow's Edge")).toBe("barrows-edge");
+    expect(toChoiceSlug("Barrow’s Edge")).toBe("barrows-edge");
+    expect(toChoiceSlug("Skybearer's Belt")).toBe("skybearers-belt");
+  });
 });
