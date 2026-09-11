@@ -41,7 +41,7 @@ describe("runeParentId", () => {
 describe("collectRunesByParent", () => {
   it("resolves a potency rune to its parent weapon", () => {
     const map = collectRunesByParent([runeEngine("weapon-potency-1-rm", "whip-id")]);
-    expect(map.get("whip-id")).toEqual({ potency: 1, striking: 0, resilient: 0, property: [] });
+    expect(map.get("whip-id")).toEqual({ potency: 1, striking: 0, resilient: 0, reinforcing: 0, property: [] });
   });
 
   it("accumulates potency and striking on the same weapon, taking the max grade", () => {
@@ -49,7 +49,7 @@ describe("collectRunesByParent", () => {
       runeEngine("weapon-potency-2-rm", "w1"),
       runeEngine("striking-greater-rm", "w1"),
     ]);
-    expect(map.get("w1")).toEqual({ potency: 2, striking: 2, resilient: 0, property: [] });
+    expect(map.get("w1")).toEqual({ potency: 2, striking: 2, resilient: 0, reinforcing: 0, property: [] });
   });
 
   it("maps striking grades: basic=1, greater=2, major=3", () => {
@@ -89,6 +89,7 @@ describe("collectRunesByParent", () => {
       potency: 3,
       striking: 3,
       resilient: 0,
+      reinforcing: 0,
       property: ["ghostTouch", "greaterCorrosive", "greaterShock"],
     });
     expect(onUnknown).not.toHaveBeenCalled();
@@ -98,13 +99,13 @@ describe("collectRunesByParent", () => {
     const onUnknown = vi.fn();
     const map = collectRunesByParent([runeEngine("made-up-rune-rm", "w1")], onUnknown, () => false);
     expect(onUnknown).toHaveBeenCalledWith("made-up-rune-rm");
-    expect(map.get("w1")).toEqual({ potency: 0, striking: 0, resilient: 0, property: [] });
+    expect(map.get("w1")).toEqual({ potency: 0, striking: 0, resilient: 0, reinforcing: 0, property: [] });
   });
 
   it("resolves an armor potency rune the same as a weapon potency rune", () => {
     // Armor and weapon potency both land on system.runes.potency.
     const map = collectRunesByParent([runeEngine("armor-potency-1-rm", "chain-mail")]);
-    expect(map.get("chain-mail")).toEqual({ potency: 1, striking: 0, resilient: 0, property: [] });
+    expect(map.get("chain-mail")).toEqual({ potency: 1, striking: 0, resilient: 0, reinforcing: 0, property: [] });
   });
 
   it("resolves resilient runes (the armor analogue of striking): basic=1, greater=2, major=3", () => {
@@ -118,13 +119,38 @@ describe("collectRunesByParent", () => {
       runeEngine("armor-potency-2-rm", "robes"),
       runeEngine("resilient-greater-rm", "robes"),
     ]);
-    expect(map.get("robes")).toEqual({ potency: 2, striking: 0, resilient: 2, property: [] });
+    expect(map.get("robes")).toEqual({ potency: 2, striking: 0, resilient: 2, reinforcing: 0, property: [] });
+  });
+
+  it("resolves reinforcing runes (the shield's fundamental rune): minor=1..supreme=6", () => {
+    const grade = (slug: string, id: string) => collectRunesByParent([runeEngine(slug, id)]).get(id)?.reinforcing;
+    expect(grade("reinforcing-rune-minor-rm", "a")).toBe(1);
+    expect(grade("reinforcing-rune-lesser-rm", "b")).toBe(2);
+    expect(grade("reinforcing-rune-moderate-rm", "c")).toBe(3);
+    expect(grade("reinforcing-rune-greater-rm", "d")).toBe(4);
+    expect(grade("reinforcing-rune-major-rm", "e")).toBe(5);
+    expect(grade("reinforcing-rune-supreme-rm", "f")).toBe(6);
+  });
+
+  it("does not report a reinforcing rune as an unknown property rune", () => {
+    // Regression: reinforcing-rune-lesser used to slip past the fundamental-rune
+    // checks and get mis-derived as a bogus property rune (lesserReinforcingRune).
+    const onUnknown = vi.fn();
+    const map = collectRunesByParent([runeEngine("reinforcing-rune-lesser-rm", "shield-id")], onUnknown);
+    expect(map.get("shield-id")).toEqual({ potency: 0, striking: 0, resilient: 0, reinforcing: 2, property: [] });
+    expect(onUnknown).not.toHaveBeenCalled();
   });
 
   it("resolves a base-grade property rune (crushing-basic, no -rm suffix)", () => {
     const onUnknown = vi.fn();
     const map = collectRunesByParent([runeEngine("crushing-basic", "halberd")], onUnknown, (s) => s === "crushing");
-    expect(map.get("halberd")).toEqual({ potency: 0, striking: 0, resilient: 0, property: ["crushing"] });
+    expect(map.get("halberd")).toEqual({
+      potency: 0,
+      striking: 0,
+      resilient: 0,
+      reinforcing: 0,
+      property: ["crushing"],
+    });
     expect(onUnknown).not.toHaveBeenCalled();
   });
 });

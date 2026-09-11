@@ -39,6 +39,12 @@ describe("applyEquipment", () => {
           system: { slug: "whip", runes: { potency: 0, striking: 0, property: [] } },
           type: "weapon",
         },
+        {
+          _id: "shield1",
+          name: "Steel Shield",
+          system: { slug: "steel-shield", runes: { reinforcing: 0 } },
+          type: "shield",
+        },
       ]),
     });
   });
@@ -279,6 +285,44 @@ describe("applyEquipment", () => {
     expect(whip.name).toBe("Whip");
     expect((whip.system as { runes: { potency: number } }).runes.potency).toBe(1);
     expect(created.some((i) => (i.name as string)?.toLowerCase().includes("potency"))).toBe(false);
+  });
+
+  it("affixes a reinforcing rune to a shield's system.runes.reinforcing", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "shield",
+        name: "tabula/item/steel-shield-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "steel-shield-rm" },
+        demiplaneEngineId: "shield-eng-id",
+      },
+      {
+        id: "rune",
+        name: "tabula/item/reinforcing-rune-lesser-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "reinforcing-rune-lesser-rm",
+          metaItemType: "item-rune",
+          parentItemID: "shield-eng-id",
+          parentEngine: "shield-eng-id",
+        },
+        demiplaneEngineId: "rune-eng-id",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    const created = (actor.createEmbeddedDocuments as ReturnType<typeof import("vitest").vi.fn>).mock.calls.flatMap(
+      (c: unknown[]) => c[1] as Array<Record<string, unknown>>
+    );
+    // Exactly one item — the shield — with only the reinforcing rune set, and no
+    // weapon/armor rune fields leaked onto the shield's schema.
+    expect(created).toHaveLength(1);
+    const shield = created[0]!;
+    expect(shield.name).toBe("Steel Shield");
+    expect((shield.system as { runes: Record<string, unknown> }).runes).toEqual({ reinforcing: 2 });
+    expect(summary.unmapped).toEqual([]);
   });
 
   it("derives slug from engine name when args.slug is missing", async () => {
