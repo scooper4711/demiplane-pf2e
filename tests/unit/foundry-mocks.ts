@@ -114,6 +114,26 @@ export function createMockActor(initialData: { name?: string; items?: Array<Reco
         if (idx >= 0) items.splice(idx, 1);
       }
     }),
+    updateEmbeddedDocuments: vi
+      .fn()
+      .mockImplementation(async (_type: string, updates: Array<Record<string, unknown>>) => {
+        for (const update of updates) {
+          const target = items.find((i) => i.id === update._id || i._id === update._id);
+          if (!target) continue;
+          // Apply dotted-path keys (e.g. "system.hp.value") into the item.
+          for (const [path, value] of Object.entries(update)) {
+            if (path === "_id") continue;
+            const keys = path.split(".");
+            let node = target as Record<string, unknown>;
+            for (let k = 0; k < keys.length - 1; k++) {
+              node[keys[k]!] = { ...(node[keys[k]!] as Record<string, unknown>) };
+              node = node[keys[k]!] as Record<string, unknown>;
+            }
+            node[keys[keys.length - 1]!] = value;
+          }
+        }
+        return updates;
+      }),
   };
 
   return actor;

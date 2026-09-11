@@ -357,6 +357,40 @@ export class BatchItemsPhase implements ImportPhase {
 
 // ─── Phase 6: Post-import attribute/identity/spell processing ───────────────
 
+/** The minimal surface of a created actor item that {@link PostProcessingPhase} reads. */
+interface ImportedItem {
+  id: string;
+  flags?: { "demiplane-pf2e"?: { demiplaneEngineId?: string } };
+  system?: { hp?: { max?: number } };
+}
+
+/** Matches a per-item current-hit-points custom engine: `<item-engine-id>--hit-points`. */
+const ITEM_HIT_POINTS_RE = /^(.+)--hit-points$/;
+
+/** Maps each item engine id to the current hit points Demiplane recorded for it. */
+function collectHitPointsByEngineId(engines: DemiplaneEngineEntry[]): Map<string, number> {
+  const hpByEngineId = new Map<string, number>();
+  for (const eng of engines) {
+    if (eng.type !== "CustomDemiplaneEngine") continue;
+    const engineId = ITEM_HIT_POINTS_RE.exec(eng.name)?.[1];
+    const value = Number(eng.value);
+    if (engineId && Number.isFinite(value)) hpByEngineId.set(engineId, value);
+  }
+  return hpByEngineId;
+}
+
+/**
+ * The clamped current hit points to write to an item, or `undefined` when the
+ * item has no recorded HP or no computed max. Clamps to `[0, max]`.
+ */
+function clampedHitPoints(item: ImportedItem, hpByEngineId: Map<string, number>): number | undefined {
+  const engineId = item.flags?.["demiplane-pf2e"]?.demiplaneEngineId;
+  const current = engineId ? hpByEngineId.get(engineId) : undefined;
+  const max = item.system?.hp?.max;
+  if (current === undefined || typeof max !== "number") return undefined;
+  return Math.min(Math.max(current, 0), max);
+}
+
 export class PostProcessingPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
     await this.setActorIdentity(actor, ctx.engines);
@@ -391,6 +425,32 @@ export class PostProcessingPhase implements ImportPhase {
     this.addFocusUpdate(actor, findCustomValue("character_focus_current")?.value, updates);
 
     await actor.update(updates);
+    await this.syncShieldHitPoints(actor, engines);
+  }
+
+  /**
+   * Applies current shield hit points from Demiplane to the matching shield item.
+   *
+   * A damaged shield's current HP is stored as a per-item custom engine named
+   * `<item-engine-id>--hit-points` (Demiplane omits it when the shield is
+   * undamaged, so an absent engine means "full"). Unlike character HP this lives
+   * on the shield *item*, not the actor, so it's matched to the item the importer
+   * stamped with that same `demiplaneEngineId` and written to `system.hp.value`,
+   * clamped to the PF2e-computed max (which we never set).
+   */
+  private async syncShieldHitPoints(actor: Actor, engines: DemiplaneEngineEntry[]): Promise<void> {
+    const hpByEngineId = collectHitPointsByEngineId(engines);
+    if (hpByEngineId.size === 0) return;
+
+    const updates: Array<{ _id: string; "system.hp.value": number }> = [];
+    for (const item of actor.items as Iterable<ImportedItem>) {
+      const clamped = clampedHitPoints(item, hpByEngineId);
+      if (clamped !== undefined) updates.push({ _id: item.id, "system.hp.value": clamped });
+    }
+
+    if (updates.length > 0) {
+      await actor.updateEmbeddedDocuments("Item", updates);
+    }
   }
 
   /**

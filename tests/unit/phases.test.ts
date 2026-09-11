@@ -612,6 +612,74 @@ describe("import phases", () => {
         })
       );
     });
+
+    function shieldItem(engineId, hpMax) {
+      return {
+        _id: "shield-item",
+        id: "shield-item",
+        type: "shield",
+        name: "Steel Shield",
+        flags: { "demiplane-pf2e": { imported: true, demiplaneEngineId: engineId } },
+        system: { hp: { value: hpMax, max: hpMax } },
+      };
+    }
+
+    function unstampedItem() {
+      // An item the importer didn't stamp (no demiplaneEngineId) with its own hp
+      // pool — must be skipped, never matched to a hit-points engine.
+      return {
+        _id: "other",
+        id: "other",
+        type: "shield",
+        name: "Buckler",
+        flags: {},
+        system: { hp: { value: 6, max: 6 } },
+      };
+    }
+
+    it("applies a damaged shield's current HP to the matching shield item", async () => {
+      // Mix in an unstamped item and a non-custom engine to exercise the guards.
+      const actor = createMockActor({ items: [shieldItem("shield-eng", 72), unstampedItem()] });
+      const ctx = makeCtx([
+        customEngine("shield-eng--hit-points", 42),
+        demiEngine("tabula/item/steel-shield-rm.eng", { slug: "steel-shield-rm" }),
+      ]);
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.updateEmbeddedDocuments).toHaveBeenCalledWith("Item", [
+        { _id: "shield-item", "system.hp.value": 42 },
+      ]);
+    });
+
+    it("clamps shield HP to the item's computed max", async () => {
+      const actor = createMockActor({ items: [shieldItem("shield-eng", 72)] });
+      const ctx = makeCtx([customEngine("shield-eng--hit-points", 999)]);
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.updateEmbeddedDocuments).toHaveBeenCalledWith("Item", [
+        { _id: "shield-item", "system.hp.value": 72 },
+      ]);
+    });
+
+    it("does not touch shields when no hit-points engine is present", async () => {
+      const actor = createMockActor({ items: [shieldItem("shield-eng", 72)] });
+      const ctx = makeCtx([]);
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
+    });
+
+    it("ignores a hit-points engine with no matching item", async () => {
+      const actor = createMockActor({ items: [shieldItem("shield-eng", 72)] });
+      const ctx = makeCtx([customEngine("some-other-engine--hit-points", 10)]);
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
+    });
   });
 
   describe("RemoveDuplicatesPhase", () => {
