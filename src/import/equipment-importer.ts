@@ -437,6 +437,14 @@ function applyRunesToItem(data: Record<string, unknown>, runes: WeaponRunes | un
 
   const system = data.system as Record<string, unknown>;
   const existing = (system.runes as Partial<WeaponRunes> | undefined) ?? {};
+
+  // A shield's only rune is `reinforcing` — its schema has no potency, striking,
+  // or property runes — so write that field alone and nothing else.
+  if (data.type === "shield") {
+    system.runes = { reinforcing: Math.max(existing.reinforcing ?? 0, runes.reinforcing) };
+    return;
+  }
+
   const existingProperty = Array.isArray(existing.property) ? existing.property : [];
 
   // Armor and weapons share potency and property runes but differ in their

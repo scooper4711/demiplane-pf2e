@@ -17,7 +17,7 @@ const CHARACTER_ID = "char-123";
 const TOKEN = "token-abc";
 
 function summary(overrides = {}) {
-  return { itemsImported: 3, itemsSkipped: 0, unmapped: [], errors: [], log: [], ...overrides };
+  return { itemsImported: 3, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [], ...overrides };
 }
 
 function makeDeps(overrides = {}) {
@@ -68,6 +68,17 @@ describe("sync-flows", () => {
       expect(isSyncActive(actor)).toBe(true);
       await vi.runAllTimersAsync();
       expect(isSyncActive(actor)).toBe(false);
+    });
+
+    it("persists unresolved choices from the import summary", async () => {
+      const { deps, importCharacter } = makeDeps();
+      const actor = linkedActor();
+      const records = [{ key: "feat::choice", prompt: "Choose", options: [], guessedValue: null }];
+      importCharacter.mockResolvedValue(summary({ unresolvedChoices: records }));
+
+      await importLinkedCharacter(actor, CHARACTER_ID, TOKEN, deps);
+
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "unresolvedChoices", records);
     });
 
     it("toasts that the import is starting and warns not to modify the actor", async () => {

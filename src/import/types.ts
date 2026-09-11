@@ -44,6 +44,12 @@ export interface ImportSummary {
    * via `formatUnmapped` rather than stored alongside.
    */
   unmapped: UnmappedSlug[];
+  /**
+   * ChoiceSets no automatic strategy could resolve (and no valid user override
+   * covered). Carried so the sync dialog can offer them for a manual pick;
+   * human-readable text is derived at render time, never stored.
+   */
+  unresolvedChoices: UnresolvedChoice[];
   errors: string[];
   log: string[];
 }
@@ -83,6 +89,36 @@ export interface UnmappedSlug {
 export function formatUnmapped(record: UnmappedSlug): string {
   const suffix = record.slot ? ` (${record.slot})` : "";
   return `Could not import ${record.kind} "${record.slug}"${suffix}: not found in compendium`;
+}
+
+/**
+ * Stable identity for one ChoiceSet on one actor: the owning item's slug plus
+ * the rule's own selection flag. The flag is stable per rule definition (unlike
+ * array index or prompt text) and the item slug disambiguates items that reuse
+ * generic flag names like "choice".
+ */
+export type ChoiceKey = string;
+
+/** A per-actor user pick for a ChoiceSet, keyed by {@link ChoiceKey}. */
+export type ChoiceOverrides = Record<ChoiceKey, string>;
+
+/**
+ * A ChoiceSet the automatic strategies could not resolve, recorded for the
+ * sync dialog. `source` says how it was applied this import: a blind
+ * `choices[0]` guess (needs the user's input) or a stored user pick (in
+ * effect; deletable). Records are replaced wholesale each import.
+ */
+export interface UnresolvedChoice {
+  /** Stable identity for this ChoiceSet on this actor (see {@link ChoiceKey}). */
+  key: ChoiceKey;
+  /** How this ChoiceSet was applied: blind guess or stored user pick. */
+  source: "guess" | "override";
+  /** Human label: the ChoiceSet prompt, or the granting item's name. */
+  prompt: string;
+  /** The options to offer, with serializable values for matching. */
+  options: { value: string; label: string }[];
+  /** What the blind `choices[0]` fallback applied or would apply, for display ("we guessed X"). */
+  guessedValue: string | null;
 }
 
 /**

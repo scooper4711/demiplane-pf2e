@@ -39,6 +39,12 @@ describe("applyEquipment", () => {
           system: { slug: "whip", runes: { potency: 0, striking: 0, property: [] } },
           type: "weapon",
         },
+        {
+          _id: "shield1",
+          name: "Steel Shield",
+          system: { slug: "steel-shield", runes: { reinforcing: 0 } },
+          type: "shield",
+        },
       ]),
     });
   });
@@ -48,6 +54,7 @@ describe("applyEquipment", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -278,6 +285,44 @@ describe("applyEquipment", () => {
     expect(whip.name).toBe("Whip");
     expect((whip.system as { runes: { potency: number } }).runes.potency).toBe(1);
     expect(created.some((i) => (i.name as string)?.toLowerCase().includes("potency"))).toBe(false);
+  });
+
+  it("affixes a reinforcing rune to a shield's system.runes.reinforcing", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "shield",
+        name: "tabula/item/steel-shield-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "steel-shield-rm" },
+        demiplaneEngineId: "shield-eng-id",
+      },
+      {
+        id: "rune",
+        name: "tabula/item/reinforcing-rune-lesser-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "reinforcing-rune-lesser-rm",
+          metaItemType: "item-rune",
+          parentItemID: "shield-eng-id",
+          parentEngine: "shield-eng-id",
+        },
+        demiplaneEngineId: "rune-eng-id",
+      },
+    ];
+    const summary = makeSummary();
+    await applyEquipment(actor as never, engines, summary);
+
+    const created = (actor.createEmbeddedDocuments as ReturnType<typeof import("vitest").vi.fn>).mock.calls.flatMap(
+      (c: unknown[]) => c[1] as Array<Record<string, unknown>>
+    );
+    // Exactly one item — the shield — with only the reinforcing rune set, and no
+    // weapon/armor rune fields leaked onto the shield's schema.
+    expect(created).toHaveLength(1);
+    const shield = created[0]!;
+    expect(shield.name).toBe("Steel Shield");
+    expect((shield.system as { runes: Record<string, unknown> }).runes).toEqual({ reinforcing: 2 });
+    expect(summary.unmapped).toEqual([]);
   });
 
   it("derives slug from engine name when args.slug is missing", async () => {
@@ -1121,28 +1166,15 @@ describe("applyEquipment", () => {
       return { summary, name };
     }
 
-    it("resolves -9th-rank-rm to the -9th-rank-spell compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-widening-9th-rank-rm");
+    it.each([
+      ["wand-of-widening-9th-rank-rm", "Wand of Widening (9th-Rank Spell)"],
+      ["wand-of-spiritual-warfare-8th-level-spell", "Wand of Spiritual Warfare (8th-Rank Spell)"],
+      ["wand-of-the-snowfields-5th-level-spell", "Wand of the Snowfields (5th-Rank Spell)"],
+      ["wand-of-legerdemain-9th-level-spell", "Wand of Legerdemain (9th-rank)"],
+    ])("resolves %s to the compendium item", async (input, expected) => {
+      const { summary, name } = await importNamedWand(input);
       expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Widening (9th-Rank Spell)");
-    });
-
-    it("resolves -8th-level-spell to the -8th-rank-spell compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-spiritual-warfare-8th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Spiritual Warfare (8th-Rank Spell)");
-    });
-
-    it("resolves the Snowfields -level-spell shell to the real -rank-spell item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-the-snowfields-5th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of the Snowfields (5th-Rank Spell)");
-    });
-
-    it("resolves Legerdemain -level-spell to the bare -rank compendium item", async () => {
-      const { summary, name } = await importNamedWand("wand-of-legerdemain-9th-level-spell");
-      expect(summary.unmapped).toEqual([]);
-      expect(name).toBe("Wand of Legerdemain (9th-rank)");
+      expect(name).toBe(expected);
     });
   });
 
@@ -1248,6 +1280,7 @@ describe("applyCurrency", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
@@ -1313,7 +1346,7 @@ describe("applyCraftingFormulas", () => {
   });
 
   function makeSummary(): ImportSummary {
-    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
   }
 
   function formulaEngine(slug: string, name = ""): DemiplaneEngineEntry {

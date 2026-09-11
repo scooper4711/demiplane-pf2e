@@ -7,7 +7,7 @@ const CHARACTER_ID = "char-123";
 const TOKEN = "token-abc";
 
 function summary(overrides = {}) {
-  return { itemsImported: 4, itemsSkipped: 0, unmapped: [], errors: [], log: [], ...overrides };
+  return { itemsImported: 4, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [], ...overrides };
 }
 
 function linkedActor(id: string) {
@@ -80,6 +80,41 @@ describe("actor-context-menu", () => {
       globalThis.game.actors.contents = [linkedActor("a1")];
       const option = buildUpdateFromDemiplaneOption(vi.fn());
       expect(option.visible(entryElement("a1"))).toBe(true);
+    });
+
+    it("greys (but keeps) the option while a sync is in flight", () => {
+      const actor = linkedActor("a1");
+      actor.flags[MODULE_ID] = { characterId: CHARACTER_ID, syncActiveTokens: ["in-flight"] };
+      globalThis.game.actors.contents = [actor];
+      const option = buildUpdateFromDemiplaneOption(vi.fn());
+
+      // Still visible — greyed, not hidden. Reading classes requires the
+      // visible() call first: it refreshes them as a side effect.
+      expect(option.visible(entryElement("a1"))).toBe(true);
+      expect(option.classes).toBe("demiplane-sync-disabled");
+    });
+
+    it("leaves classes empty when idle", () => {
+      globalThis.game.actors.contents = [linkedActor("a1")];
+      const option = buildUpdateFromDemiplaneOption(vi.fn());
+
+      expect(option.visible(entryElement("a1"))).toBe(true);
+      expect(option.classes).toBe("");
+    });
+
+    it("silently skips the click while syncing", async () => {
+      const importCharacter = vi.fn();
+      const actor = linkedActor("a1");
+      actor.flags[MODULE_ID] = { characterId: CHARACTER_ID, syncActiveTokens: ["in-flight"] };
+      globalThis.game.actors.contents = [actor];
+      const option = buildUpdateFromDemiplaneOption(importCharacter);
+
+      await option.onClick({}, entryElement("a1"));
+
+      expect(importCharacter).not.toHaveBeenCalled();
+      expect(globalThis.foundry.applications.api.DialogV2.confirm).not.toHaveBeenCalled();
+      expect(globalThis.ui.notifications.error).not.toHaveBeenCalled();
+      expect(globalThis.ui.notifications.warn).not.toHaveBeenCalled();
     });
 
     it("returns early on click when the actor is gone", async () => {

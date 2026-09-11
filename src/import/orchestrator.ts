@@ -21,7 +21,7 @@ import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
-import { getSanctification, recordSanctificationChoice } from "../sanctification.js";
+import { getChoiceOverrides } from "../sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
@@ -59,7 +59,6 @@ const CHARACTER_DATA_QUERY = `query($id: uuid!) {
 }`;
 
 export class ImportOrchestrator {
-  private readonly choiceSetHandler = new ChoiceSetHandler();
   private readonly client: DemiplaneClient | undefined;
 
   /**
@@ -74,7 +73,14 @@ export class ImportOrchestrator {
 
   async importCharacter(actor: Actor, characterId: string, options: ImportOptions = {}): Promise<ImportSummary> {
     const { token } = options;
-    const summary: ImportSummary = { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
 
     const fetched = await this.fetchCharacterEngines(characterId, token, summary);
     if (!fetched) return summary;
@@ -93,13 +99,20 @@ export class ImportOrchestrator {
     // eslint-disable-next-line no-console -- single always-on log per pull
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
 
-    await this.prepareChoiceSetHandler(actor, engines, cacheEngineIds);
+    // ChoiceSet handling is per-import so concurrent imports of different actors
+    // don't share engines/overrides/fallbacks. The handler's prototype patch is
+    // ref-counted and routes by actor id.
+    const handler = new ChoiceSetHandler();
+    // eslint-disable-next-line no-restricted-syntax -- Actor id is not in the published Actor type
+    const actorId = (actor as unknown as { id: string }).id ?? characterId;
+    handler.beginImport(actorId, actor.name as string | undefined);
+    await this.prepareChoiceSetHandler(handler, actor, engines, cacheEngineIds);
     const selectionData = buildSelectionData(engines);
     const categorized = categorizeEngines(engines);
     const ctx: ImportContext = {
       engines,
       summary,
-      choiceSetHandler: this.choiceSetHandler,
+      choiceSetHandler: handler,
       categorized,
       selectionData,
       grantResolvedSlugs: new Set(),
@@ -118,22 +131,26 @@ export class ImportOrchestrator {
     }) as (...args: unknown[]) => void);
 
     try {
-      this.choiceSetHandler.enable();
+      handler.enable();
       for (const phase of this.buildPipeline()) {
         await phase.run(actor, ctx);
       }
     } finally {
       Hooks.off("preCreateItem", importHookId);
-      this.choiceSetHandler.disable();
+      handler.disable();
+      handler.endImport();
     }
 
     // Surface any unresolved ChoiceSets (defaulted to a guess) as import issues
     // so the GM can review and correct them on the actor sheet.
-    for (const fallback of this.choiceSetHandler.drainFallbacks()) {
+    for (const fallback of handler.drainFallbacks()) {
       summary.errors.push(formatChoiceSetFallback(fallback));
     }
 
-    await this.persistSanctification(actor, summary);
+    // Structured unresolved-choice records for the sync dialog's dropdowns.
+    // Drained here (not in a phase) because the handler accumulates them
+    // across the whole pipeline, exactly like the fallbacks above.
+    summary.unresolvedChoices = handler.drainUnresolvedChoices();
 
     // Flag variant rules the character relies on that aren't enabled in the
     // Foundry world (e.g. Gradual Ability Boosts, Mythic), which would otherwise
@@ -148,44 +165,19 @@ export class ImportOrchestrator {
   }
 
   /**
-   * Persists the per-character sanctification state and, only the first time,
-   * surfaces a sync issue asking the player to confirm the guessed value.
-   *
-   * A "must be" deity produces no decision (nothing to persist or flag). A "can
-   * be" deity does: we store its options and current selection so the sync
-   * dialog can show a selector and a later re-import honors the choice. The
-   * confirmation note is shown only while the choice is unacknowledged — once the
-   * player sets it in the dialog, `recordSanctificationChoice` keeps it
-   * acknowledged and this stops flagging it.
-   */
-  /**
-   * Primes the ChoiceSet handler for this import: seeds the engine data and any
-   * previously chosen sanctification, so a re-import honors the player's choice
-   * instead of reverting to the affirmative default.
+   * Primes the ChoiceSet handler for this import: seeds the engine data and the
+   * actor's stored choice overrides, so a re-import honors the player's past
+   * decisions instead of re-guessing.
    */
   private async prepareChoiceSetHandler(
+    handler: ChoiceSetHandler,
     actor: Actor,
     engines: DemiplaneEngineEntry[],
     cacheEngineIds: string[]
   ): Promise<void> {
-    this.choiceSetHandler.setEngines(engines);
-    this.choiceSetHandler.setSanctificationPreference(getSanctification(actor)?.selected);
-    this.choiceSetHandler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
-  }
-
-  private async persistSanctification(actor: Actor, summary: ImportSummary): Promise<void> {
-    const decision = this.choiceSetHandler.drainSanctificationDecision();
-    if (!decision) return;
-
-    await recordSanctificationChoice(actor, decision.options, decision.selected);
-
-    const alreadyChosen = decision.fromPreference || getSanctification(actor)?.acknowledged === true;
-    if (!alreadyChosen) {
-      summary.errors.push(
-        `Demiplane doesn't export your deity's sanctification, so it defaulted to "${decision.selected}". ` +
-          `Your deity lets you choose — set it in the Demiplane sync panel if this is wrong.`
-      );
-    }
+    handler.setEngines(engines);
+    handler.setChoiceOverrides(getChoiceOverrides(actor));
+    handler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
   }
 
   private buildPipeline(): ImportPhase[] {

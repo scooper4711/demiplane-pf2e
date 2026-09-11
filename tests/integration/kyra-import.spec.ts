@@ -38,11 +38,11 @@ test.describe("Kyra Import", () => {
   });
 
   test("no import errors", () => {
-    // Demiplane doesn't export deity sanctification, so the import defaults
-    // to holy and flags it once. Everything else (including the Deity and
-    // Domain Initiate ChoiceSets) resolves cleanly.
+    // Demiplane doesn't export deity sanctification, so the generic blind
+    // fallback guesses once and flags it. Everything else (including the
+    // Deity and Domain Initiate ChoiceSets) resolves cleanly.
     expect(result.summary.errors).toHaveLength(1);
-    expect(result.summary.errors[0]).toMatch(/sanctification.*holy/i);
+    expect(result.summary.errors[0]).toMatch(/couldn't determine the choice for/i);
     expect(result.summary.itemsSkipped).toBe(0);
   });
 
@@ -59,8 +59,9 @@ test.describe("Kyra Import", () => {
     const names = result.feats.map((f) => f.name);
     expect(names).toContain("Student of the Canon");
     expect(names).toContain("Cleric Spellcasting");
-    expect(names).toContain("Divine Font");
-    expect(names).toContain("Domain Initiate");
+    // Resolved ChoiceSets rename the item like the UI does ("Feat (Choice)").
+    expect(names).toContain("Divine Font (Healing)");
+    expect(names).toContain("Domain Initiate (Fire)");
   });
 
   test("imports background lore and languages", () => {

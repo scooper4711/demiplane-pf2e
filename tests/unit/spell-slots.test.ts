@@ -5,7 +5,7 @@ import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types
 const FEATURE = "bard-spellcasting-rm";
 
 function makeSummary(): ImportSummary {
-  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
 }
 
 /**

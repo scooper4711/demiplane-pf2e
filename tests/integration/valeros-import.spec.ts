@@ -91,7 +91,8 @@ test.describe("Valeros Level 5 Import", () => {
     const feats = result.feats;
     expect(feats.find((f) => f.name === "Reactive Strike")).toBeDefined();
     expect(feats.find((f) => f.name === "Bravery")).toBeDefined();
-    expect(feats.find((f) => f.name === "Fighter Weapon Mastery")).toBeDefined();
+    // Resolved ChoiceSets rename the item like the UI does ("Feat (Choice)").
+    expect(feats.find((f) => f.name === "Fighter Weapon Mastery (Sword)")).toBeDefined();
   });
   test("applies correct languages", () => {
     expect(result.languages).toContain("common");

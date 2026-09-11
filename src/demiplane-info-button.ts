@@ -1,29 +1,22 @@
 import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
-import type { ImportSummary } from "./import/types.js";
+import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
 import { canWriteText } from "./write-level.js";
+import { isSyncActive } from "./sync-pause.js";
+import { localizeChoiceLabel } from "./import/choice-overrides.js";
 import {
+  acknowledgeIssues,
+  getChoiceOverrides,
   getExportIssues,
   getImportIssues,
   getUnmappedSlugs,
-  acknowledgeIssues,
+  getUnresolvedChoices,
+  removeChoiceOverride,
+  setChoiceOverride,
   shouldShowIndicator,
 } from "./sync-issues.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
-import {
-  getSanctification,
-  setSanctificationSelection,
-  isSanctification,
-  type Sanctification,
-} from "./sanctification.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
-
-/** Human-readable labels for the sanctification select options. */
-const SANCTIFICATION_LABELS: Record<Sanctification, string> = {
-  holy: "Holy",
-  unholy: "Unholy",
-  none: "None",
-};
 
 type ImportCharacterFn = (
   actor: Actor,
@@ -85,7 +78,10 @@ export async function showDemiplaneInfoDialog(
   const indicatorActive = shouldShowIndicator(actor);
 
   const syncIssuesSection = buildSyncIssuesSection(syncIssues);
-  const sanctificationSection = buildSanctificationSection(actor);
+  const unresolved = getUnresolvedChoices(actor);
+  const overrides = getChoiceOverrides(actor);
+  const unresolvedChoicesSection = buildUnresolvedChoicesSection(unresolved, overrides);
+  const choicePicksSection = buildChoicePicksSection(unresolved, overrides);
   const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
   const manualItems = actor.items.filter(isUnmanagedManualItem);
@@ -96,7 +92,8 @@ export async function showDemiplaneInfoDialog(
     lastImportDisplay,
     lastExportDisplay,
     syncIssuesSection,
-    sanctificationSection,
+    unresolvedChoicesSection,
+    choicePicksSection,
     unmappedItemsSection,
     manualItemsSection,
   });
@@ -108,7 +105,8 @@ export async function showDemiplaneInfoDialog(
     buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, indicatorActive),
     render: (event, dialog) => {
       attachMappingEditorButton(event, dialog);
-      attachSanctificationSelect(actor, dialog);
+      attachChoicesSelects(actor, dialog);
+      attachChoiceDeletes(actor, dialog);
     },
   });
 }
@@ -139,6 +137,11 @@ function buildDialogButtons(
       action: "update",
       label: "Update from Demiplane",
       icon: "fa-solid fa-sync",
+      // Greyed while this actor is syncing: a second import would race the
+      // first (concurrent wipes, interleaved pushes). The dialog closes on
+      // submit, so no toggle is needed — a reopened dialog re-reads the state.
+      disabled: isSyncActive(actor),
+      tooltip: isSyncActive(actor) ? "An import or push is already in progress for this character." : "",
       callback: () => performUpdate(actor, characterId, importCharacter),
     },
     buildPushButton(actor, exportCharacter),
@@ -158,19 +161,25 @@ function buildDialogButtons(
 }
 
 /**
- * The "Push to Demiplane" button. Auto-sync is the master write switch, so when
- * it is off the button is disabled with a tooltip explaining why — pushing would
- * be a no-op, so it is better to prevent the click than to report a misleading
- * "pushed" success.
+ * The "Push to Demiplane" button. Disabled when writing is off (pushing would
+ * be a no-op) or while a sync is already in flight for the actor (a second
+ * push would race it) — each with a tooltip explaining why, so the button
+ * reads as inactive rather than broken.
  */
 function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
   const writingOn = canWriteText();
+  const syncing = isSyncActive(actor);
+  const tooltip = !writingOn
+    ? "Set a “Write to Demiplane” level in the module settings to push to Demiplane."
+    : syncing
+      ? "An import or push is already in progress for this character."
+      : "";
   return {
     action: "push",
     label: "Push to Demiplane",
     icon: "fa-solid fa-upload",
-    disabled: !writingOn,
-    tooltip: writingOn ? "" : "Set a “Write to Demiplane” level in the module settings to push to Demiplane.",
+    disabled: !writingOn || syncing,
+    tooltip,
     callback: () => exportCharacter(actor),
   };
 }
@@ -180,7 +189,8 @@ interface DialogContentOptions {
   lastImportDisplay: string;
   lastExportDisplay: string;
   syncIssuesSection: string;
-  sanctificationSection: string;
+  unresolvedChoicesSection: string;
+  choicePicksSection: string;
   unmappedItemsSection: string;
   manualItemsSection: string;
 }
@@ -210,7 +220,8 @@ function buildDialogContent(opts: DialogContentOptions): string {
         <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
       ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
-      ${opts.sanctificationSection}
+      ${opts.unresolvedChoicesSection}
+      ${opts.choicePicksSection}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -277,46 +288,118 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Renders the sanctification selector — only for characters whose deity presents
- * a real holy/unholy/none choice (a "can be" deity). Demiplane doesn't export
- * the choice, so the import guesses; this lets the player correct it. Absent for
- * "must be" deities (deterministic) and non-deity classes, so the section simply
- * doesn't render for them.
+ * Renders one dropdown per ChoiceSet the last import guessed at. Each lists
+ * the ChoiceSet's options plus an explicit "not chosen" empty state, so a
+ * blind `choices[0]` guess is never presented as the user's decision; a
+ * stored override pre-selects. Absent when nothing needs input.
  */
-function buildSanctificationSection(actor: Actor): string {
-  const state = getSanctification(actor);
-  if (!state) return "";
+function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: ChoiceOverrides): string {
+  const pending = records.filter((r) => r.source === "guess");
+  if (pending.length === 0) return "";
 
-  const options = state.options
-    .map((value) => {
-      const selected = value === state.selected ? " selected" : "";
-      return `<option value="${value}"${selected}>${escapeHtml(SANCTIFICATION_LABELS[value])}</option>`;
+  const selects = pending
+    .map((record) => {
+      const current = overrides[record.key];
+      const options = record.options
+        .map((option) => {
+          const selected = option.value === current ? " selected" : "";
+          return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(localizeChoiceLabel(option.label))}</option>`;
+        })
+        .join("");
+      const guessedLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
+      return `
+      <p><strong>${escapeHtml(localizeChoiceLabel(record.prompt))}:</strong>
+        <select class="demiplane-choice-select" data-choice-key="${escapeHtml(record.key)}">
+          <option value="">— choose —</option>${options}
+        </select>
+      </p>
+      <p class="hint">Guessed "${escapeHtml(localizeChoiceLabel(guessedLabel ?? "?"))}" on import. Pick the right one, then Update from Demiplane to apply it.</p>`;
     })
-    .join("");
+    .join("\n");
 
   return `
     <hr>
-    <section class="demiplane-sanctification">
-      <p><strong>Sanctification:</strong>
-        <select class="demiplane-sanctification-select">${options}</select>
-      </p>
-      <p class="hint">Demiplane doesn't export this, so it was guessed on import. Set it here, then Update from Demiplane to apply it.</p>
+    <section class="demiplane-choices">
+      <p><strong>Choices needing your input</strong> (${String(pending.length)}):</p>
+      ${selects}
     </section>`;
 }
 
 /**
- * Wires the sanctification `<select>` to persist the player's choice. The choice
- * is applied on the next "Update from Demiplane": the import honors the stored
- * preference and stops flagging it. (Applying it live would mean rewriting the
- * deity feature's ChoiceSet rules array, which is error-prone, so we defer to
- * the import that already sets sanctification correctly.)
+ * Renders every stored pick — the ChoiceSets resolving from user overrides
+ * plus stale picks whose ChoiceSet no longer fails (auto-resolves now, or is
+ * gone). Each row names what is in effect and offers a delete button: deleting
+ * is the manual garbage collection (the next import then guesses and
+ * re-reports the ChoiceSet for a fresh pick). Absent when no picks are stored.
  */
-function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
-  const select = dialog.element.querySelector<HTMLSelectElement>(".demiplane-sanctification-select");
-  select?.addEventListener("change", () => {
-    const value = select.value;
-    if (!isSanctification(value)) return;
-    void setSanctificationSelection(actor, value);
+function buildChoicePicksSection(records: UnresolvedChoice[], overrides: ChoiceOverrides): string {
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) return "";
+
+  const rows = keys
+    .map((key) => {
+      const record = records.find((r) => r.key === key);
+      const stored = overrides[key] ?? "";
+      let detail: string;
+      if (!record) {
+        detail = `value "${escapeHtml(stored)}" <span class="hint">(stale — no longer applies to any ChoiceSet)</span>`;
+      } else if (record.source === "override") {
+        const selectedLabel = record.options.find((o) => o.value === stored)?.label ?? stored;
+        const guessLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
+        detail = `your pick "${escapeHtml(localizeChoiceLabel(selectedLabel))}" is in effect (would have guessed "${escapeHtml(localizeChoiceLabel(guessLabel ?? "?"))}")`;
+      } else {
+        detail = `stored pick "${escapeHtml(stored)}" is stale — the ChoiceSet offered different options`;
+      }
+      const label = record ? escapeHtml(localizeChoiceLabel(record.prompt)) : escapeHtml(key);
+      return `<li>${label}: ${detail}
+        <button type="button" class="demiplane-choice-delete" data-choice-key="${escapeHtml(key)}" title="Delete this pick">
+          <i class="fa-solid fa-trash" inert></i> Delete
+        </button></li>`;
+    })
+    .join("\n");
+
+  return `
+    <hr>
+    <section class="demiplane-choices-applied">
+      <p><strong>Your picks in effect</strong> (${String(keys.length)}):</p>
+      <ul>${rows}</ul>
+      <p class="hint">Delete a pick, then Update from Demiplane to re-resolve it.</p>
+    </section>`;
+}
+
+/**
+ * Wires each choice `<select>` to persist the player's pick immediately (like
+ * the sanctification selector). The pick applies on the next "Update from
+ * Demiplane", which consults stored overrides before guessing. Choosing the
+ * empty option removes a previously stored pick.
+ */
+function attachChoicesSelects(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
+  dialog.element.querySelectorAll<HTMLSelectElement>(".demiplane-choice-select").forEach((select) => {
+    select.addEventListener("change", () => {
+      const key = select.dataset.choiceKey;
+      if (!key) return;
+      if (select.value === "") removeChoiceOverride(actor, key);
+      else setChoiceOverride(actor, key, select.value);
+    });
+  });
+}
+
+/**
+ * Wires each pick's delete button to drop the stored override and remove its
+ * row (plus the section if it was the last row). The pick stops applying on
+ * the next Update from Demiplane, which falls back to guessing and re-reports
+ * the ChoiceSet for a fresh pick.
+ */
+function attachChoiceDeletes(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
+  dialog.element.querySelectorAll<HTMLButtonElement>(".demiplane-choice-delete").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.choiceKey;
+      if (!key) return;
+      removeChoiceOverride(actor, key);
+      button.closest("li")?.remove();
+      const section = dialog.element.querySelector(".demiplane-choices-applied");
+      if (section && section.querySelectorAll("li").length === 0) section.remove();
+    });
   });
 }
 

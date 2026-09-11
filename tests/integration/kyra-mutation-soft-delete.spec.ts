@@ -10,6 +10,7 @@ import {
   setWriteLevel,
   restoreWriteLevel,
   waitForSyncRelease,
+  storeGuessedPicks,
 } from "./helpers.js";
 
 const CHARACTER_UUID = process.env.KYRA_UUID ?? "";
@@ -50,6 +51,9 @@ test.describe("Kyra Soft Delete", () => {
       await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
       const imported = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
       expect(imported.summary.errors).toHaveLength(1);
+      // Adopt the guesses so later re-imports apply silently instead of
+      // re-flagging; correctness of picks is covered by reimport.spec.ts.
+      await storeGuessedPicks(page, CHARACTER_UUID, imported.summary.unresolvedChoices);
       // Imports hold the export suspension for seconds AFTER returning; any
       // mutation inside that window loses its hook queues (deletes
       // unrecoverably), so wait it out before touching the actor.
@@ -103,10 +107,12 @@ test.describe("Kyra Soft Delete", () => {
 
       // Soft-delete is reversible, so it deliberately prompts nothing: the
       // quantity-0 change queues immediately. Assert no dialog appears (a
-      // prompt here would mean the skip regressed), then push.
-      await page.waitForTimeout(3000);
-      expect(await page.getByRole("button", { name: "Set quantity to 0 on Demiplane" }).count()).toBe(0);
-      expect(await page.getByRole("button", { name: "Delete on Demiplane" }).count()).toBe(0);
+      // prompt here would mean the skip regressed), then push. The delete
+      // hook runs synchronously inside delete(), so only the dialog's own
+      // async render needs flushing — two animation frames, no fixed sleep.
+      await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+      await expect(page.getByRole("button", { name: "Set quantity to 0 on Demiplane" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
 
       const pushResult = await page.evaluate(
         async ({ characterId, moduleId }) => {

@@ -126,15 +126,15 @@ function breakOneTie(
 
 /**
  * Picks the winning weapon among several candidates: the equipped weapon when it
- * qualifies, otherwise the first candidate in a stable (sorted) order so a given
- * character always imports the same way.
+ * qualifies, otherwise the first candidate in locale-aware alphabetical order so
+ * a given character always imports the same way.
  */
 function chooseTieBreakWinner(candidates: Set<string>, context: WeaponContext): string {
   const { equippedWeaponId } = context;
   if (equippedWeaponId !== undefined && candidates.has(equippedWeaponId)) {
     return equippedWeaponId;
   }
-  return [...candidates].sort()[0]!;
+  return [...candidates].sort((a, b) => a.localeCompare(b))[0]!;
 }
 
 /** Removes weapons already taken by another ikon from a candidate set. */

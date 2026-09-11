@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { ImportOrchestrator } from "../../src/import/orchestrator.js";
+import { ChoiceSetHandler } from "../../src/import/choice-set-handler.js";
 import { collectLoreNames } from "../../src/import/phases.js";
 
 describe("ImportOrchestrator", () => {
@@ -126,6 +127,27 @@ describe("ImportOrchestrator", () => {
       (call: unknown[]) => call[1] as Array<Record<string, unknown>>
     );
     expect(createdItems.some((item) => item.name === "Weapon Specialization")).toBe(false);
+  });
+
+  it("drains unresolved choices into the import summary", async () => {
+    const drain = vi.spyOn(ChoiceSetHandler.prototype, "drainUnresolvedChoices");
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+
+    (globalThis as unknown as Record<string, unknown>).game = {
+      ...(globalThis as unknown as { game: Record<string, unknown> }).game,
+      pf2e: {
+        RuleElements: {
+          builtin: { ChoiceSet: { prototype: { preCreate: async () => {} } } },
+        },
+      },
+    };
+
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
+
+    expect(drain).toHaveBeenCalled();
+    expect(summary.unresolvedChoices).toEqual([]);
+    drain.mockRestore();
   });
 
   it("stamps lastImportTimestamp after a successful pipeline run", async () => {

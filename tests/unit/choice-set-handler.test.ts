@@ -25,12 +25,15 @@ function installChoiceSetPrototype() {
   return builtin;
 }
 
+beforeEach(() => ChoiceSetHandler._resetForTests());
+
 describe("ChoiceSetHandler.presetChoiceSelections", () => {
-  beforeEach(() =>
+  beforeEach(() => {
+    ChoiceSetHandler._resetForTests();
     installFoundryMocks({
       "pf2e.feats-srd": createMockPack([{ _id: "f1", name: "Power Attack", system: { slug: "power-attack" } }]),
-    })
-  );
+    });
+  });
 
   it("returns early when there are no rules", async () => {
     const handler = new ChoiceSetHandler();
@@ -304,7 +307,7 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     });
   }
 
-  it("auto-selects a 'must be' deity's sole sanctification with no decision to review", async () => {
+  it("treats sanctification like any other ChoiceSet: single option decides silently", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
@@ -317,34 +320,42 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
 
     expect(ctx.selection).toBe("holy");
     expect(handler.drainFallbacks()).toHaveLength(0);
-    // A single-option "must be" deity is deterministic — no decision to surface.
-    expect(handler.drainSanctificationDecision()).toBeUndefined();
+    expect(handler.drainUnresolvedChoices()).toHaveLength(0);
   });
 
-  it("defaults a 'can be' deity to the affirmative sanctification and records a decision to confirm", async () => {
+  it("treats sanctification like any other ChoiceSet: guesses first option and records it", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
     handler.enable();
 
-    // A "can be" deity leaves the affirmative option plus the "none" opt-out
-    // (e.g. Sarenrae → Holy / None).
+    // A "can be" deity leaves several options (e.g. Sarenrae → Holy / None)
+    // with no engine data to match — the generic blind fallback applies.
     const ctx = sanctificationCtx(makeContext, ["holy", "none"]);
     const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
     await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
 
     expect(ctx.selection).toBe("holy");
-    // No generic ChoiceSet fallback — the sanctification note is owned by the orchestrator.
-    expect(handler.drainFallbacks()).toHaveLength(0);
-    const decision = handler.drainSanctificationDecision();
-    expect(decision).toEqual({ options: ["holy", "none"], selected: "holy", fromPreference: false });
+    expect(handler.drainFallbacks()).toHaveLength(1);
+    expect(handler.drainUnresolvedChoices()).toEqual([
+      {
+        key: "deity-cleric::choice",
+        source: "guess",
+        prompt: "Deity (Cleric)",
+        options: [
+          { value: "holy", label: "Holy" },
+          { value: "none", label: "None" },
+        ],
+        guessedValue: "holy",
+      },
+    ]);
   });
 
-  it("honors a stored sanctification preference over the affirmative default", async () => {
+  it("honors a stored override for sanctification like any other choice", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
-    handler.setSanctificationPreference("none");
+    handler.setChoiceOverrides({ "deity-cleric::choice": "none" });
     handler.enable();
 
     const ctx = sanctificationCtx(makeContext, ["holy", "none"]);
@@ -352,8 +363,9 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
 
     expect(ctx.selection).toBe("none");
-    const decision = handler.drainSanctificationDecision();
-    expect(decision).toEqual({ options: ["holy", "none"], selected: "none", fromPreference: true });
+    expect(handler.drainFallbacks()).toHaveLength(0);
+    const [record] = handler.drainUnresolvedChoices();
+    expect(record?.source).toBe("override");
   });
 
   it("passes through a valid pre-set selection without re-resolving", async () => {
@@ -833,6 +845,239 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
 
     // Fell through to the generic path, which defaults to the first option.
     expect(ctx.selection).toBe("granted");
+  });
+
+  describe("user choice overrides (last resort)", () => {
+    const twoSkills = () => [
+      { value: "acrobatics", label: "Acrobatics" },
+      { value: "crafting", label: "Crafting" },
+    ];
+
+    async function runPreCreate(
+      handler: ChoiceSetHandler,
+      ctx: Record<string, unknown>,
+      itemName = "Test Feat",
+      ruleSource: Record<string, unknown> = {}
+    ): Promise<string> {
+      const builtin = installChoiceSetPrototype();
+      handler.enable();
+      const proto = builtin.ChoiceSet.prototype as unknown as {
+        preCreate: (this: unknown, p: unknown) => Promise<void>;
+      };
+      const itemSource = { name: itemName };
+      await proto.preCreate.call(ctx, { ruleSource, itemSource, tempItems: [] });
+      return itemSource.name;
+    }
+
+    function unmatchedHandler(): ChoiceSetHandler {
+      const handler = new ChoiceSetHandler();
+      handler.setEngines([eng({ args: {} })]);
+      return handler;
+    }
+
+    it("applies a stored override when automatic matching fails", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "crafting" });
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("crafting");
+      // Applied as a decision, not a guess: no fallback text — but recorded
+      // as an override record so the dialog shows what is in effect.
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      const [record] = handler.drainUnresolvedChoices();
+      expect(record?.source).toBe("override");
+      expect(record?.key).toBe("test-feat::choice");
+    });
+
+    it("lets an automatic match win over a stored override", async () => {
+      const handler = new ChoiceSetHandler();
+      handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+      handler.setChoiceOverrides({ "test-feat::choice": "crafting" });
+      const choices = [
+        { value: "society", label: "Society" },
+        { value: "crafting", label: "Crafting" },
+      ];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      // The override names a valid option, but the matchers found society —
+      // automatic resolution always wins.
+      expect(ctx.selection).toBe("society");
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+
+    it("ignores a stale override and records the ChoiceSet as unresolved", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "survival" });
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      // "survival" is not among today's options: blind guess, flagged both ways.
+      expect(ctx.selection).toBe("acrobatics");
+      expect(handler.drainFallbacks()).toHaveLength(1);
+      expect(handler.drainUnresolvedChoices()).toEqual([
+        {
+          key: "test-feat::choice",
+          source: "guess",
+          prompt: "Test Feat",
+          options: [
+            { value: "acrobatics", label: "Acrobatics" },
+            { value: "crafting", label: "Crafting" },
+          ],
+          guessedValue: "acrobatics",
+        },
+      ]);
+    });
+
+    it("records an override-applied choice with source override", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "crafting" });
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("crafting");
+      // Applied as the user's decision: no fallback text, but recorded so the
+      // dialog can show what is in effect (with a delete option).
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toEqual([
+        {
+          key: "test-feat::choice",
+          source: "override",
+          prompt: "Test Feat",
+          options: [
+            { value: "acrobatics", label: "Acrobatics" },
+            { value: "crafting", label: "Crafting" },
+          ],
+          guessedValue: "acrobatics",
+        },
+      ]);
+    });
+
+    it("labels the record with the ChoiceSet prompt when present", async () => {
+      const handler = unmatchedHandler();
+      const choices = twoSkills();
+      const ctx = makeContext({ choices, inflateChoices: async () => choices, prompt: "Choose a skill" });
+      await runPreCreate(handler, ctx);
+
+      const [record] = handler.drainUnresolvedChoices();
+      expect(record?.prompt).toBe("Choose a skill");
+    });
+
+    it("keys by item slug when the item has one", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "domain-initiate::choice": "crafting" });
+      const choices = twoSkills();
+      const ctx = makeContext({
+        choices,
+        inflateChoices: async () => choices,
+        item: { flags: {}, getRollOptions: () => [], rules: [], name: "Domain Initiate", slug: "domain-initiate" },
+      });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("crafting");
+      const [record] = handler.drainUnresolvedChoices();
+      expect(record?.source).toBe("override");
+      expect(record?.key).toBe("domain-initiate::choice");
+    });
+
+    it("records nothing for a predicate-narrowed sole option, even with an override stored", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "other" });
+      const choices = [{ value: "heavy", label: "Heavy" }];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      await runPreCreate(handler, ctx);
+
+      expect(ctx.selection).toBe("heavy");
+      expect(handler.drainFallbacks()).toHaveLength(0);
+      expect(handler.drainUnresolvedChoices()).toHaveLength(0);
+    });
+
+    it("renames the item for the applied fallback choice", async () => {
+      const handler = unmatchedHandler();
+      const choices = [
+        { value: "acting", label: "Acting" },
+        { value: "winds", label: "Winds" },
+      ];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      const name = await runPreCreate(handler, ctx, "Virtuosic Performer");
+
+      expect(ctx.selection).toBe("acting");
+      expect(name).toBe("Virtuosic Performer (Acting)");
+    });
+
+    it("renames the item for a stored override", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "winds" });
+      const choices = [
+        { value: "acting", label: "Acting" },
+        { value: "winds", label: "Winds" },
+      ];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      const name = await runPreCreate(handler, ctx, "Virtuosic Performer");
+
+      expect(ctx.selection).toBe("winds");
+      expect(name).toBe("Virtuosic Performer (Winds)");
+    });
+
+    it("renames the item for an automatic match", async () => {
+      const handler = new ChoiceSetHandler();
+      handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+      const choices = [
+        { value: "society", label: "Society" },
+        { value: "crafting", label: "Crafting" },
+      ];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      const name = await runPreCreate(handler, ctx, "Additional Lore");
+
+      expect(ctx.selection).toBe("society");
+      expect(name).toBe("Additional Lore (Society)");
+    });
+
+    it("localizes translation-key labels before renaming", async () => {
+      const gameGlobal = globalThis as unknown as { game?: { i18n?: unknown } };
+      const savedGame = gameGlobal.game;
+      try {
+        gameGlobal.game = {
+          ...((savedGame ?? {}) as Record<string, unknown>),
+          i18n: { localize: (key: string) => (key === "PF2E.SpecificRule.VirtuosicPerformer.Winds" ? "Winds" : key) },
+        };
+        const handler = unmatchedHandler();
+        handler.setChoiceOverrides({ "test-feat::choice": "winds" });
+        const choices = [{ value: "winds", label: "PF2E.SpecificRule.VirtuosicPerformer.Winds" }];
+        const ctx = makeContext({ choices, inflateChoices: async () => choices });
+        const name = await runPreCreate(handler, ctx, "Virtuosic Performer");
+
+        expect(name).toBe("Virtuosic Performer (Winds)");
+      } finally {
+        gameGlobal.game = savedGame;
+      }
+    });
+
+    it("does not double the suffix when already present", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "winds" });
+      const choices = [{ value: "winds", label: "Winds" }];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      const name = await runPreCreate(handler, ctx, "Virtuosic Performer (Winds)");
+
+      expect(name).toBe("Virtuosic Performer (Winds)");
+    });
+
+    it("leaves the name alone for string-form adjustName templates", async () => {
+      const handler = unmatchedHandler();
+      handler.setChoiceOverrides({ "test-feat::choice": "winds" });
+      const choices = [{ value: "winds", label: "Winds" }];
+      const ctx = makeContext({ choices, inflateChoices: async () => choices });
+      const name = await runPreCreate(handler, ctx, "Kinetic Gate", { adjustName: "Gate ({element}): {choice}" });
+
+      expect(ctx.selection).toBe("winds");
+      expect(name).toBe("Kinetic Gate");
+    });
   });
 });
 

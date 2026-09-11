@@ -1,37 +1,19 @@
+/* eslint-disable max-lines -- ChoiceSet handler is inherently large; split would hurt cohesion */
 import type { DemiplaneEngineEntry } from "./types.js";
+import type { ChoiceOverrides, UnresolvedChoice } from "./types.js";
 import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
 import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
+import { resolveUserOverride, unresolvedChoiceRecord, localizeChoiceLabel } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
 import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
 import { builtinRuleElement } from "../pf2e-types.js";
-import { isSanctification, type Sanctification } from "../sanctification.js";
-
-/**
- * The sanctification choice discovered while resolving a "can be" deity's
- * Sanctification ChoiceSet during import. Drained by the orchestrator so it can
- * persist the per-character state and decide whether to flag it for review.
- */
-export interface SanctificationDecision {
-  /** The options the deity allows (predicate-surviving choices), e.g. `["holy", "none"]`. */
-  options: Sanctification[];
-  /** The value the importer applied (a stored preference, or the affirmative default). */
-  selected: Sanctification;
-  /** True when `selected` came from a stored player preference rather than a guess. */
-  fromPreference: boolean;
-}
 
 /** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
 const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";
-
-/** The `rollOption` PF2e's cleric Sanctification ChoiceSet declares (see `deity-cleric` class feature). */
-const SANCTIFICATION_ROLL_OPTION = "sanctification";
-
-/** The Sanctification "opt out" option value (neither holy nor unholy). */
-const SANCTIFICATION_NONE_VALUE = "none";
 
 /**
  * Manages ChoiceSet auto-resolution during import.
@@ -83,11 +65,19 @@ export function formatChoiceSetFallback(fallback: ChoiceSetFallback): string {
 }
 
 export class ChoiceSetHandler {
-  private originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
-  private patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
-  private usingLibWrapper = false;
+  // Global patch state — shared across all handler instances so concurrent imports
+  // of different actors don't clobber each other's prototype patch.
+  private static originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private static patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private static usingLibWrapper = false;
+  private static activeByActorId = new Map<string, ChoiceSetHandler>();
+  private static activeHandlers = new Set<ChoiceSetHandler>();
+  private static patchRefCount = 0;
+
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
+  private boundActorId: string | null = null;
+  private boundActorName: string | null = null;
   /**
    * Maps a granting element's slug to the feat slugs it confers outright (e.g.
    * `total-power` → {`bone-spikes`, `intimidating-glare`}). Used to resolve a
@@ -97,10 +87,14 @@ export class ChoiceSetHandler {
   private grantedFeatsByElement: Map<string, Set<string>> = new Map();
   /** Fallbacks accumulated during the current import; drained by the orchestrator. */
   private fallbacks: ChoiceSetFallback[] = [];
-  /** A stored player sanctification preference to honor over the default, if any. */
-  private sanctificationPreference: Sanctification | undefined;
-  /** The sanctification decision made this import (multi-option deities only). */
-  private sanctificationDecision: SanctificationDecision | undefined;
+  /**
+   * Per-actor user picks for ChoiceSets (`key -> option value`), loaded per
+   * import. Consulted only when automatic matching fails — never consulted,
+   * let alone preferred, when the matchers succeed.
+   */
+  private choiceOverrides: ChoiceOverrides = {};
+  /** Unresolved ChoiceSets recorded during the current import; drained by the orchestrator. */
+  private unresolvedChoices: UnresolvedChoice[] = [];
   /**
    * The Exemplar ikon → owned-weapon assignment, computed lazily the first time
    * an ikon ChoiceSet is seen (so every sibling ikon and the owned weapons
@@ -111,8 +105,31 @@ export class ChoiceSetHandler {
   setEngines(engines: DemiplaneEngineEntry[]): void {
     this.currentEngines = engines;
     this.fallbacks = [];
-    this.sanctificationDecision = undefined;
+    this.unresolvedChoices = [];
     this.ikonResolver = undefined;
+  }
+
+  /** Begins a per-actor import, registering this handler so concurrent imports route correctly. */
+  beginImport(actorId: string, actorName?: string): void {
+    this.boundActorId = actorId;
+    this.boundActorName = actorName ?? null;
+    ChoiceSetHandler.activeByActorId.set(actorId, this);
+  }
+
+  /** Ends a per-actor import, unregistering this handler. */
+  endImport(): void {
+    if (this.boundActorId) {
+      ChoiceSetHandler.activeByActorId.delete(this.boundActorId);
+      this.boundActorId = null;
+      this.boundActorName = null;
+    }
+    ChoiceSetHandler.activeHandlers.delete(this);
+  }
+
+  private actorTag(): string {
+    if (this.boundActorName) return `${this.boundActorName} (${this.boundActorId})`;
+    if (this.boundActorId) return this.boundActorId;
+    return "unknown actor";
   }
 
   /**
@@ -124,15 +141,6 @@ export class ChoiceSetHandler {
     this.grantedFeatsByElement = grantedFeatsByElement;
   }
 
-  /**
-   * Provides the character's previously chosen sanctification (from the actor
-   * flag) so a re-import honors it instead of re-guessing. Cleared by passing
-   * `undefined`.
-   */
-  setSanctificationPreference(value: Sanctification | undefined): void {
-    this.sanctificationPreference = value;
-  }
-
   /** Returns and clears the fallbacks recorded since the last {@link setEngines}. */
   drainFallbacks(): ChoiceSetFallback[] {
     const drained = this.fallbacks;
@@ -141,20 +149,26 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * Returns the sanctification decision made during this import, if the
-   * character's deity presented a real choice. `undefined` for deterministic
-   * ("must be") deities and non-cleric/champion characters.
+   * Provides the actor's stored choice overrides for this import. These persist
+   * across imports on the actor and are loaded per import — deliberately NOT
+   * reset by {@link setEngines}.
    */
-  drainSanctificationDecision(): SanctificationDecision | undefined {
-    const drained = this.sanctificationDecision;
-    this.sanctificationDecision = undefined;
+  setChoiceOverrides(overrides: ChoiceOverrides): void {
+    this.choiceOverrides = overrides;
+  }
+
+  /** Returns and clears the unresolved choices recorded since the last {@link setEngines}. */
+  drainUnresolvedChoices(): UnresolvedChoice[] {
+    const drained = this.unresolvedChoices;
+    this.unresolvedChoices = [];
     return drained;
   }
 
   enable(): void {
     this.importMode = true;
-    if (this.usingLibWrapper || this.originalPreCreate) {
-      debugLog("[ChoiceSet] Wrap already enabled; skipping re-install");
+    ChoiceSetHandler.activeHandlers.add(this);
+    if (ChoiceSetHandler.patchRefCount++ > 0) {
+      debugLog("[ChoiceSet] Wrap already enabled; refCount incremented");
       return;
     }
 
@@ -167,9 +181,15 @@ export class ChoiceSetHandler {
 
   disable(): void {
     this.importMode = false;
-    if (this.usingLibWrapper) {
+    ChoiceSetHandler.activeHandlers.delete(this);
+    if (--ChoiceSetHandler.patchRefCount > 0) {
+      debugLog("[ChoiceSet] Wrap still needed by another import; deferring removal");
+      return;
+    }
+    ChoiceSetHandler.patchRefCount = 0;
+    if (ChoiceSetHandler.usingLibWrapper) {
       unregisterWrapper(CHOICE_SET_TARGET);
-      this.usingLibWrapper = false;
+      ChoiceSetHandler.usingLibWrapper = false;
       debugLog("[ChoiceSet] libWrapper wrap removed, import mode off");
       return;
     }
@@ -179,28 +199,57 @@ export class ChoiceSetHandler {
   }
 
   private enableViaLibWrapper(): void {
-    const handle = this.handlePreCreate.bind(this);
     registerWrapper(CHOICE_SET_TARGET, function (this: unknown, wrapped: WrappedFn, ...args: unknown[]) {
       const context = this as ChoiceSetContext;
       const params = args[0] as PreCreateParams;
-      return handle(context, params, () => wrapped.call(context, params) as Promise<void>);
+      const handler = ChoiceSetHandler.handlerForContext(context);
+      if (!handler) return wrapped.call(context, params) as Promise<void>;
+      return handler.handlePreCreate(context, params, () => wrapped.call(context, params) as Promise<void>);
     });
-    this.usingLibWrapper = true;
+    ChoiceSetHandler.usingLibWrapper = true;
     debugLog("[ChoiceSet] libWrapper wrap registered, import mode active");
   }
 
   private enableViaPrototypePatch(): void {
     const ChoiceSetRE = this.getChoiceSetPrototype();
     const original = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
-    this.originalPreCreate = original;
+    ChoiceSetHandler.originalPreCreate = original;
 
-    const handle = this.handlePreCreate.bind(this);
     const patched = async function (this: ChoiceSetContext, params: PreCreateParams) {
-      await handle(this, params, () => original.call(this, params) as Promise<void>);
+      const handler = ChoiceSetHandler.handlerForContext(this);
+      if (!handler) return original.call(this, params) as Promise<void>;
+      await handler.handlePreCreate(this, params, () => original.call(this, params) as Promise<void>);
     };
-    this.patchedPreCreate = patched as (...args: unknown[]) => Promise<void>;
+    ChoiceSetHandler.patchedPreCreate = patched as (...args: unknown[]) => Promise<void>;
     ChoiceSetRE.prototype.preCreate = patched;
     debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");
+  }
+
+  private static handlerForContext(context: ChoiceSetContext): ChoiceSetHandler | undefined {
+    // eslint-disable-next-line no-restricted-syntax -- Actor id is not in the published ChoiceSetContext type
+    const actorId = (context.actor as unknown as { id?: string })?.id;
+    if (actorId && ChoiceSetHandler.activeByActorId.has(actorId)) {
+      return ChoiceSetHandler.activeByActorId.get(actorId);
+    }
+    // Fallback for tests and single-import cases where actor has no id or
+    // beginImport wasn't used — single active handler wins.
+    if (ChoiceSetHandler.activeHandlers.size === 1) {
+      return ChoiceSetHandler.activeHandlers.values().next().value;
+    }
+    if (ChoiceSetHandler.activeByActorId.size === 1) {
+      return ChoiceSetHandler.activeByActorId.values().next().value;
+    }
+    return undefined;
+  }
+
+  /** Test-only: resets global patch state between unit tests. */
+  static _resetForTests(): void {
+    ChoiceSetHandler.activeByActorId.clear();
+    ChoiceSetHandler.activeHandlers.clear();
+    ChoiceSetHandler.patchRefCount = 0;
+    ChoiceSetHandler.usingLibWrapper = false;
+    ChoiceSetHandler.originalPreCreate = null;
+    ChoiceSetHandler.patchedPreCreate = null;
   }
 
   /**
@@ -210,15 +259,15 @@ export class ChoiceSetHandler {
    * and just drop our reference.
    */
   private restorePrototypePatch(): void {
-    if (!this.originalPreCreate) return;
+    if (!ChoiceSetHandler.originalPreCreate) return;
     const ChoiceSetRE = this.getChoiceSetPrototype();
-    if (ChoiceSetRE.prototype.preCreate === this.patchedPreCreate) {
-      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
+    if (ChoiceSetRE.prototype.preCreate === ChoiceSetHandler.patchedPreCreate) {
+      ChoiceSetRE.prototype.preCreate = ChoiceSetHandler.originalPreCreate;
     } else {
       debugLog("[ChoiceSet] preCreate was re-wrapped by another module; leaving it in place");
     }
-    this.originalPreCreate = null;
-    this.patchedPreCreate = null;
+    ChoiceSetHandler.originalPreCreate = null;
+    ChoiceSetHandler.patchedPreCreate = null;
   }
 
   private async handlePreCreate(
@@ -235,7 +284,7 @@ export class ChoiceSetHandler {
     }
 
     debugLog(
-      `ChoiceSet preCreate: item=${context.item.name}, flag=${context.flag || "choice"}, prompt=${this.description(
+      `[${this.actorTag()}] ChoiceSet preCreate: item=${context.item.name}, flag=${context.flag || "choice"}, prompt=${this.description(
         context.prompt
       )}, choices=${this.describeChoiceQuery(context.choices)}`
     );
@@ -246,12 +295,7 @@ export class ChoiceSetHandler {
 
     context.choices = await context.inflateChoices(rollOptions, params.tempItems);
     if (!context.choices || context.choices.length === 0) {
-      debugLog("ChoiceSet presented choices: none");
-      return;
-    }
-
-    if (context.rollOption === SANCTIFICATION_ROLL_OPTION) {
-      this.resolveSanctification(context, params);
+      debugLog(`[${this.actorTag()}] ChoiceSet presented choices: none`);
       return;
     }
 
@@ -261,18 +305,42 @@ export class ChoiceSetHandler {
 
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
-      `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
+      `[${this.actorTag()}] ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
     );
 
     const matched = findMatchInChoices(
       context.choices,
       this.currentEngines,
       context.item.name,
-      this.grantedFeatsByElement
+      this.grantedFeatsByElement,
+      this.actorTag()
     );
-    const selected = matched ?? context.choices[0];
-    if (selected) {
-      this.applySelectedChoice(context, params, selected, matched !== null, candidateSlugs);
+    this.resolveFallbackChoice(context, params, matched, candidateSlugs);
+  }
+
+  /**
+   * Applies the fallback path when automatic matching fails: a stored user
+   * override wins if it names a current option, else the blind first option
+   * with an unresolved-choice record for the dialog. Extracted from
+   * `handlePreCreate` to keep that method under the complexity budget.
+   */
+  private resolveFallbackChoice(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    matched: Choice | null,
+    candidateSlugs: string[]
+  ): void {
+    // User overrides are strictly last-resort: consulted only when the
+    // matchers fail, so they can never win over a successful automatic match.
+    // Both outcomes are recorded (override-applied or blind guess) so the
+    // dialog can show what is in effect for every non-automatic choice.
+    const override = matched === null ? resolveUserOverride(context, this.choiceOverrides) : null;
+    const selected = matched ?? override ?? context.choices[0];
+    const guessed = context.choices[0];
+    if (!selected || !guessed) return;
+    this.applySelectedChoice(context, params, selected, matched !== null || override !== null, candidateSlugs);
+    if (matched === null) {
+      this.unresolvedChoices.push(unresolvedChoiceRecord(context, guessed, override !== null ? "override" : "guess"));
     }
   }
 
@@ -295,7 +363,7 @@ export class ChoiceSetHandler {
   private resolveForcedSingleChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
     if (context.choices.length !== 1) return false;
     debugLog(
-      `[ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
+      `[${this.actorTag()}] [ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
     );
     this.applySelectedChoice(context, params, context.choices[0]!, true, []);
     return true;
@@ -407,51 +475,6 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * Resolves the cleric Sanctification ChoiceSet (holy / unholy / none).
-   *
-   * Demiplane does not export the character's sanctification, so we can't match
-   * it from engine data. PF2e pre-filters the options by the deity's own
-   * sanctification, which lets us infer the right behavior from what remains:
-   *
-   * - **Deterministic ("must be" deity):** exactly one option survives the
-   *   predicate (e.g. Iomedae → only Holy). The trait is automatic, so select it
-   *   silently — there was no choice to lose.
-   * - **A real choice ("can be" deity):** several options survive, including the
-   *   "none" opt-out (e.g. Sarenrae → Holy / None). Demiplane doesn't tell us
-   *   which the player took. If they previously chose one (a stored preference
-   *   passed via {@link setSanctificationPreference}), honor it silently.
-   *   Otherwise default to the affirmative sanctification, record it as an issue
-   *   for the player to confirm, and expose the decision so the orchestrator can
-   *   persist the per-character state.
-   */
-  private resolveSanctification(context: ChoiceSetContext, params: PreCreateParams): void {
-    const choices = context.choices;
-    if (choices.length === 1) {
-      this.applySelectedChoice(context, params, choices[0]!, true, []);
-      return;
-    }
-
-    const options = choices.map((c) => c.value).filter(isSanctification);
-    const preferred = this.sanctificationPreference;
-    const preferredChoice = preferred !== undefined ? choices.find((c) => c.value === preferred) : undefined;
-
-    if (preferredChoice) {
-      // The player already chose this sanctification; apply it without re-flagging.
-      this.sanctificationDecision = { options, selected: preferred!, fromPreference: true };
-      this.applySelectedChoice(context, params, preferredChoice, true, []);
-      return;
-    }
-
-    const affirmative = choices.find((c) => c.value !== SANCTIFICATION_NONE_VALUE) ?? choices[0]!;
-    const selected = isSanctification(affirmative.value) ? affirmative.value : options[0]!;
-    this.sanctificationDecision = { options, selected, fromPreference: false };
-    // Apply as a "matched" selection so no generic ChoiceSet fallback is
-    // recorded here. Whether to surface a sync-issue note is decided by the
-    // orchestrator (it owns the actor and the "first time only" acknowledgement).
-    this.applySelectedChoice(context, params, affirmative, true, []);
-  }
-
-  /**
    * The Demiplane selection slugs in scope for matching — the values the
    * strategies compare against. Logged next to the presented choices so a failed
    * match shows both sides (e.g. choices "Reach Spell"/"Widen Spell" vs
@@ -488,7 +511,7 @@ export class ChoiceSetHandler {
 
     if (await this.isPreSetSelectionValid(context, params)) {
       debugLog(
-        `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
+        `[${this.actorTag()}] [ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
           this.description(context.selection)
         )}, item=${params.itemSource.name}`
       );
@@ -496,7 +519,7 @@ export class ChoiceSetHandler {
     }
 
     debugLog(
-      `[ChoiceSet] preCreate: pre-set selection ${this.description(
+      `[${this.actorTag()}] [ChoiceSet] preCreate: pre-set selection ${this.description(
         context.selection
       )} is not a valid choice; re-resolving, item=${params.itemSource.name}`
     );
@@ -521,7 +544,9 @@ export class ChoiceSetHandler {
     candidateSlugs: string[],
     note?: string
   ): void {
-    debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
+    debugLog(
+      `[${this.actorTag()}] ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`
+    );
 
     // A fallback is a guess (the first option), applied so the import stays
     // usable, but recorded so it surfaces as a sync issue for the GM to correct.
@@ -538,6 +563,12 @@ export class ChoiceSetHandler {
 
     context.selection = params.ruleSource.selection = selected.value;
 
+    // Mirror PF2e's ChoiceSet rename (rule-element #adjustName): choosing an
+    // option renames the item ("Virtuosic Performer" → "Virtuosic Performer
+    // (Winds)"). The import bypasses the native preCreate that performs it,
+    // so neither defaults nor user overrides ever renamed — replicate it here.
+    this.renameItemForSelection(params, selected);
+
     // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation
     // so that subsequent GrantItem rules can resolve {item|flags.pf2e.rulesSelections.X}
     const itemFlags = context.item.flags as Record<string, Record<string, unknown>>;
@@ -547,13 +578,29 @@ export class ChoiceSetHandler {
     (pf2eFlags.rulesSelections as Record<string, unknown>)[context.flag || "choice"] = selected.value;
 
     debugLog(
-      `[ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${context.flag || "choice"} = ${String(selected.value)}`
+      `[${this.actorTag()}] [ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${context.flag || "choice"} = ${String(selected.value)}`
     );
 
     // Reset ignored state on sibling rules so GrantItem processes after selection is available
     for (const rule of context.item.rules) {
       rule.ignored = false;
     }
+  }
+
+  /**
+   * Replicates PF2e ChoiceSet's `#adjustName` for the boolean-true case (which
+   * the schema also applies when the rule omits `adjustName` entirely):
+   * `Name` becomes `Name (Localized Label)`, collapsing an already-present
+   * double suffix. String-form templates (e.g. kinetic gates, which compose
+   * several selections) are left alone.
+   */
+  private renameItemForSelection(params: PreCreateParams, selected: Choice): void {
+    const adjustName = (params.ruleSource as { adjustName?: unknown }).adjustName ?? true;
+    if (adjustName !== true) return;
+    const label = localizeChoiceLabel(selected.label);
+    const newName = `${params.itemSource.name} (${label})`;
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    params.itemSource.name = newName.replace(new RegExp(`\\(${escaped}\\) \\(${escaped}\\)$`), `(${label})`);
   }
 
   private getChoiceSetPrototype(): { prototype: Record<string, unknown> } {
@@ -597,7 +644,7 @@ export class ChoiceSetHandler {
     const choiceSetRules = system.rules.filter((r) => r.key === "ChoiceSet");
     if (choiceSetRules.length > 0) {
       debugLog(
-        `[ChoiceSet] presetChoiceSelections: item=${(itemData as { name?: string }).name}, slug=${demiplaneSlug}, ChoiceSet rules count=${String(choiceSetRules.length)}`
+        `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections: item=${(itemData as { name?: string }).name}, slug=${demiplaneSlug}, ChoiceSet rules count=${String(choiceSetRules.length)}`
       );
     }
 
@@ -617,11 +664,15 @@ export class ChoiceSetHandler {
     const selection =
       this.instanceScopedGenericChoice(rule, featEngineId) ?? (await this.findChoiceSelection(demiplaneSlug, rule));
     if (selection === null) {
-      debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
+      debugLog(
+        `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`
+      );
       return;
     }
 
-    debugLog(`[ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`);
+    debugLog(
+      `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`
+    );
     rule.selection = selection;
 
     // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
@@ -660,7 +711,7 @@ export class ChoiceSetHandler {
     if (!choice) return null;
 
     const value = (choice.args!.name as string).toLowerCase().replace(/\s+/g, "-");
-    debugLog(`[ChoiceSet] instance-scoped generic choice for feat ${featEngineId}: ${value}`);
+    debugLog(`[${this.actorTag()}] [ChoiceSet] instance-scoped generic choice for feat ${featEngineId}: ${value}`);
     return value;
   }
 

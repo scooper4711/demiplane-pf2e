@@ -44,7 +44,7 @@ function packs() {
 }
 
 function summary() {
-  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], errors: [], log: [] };
+  return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
 }
 
 function makeCtx(engines = [], overrides = {}) {

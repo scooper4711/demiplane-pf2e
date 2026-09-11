@@ -13,7 +13,7 @@ const UUID = "123e4567-e89b-12d3-a456-426614174000";
 const TOKEN = "token-abc";
 
 function summary(overrides = {}) {
-  return { itemsImported: 2, itemsSkipped: 0, unmapped: [], errors: [], log: [], ...overrides };
+  return { itemsImported: 2, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [], ...overrides };
 }
 
 function linkedActor(id: string, characterId: string) {

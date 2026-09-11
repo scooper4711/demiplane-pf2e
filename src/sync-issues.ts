@@ -1,11 +1,13 @@
 import { MODULE_ID } from "./import/types.js";
-import type { UnmappedSlug } from "./import/types.js";
+import type { ChoiceKey, ChoiceOverrides, UnmappedSlug, UnresolvedChoice } from "./import/types.js";
 
 export const ISSUES_CHANGED_EVENT = "demiplaneSyncIssuesChanged";
 
 type IssueSetKind = "import" | "export";
 
 const UNMAPPED_FLAG = "unmappedSlugs";
+const UNRESOLVED_CHOICES_FLAG = "unresolvedChoices";
+const CHOICE_OVERRIDES_FLAG = "choiceOverrides";
 const ACKNOWLEDGED_FLAG = "issuesAcknowledged";
 const CONFLICT_NOTIFIED_FLAG = "conflictNotified";
 
@@ -53,9 +55,69 @@ export function setUnmappedSlugs(actor: Actor, records: UnmappedSlug[]): void {
   notifyChanged(actor);
 }
 
+/**
+ * ChoiceSets the last import could not resolve, stored as structured records.
+ *
+ * Mirrors unmapped slugs: the sync dialog renders dropdowns from these, and
+ * they are replaced wholesale on each import, so a record whose ChoiceSet
+ * starts resolving (or disappears) drops out with no pruning needed.
+ */
+export function getUnresolvedChoices(actor: Actor): UnresolvedChoice[] {
+  const raw = actor.getFlag(MODULE_ID, UNRESOLVED_CHOICES_FLAG) as UnresolvedChoice[] | undefined;
+  return Array.isArray(raw) ? raw : [];
+}
+
+export function setUnresolvedChoices(actor: Actor, records: UnresolvedChoice[]): void {
+  void actor.setFlag(MODULE_ID, UNRESOLVED_CHOICES_FLAG, records);
+  // Only guesses relight the dot: an applied user pick is settled, not an
+  // issue, even though it stays visible in the dialog for transparency.
+  if (records.some((r) => r.source === "guess")) markUnacknowledged(actor);
+  notifyChanged(actor);
+}
+
+/**
+ * The actor's stored ChoiceSet picks (`key -> option value`). Per-actor, not a
+ * world setting: a choice belongs to one character's build. Unlike the
+ * unresolved records above, overrides are NEVER cleared by imports — they must
+ * survive so re-imports keep honoring them; stale ones simply stop matching
+ * and go inert.
+ */
+export function getChoiceOverrides(actor: Actor): ChoiceOverrides {
+  const raw = actor.getFlag(MODULE_ID, CHOICE_OVERRIDES_FLAG) as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== "object") return {};
+  const overrides: ChoiceOverrides = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") overrides[key as ChoiceKey] = value;
+  }
+  return overrides;
+}
+
+/** Stores one user pick. Deliberately does not touch acknowledgement: an
+ * override is user data answering an issue, not a new issue. */
+export function setChoiceOverride(actor: Actor, key: ChoiceKey, value: string): void {
+  const overrides = getChoiceOverrides(actor);
+  overrides[key] = value;
+  void actor.setFlag(MODULE_ID, CHOICE_OVERRIDES_FLAG, overrides);
+  notifyChanged(actor);
+}
+
+/** Removes one user pick (the dialog's explicit "not chosen" state). */
+export function removeChoiceOverride(actor: Actor, key: ChoiceKey): void {
+  const overrides = getChoiceOverrides(actor);
+  if (!(key in overrides)) return;
+  delete overrides[key];
+  void actor.setFlag(MODULE_ID, CHOICE_OVERRIDES_FLAG, overrides);
+  notifyChanged(actor);
+}
+
 /** True when any issue data is currently stored, regardless of acknowledgement. */
 export function hasActiveIssues(actor: Actor): boolean {
-  return getImportIssues(actor).size > 0 || getExportIssues(actor).size > 0 || getUnmappedSlugs(actor).length > 0;
+  return (
+    getImportIssues(actor).size > 0 ||
+    getExportIssues(actor).size > 0 ||
+    getUnmappedSlugs(actor).length > 0 ||
+    getUnresolvedChoices(actor).some((r) => r.source === "guess")
+  );
 }
 
 /**
@@ -85,6 +147,7 @@ export function acknowledgeIssues(actor: Actor): void {
 export function resetImportIssues(actor: Actor): void {
   void writeIssueSet(actor, "import", new Set());
   void actor.setFlag(MODULE_ID, UNMAPPED_FLAG, []);
+  void actor.setFlag(MODULE_ID, UNRESOLVED_CHOICES_FLAG, []);
   void actor.setFlag(MODULE_ID, ACKNOWLEDGED_FLAG, false);
   // An import re-baselines the character (fresh lastUpdated/engineSig), so any
   // prior conflict is resolved — re-arm the conflict warning for the future.
@@ -97,6 +160,7 @@ export function clearAllIssues(actor: Actor): void {
   void writeIssueSet(actor, "import", new Set());
   void writeIssueSet(actor, "export", new Set());
   void actor.setFlag(MODULE_ID, UNMAPPED_FLAG, []);
+  void actor.setFlag(MODULE_ID, UNRESOLVED_CHOICES_FLAG, []);
   void actor.setFlag(MODULE_ID, ACKNOWLEDGED_FLAG, false);
   notifyChanged(actor);
 }

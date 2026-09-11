@@ -13,6 +13,12 @@ export interface WeaponRunes {
    * weapons, so carrying it here alongside striking keeps one rune shape for both.
    */
   resilient: number;
+  /**
+   * A shield's reinforcing rune, its sole fundamental rune. PF2e stores it on
+   * `shield.system.runes.reinforcing` (0-6); ignored on weapons and armor, so it
+   * rides along in the shared rune shape like {@link resilient}.
+   */
+  reinforcing: number;
   property: string[];
 }
 
@@ -48,6 +54,20 @@ const RESILIENT_VALUES: Record<string, number> = {
   resilient: 1,
   "resilient-greater": 2,
   "resilient-major": 3,
+};
+
+/**
+ * Demiplane reinforcing-rune slugs → PF2e reinforcing value (0-6), the shield's
+ * fundamental rune. Grades follow PF2e's ladder: minor 1, lesser 2, moderate 3,
+ * greater 4, major 5, supreme 6.
+ */
+const REINFORCING_VALUES: Record<string, number> = {
+  "reinforcing-rune-minor": 1,
+  "reinforcing-rune-lesser": 2,
+  "reinforcing-rune-moderate": 3,
+  "reinforcing-rune-greater": 4,
+  "reinforcing-rune-major": 5,
+  "reinforcing-rune-supreme": 6,
 };
 
 /**
@@ -141,7 +161,7 @@ export function collectRunesByParent(
     const rawSlug = eng.args?.slug as string | undefined;
     if (!parentId || !rawSlug) continue;
 
-    const runes = byParent.get(parentId) ?? { potency: 0, striking: 0, resilient: 0, property: [] };
+    const runes = byParent.get(parentId) ?? { potency: 0, striking: 0, resilient: 0, reinforcing: 0, property: [] };
     applyRuneSlug(runes, rawSlug, isValidProperty, onUnknown);
     byParent.set(parentId, runes);
   }
@@ -173,6 +193,12 @@ function applyRuneSlug(
   const resilient = RESILIENT_VALUES[slug];
   if (resilient !== undefined) {
     runes.resilient = Math.max(runes.resilient, resilient);
+    return;
+  }
+
+  const reinforcing = REINFORCING_VALUES[slug];
+  if (reinforcing !== undefined) {
+    runes.reinforcing = Math.max(runes.reinforcing, reinforcing);
     return;
   }
 

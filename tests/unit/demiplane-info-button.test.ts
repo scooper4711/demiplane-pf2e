@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { showDemiplaneInfoDialog, registerDemiplaneInfoButton } from "../../src/demiplane-info-button.js";
+import { MODULE_ID } from "../../src/import/types.js";
 
 const DEMI_UUID = "12345678-1234-1234-1234-123456789012";
 
@@ -143,14 +144,9 @@ describe("demiplane-info-button", () => {
     expect(opts.content).not.toContain("Your GM can map these");
   });
 
-  it("omits the sanctification selector when the character has no sanctification choice", async () => {
-    // The default actor mock returns undefined for the sanctification flag.
-    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
-    const opts = wait.mock.calls[0][0] as { content: string };
-    expect(opts.content).not.toContain("demiplane-sanctification-select");
-  });
-
-  it("renders a sanctification selector with the deity's options when the choice is real", async () => {
+  it("has no sanctification section: sanctification is an ordinary ChoiceSet now", async () => {
+    // The old per-deity selector is gone; a sanctification flag left over
+    // from an earlier version renders nothing.
     actor.getFlag = vi.fn((_m: string, k: string) => {
       if (k === "characterId") return DEMI_UUID;
       if (k === "sanctification") return { options: ["holy", "none"], selected: "holy", acknowledged: false };
@@ -158,11 +154,8 @@ describe("demiplane-info-button", () => {
     });
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     const opts = wait.mock.calls[0][0] as { content: string };
-    expect(opts.content).toContain("demiplane-sanctification-select");
-    expect(opts.content).toContain('<option value="holy" selected>Holy</option>');
-    expect(opts.content).toContain('<option value="none">None</option>');
-    // Only the deity's options appear — "Unholy" is not offered for a can-be-holy deity.
-    expect(opts.content).not.toContain(">Unholy<");
+    expect(opts.content).not.toContain("demiplane-sanctification-select");
+    expect(opts.content).not.toContain("Sanctification:");
   });
 
   it("flags the dialog when the latest sync has unacknowledged issues", async () => {
@@ -203,6 +196,24 @@ describe("demiplane-info-button", () => {
     const push = pushButton();
     expect(push?.disabled).toBe(true);
     expect(push?.tooltip).toContain("Write to Demiplane");
+  });
+
+  it("disables update and push with tooltips while a sync is in flight", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "syncActiveTokens") return ["in-flight"];
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as {
+      buttons: Array<{ action: string; disabled?: boolean; tooltip?: string }>;
+    };
+    const update = opts.buttons.find((b) => b.action === "update");
+    expect(update?.disabled).toBe(true);
+    expect(update?.tooltip).toContain("already in progress");
+    const push = pushButton();
+    expect(push?.disabled).toBe(true);
+    expect(push?.tooltip).toContain("already in progress");
   });
 
   it("updates from Demiplane when the update button is clicked", async () => {
@@ -266,6 +277,199 @@ describe("demiplane-info-button", () => {
     expect(opts.classes).not.toContain("has-sync-errors");
     expect(opts.content).toContain("imp issue");
     expect(opts.content).toContain("goblin-blade");
+  });
+
+  describe("unresolved choice dropdowns", () => {
+    const choiceRecord = {
+      key: "feat::choice",
+      source: "guess",
+      prompt: "Choose a skill",
+      options: [
+        { value: "acrobatics", label: "Acrobatics" },
+        { value: "crafting", label: "Crafting" },
+      ],
+      guessedValue: "acrobatics",
+    };
+
+    function actorWithChoices(records: unknown[], overrides: Record<string, string>) {
+      actor.getFlag = vi.fn((_m: string, k: string) => {
+        if (k === "characterId") return DEMI_UUID;
+        if (k === "importIssues") return [];
+        if (k === "exportIssues") return [];
+        if (k === "unmappedSlugs") return [];
+        if (k === "unresolvedChoices") return records;
+        if (k === "choiceOverrides") return overrides;
+        return undefined;
+      });
+    }
+
+    function dialogWithSelects(selects: Array<{ dataset: Record<string, string>; value: string }>) {
+      const listeners: Record<string, Array<() => void>> = {};
+      const fakeSelects = selects.map((select) => ({
+        ...select,
+        addEventListener: (event: string, fn: () => void) => {
+          listeners[event] = [...(listeners[event] ?? []), fn];
+        },
+      }));
+      const fakeDialog = {
+        element: {
+          querySelector: () => null,
+          querySelectorAll: () => fakeSelects,
+        },
+      };
+      return { fakeDialog, listeners };
+    }
+
+    async function openDialogWith(fakeDialog: unknown) {
+      wait.mockImplementationOnce(async (opts: { render?: (event: unknown, dialog: unknown) => void }) => {
+        opts.render?.({}, fakeDialog);
+        return "close";
+      });
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    }
+
+    it("renders one dropdown per unresolved choice with the stored pick preselected", async () => {
+      actorWithChoices([choiceRecord], { "feat::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Choices needing your input");
+      expect(opts.content).toContain('data-choice-key="feat::choice"');
+      // Explicit not-chosen state first, so a blind guess is never presented
+      // as the user's decision.
+      expect(opts.content).toContain("— choose —");
+      expect(opts.content).toContain('value="crafting" selected');
+      expect(opts.content).toContain("Guessed");
+    });
+
+    it("omits the choices section when nothing is unresolved", async () => {
+      actorWithChoices([], {});
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).not.toContain("demiplane-choice-select");
+      expect(opts.content).not.toContain("Choices needing your input");
+    });
+
+    it("translates labels that are translation keys", async () => {
+      const gameGlobal = globalThis as unknown as { game?: Record<string, unknown> };
+      const savedGame = gameGlobal.game;
+      try {
+        gameGlobal.game = {
+          ...((savedGame ?? {}) as Record<string, unknown>),
+          i18n: {
+            localize: (key: string) => (key === "PF2E.SpecificRule.VirtuosicPerformer.Winds" ? "Winds" : key),
+          },
+        };
+        actorWithChoices(
+          [
+            {
+              key: "feat::choice",
+              source: "guess",
+              prompt: "PF2E.SpecificRule.VirtuosicPerformer.Prompt",
+              options: [{ value: "winds", label: "PF2E.SpecificRule.VirtuosicPerformer.Winds" }],
+              guessedValue: "winds",
+            },
+          ],
+          {}
+        );
+
+        await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+        const opts = wait.mock.calls[0][0] as { content: string };
+
+        expect(opts.content).toContain(">Winds<");
+        expect(opts.content).not.toContain("PF2E.SpecificRule.VirtuosicPerformer.Winds");
+      } finally {
+        gameGlobal.game = savedGame;
+      }
+    });
+
+    it("persists a dropdown pick to the actor flag", async () => {
+      actorWithChoices([choiceRecord], {});
+      const { fakeDialog, listeners } = dialogWithSelects([
+        { dataset: { choiceKey: "feat::choice" }, value: "crafting" },
+      ]);
+      await openDialogWith(fakeDialog);
+
+      for (const fn of listeners["change"] ?? []) fn();
+
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", { "feat::choice": "crafting" });
+    });
+
+    it("removes the override when reset to not-chosen", async () => {
+      actorWithChoices([choiceRecord], { "feat::choice": "crafting" });
+      const { fakeDialog, listeners } = dialogWithSelects([{ dataset: { choiceKey: "feat::choice" }, value: "" }]);
+      await openDialogWith(fakeDialog);
+
+      for (const fn of listeners["change"] ?? []) fn();
+
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", {});
+    });
+
+    it("shows applied picks with a delete button", async () => {
+      const applied = { ...choiceRecord, source: "override" };
+      actorWithChoices([applied], { "feat::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Your picks in effect");
+      expect(opts.content).toContain("your pick");
+      expect(opts.content).toContain('data-choice-key="feat::choice"');
+      // No dropdown for an applied pick — only the delete.
+      expect(opts.content).not.toContain("demiplane-choice-select");
+    });
+
+    it("shows stale picks with no record", async () => {
+      actorWithChoices([], { "gone::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Your picks in effect");
+      expect(opts.content).toContain("stale");
+      expect(opts.content).toContain('data-choice-key="gone::choice"');
+    });
+
+    it("omits the picks section when nothing is stored", async () => {
+      actorWithChoices([choiceRecord], {});
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).not.toContain("Your picks in effect");
+    });
+
+    it("deletes the pick and its row when the trashcan is clicked", async () => {
+      actorWithChoices([{ ...choiceRecord, source: "override" }], { "feat::choice": "crafting" });
+      let clicks = 0;
+      const row = { remove: vi.fn() };
+      const fakeButton = {
+        dataset: { choiceKey: "feat::choice" },
+        closest: () => row,
+        addEventListener: (_event: string, fn: () => void) => {
+          clicks += 1;
+          fn();
+        },
+      };
+      const fakeDialog = {
+        element: {
+          querySelector: () => null,
+          querySelectorAll: (selector: string) => (selector === ".demiplane-choice-delete" ? [fakeButton] : []),
+        },
+      };
+      wait.mockImplementationOnce(async (opts: { render?: (event: unknown, dialog: unknown) => void }) => {
+        opts.render?.({}, fakeDialog);
+        return "close";
+      });
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+
+      expect(clicks).toBe(1);
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", {});
+      expect(row.remove).toHaveBeenCalled();
+    });
   });
 });
 

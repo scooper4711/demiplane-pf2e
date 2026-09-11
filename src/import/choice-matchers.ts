@@ -4,6 +4,11 @@ import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
 
+let currentTag = "";
+function tlog(msg: string): void {
+  debugLog(currentTag ? `[${currentTag}] ${msg}` : msg);
+}
+
 /**
  * Resolves a ChoiceSet's available options against the character's Demiplane
  * engines, returning the matching choice or null. Strategies are tried in a
@@ -14,8 +19,10 @@ export function findMatchInChoices(
   choices: Choice[],
   engines: DemiplaneEngineEntry[],
   itemName?: string,
-  grantedFeatsByElement?: Map<string, Set<string>>
+  grantedFeatsByElement?: Map<string, Set<string>>,
+  actorTag?: string
 ): Choice | null {
+  currentTag = actorTag ?? "";
   // Strategies run in order from most specific (an explicit selection engine) to
   // most generic (keyword matching), so a precise engine wins over a broad
   // fallback. Expressed as an ordered list rather than a `??` chain to keep this
@@ -43,7 +50,7 @@ export function findMatchInChoices(
     if (match) return match;
   }
 
-  debugLog("[ChoiceSet match] No match found across all strategies");
+  tlog("[ChoiceSet match] No match found across all strategies");
   return null;
 }
 
@@ -70,7 +77,7 @@ function matchGrantedFeats(
   const grantedFeats = grantedFeatsByElement.get(toChoiceSlug(itemName));
   if (!grantedFeats || grantedFeats.size === 0) return null;
 
-  debugLog(`[ChoiceSet match] Granted-feats strategy for "${itemName}": [${Array.from(grantedFeats).join(", ")}]`);
+  tlog(`[ChoiceSet match] Granted-feats strategy for "${itemName}": [${Array.from(grantedFeats).join(", ")}]`);
 
   for (const choice of choices) {
     const value = typeof choice.value === "string" ? toFoundrySlug(choice.value) : "";
@@ -101,7 +108,7 @@ function matchDeity(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice 
 
   if (deitySlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Deity strategy - deity slugs: [${deitySlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Deity strategy - deity slugs: [${deitySlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const labelSlug = toChoiceSlug(choice.label);
@@ -125,7 +132,7 @@ function matchDomain(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice
 
   if (domainSlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Domain strategy - domain slugs: [${domainSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Domain strategy - domain slugs: [${domainSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -185,7 +192,7 @@ function matchFeatScopedSkill(choices: Choice[], engines: DemiplaneEngineEntry[]
   if (!chosen) return null;
 
   const chosenSkill = toFoundrySlug(chosen.args!.slug as string);
-  debugLog(`[ChoiceSet match] feat-scoped skill for "${itemName}": ${chosenSkill}`);
+  tlog(`[ChoiceSet match] feat-scoped skill for "${itemName}": ${chosenSkill}`);
 
   return choices.find((choice) => skillSlugFromChoice(choice) === chosenSkill) ?? null;
 }
@@ -197,7 +204,7 @@ function matchSkillSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Ch
       .map((e) => e.args?.slug as string)
   );
 
-  debugLog(`[ChoiceSet match] Strategy 1 - skill slugs: [${Array.from(allSkillSlugs).join(", ")}]`);
+  tlog(`[ChoiceSet match] Strategy 1 - skill slugs: [${Array.from(allSkillSlugs).join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -234,7 +241,7 @@ function matchCustomSelectionLore(
 
   const scoped = itemName ? ` for "${itemName}"` : "";
   const engineNames = loreEngines.map((e) => String(e.args?.name)).join(", ");
-  debugLog(`[ChoiceSet match] custom-selection lore engines${scoped}: [${engineNames}]`);
+  tlog(`[ChoiceSet match] custom-selection lore engines${scoped}: [${engineNames}]`);
 
   for (const eng of loreEngines) {
     const target = toChoiceSlug(eng.args!.name as string);
@@ -261,7 +268,7 @@ function matchMuse(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice |
 
   if (museSlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Muse strategy - muse slugs: [${museSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Muse strategy - muse slugs: [${museSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -285,7 +292,7 @@ function matchAdoptedAncestry(choices: Choice[], engines: DemiplaneEngineEntry[]
 
   if (ancestrySlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Adopted ancestry strategy - slugs: [${ancestrySlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Adopted ancestry strategy - slugs: [${ancestrySlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -333,7 +340,7 @@ function matchWeaponInnovation(choices: Choice[], engines: DemiplaneEngineEntry[
     .map((e) => toFoundrySlug(rawEquipmentSlug(e)));
   if (ownedItemSlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Weapon Innovation - owned item slugs: [${ownedItemSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Weapon Innovation - owned item slugs: [${ownedItemSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const value = typeof choice.value === "string" ? choice.value : "";
@@ -349,7 +356,7 @@ function matchItemEngines(choices: Choice[], engines: DemiplaneEngineEntry[]): C
     .map((e) => toFoundrySlug(rawEquipmentSlug(e)));
   if (itemSlugs.length === 0) return null;
 
-  debugLog(`[ChoiceSet match] Item-engine strategy - item slugs: [${itemSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Item-engine strategy - item slugs: [${itemSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const value = typeof choice.value === "string" ? choice.value : "";
@@ -366,9 +373,7 @@ function matchAllSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Choi
       .map((e) => toFoundrySlug(e.args?.slug as string))
   );
 
-  debugLog(
-    `[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`
-  );
+  tlog(`[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -382,8 +387,8 @@ function matchClassFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]):
     .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/class-feature/") && e.args?.slug)
     .map((e) => toFoundrySlug(e.args?.slug as string));
 
-  debugLog(`[ChoiceSet match] Strategy 3 - class feature slugs: [${classFeatureSlugs.join(", ")}]`);
-  debugLog(
+  tlog(`[ChoiceSet match] Strategy 3 - class feature slugs: [${classFeatureSlugs.join(", ")}]`);
+  tlog(
     `[ChoiceSet match] Choice labels for Strategy 3: [${choices
       .slice(0, 5)
       .map((c) => `${c.label}→${toChoiceSlug(c.label)}`)
@@ -404,7 +409,7 @@ function matchGenericFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]
     .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-feature/") && e.args?.slug)
     .map((e) => toFoundrySlug(e.args?.slug as string));
 
-  debugLog(`[ChoiceSet match] Strategy 4 - generic feature slugs: [${genericFeatureSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Strategy 4 - generic feature slugs: [${genericFeatureSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -448,7 +453,7 @@ function matchFeatSlugs(choices: Choice[], engines: DemiplaneEngineEntry[], item
   const featSlugs = [...new Set(relevant.flatMap((e) => generateSlugCandidates(toFoundrySlug(e.args.slug as string))))];
 
   const scope = itemName ? ` for "${itemName}"` : "";
-  debugLog(`[ChoiceSet match] Strategy 5 - feat slugs${scope}: [${featSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] Strategy 5 - feat slugs${scope}: [${featSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     if (typeof choice.value === "string" && choice.value.includes("Compendium")) {
@@ -477,7 +482,7 @@ function matchGenericChoice(choices: Choice[], engines: DemiplaneEngineEntry[], 
   const matchScoped = (scopedEngines: DemiplaneEngineEntry[], label: (keywords: string[]) => string): Choice | null => {
     if (scopedEngines.length === 0) return null;
     const keywords = genericChoiceKeywords(scopedEngines);
-    debugLog(label(keywords));
+    tlog(label(keywords));
     return matchByKeyword(choices, keywords);
   };
 

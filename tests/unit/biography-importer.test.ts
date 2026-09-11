@@ -30,6 +30,7 @@ describe("applyBiography", () => {
       itemsImported: 0,
       itemsSkipped: 0,
       unmapped: [],
+      unresolvedChoices: [],
       errors: [],
       log: [],
     };
