@@ -312,7 +312,8 @@ export class ChoiceSetHandler {
       context.choices,
       this.currentEngines,
       context.item.name,
-      this.grantedFeatsByElement
+      this.grantedFeatsByElement,
+      this.actorTag()
     );
     this.resolveFallbackChoice(context, params, matched, candidateSlugs);
   }
