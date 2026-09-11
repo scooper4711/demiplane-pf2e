@@ -59,7 +59,6 @@ const CHARACTER_DATA_QUERY = `query($id: uuid!) {
 }`;
 
 export class ImportOrchestrator {
-  private readonly choiceSetHandler = new ChoiceSetHandler();
   private readonly client: DemiplaneClient | undefined;
 
   /**
@@ -100,13 +99,20 @@ export class ImportOrchestrator {
     // eslint-disable-next-line no-console -- single always-on log per pull
     console.info(`${MODULE_ID} | Pulled character data from Demiplane (${characterId})`);
 
-    await this.prepareChoiceSetHandler(actor, engines, cacheEngineIds);
+    // ChoiceSet handling is per-import so concurrent imports of different actors
+    // don't share engines/overrides/fallbacks. The handler's prototype patch is
+    // ref-counted and routes by actor id.
+    const handler = new ChoiceSetHandler();
+    // eslint-disable-next-line no-restricted-syntax -- Actor id is not in the published Actor type
+    const actorId = (actor as unknown as { id: string }).id ?? characterId;
+    handler.beginImport(actorId);
+    await this.prepareChoiceSetHandler(handler, actor, engines, cacheEngineIds);
     const selectionData = buildSelectionData(engines);
     const categorized = categorizeEngines(engines);
     const ctx: ImportContext = {
       engines,
       summary,
-      choiceSetHandler: this.choiceSetHandler,
+      choiceSetHandler: handler,
       categorized,
       selectionData,
       grantResolvedSlugs: new Set(),
@@ -125,25 +131,26 @@ export class ImportOrchestrator {
     }) as (...args: unknown[]) => void);
 
     try {
-      this.choiceSetHandler.enable();
+      handler.enable();
       for (const phase of this.buildPipeline()) {
         await phase.run(actor, ctx);
       }
     } finally {
       Hooks.off("preCreateItem", importHookId);
-      this.choiceSetHandler.disable();
+      handler.disable();
+      handler.endImport();
     }
 
     // Surface any unresolved ChoiceSets (defaulted to a guess) as import issues
     // so the GM can review and correct them on the actor sheet.
-    for (const fallback of this.choiceSetHandler.drainFallbacks()) {
+    for (const fallback of handler.drainFallbacks()) {
       summary.errors.push(formatChoiceSetFallback(fallback));
     }
 
     // Structured unresolved-choice records for the sync dialog's dropdowns.
     // Drained here (not in a phase) because the handler accumulates them
     // across the whole pipeline, exactly like the fallbacks above.
-    summary.unresolvedChoices = this.choiceSetHandler.drainUnresolvedChoices();
+    summary.unresolvedChoices = handler.drainUnresolvedChoices();
 
     // Flag variant rules the character relies on that aren't enabled in the
     // Foundry world (e.g. Gradual Ability Boosts, Mythic), which would otherwise
@@ -163,13 +170,14 @@ export class ImportOrchestrator {
    * decisions instead of re-guessing.
    */
   private async prepareChoiceSetHandler(
+    handler: ChoiceSetHandler,
     actor: Actor,
     engines: DemiplaneEngineEntry[],
     cacheEngineIds: string[]
   ): Promise<void> {
-    this.choiceSetHandler.setEngines(engines);
-    this.choiceSetHandler.setChoiceOverrides(getChoiceOverrides(actor));
-    this.choiceSetHandler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
+    handler.setEngines(engines);
+    handler.setChoiceOverrides(getChoiceOverrides(actor));
+    handler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
   }
 
   private buildPipeline(): ImportPhase[] {

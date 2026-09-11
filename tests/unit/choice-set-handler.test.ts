@@ -25,12 +25,15 @@ function installChoiceSetPrototype() {
   return builtin;
 }
 
+beforeEach(() => ChoiceSetHandler._resetForTests());
+
 describe("ChoiceSetHandler.presetChoiceSelections", () => {
-  beforeEach(() =>
+  beforeEach(() => {
+    ChoiceSetHandler._resetForTests();
     installFoundryMocks({
       "pf2e.feats-srd": createMockPack([{ _id: "f1", name: "Power Attack", system: { slug: "power-attack" } }]),
-    })
-  );
+    });
+  });
 
   it("returns early when there are no rules", async () => {
     const handler = new ChoiceSetHandler();

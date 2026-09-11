@@ -64,11 +64,18 @@ export function formatChoiceSetFallback(fallback: ChoiceSetFallback): string {
 }
 
 export class ChoiceSetHandler {
-  private originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
-  private patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
-  private usingLibWrapper = false;
+  // Global patch state — shared across all handler instances so concurrent imports
+  // of different actors don't clobber each other's prototype patch.
+  private static originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private static patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
+  private static usingLibWrapper = false;
+  private static activeByActorId = new Map<string, ChoiceSetHandler>();
+  private static activeHandlers = new Set<ChoiceSetHandler>();
+  private static patchRefCount = 0;
+
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
+  private boundActorId: string | null = null;
   /**
    * Maps a granting element's slug to the feat slugs it confers outright (e.g.
    * `total-power` → {`bone-spikes`, `intimidating-glare`}). Used to resolve a
@@ -98,6 +105,21 @@ export class ChoiceSetHandler {
     this.fallbacks = [];
     this.unresolvedChoices = [];
     this.ikonResolver = undefined;
+  }
+
+  /** Begins a per-actor import, registering this handler so concurrent imports route correctly. */
+  beginImport(actorId: string): void {
+    this.boundActorId = actorId;
+    ChoiceSetHandler.activeByActorId.set(actorId, this);
+  }
+
+  /** Ends a per-actor import, unregistering this handler. */
+  endImport(): void {
+    if (this.boundActorId) {
+      ChoiceSetHandler.activeByActorId.delete(this.boundActorId);
+      this.boundActorId = null;
+    }
+    ChoiceSetHandler.activeHandlers.delete(this);
   }
 
   /**
@@ -134,8 +156,9 @@ export class ChoiceSetHandler {
 
   enable(): void {
     this.importMode = true;
-    if (this.usingLibWrapper || this.originalPreCreate) {
-      debugLog("[ChoiceSet] Wrap already enabled; skipping re-install");
+    ChoiceSetHandler.activeHandlers.add(this);
+    if (ChoiceSetHandler.patchRefCount++ > 0) {
+      debugLog("[ChoiceSet] Wrap already enabled; refCount incremented");
       return;
     }
 
@@ -148,9 +171,15 @@ export class ChoiceSetHandler {
 
   disable(): void {
     this.importMode = false;
-    if (this.usingLibWrapper) {
+    ChoiceSetHandler.activeHandlers.delete(this);
+    if (--ChoiceSetHandler.patchRefCount > 0) {
+      debugLog("[ChoiceSet] Wrap still needed by another import; deferring removal");
+      return;
+    }
+    ChoiceSetHandler.patchRefCount = 0;
+    if (ChoiceSetHandler.usingLibWrapper) {
       unregisterWrapper(CHOICE_SET_TARGET);
-      this.usingLibWrapper = false;
+      ChoiceSetHandler.usingLibWrapper = false;
       debugLog("[ChoiceSet] libWrapper wrap removed, import mode off");
       return;
     }
@@ -160,28 +189,57 @@ export class ChoiceSetHandler {
   }
 
   private enableViaLibWrapper(): void {
-    const handle = this.handlePreCreate.bind(this);
     registerWrapper(CHOICE_SET_TARGET, function (this: unknown, wrapped: WrappedFn, ...args: unknown[]) {
       const context = this as ChoiceSetContext;
       const params = args[0] as PreCreateParams;
-      return handle(context, params, () => wrapped.call(context, params) as Promise<void>);
+      const handler = ChoiceSetHandler.handlerForContext(context);
+      if (!handler) return wrapped.call(context, params) as Promise<void>;
+      return handler.handlePreCreate(context, params, () => wrapped.call(context, params) as Promise<void>);
     });
-    this.usingLibWrapper = true;
+    ChoiceSetHandler.usingLibWrapper = true;
     debugLog("[ChoiceSet] libWrapper wrap registered, import mode active");
   }
 
   private enableViaPrototypePatch(): void {
     const ChoiceSetRE = this.getChoiceSetPrototype();
     const original = ChoiceSetRE.prototype.preCreate as (...args: unknown[]) => Promise<void>;
-    this.originalPreCreate = original;
+    ChoiceSetHandler.originalPreCreate = original;
 
-    const handle = this.handlePreCreate.bind(this);
     const patched = async function (this: ChoiceSetContext, params: PreCreateParams) {
-      await handle(this, params, () => original.call(this, params) as Promise<void>);
+      const handler = ChoiceSetHandler.handlerForContext(this);
+      if (!handler) return original.call(this, params) as Promise<void>;
+      await handler.handlePreCreate(this, params, () => original.call(this, params) as Promise<void>);
     };
-    this.patchedPreCreate = patched as (...args: unknown[]) => Promise<void>;
+    ChoiceSetHandler.patchedPreCreate = patched as (...args: unknown[]) => Promise<void>;
     ChoiceSetRE.prototype.preCreate = patched;
     debugLog("[ChoiceSet] Monkey-patch enabled, import mode active");
+  }
+
+  private static handlerForContext(context: ChoiceSetContext): ChoiceSetHandler | undefined {
+    // eslint-disable-next-line no-restricted-syntax -- Actor id is not in the published ChoiceSetContext type
+    const actorId = (context.actor as unknown as { id?: string })?.id;
+    if (actorId && ChoiceSetHandler.activeByActorId.has(actorId)) {
+      return ChoiceSetHandler.activeByActorId.get(actorId);
+    }
+    // Fallback for tests and single-import cases where actor has no id or
+    // beginImport wasn't used — single active handler wins.
+    if (ChoiceSetHandler.activeHandlers.size === 1) {
+      return ChoiceSetHandler.activeHandlers.values().next().value;
+    }
+    if (ChoiceSetHandler.activeByActorId.size === 1) {
+      return ChoiceSetHandler.activeByActorId.values().next().value;
+    }
+    return undefined;
+  }
+
+  /** Test-only: resets global patch state between unit tests. */
+  static _resetForTests(): void {
+    ChoiceSetHandler.activeByActorId.clear();
+    ChoiceSetHandler.activeHandlers.clear();
+    ChoiceSetHandler.patchRefCount = 0;
+    ChoiceSetHandler.usingLibWrapper = false;
+    ChoiceSetHandler.originalPreCreate = null;
+    ChoiceSetHandler.patchedPreCreate = null;
   }
 
   /**
@@ -191,15 +249,15 @@ export class ChoiceSetHandler {
    * and just drop our reference.
    */
   private restorePrototypePatch(): void {
-    if (!this.originalPreCreate) return;
+    if (!ChoiceSetHandler.originalPreCreate) return;
     const ChoiceSetRE = this.getChoiceSetPrototype();
-    if (ChoiceSetRE.prototype.preCreate === this.patchedPreCreate) {
-      ChoiceSetRE.prototype.preCreate = this.originalPreCreate;
+    if (ChoiceSetRE.prototype.preCreate === ChoiceSetHandler.patchedPreCreate) {
+      ChoiceSetRE.prototype.preCreate = ChoiceSetHandler.originalPreCreate;
     } else {
       debugLog("[ChoiceSet] preCreate was re-wrapped by another module; leaving it in place");
     }
-    this.originalPreCreate = null;
-    this.patchedPreCreate = null;
+    ChoiceSetHandler.originalPreCreate = null;
+    ChoiceSetHandler.patchedPreCreate = null;
   }
 
   private async handlePreCreate(
