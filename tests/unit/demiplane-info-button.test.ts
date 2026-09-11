@@ -198,6 +198,24 @@ describe("demiplane-info-button", () => {
     expect(push?.tooltip).toContain("Write to Demiplane");
   });
 
+  it("disables update and push with tooltips while a sync is in flight", async () => {
+    actor.getFlag = vi.fn((_m: string, k: string) => {
+      if (k === "characterId") return DEMI_UUID;
+      if (k === "syncActiveTokens") return ["in-flight"];
+      return undefined;
+    });
+    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+    const opts = wait.mock.calls[0][0] as {
+      buttons: Array<{ action: string; disabled?: boolean; tooltip?: string }>;
+    };
+    const update = opts.buttons.find((b) => b.action === "update");
+    expect(update?.disabled).toBe(true);
+    expect(update?.tooltip).toContain("already in progress");
+    const push = pushButton();
+    expect(push?.disabled).toBe(true);
+    expect(push?.tooltip).toContain("already in progress");
+  });
+
   it("updates from Demiplane when the update button is clicked", async () => {
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     await clickAction("update");

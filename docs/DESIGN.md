@@ -427,6 +427,8 @@ The loop is broken by marking the character as "syncing" on the actor document i
 
 **Known limitation:** The mark is per-character, so two _different_ characters importing simultaneously do not block each other (by design). A genuinely concurrent import of the _same_ character on two clients is rare and is additionally guarded by the optimistic-concurrency `engineSig`/`lastUpdated` checks in the export path.
 
+**UI greying:** While the mark is set for an actor, its import entry points go inactive rather than merely refusing: the directory context-menu option renders greyed (faded, pointer-transparent, with an inline reason — Foundry has no native disabled state for context entries) and the sync dialog's Update/Push buttons disable with tooltips. The menu is rebuilt per open and the dialog closes on submit, so no dynamic toggling is needed; a silent click-guard remains as backstop.
+
 ## 17. Conflict Resolution Heuristic
 
 **Decision:** A push is aborted and a re-import is triggered **only** when the remote character's _engine content_ actually changed since our last sync — not merely because Demiplane bumped the `updated` timestamp.

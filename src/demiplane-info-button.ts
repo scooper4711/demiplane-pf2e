@@ -2,6 +2,7 @@ import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
 import { canWriteText } from "./write-level.js";
+import { isSyncActive } from "./sync-pause.js";
 import { localizeChoiceLabel } from "./import/choice-overrides.js";
 import {
   acknowledgeIssues,
@@ -136,6 +137,11 @@ function buildDialogButtons(
       action: "update",
       label: "Update from Demiplane",
       icon: "fa-solid fa-sync",
+      // Greyed while this actor is syncing: a second import would race the
+      // first (concurrent wipes, interleaved pushes). The dialog closes on
+      // submit, so no toggle is needed — a reopened dialog re-reads the state.
+      disabled: isSyncActive(actor),
+      tooltip: isSyncActive(actor) ? "An import or push is already in progress for this character." : "",
       callback: () => performUpdate(actor, characterId, importCharacter),
     },
     buildPushButton(actor, exportCharacter),
@@ -155,19 +161,25 @@ function buildDialogButtons(
 }
 
 /**
- * The "Push to Demiplane" button. Auto-sync is the master write switch, so when
- * it is off the button is disabled with a tooltip explaining why — pushing would
- * be a no-op, so it is better to prevent the click than to report a misleading
- * "pushed" success.
+ * The "Push to Demiplane" button. Disabled when writing is off (pushing would
+ * be a no-op) or while a sync is already in flight for the actor (a second
+ * push would race it) — each with a tooltip explaining why, so the button
+ * reads as inactive rather than broken.
  */
 function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
   const writingOn = canWriteText();
+  const syncing = isSyncActive(actor);
+  const tooltip = !writingOn
+    ? "Set a “Write to Demiplane” level in the module settings to push to Demiplane."
+    : syncing
+      ? "An import or push is already in progress for this character."
+      : "";
   return {
     action: "push",
     label: "Push to Demiplane",
     icon: "fa-solid fa-upload",
-    disabled: !writingOn,
-    tooltip: writingOn ? "" : "Set a “Write to Demiplane” level in the module settings to push to Demiplane.",
+    disabled: !writingOn || syncing,
+    tooltip,
     callback: () => exportCharacter(actor),
   };
 }
