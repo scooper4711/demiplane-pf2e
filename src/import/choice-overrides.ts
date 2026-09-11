@@ -33,16 +33,20 @@ export function resolveUserOverride(context: ChoiceSetContext, overrides: Choice
   if (typeof stored !== "string") return null;
   return context.choices.find((c) => String(c.value) === stored) ?? null;
 }
-
 /**
- * Captures an unresolved ChoiceSet as a structured record for the sync dialog.
+ * Captures a ChoiceSet as a structured record for the sync dialog.
  * The prompt prefers the ChoiceSet's own prompt text, falling back to the
  * granting item's name when it is absent or not a string.
  */
-export function unresolvedChoiceRecord(context: ChoiceSetContext, guessed: Choice): UnresolvedChoice {
+export function unresolvedChoiceRecord(
+  context: ChoiceSetContext,
+  guessed: Choice,
+  source: "guess" | "override"
+): UnresolvedChoice {
   const prompt = typeof context.prompt === "string" && context.prompt.length > 0 ? context.prompt : context.item.name;
   return {
     key: choiceKeyFor(context.item.slug, context.item.name, context.flag),
+    source,
     prompt,
     options: context.choices.map((c) => ({ value: String(c.value), label: c.label })),
     guessedValue: String(guessed.value),

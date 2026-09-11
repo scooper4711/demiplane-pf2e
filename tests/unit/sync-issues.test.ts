@@ -270,6 +270,7 @@ describe("sync-issues choice overrides", () => {
 describe("sync-issues unresolved choices", () => {
   const record = {
     key: "feat::choice",
+    source: "guess",
     prompt: "Choose a skill",
     options: [
       { value: "acrobatics", label: "Acrobatics" },
@@ -296,6 +297,24 @@ describe("sync-issues unresolved choices", () => {
   it("lights the indicator for unanswered choices", () => {
     const actor = createFlagActor() as unknown as Actor;
     setUnresolvedChoices(actor, [record]);
+
+    expect(hasActiveIssues(actor)).toBe(true);
+    expect(shouldShowIndicator(actor)).toBe(true);
+  });
+
+  it("does not light the indicator for applied picks alone", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [{ ...record, source: "override" }]);
+
+    // A pick in effect is settled, not an issue — visible in the dialog,
+    // but the dot stays off.
+    expect(hasActiveIssues(actor)).toBe(false);
+    expect(shouldShowIndicator(actor)).toBe(false);
+  });
+
+  it("stays lit when guesses remain alongside applied picks", () => {
+    const actor = createFlagActor() as unknown as Actor;
+    setUnresolvedChoices(actor, [record, { ...record, key: "other::choice", source: "override" }]);
 
     expect(hasActiveIssues(actor)).toBe(true);
     expect(shouldShowIndicator(actor)).toBe(true);

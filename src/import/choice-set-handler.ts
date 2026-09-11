@@ -314,12 +314,15 @@ export class ChoiceSetHandler {
   ): void {
     // User overrides are strictly last-resort: consulted only when the
     // matchers fail, so they can never win over a successful automatic match.
+    // Both outcomes are recorded (override-applied or blind guess) so the
+    // dialog can show what is in effect for every non-automatic choice.
     const override = matched === null ? resolveUserOverride(context, this.choiceOverrides) : null;
     const selected = matched ?? override ?? context.choices[0];
-    if (!selected) return;
+    const guessed = context.choices[0];
+    if (!selected || !guessed) return;
     this.applySelectedChoice(context, params, selected, matched !== null || override !== null, candidateSlugs);
-    if (matched === null && override === null) {
-      this.unresolvedChoices.push(unresolvedChoiceRecord(context, selected));
+    if (matched === null) {
+      this.unresolvedChoices.push(unresolvedChoiceRecord(context, guessed, override !== null ? "override" : "guess"));
     }
   }
 
@@ -585,6 +588,12 @@ export class ChoiceSetHandler {
 
     context.selection = params.ruleSource.selection = selected.value;
 
+    // Mirror PF2e's ChoiceSet rename (rule-element #adjustName): choosing an
+    // option renames the item ("Virtuosic Performer" → "Virtuosic Performer
+    // (Winds)"). The import bypasses the native preCreate that performs it,
+    // so neither defaults nor user overrides ever renamed — replicate it here.
+    this.renameItemForSelection(params, selected);
+
     // Set the item flag the same way PF2e's native ChoiceSet does — direct mutation
     // so that subsequent GrantItem rules can resolve {item|flags.pf2e.rulesSelections.X}
     const itemFlags = context.item.flags as Record<string, Record<string, unknown>>;
@@ -600,6 +609,36 @@ export class ChoiceSetHandler {
     // Reset ignored state on sibling rules so GrantItem processes after selection is available
     for (const rule of context.item.rules) {
       rule.ignored = false;
+    }
+  }
+
+  /**
+   * Replicates PF2e ChoiceSet's `#adjustName` for the boolean-true case (which
+   * the schema also applies when the rule omits `adjustName` entirely):
+   * `Name` becomes `Name (Localized Label)`, collapsing an already-present
+   * double suffix. String-form templates (e.g. kinetic gates, which compose
+   * several selections) are left alone.
+   */
+  private renameItemForSelection(params: PreCreateParams, selected: Choice): void {
+    const adjustName = (params.ruleSource as { adjustName?: unknown }).adjustName ?? true;
+    if (adjustName !== true) return;
+    const label = this.localizeChoiceLabel(selected.label);
+    const newName = `${params.itemSource.name} (${label})`;
+    const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    params.itemSource.name = newName.replace(new RegExp(`\\(${escaped}\\) \\(${escaped}\\)$`), `(${label})`);
+  }
+
+  /**
+   * Localizes a choice label the way PF2e's `_loc` does: translation keys
+   * resolve, raw display strings pass through unchanged. Falls back to the
+   * raw label when i18n is unavailable (unit tests) or yields nothing.
+   */
+  private localizeChoiceLabel(label: string): string {
+    try {
+      const localized = game.i18n.localize(label);
+      return localized.length > 0 ? localized : label;
+    } catch {
+      return label;
     }
   }
 

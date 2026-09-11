@@ -90,10 +90,10 @@ export async function showDemiplaneInfoDialog(
 
   const syncIssuesSection = buildSyncIssuesSection(syncIssues);
   const sanctificationSection = buildSanctificationSection(actor);
-  const unresolvedChoicesSection = buildUnresolvedChoicesSection(
-    getUnresolvedChoices(actor),
-    getChoiceOverrides(actor)
-  );
+  const unresolved = getUnresolvedChoices(actor);
+  const overrides = getChoiceOverrides(actor);
+  const unresolvedChoicesSection = buildUnresolvedChoicesSection(unresolved, overrides);
+  const choicePicksSection = buildChoicePicksSection(unresolved, overrides);
   const unmappedItemsSection = buildUnmappedItemsSection(unmappedItems);
 
   const manualItems = actor.items.filter(isUnmanagedManualItem);
@@ -106,6 +106,7 @@ export async function showDemiplaneInfoDialog(
     syncIssuesSection,
     sanctificationSection,
     unresolvedChoicesSection,
+    choicePicksSection,
     unmappedItemsSection,
     manualItemsSection,
   });
@@ -119,6 +120,7 @@ export async function showDemiplaneInfoDialog(
       attachMappingEditorButton(event, dialog);
       attachSanctificationSelect(actor, dialog);
       attachChoicesSelects(actor, dialog);
+      attachChoiceDeletes(actor, dialog);
     },
   });
 }
@@ -192,6 +194,7 @@ interface DialogContentOptions {
   syncIssuesSection: string;
   sanctificationSection: string;
   unresolvedChoicesSection: string;
+  choicePicksSection: string;
   unmappedItemsSection: string;
   manualItemsSection: string;
 }
@@ -223,6 +226,7 @@ function buildDialogContent(opts: DialogContentOptions): string {
       ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
       ${opts.sanctificationSection}
       ${opts.unresolvedChoicesSection}
+      ${opts.choicePicksSection}
       ${opts.manualItemsSection}
       <hr>
       <section>
@@ -333,15 +337,16 @@ function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.a
 }
 
 /**
- * Renders one dropdown per ChoiceSet the last import could not resolve. Each
- * lists the ChoiceSet's options plus an explicit "not chosen" empty state, so
- * a blind `choices[0]` guess is never presented as the user's decision; a
- * stored override pre-selects. Absent when nothing is unresolved.
+ * Renders one dropdown per ChoiceSet the last import guessed at. Each lists
+ * the ChoiceSet's options plus an explicit "not chosen" empty state, so a
+ * blind `choices[0]` guess is never presented as the user's decision; a
+ * stored override pre-selects. Absent when nothing needs input.
  */
 function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: ChoiceOverrides): string {
-  if (records.length === 0) return "";
+  const pending = records.filter((r) => r.source === "guess");
+  if (pending.length === 0) return "";
 
-  const selects = records
+  const selects = pending
     .map((record) => {
       const current = overrides[record.key];
       const options = record.options
@@ -364,8 +369,50 @@ function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: C
   return `
     <hr>
     <section class="demiplane-choices">
-      <p><strong>Choices needing your input</strong> (${String(records.length)}):</p>
+      <p><strong>Choices needing your input</strong> (${String(pending.length)}):</p>
       ${selects}
+    </section>`;
+}
+
+/**
+ * Renders every stored pick — the ChoiceSets resolving from user overrides
+ * plus stale picks whose ChoiceSet no longer fails (auto-resolves now, or is
+ * gone). Each row names what is in effect and offers a delete button: deleting
+ * is the manual garbage collection (the next import then guesses and
+ * re-reports the ChoiceSet for a fresh pick). Absent when no picks are stored.
+ */
+function buildChoicePicksSection(records: UnresolvedChoice[], overrides: ChoiceOverrides): string {
+  const keys = Object.keys(overrides);
+  if (keys.length === 0) return "";
+
+  const rows = keys
+    .map((key) => {
+      const record = records.find((r) => r.key === key);
+      const stored = overrides[key] ?? "";
+      let detail: string;
+      if (!record) {
+        detail = `value "${escapeHtml(stored)}" <span class="hint">(stale — no longer applies to any ChoiceSet)</span>`;
+      } else if (record.source === "override") {
+        const selectedLabel = record.options.find((o) => o.value === stored)?.label ?? stored;
+        const guessLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
+        detail = `your pick "${escapeHtml(selectedLabel)}" is in effect (would have guessed "${escapeHtml(guessLabel ?? "?")}")`;
+      } else {
+        detail = `stored pick "${escapeHtml(stored)}" is stale — the ChoiceSet offered different options`;
+      }
+      const label = record ? escapeHtml(record.prompt) : escapeHtml(key);
+      return `<li>${label}: ${detail}
+        <button type="button" class="demiplane-choice-delete" data-choice-key="${escapeHtml(key)}" title="Delete this pick">
+          <i class="fa-solid fa-trash" inert></i> Delete
+        </button></li>`;
+    })
+    .join("\n");
+
+  return `
+    <hr>
+    <section class="demiplane-choices-applied">
+      <p><strong>Your picks in effect</strong> (${String(keys.length)}):</p>
+      <ul>${rows}</ul>
+      <p class="hint">Delete a pick, then Update from Demiplane to re-resolve it.</p>
     </section>`;
 }
 
@@ -382,6 +429,25 @@ function attachChoicesSelects(actor: Actor, dialog: foundry.applications.api.Dia
       if (!key) return;
       if (select.value === "") removeChoiceOverride(actor, key);
       else setChoiceOverride(actor, key, select.value);
+    });
+  });
+}
+
+/**
+ * Wires each pick's delete button to drop the stored override and remove its
+ * row (plus the section if it was the last row). The pick stops applying on
+ * the next Update from Demiplane, which falls back to guessing and re-reports
+ * the ChoiceSet for a fresh pick.
+ */
+function attachChoiceDeletes(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
+  dialog.element.querySelectorAll<HTMLButtonElement>(".demiplane-choice-delete").forEach((button) => {
+    button.addEventListener("click", () => {
+      const key = button.dataset.choiceKey;
+      if (!key) return;
+      removeChoiceOverride(actor, key);
+      button.closest("li")?.remove();
+      const section = dialog.element.querySelector(".demiplane-choices-applied");
+      if (section && section.querySelectorAll("li").length === 0) section.remove();
     });
   });
 }

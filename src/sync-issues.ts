@@ -69,7 +69,9 @@ export function getUnresolvedChoices(actor: Actor): UnresolvedChoice[] {
 
 export function setUnresolvedChoices(actor: Actor, records: UnresolvedChoice[]): void {
   void actor.setFlag(MODULE_ID, UNRESOLVED_CHOICES_FLAG, records);
-  if (records.length > 0) markUnacknowledged(actor);
+  // Only guesses relight the dot: an applied user pick is settled, not an
+  // issue, even though it stays visible in the dialog for transparency.
+  if (records.some((r) => r.source === "guess")) markUnacknowledged(actor);
   notifyChanged(actor);
 }
 
@@ -114,7 +116,7 @@ export function hasActiveIssues(actor: Actor): boolean {
     getImportIssues(actor).size > 0 ||
     getExportIssues(actor).size > 0 ||
     getUnmappedSlugs(actor).length > 0 ||
-    getUnresolvedChoices(actor).length > 0
+    getUnresolvedChoices(actor).some((r) => r.source === "guess")
   );
 }
 

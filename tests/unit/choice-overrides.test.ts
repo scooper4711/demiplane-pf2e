@@ -58,9 +58,10 @@ describe("resolveUserOverride", () => {
 });
 
 describe("unresolvedChoiceRecord", () => {
-  it("captures key, prompt fallback, options, and guess", () => {
-    expect(unresolvedChoiceRecord(context(), { value: "acrobatics", label: "Acrobatics" })).toEqual({
+  it("captures key, source, prompt fallback, options, and guess", () => {
+    expect(unresolvedChoiceRecord(context(), { value: "acrobatics", label: "Acrobatics" }, "guess")).toEqual({
       key: "test-feat::choice",
+      source: "guess",
       prompt: "Test Feat",
       options: [
         { value: "acrobatics", label: "Acrobatics" },
@@ -71,10 +72,20 @@ describe("unresolvedChoiceRecord", () => {
   });
 
   it("prefers the ChoiceSet prompt text when present", () => {
-    const record = unresolvedChoiceRecord(context({ prompt: "Choose a skill" }), {
-      value: "acrobatics",
-      label: "Acrobatics",
-    });
+    const record = unresolvedChoiceRecord(
+      context({ prompt: "Choose a skill" }),
+      {
+        value: "acrobatics",
+        label: "Acrobatics",
+      },
+      "guess"
+    );
     expect(record.prompt).toBe("Choose a skill");
+  });
+
+  it("marks override-applied records with their source", () => {
+    const record = unresolvedChoiceRecord(context(), { value: "acrobatics", label: "Acrobatics" }, "override");
+    expect(record.source).toBe("override");
+    expect(record.key).toBe("test-feat::choice");
   });
 });

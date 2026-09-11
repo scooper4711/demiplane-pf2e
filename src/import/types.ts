@@ -103,18 +103,21 @@ export type ChoiceKey = string;
 export type ChoiceOverrides = Record<ChoiceKey, string>;
 
 /**
- * A ChoiceSet no automatic strategy (and no valid user override) could resolve
- * during import. The single source of truth for the sync dialog's choice
- * dropdowns — human-readable text is derived at render time, never stored.
+ * A ChoiceSet the automatic strategies could not resolve, recorded for the
+ * sync dialog. `source` says how it was applied this import: a blind
+ * `choices[0]` guess (needs the user's input) or a stored user pick (in
+ * effect; deletable). Records are replaced wholesale each import.
  */
 export interface UnresolvedChoice {
   /** Stable identity for this ChoiceSet on this actor (see {@link ChoiceKey}). */
   key: ChoiceKey;
+  /** How this ChoiceSet was applied: blind guess or stored user pick. */
+  source: "guess" | "override";
   /** Human label: the ChoiceSet prompt, or the granting item's name. */
   prompt: string;
   /** The options to offer, with serializable values for matching. */
-  options: Array<{ value: string; label: string }>;
-  /** What the blind `choices[0]` fallback applied, for display ("we guessed X"). */
+  options: { value: string; label: string }[];
+  /** What the blind `choices[0]` fallback applied or would apply, for display ("we guessed X"). */
   guessedValue: string | null;
 }
 

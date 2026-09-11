@@ -272,6 +272,7 @@ describe("demiplane-info-button", () => {
   describe("unresolved choice dropdowns", () => {
     const choiceRecord = {
       key: "feat::choice",
+      source: "guess",
       prompt: "Choose a skill",
       options: [
         { value: "acrobatics", label: "Acrobatics" },
@@ -362,6 +363,69 @@ describe("demiplane-info-button", () => {
       for (const fn of listeners["change"] ?? []) fn();
 
       expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", {});
+    });
+
+    it("shows applied picks with a delete button", async () => {
+      const applied = { ...choiceRecord, source: "override" };
+      actorWithChoices([applied], { "feat::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Your picks in effect");
+      expect(opts.content).toContain("your pick");
+      expect(opts.content).toContain('data-choice-key="feat::choice"');
+      // No dropdown for an applied pick — only the delete.
+      expect(opts.content).not.toContain("demiplane-choice-select");
+    });
+
+    it("shows stale picks with no record", async () => {
+      actorWithChoices([], { "gone::choice": "crafting" });
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).toContain("Your picks in effect");
+      expect(opts.content).toContain("stale");
+      expect(opts.content).toContain('data-choice-key="gone::choice"');
+    });
+
+    it("omits the picks section when nothing is stored", async () => {
+      actorWithChoices([choiceRecord], {});
+
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+      const opts = wait.mock.calls[0][0] as { content: string };
+
+      expect(opts.content).not.toContain("Your picks in effect");
+    });
+
+    it("deletes the pick and its row when the trashcan is clicked", async () => {
+      actorWithChoices([{ ...choiceRecord, source: "override" }], { "feat::choice": "crafting" });
+      let clicks = 0;
+      const row = { remove: vi.fn() };
+      const fakeButton = {
+        dataset: { choiceKey: "feat::choice" },
+        closest: () => row,
+        addEventListener: (_event: string, fn: () => void) => {
+          clicks += 1;
+          fn();
+        },
+      };
+      const fakeDialog = {
+        element: {
+          querySelector: () => null,
+          querySelectorAll: (selector: string) => (selector === ".demiplane-choice-delete" ? [fakeButton] : []),
+        },
+      };
+      wait.mockImplementationOnce(async (opts: { render?: (event: unknown, dialog: unknown) => void }) => {
+        opts.render?.({}, fakeDialog);
+        return "close";
+      });
+      await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+
+      expect(clicks).toBe(1);
+      expect(actor.setFlag).toHaveBeenCalledWith(MODULE_ID, "choiceOverrides", {});
+      expect(row.remove).toHaveBeenCalled();
     });
   });
 });

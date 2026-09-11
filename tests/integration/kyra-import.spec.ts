@@ -59,8 +59,9 @@ test.describe("Kyra Import", () => {
     const names = result.feats.map((f) => f.name);
     expect(names).toContain("Student of the Canon");
     expect(names).toContain("Cleric Spellcasting");
-    expect(names).toContain("Divine Font");
-    expect(names).toContain("Domain Initiate");
+    // Resolved ChoiceSets rename the item like the UI does ("Feat (Choice)").
+    expect(names).toContain("Divine Font (Healing)");
+    expect(names).toContain("Domain Initiate (Fire)");
   });
 
   test("imports background lore and languages", () => {
