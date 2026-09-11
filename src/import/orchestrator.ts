@@ -105,7 +105,7 @@ export class ImportOrchestrator {
     const handler = new ChoiceSetHandler();
     // eslint-disable-next-line no-restricted-syntax -- Actor id is not in the published Actor type
     const actorId = (actor as unknown as { id: string }).id ?? characterId;
-    handler.beginImport(actorId);
+    handler.beginImport(actorId, actor.name as string | undefined);
     await this.prepareChoiceSetHandler(handler, actor, engines, cacheEngineIds);
     const selectionData = buildSelectionData(engines);
     const categorized = categorizeEngines(engines);

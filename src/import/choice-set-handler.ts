@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- ChoiceSet handler is inherently large; split would hurt cohesion */
 import type { DemiplaneEngineEntry } from "./types.js";
 import type { ChoiceOverrides, UnresolvedChoice } from "./types.js";
 import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
@@ -76,6 +77,7 @@ export class ChoiceSetHandler {
   private importMode = false;
   private currentEngines: DemiplaneEngineEntry[] = [];
   private boundActorId: string | null = null;
+  private boundActorName: string | null = null;
   /**
    * Maps a granting element's slug to the feat slugs it confers outright (e.g.
    * `total-power` → {`bone-spikes`, `intimidating-glare`}). Used to resolve a
@@ -108,8 +110,9 @@ export class ChoiceSetHandler {
   }
 
   /** Begins a per-actor import, registering this handler so concurrent imports route correctly. */
-  beginImport(actorId: string): void {
+  beginImport(actorId: string, actorName?: string): void {
     this.boundActorId = actorId;
+    this.boundActorName = actorName ?? null;
     ChoiceSetHandler.activeByActorId.set(actorId, this);
   }
 
@@ -118,8 +121,15 @@ export class ChoiceSetHandler {
     if (this.boundActorId) {
       ChoiceSetHandler.activeByActorId.delete(this.boundActorId);
       this.boundActorId = null;
+      this.boundActorName = null;
     }
     ChoiceSetHandler.activeHandlers.delete(this);
+  }
+
+  private actorTag(): string {
+    if (this.boundActorName) return `${this.boundActorName} (${this.boundActorId})`;
+    if (this.boundActorId) return this.boundActorId;
+    return "unknown actor";
   }
 
   /**
@@ -274,7 +284,7 @@ export class ChoiceSetHandler {
     }
 
     debugLog(
-      `ChoiceSet preCreate: item=${context.item.name}, flag=${context.flag || "choice"}, prompt=${this.description(
+      `[${this.actorTag()}] ChoiceSet preCreate: item=${context.item.name}, flag=${context.flag || "choice"}, prompt=${this.description(
         context.prompt
       )}, choices=${this.describeChoiceQuery(context.choices)}`
     );
@@ -285,7 +295,7 @@ export class ChoiceSetHandler {
 
     context.choices = await context.inflateChoices(rollOptions, params.tempItems);
     if (!context.choices || context.choices.length === 0) {
-      debugLog("ChoiceSet presented choices: none");
+      debugLog(`[${this.actorTag()}] ChoiceSet presented choices: none`);
       return;
     }
 
@@ -295,7 +305,7 @@ export class ChoiceSetHandler {
 
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
-      `ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
+      `[${this.actorTag()}] ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
     );
 
     const matched = findMatchInChoices(
@@ -352,7 +362,7 @@ export class ChoiceSetHandler {
   private resolveForcedSingleChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
     if (context.choices.length !== 1) return false;
     debugLog(
-      `[ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
+      `[${this.actorTag()}] [ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
     );
     this.applySelectedChoice(context, params, context.choices[0]!, true, []);
     return true;
@@ -500,7 +510,7 @@ export class ChoiceSetHandler {
 
     if (await this.isPreSetSelectionValid(context, params)) {
       debugLog(
-        `[ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
+        `[${this.actorTag()}] [ChoiceSet] preCreate passthrough: valid pre-set selection=${String(
           this.description(context.selection)
         )}, item=${params.itemSource.name}`
       );
@@ -508,7 +518,7 @@ export class ChoiceSetHandler {
     }
 
     debugLog(
-      `[ChoiceSet] preCreate: pre-set selection ${this.description(
+      `[${this.actorTag()}] [ChoiceSet] preCreate: pre-set selection ${this.description(
         context.selection
       )} is not a valid choice; re-resolving, item=${params.itemSource.name}`
     );
@@ -533,7 +543,9 @@ export class ChoiceSetHandler {
     candidateSlugs: string[],
     note?: string
   ): void {
-    debugLog(`ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`);
+    debugLog(
+      `[${this.actorTag()}] ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`
+    );
 
     // A fallback is a guess (the first option), applied so the import stays
     // usable, but recorded so it surfaces as a sync issue for the GM to correct.
@@ -565,7 +577,7 @@ export class ChoiceSetHandler {
     (pf2eFlags.rulesSelections as Record<string, unknown>)[context.flag || "choice"] = selected.value;
 
     debugLog(
-      `[ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${context.flag || "choice"} = ${String(selected.value)}`
+      `[${this.actorTag()}] [ChoiceSet] Set flag: item.flags.pf2e.rulesSelections.${context.flag || "choice"} = ${String(selected.value)}`
     );
 
     // Reset ignored state on sibling rules so GrantItem processes after selection is available
@@ -631,7 +643,7 @@ export class ChoiceSetHandler {
     const choiceSetRules = system.rules.filter((r) => r.key === "ChoiceSet");
     if (choiceSetRules.length > 0) {
       debugLog(
-        `[ChoiceSet] presetChoiceSelections: item=${(itemData as { name?: string }).name}, slug=${demiplaneSlug}, ChoiceSet rules count=${String(choiceSetRules.length)}`
+        `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections: item=${(itemData as { name?: string }).name}, slug=${demiplaneSlug}, ChoiceSet rules count=${String(choiceSetRules.length)}`
       );
     }
 
@@ -651,11 +663,15 @@ export class ChoiceSetHandler {
     const selection =
       this.instanceScopedGenericChoice(rule, featEngineId) ?? (await this.findChoiceSelection(demiplaneSlug, rule));
     if (selection === null) {
-      debugLog(`[ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`);
+      debugLog(
+        `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections: no match for flag=${flagText} on slug=${demiplaneSlug}`
+      );
       return;
     }
 
-    debugLog(`[ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`);
+    debugLog(
+      `[${this.actorTag()}] [ChoiceSet] presetChoiceSelections resolved: flag=${flagText}, selection=${String(selection)}`
+    );
     rule.selection = selection;
 
     // Also set flags so GrantItem can resolve {item|flags.pf2e.rulesSelections.X}
@@ -694,7 +710,7 @@ export class ChoiceSetHandler {
     if (!choice) return null;
 
     const value = (choice.args!.name as string).toLowerCase().replace(/\s+/g, "-");
-    debugLog(`[ChoiceSet] instance-scoped generic choice for feat ${featEngineId}: ${value}`);
+    debugLog(`[${this.actorTag()}] [ChoiceSet] instance-scoped generic choice for feat ${featEngineId}: ${value}`);
     return value;
   }
 
