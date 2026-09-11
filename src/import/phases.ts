@@ -18,6 +18,7 @@ import {
   toPlainData,
 } from "../pf2e-types.js";
 import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
+import { IMPORT_PLACEHOLDER_NAME } from "../config.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "./slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
@@ -473,7 +474,16 @@ export class PostProcessingPhase implements ImportPhase {
     const levelEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_level");
     const avatarEng = engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === "character_avatar");
     const updates: Record<string, unknown> = {};
-    if (nameEng?.value) updates.name = nameEng.value;
+    if (nameEng?.value) {
+      updates.name = nameEng.value;
+      // The prototype token defaults to the actor's creation name ("Importing...").
+      // Rename it to match only while it still carries that placeholder, so a user
+      // who shortened the token name for the battle map keeps their choice.
+      const tokenName = (actor as { prototypeToken?: { name?: string } }).prototypeToken?.name;
+      if (tokenName === IMPORT_PLACEHOLDER_NAME) {
+        updates["prototypeToken.name"] = nameEng.value;
+      }
+    }
     if (levelEng?.value) updates["system.details.level.value"] = levelEng.value;
     if (avatarEng?.value) {
       updates.img = avatarEng.value;

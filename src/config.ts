@@ -4,6 +4,14 @@ import { MODULE_ID } from "./import/types.js";
 export const DEMIPLANE_SHEET_BASE = "https://app.demiplane.com/nexus/pathfinder2e/character-sheet";
 
 /**
+ * Placeholder name a new actor is created with before its Demiplane data
+ * arrives. The import renames the actor, and also renames its prototype token
+ * only if the token still carries this placeholder — leaving a user-shortened
+ * token name (e.g. for the battle map) untouched.
+ */
+export const IMPORT_PLACEHOLDER_NAME = "Importing...";
+
+/**
  * The Demiplane logo, served by Foundry from the module root. Blue = linked.
  * A transparent PNG (not the ICO): the dark tile is keyed out so the badge is
  * just the "D" and its blue ring, matching the transparent error variant.

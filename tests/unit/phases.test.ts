@@ -586,6 +586,31 @@ describe("import phases", () => {
       );
     });
 
+    it("renames the prototype token when it still holds the import placeholder", async () => {
+      const actor = createMockActor();
+      actor.prototypeToken.name = "Importing...";
+      const ctx = makeCtx(identityEngines());
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      expect(actor.update).toHaveBeenCalledWith(
+        expect.objectContaining({ name: "Valeros", "prototypeToken.name": "Valeros" })
+      );
+    });
+
+    it("leaves a user-customized token name untouched", async () => {
+      const actor = createMockActor();
+      actor.prototypeToken.name = "Val"; // shortened for the battle map
+      const ctx = makeCtx(identityEngines());
+
+      await new PostProcessingPhase().run(actor, ctx);
+
+      const identityCall = actor.update.mock.calls.find(
+        (c: unknown[]) => (c[0] as Record<string, unknown>).name === "Valeros"
+      );
+      expect(identityCall![0]).not.toHaveProperty("prototypeToken.name");
+    });
+
     it("defaults focus to the full pool when Demiplane omits the current value", async () => {
       // Demiplane drops character_focus_current when the pool is full, so an
       // absent engine imports as max (here the mock's focus.max = 3).

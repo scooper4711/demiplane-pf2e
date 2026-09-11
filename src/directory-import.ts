@@ -1,5 +1,5 @@
 import { MODULE_ID } from "./import/types.js";
-import { DEMIPLANE_SHEET_BASE } from "./config.js";
+import { DEMIPLANE_SHEET_BASE, IMPORT_PLACEHOLDER_NAME } from "./config.js";
 import { findActorLinkedTo } from "./actor-link.js";
 import type { ImportCharacterFn } from "./sync-flows.js";
 
@@ -64,7 +64,7 @@ export async function onImportButtonClick(importCharacter: ImportCharacterFn): P
     return;
   }
 
-  const actor = await Actor.create({ name: "Importing...", type: "character" });
+  const actor = await Actor.create({ name: IMPORT_PLACEHOLDER_NAME, type: "character" });
   if (!actor) return;
 
   await actor.setFlag(MODULE_ID, "characterId", characterId);
