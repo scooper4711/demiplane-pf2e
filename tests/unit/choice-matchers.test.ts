@@ -185,6 +185,23 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices([{ label: "X", value: "unrelated" }], engines)).toBeNull();
   });
 
+  it("prefers the chosen weapon group over a coincidental owned-item slug", async () => {
+    // Fighter Weapon Mastery offers weapon GROUPS (spear, polearm, ...). The
+    // player chose Polearm (a generic-feature engine), but also owns a spear;
+    // the owned "spear" slug must not win the "spear" group option over the
+    // explicit polearm selection.
+    const choices = [
+      { label: "Spear", value: "spear" },
+      { label: "Polearm", value: "polearm" },
+    ];
+    const engines = [
+      demiEngine("tabula/item/spear-rm.eng", "spear-rm"),
+      demiEngine("tabula/generic-feature/weapon-master-polearm.eng", "weapon-master-polearm"),
+    ];
+
+    expect(findMatchInChoices(choices, engines)).toBe(choices[1]);
+  });
+
   it("matches feat slugs against compendium choice labels", () => {
     const engines = [featEngine("power-attack")];
 

@@ -38,9 +38,14 @@ export function findMatchInChoices(
     () => matchWeaponInnovation(choices, engines, itemName),
     () => matchItemEngines(choices, engines),
     () => matchGrantedFeats(choices, grantedFeatsByElement, itemName),
-    () => matchAllSlugs(choices, engines),
+    // Class- and generic-feature engines are explicit records of a player's
+    // selection for a specific feature, so they must win over matchAllSlugs — a
+    // broad fallback that matches any owned-item slug. Otherwise a coincidental
+    // collision (a Fighter who owns a spear picking the "spear" weapon *group*
+    // instead of the chosen "polearm") resolves to the wrong option.
     () => matchClassFeatures(choices, engines),
     () => matchGenericFeatures(choices, engines),
+    () => matchAllSlugs(choices, engines),
     () => matchFeatSlugs(choices, engines, itemName),
     () => matchGenericChoice(choices, engines, itemName),
   ];
@@ -373,7 +378,7 @@ function matchAllSlugs(choices: Choice[], engines: DemiplaneEngineEntry[]): Choi
       .map((e) => toFoundrySlug(e.args?.slug as string))
   );
 
-  tlog(`[ChoiceSet match] Strategy 2 - all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`);
+  tlog(`[ChoiceSet match] all engine slugs (first 20): [${Array.from(allSlugs).slice(0, 20).join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
@@ -387,9 +392,9 @@ function matchClassFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]):
     .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/class-feature/") && e.args?.slug)
     .map((e) => toFoundrySlug(e.args?.slug as string));
 
-  tlog(`[ChoiceSet match] Strategy 3 - class feature slugs: [${classFeatureSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] class feature slugs: [${classFeatureSlugs.join(", ")}]`);
   tlog(
-    `[ChoiceSet match] Choice labels for Strategy 3: [${choices
+    `[ChoiceSet match] Choice labels for class-feature match: [${choices
       .slice(0, 5)
       .map((c) => `${c.label}→${toChoiceSlug(c.label)}`)
       .join(", ")}...]`
@@ -409,7 +414,7 @@ function matchGenericFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]
     .filter((e) => e.type === "DemiplaneEngine" && e.name.includes("/generic-feature/") && e.args?.slug)
     .map((e) => toFoundrySlug(e.args?.slug as string));
 
-  tlog(`[ChoiceSet match] Strategy 4 - generic feature slugs: [${genericFeatureSlugs.join(", ")}]`);
+  tlog(`[ChoiceSet match] generic feature slugs: [${genericFeatureSlugs.join(", ")}]`);
 
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
