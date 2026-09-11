@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.1] - 2026-09-11
+
+### Added
+
+- import current shield hit points
+- include actor identity in ChoiceSet debug output
+- grey out import actions while that actor is syncing
+- unify sanctification into user choice overrides
+- user-specified ChoiceSet resolution as last resort
+- user-specified ChoiceSet resolution as last resort
+
+### Fixed
+
+- import shield reinforcing runes
+- prefix ChoiceSet match logs with actor identity
+- make ChoiceSet resolution thread-safe for concurrent imports
+- replace fixed dialog waits with render flush and toHaveCount
+- locale-aware ikon tie-break sort and parameterized unit tests
+
+[1.0.0-rc.1]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v1.0.0-rc.1
+
 ## [1.0.0-beta.5] - 2026-09-10
 
 ### Added
