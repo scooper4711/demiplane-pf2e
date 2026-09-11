@@ -304,7 +304,7 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     });
   }
 
-  it("auto-selects a 'must be' deity's sole sanctification with no decision to review", async () => {
+  it("treats sanctification like any other ChoiceSet: single option decides silently", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
@@ -317,34 +317,42 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
 
     expect(ctx.selection).toBe("holy");
     expect(handler.drainFallbacks()).toHaveLength(0);
-    // A single-option "must be" deity is deterministic — no decision to surface.
-    expect(handler.drainSanctificationDecision()).toBeUndefined();
+    expect(handler.drainUnresolvedChoices()).toHaveLength(0);
   });
 
-  it("defaults a 'can be' deity to the affirmative sanctification and records a decision to confirm", async () => {
+  it("treats sanctification like any other ChoiceSet: guesses first option and records it", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
     handler.enable();
 
-    // A "can be" deity leaves the affirmative option plus the "none" opt-out
-    // (e.g. Sarenrae → Holy / None).
+    // A "can be" deity leaves several options (e.g. Sarenrae → Holy / None)
+    // with no engine data to match — the generic blind fallback applies.
     const ctx = sanctificationCtx(makeContext, ["holy", "none"]);
     const proto = builtin.ChoiceSet.prototype as unknown as { preCreate: (this: unknown, p: unknown) => Promise<void> };
     await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
 
     expect(ctx.selection).toBe("holy");
-    // No generic ChoiceSet fallback — the sanctification note is owned by the orchestrator.
-    expect(handler.drainFallbacks()).toHaveLength(0);
-    const decision = handler.drainSanctificationDecision();
-    expect(decision).toEqual({ options: ["holy", "none"], selected: "holy", fromPreference: false });
+    expect(handler.drainFallbacks()).toHaveLength(1);
+    expect(handler.drainUnresolvedChoices()).toEqual([
+      {
+        key: "deity-cleric::choice",
+        source: "guess",
+        prompt: "Deity (Cleric)",
+        options: [
+          { value: "holy", label: "Holy" },
+          { value: "none", label: "None" },
+        ],
+        guessedValue: "holy",
+      },
+    ]);
   });
 
-  it("honors a stored sanctification preference over the affirmative default", async () => {
+  it("honors a stored override for sanctification like any other choice", async () => {
     const builtin = installChoiceSetPrototype();
     const handler = new ChoiceSetHandler();
     handler.setEngines([]);
-    handler.setSanctificationPreference("none");
+    handler.setChoiceOverrides({ "deity-cleric::choice": "none" });
     handler.enable();
 
     const ctx = sanctificationCtx(makeContext, ["holy", "none"]);
@@ -352,8 +360,9 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
     await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Deity (Cleric)" } });
 
     expect(ctx.selection).toBe("none");
-    const decision = handler.drainSanctificationDecision();
-    expect(decision).toEqual({ options: ["holy", "none"], selected: "none", fromPreference: true });
+    expect(handler.drainFallbacks()).toHaveLength(0);
+    const [record] = handler.drainUnresolvedChoices();
+    expect(record?.source).toBe("override");
   });
 
   it("passes through a valid pre-set selection without re-resolving", async () => {

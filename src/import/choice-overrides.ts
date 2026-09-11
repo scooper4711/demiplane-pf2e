@@ -1,7 +1,6 @@
 import type { Choice, ChoiceSetContext } from "./choice-set-types.js";
 import type { ChoiceKey, ChoiceOverrides, UnresolvedChoice } from "./types.js";
 import { toChoiceSlug } from "./choice-slug.js";
-
 /**
  * User-specified ChoiceSet resolution (the last resort after automatic
  * matching). These helpers are pure functions over the PF2e ChoiceSet context
@@ -51,4 +50,20 @@ export function unresolvedChoiceRecord(
     options: context.choices.map((c) => ({ value: String(c.value), label: c.label })),
     guessedValue: String(guessed.value),
   };
+}
+
+/**
+ * Localizes a choice label the way PF2e's `_loc` does: translation keys
+ * resolve, raw display strings pass through unchanged. Falls back to the raw
+ * label when i18n is unavailable (unit tests) or yields nothing. Shared by
+ * the import rename and the dialog rendering so both show the same text the
+ * Foundry UI would.
+ */
+export function localizeChoiceLabel(label: string): string {
+  try {
+    const localized = game.i18n.localize(label);
+    return localized.length > 0 ? localized : label;
+  } catch {
+    return label;
+  }
 }

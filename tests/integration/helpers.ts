@@ -394,6 +394,36 @@ export async function waitForSyncRelease(page: Page, characterId: string): Promi
     .catch(() => {});
 }
 
+/**
+ * Stores each unresolved record's guessed option as the actor's pick, so
+ * later re-imports apply silently instead of re-flagging. Fidelity specs use
+ * this to keep the re-import clean: the pick content is irrelevant here, only
+ * its stabilizing effect matters (correctness of picks is covered by the
+ * choice-override unit tests and the reimport spec, which picks non-first
+ * options deliberately).
+ */
+export async function storeGuessedPicks(
+  page: Page,
+  characterId: string,
+  records: Array<{ key: string; options: Array<{ value: string }> }>
+): Promise<void> {
+  await page.evaluate(
+    async ({ characterId, moduleId, records }) => {
+      // @ts-expect-error Foundry global
+      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      // @ts-expect-error Foundry global
+      const current = (actor.getFlag(moduleId, "choiceOverrides") ?? {}) as Record<string, string>;
+      const picks: Record<string, string> = { ...current };
+      for (const record of records) {
+        if (record.options.length > 0) picks[record.key] = String(record.options[0].value);
+      }
+      // @ts-expect-error Foundry global
+      await actor.setFlag(moduleId, "choiceOverrides", picks);
+    },
+    { characterId, moduleId: MODULE_ID, records }
+  );
+}
+
 /** Waits until our module API is callable — it lands after game.ready. */ export async function waitForModuleApi(
   page: Page
 ): Promise<void> {
@@ -462,6 +492,7 @@ export interface ImportResult {
     itemsSkipped: number;
     errors: string[];
     log: string[];
+    unresolvedChoices: Array<{ key: string; options: Array<{ value: string; label: string }> }>;
   };
   name: string;
   level: number;

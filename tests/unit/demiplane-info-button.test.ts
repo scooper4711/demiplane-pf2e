@@ -144,14 +144,9 @@ describe("demiplane-info-button", () => {
     expect(opts.content).not.toContain("Your GM can map these");
   });
 
-  it("omits the sanctification selector when the character has no sanctification choice", async () => {
-    // The default actor mock returns undefined for the sanctification flag.
-    await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
-    const opts = wait.mock.calls[0][0] as { content: string };
-    expect(opts.content).not.toContain("demiplane-sanctification-select");
-  });
-
-  it("renders a sanctification selector with the deity's options when the choice is real", async () => {
+  it("has no sanctification section: sanctification is an ordinary ChoiceSet now", async () => {
+    // The old per-deity selector is gone; a sanctification flag left over
+    // from an earlier version renders nothing.
     actor.getFlag = vi.fn((_m: string, k: string) => {
       if (k === "characterId") return DEMI_UUID;
       if (k === "sanctification") return { options: ["holy", "none"], selected: "holy", acknowledged: false };
@@ -159,11 +154,8 @@ describe("demiplane-info-button", () => {
     });
     await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
     const opts = wait.mock.calls[0][0] as { content: string };
-    expect(opts.content).toContain("demiplane-sanctification-select");
-    expect(opts.content).toContain('<option value="holy" selected>Holy</option>');
-    expect(opts.content).toContain('<option value="none">None</option>');
-    // Only the deity's options appear — "Unholy" is not offered for a can-be-holy deity.
-    expect(opts.content).not.toContain(">Unholy<");
+    expect(opts.content).not.toContain("demiplane-sanctification-select");
+    expect(opts.content).not.toContain("Sanctification:");
   });
 
   it("flags the dialog when the latest sync has unacknowledged issues", async () => {
@@ -341,6 +333,39 @@ describe("demiplane-info-button", () => {
 
       expect(opts.content).not.toContain("demiplane-choice-select");
       expect(opts.content).not.toContain("Choices needing your input");
+    });
+
+    it("translates labels that are translation keys", async () => {
+      const gameGlobal = globalThis as unknown as { game?: Record<string, unknown> };
+      const savedGame = gameGlobal.game;
+      try {
+        gameGlobal.game = {
+          ...((savedGame ?? {}) as Record<string, unknown>),
+          i18n: {
+            localize: (key: string) => (key === "PF2E.SpecificRule.VirtuosicPerformer.Winds" ? "Winds" : key),
+          },
+        };
+        actorWithChoices(
+          [
+            {
+              key: "feat::choice",
+              source: "guess",
+              prompt: "PF2E.SpecificRule.VirtuosicPerformer.Prompt",
+              options: [{ value: "winds", label: "PF2E.SpecificRule.VirtuosicPerformer.Winds" }],
+              guessedValue: "winds",
+            },
+          ],
+          {}
+        );
+
+        await showDemiplaneInfoDialog(actor as never, DEMI_UUID, importFn as never, exportFn as never);
+        const opts = wait.mock.calls[0][0] as { content: string };
+
+        expect(opts.content).toContain(">Winds<");
+        expect(opts.content).not.toContain("PF2E.SpecificRule.VirtuosicPerformer.Winds");
+      } finally {
+        gameGlobal.game = savedGame;
+      }
     });
 
     it("persists a dropdown pick to the actor flag", async () => {

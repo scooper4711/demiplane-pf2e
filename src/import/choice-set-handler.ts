@@ -6,34 +6,13 @@ import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
-import { resolveUserOverride, unresolvedChoiceRecord } from "./choice-overrides.js";
+import { resolveUserOverride, unresolvedChoiceRecord, localizeChoiceLabel } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
 import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../libwrapper.js";
 import { builtinRuleElement } from "../pf2e-types.js";
-import { isSanctification, type Sanctification } from "../sanctification.js";
-
-/**
- * The sanctification choice discovered while resolving a "can be" deity's
- * Sanctification ChoiceSet during import. Drained by the orchestrator so it can
- * persist the per-character state and decide whether to flag it for review.
- */
-export interface SanctificationDecision {
-  /** The options the deity allows (predicate-surviving choices), e.g. `["holy", "none"]`. */
-  options: Sanctification[];
-  /** The value the importer applied (a stored preference, or the affirmative default). */
-  selected: Sanctification;
-  /** True when `selected` came from a stored player preference rather than a guess. */
-  fromPreference: boolean;
-}
 
 /** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
 const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";
-
-/** The `rollOption` PF2e's cleric Sanctification ChoiceSet declares (see `deity-cleric` class feature). */
-const SANCTIFICATION_ROLL_OPTION = "sanctification";
-
-/** The Sanctification "opt out" option value (neither holy nor unholy). */
-const SANCTIFICATION_NONE_VALUE = "none";
 
 /**
  * Manages ChoiceSet auto-resolution during import.
@@ -107,10 +86,6 @@ export class ChoiceSetHandler {
   private choiceOverrides: ChoiceOverrides = {};
   /** Unresolved ChoiceSets recorded during the current import; drained by the orchestrator. */
   private unresolvedChoices: UnresolvedChoice[] = [];
-  /** A stored player sanctification preference to honor over the default, if any. */
-  private sanctificationPreference: Sanctification | undefined;
-  /** The sanctification decision made this import (multi-option deities only). */
-  private sanctificationDecision: SanctificationDecision | undefined;
   /**
    * The Exemplar ikon → owned-weapon assignment, computed lazily the first time
    * an ikon ChoiceSet is seen (so every sibling ikon and the owned weapons
@@ -122,7 +97,6 @@ export class ChoiceSetHandler {
     this.currentEngines = engines;
     this.fallbacks = [];
     this.unresolvedChoices = [];
-    this.sanctificationDecision = undefined;
     this.ikonResolver = undefined;
   }
 
@@ -135,15 +109,6 @@ export class ChoiceSetHandler {
     this.grantedFeatsByElement = grantedFeatsByElement;
   }
 
-  /**
-   * Provides the character's previously chosen sanctification (from the actor
-   * flag) so a re-import honors it instead of re-guessing. Cleared by passing
-   * `undefined`.
-   */
-  setSanctificationPreference(value: Sanctification | undefined): void {
-    this.sanctificationPreference = value;
-  }
-
   /** Returns and clears the fallbacks recorded since the last {@link setEngines}. */
   drainFallbacks(): ChoiceSetFallback[] {
     const drained = this.fallbacks;
@@ -152,9 +117,9 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * Provides the actor's stored choice overrides for this import. Like the
-   * sanctification preference, these persist across imports on the actor and
-   * are loaded per import — deliberately NOT reset by {@link setEngines}.
+   * Provides the actor's stored choice overrides for this import. These persist
+   * across imports on the actor and are loaded per import — deliberately NOT
+   * reset by {@link setEngines}.
    */
   setChoiceOverrides(overrides: ChoiceOverrides): void {
     this.choiceOverrides = overrides;
@@ -164,17 +129,6 @@ export class ChoiceSetHandler {
   drainUnresolvedChoices(): UnresolvedChoice[] {
     const drained = this.unresolvedChoices;
     this.unresolvedChoices = [];
-    return drained;
-  }
-
-  /**
-   * Returns the sanctification decision made during this import, if the
-   * character's deity presented a real choice. `undefined` for deterministic
-   * ("must be") deities and non-cleric/champion characters.
-   */
-  drainSanctificationDecision(): SanctificationDecision | undefined {
-    const drained = this.sanctificationDecision;
-    this.sanctificationDecision = undefined;
     return drained;
   }
 
@@ -274,11 +228,6 @@ export class ChoiceSetHandler {
     context.choices = await context.inflateChoices(rollOptions, params.tempItems);
     if (!context.choices || context.choices.length === 0) {
       debugLog("ChoiceSet presented choices: none");
-      return;
-    }
-
-    if (context.rollOption === SANCTIFICATION_ROLL_OPTION) {
-      this.resolveSanctification(context, params);
       return;
     }
 
@@ -457,51 +406,6 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * Resolves the cleric Sanctification ChoiceSet (holy / unholy / none).
-   *
-   * Demiplane does not export the character's sanctification, so we can't match
-   * it from engine data. PF2e pre-filters the options by the deity's own
-   * sanctification, which lets us infer the right behavior from what remains:
-   *
-   * - **Deterministic ("must be" deity):** exactly one option survives the
-   *   predicate (e.g. Iomedae → only Holy). The trait is automatic, so select it
-   *   silently — there was no choice to lose.
-   * - **A real choice ("can be" deity):** several options survive, including the
-   *   "none" opt-out (e.g. Sarenrae → Holy / None). Demiplane doesn't tell us
-   *   which the player took. If they previously chose one (a stored preference
-   *   passed via {@link setSanctificationPreference}), honor it silently.
-   *   Otherwise default to the affirmative sanctification, record it as an issue
-   *   for the player to confirm, and expose the decision so the orchestrator can
-   *   persist the per-character state.
-   */
-  private resolveSanctification(context: ChoiceSetContext, params: PreCreateParams): void {
-    const choices = context.choices;
-    if (choices.length === 1) {
-      this.applySelectedChoice(context, params, choices[0]!, true, []);
-      return;
-    }
-
-    const options = choices.map((c) => c.value).filter(isSanctification);
-    const preferred = this.sanctificationPreference;
-    const preferredChoice = preferred !== undefined ? choices.find((c) => c.value === preferred) : undefined;
-
-    if (preferredChoice) {
-      // The player already chose this sanctification; apply it without re-flagging.
-      this.sanctificationDecision = { options, selected: preferred!, fromPreference: true };
-      this.applySelectedChoice(context, params, preferredChoice, true, []);
-      return;
-    }
-
-    const affirmative = choices.find((c) => c.value !== SANCTIFICATION_NONE_VALUE) ?? choices[0]!;
-    const selected = isSanctification(affirmative.value) ? affirmative.value : options[0]!;
-    this.sanctificationDecision = { options, selected, fromPreference: false };
-    // Apply as a "matched" selection so no generic ChoiceSet fallback is
-    // recorded here. Whether to surface a sync-issue note is decided by the
-    // orchestrator (it owns the actor and the "first time only" acknowledgement).
-    this.applySelectedChoice(context, params, affirmative, true, []);
-  }
-
-  /**
    * The Demiplane selection slugs in scope for matching — the values the
    * strategies compare against. Logged next to the presented choices so a failed
    * match shows both sides (e.g. choices "Reach Spell"/"Widen Spell" vs
@@ -622,24 +526,10 @@ export class ChoiceSetHandler {
   private renameItemForSelection(params: PreCreateParams, selected: Choice): void {
     const adjustName = (params.ruleSource as { adjustName?: unknown }).adjustName ?? true;
     if (adjustName !== true) return;
-    const label = this.localizeChoiceLabel(selected.label);
+    const label = localizeChoiceLabel(selected.label);
     const newName = `${params.itemSource.name} (${label})`;
     const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     params.itemSource.name = newName.replace(new RegExp(`\\(${escaped}\\) \\(${escaped}\\)$`), `(${label})`);
-  }
-
-  /**
-   * Localizes a choice label the way PF2e's `_loc` does: translation keys
-   * resolve, raw display strings pass through unchanged. Falls back to the
-   * raw label when i18n is unavailable (unit tests) or yields nothing.
-   */
-  private localizeChoiceLabel(label: string): string {
-    try {
-      const localized = game.i18n.localize(label);
-      return localized.length > 0 ? localized : label;
-    } catch {
-      return label;
-    }
   }
 
   private getChoiceSetPrototype(): { prototype: Record<string, unknown> } {

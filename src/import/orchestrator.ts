@@ -21,7 +21,6 @@ import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
-import { getSanctification, recordSanctificationChoice } from "../sanctification.js";
 import { getChoiceOverrides } from "../sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
@@ -146,8 +145,6 @@ export class ImportOrchestrator {
     // across the whole pipeline, exactly like the fallbacks above.
     summary.unresolvedChoices = this.choiceSetHandler.drainUnresolvedChoices();
 
-    await this.persistSanctification(actor, summary);
-
     // Flag variant rules the character relies on that aren't enabled in the
     // Foundry world (e.g. Gradual Ability Boosts, Mythic), which would otherwise
     // silently drop content.
@@ -161,20 +158,9 @@ export class ImportOrchestrator {
   }
 
   /**
-   * Persists the per-character sanctification state and, only the first time,
-   * surfaces a sync issue asking the player to confirm the guessed value.
-   *
-   * A "must be" deity produces no decision (nothing to persist or flag). A "can
-   * be" deity does: we store its options and current selection so the sync
-   * dialog can show a selector and a later re-import honors the choice. The
-   * confirmation note is shown only while the choice is unacknowledged — once the
-   * player sets it in the dialog, `recordSanctificationChoice` keeps it
-   * acknowledged and this stops flagging it.
-   */
-  /**
-   * Primes the ChoiceSet handler for this import: seeds the engine data, any
-   * previously chosen sanctification, and the actor's stored choice overrides,
-   * so a re-import honors the player's past decisions instead of re-guessing.
+   * Primes the ChoiceSet handler for this import: seeds the engine data and the
+   * actor's stored choice overrides, so a re-import honors the player's past
+   * decisions instead of re-guessing.
    */
   private async prepareChoiceSetHandler(
     actor: Actor,
@@ -182,24 +168,8 @@ export class ImportOrchestrator {
     cacheEngineIds: string[]
   ): Promise<void> {
     this.choiceSetHandler.setEngines(engines);
-    this.choiceSetHandler.setSanctificationPreference(getSanctification(actor)?.selected);
     this.choiceSetHandler.setChoiceOverrides(getChoiceOverrides(actor));
     this.choiceSetHandler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
-  }
-
-  private async persistSanctification(actor: Actor, summary: ImportSummary): Promise<void> {
-    const decision = this.choiceSetHandler.drainSanctificationDecision();
-    if (!decision) return;
-
-    await recordSanctificationChoice(actor, decision.options, decision.selected);
-
-    const alreadyChosen = decision.fromPreference || getSanctification(actor)?.acknowledged === true;
-    if (!alreadyChosen) {
-      summary.errors.push(
-        `Demiplane doesn't export your deity's sanctification, so it defaulted to "${decision.selected}". ` +
-          `Your deity lets you choose — set it in the Demiplane sync panel if this is wrong.`
-      );
-    }
   }
 
   private buildPipeline(): ImportPhase[] {

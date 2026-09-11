@@ -2,6 +2,7 @@ import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
 import { canWriteText } from "./write-level.js";
+import { localizeChoiceLabel } from "./import/choice-overrides.js";
 import {
   acknowledgeIssues,
   getChoiceOverrides,
@@ -14,20 +15,7 @@ import {
   shouldShowIndicator,
 } from "./sync-issues.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
-import {
-  getSanctification,
-  setSanctificationSelection,
-  isSanctification,
-  type Sanctification,
-} from "./sanctification.js";
 import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
-
-/** Human-readable labels for the sanctification select options. */
-const SANCTIFICATION_LABELS: Record<Sanctification, string> = {
-  holy: "Holy",
-  unholy: "Unholy",
-  none: "None",
-};
 
 type ImportCharacterFn = (
   actor: Actor,
@@ -89,7 +77,6 @@ export async function showDemiplaneInfoDialog(
   const indicatorActive = shouldShowIndicator(actor);
 
   const syncIssuesSection = buildSyncIssuesSection(syncIssues);
-  const sanctificationSection = buildSanctificationSection(actor);
   const unresolved = getUnresolvedChoices(actor);
   const overrides = getChoiceOverrides(actor);
   const unresolvedChoicesSection = buildUnresolvedChoicesSection(unresolved, overrides);
@@ -104,7 +91,6 @@ export async function showDemiplaneInfoDialog(
     lastImportDisplay,
     lastExportDisplay,
     syncIssuesSection,
-    sanctificationSection,
     unresolvedChoicesSection,
     choicePicksSection,
     unmappedItemsSection,
@@ -118,7 +104,6 @@ export async function showDemiplaneInfoDialog(
     buttons: buildDialogButtons(actor, characterId, importCharacter, exportCharacter, indicatorActive),
     render: (event, dialog) => {
       attachMappingEditorButton(event, dialog);
-      attachSanctificationSelect(actor, dialog);
       attachChoicesSelects(actor, dialog);
       attachChoiceDeletes(actor, dialog);
     },
@@ -192,7 +177,6 @@ interface DialogContentOptions {
   lastImportDisplay: string;
   lastExportDisplay: string;
   syncIssuesSection: string;
-  sanctificationSection: string;
   unresolvedChoicesSection: string;
   choicePicksSection: string;
   unmappedItemsSection: string;
@@ -224,7 +208,6 @@ function buildDialogContent(opts: DialogContentOptions): string {
         <p><a href="${opts.sheetUrl}" target="_blank" rel="noopener">Open sheet on Demiplane ↗</a></p>
       </section>
       ${buildScrollableIssues(opts.syncIssuesSection, opts.unmappedItemsSection)}
-      ${opts.sanctificationSection}
       ${opts.unresolvedChoicesSection}
       ${opts.choicePicksSection}
       ${opts.manualItemsSection}
@@ -293,50 +276,6 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * Renders the sanctification selector — only for characters whose deity presents
- * a real holy/unholy/none choice (a "can be" deity). Demiplane doesn't export
- * the choice, so the import guesses; this lets the player correct it. Absent for
- * "must be" deities (deterministic) and non-deity classes, so the section simply
- * doesn't render for them.
- */
-function buildSanctificationSection(actor: Actor): string {
-  const state = getSanctification(actor);
-  if (!state) return "";
-
-  const options = state.options
-    .map((value) => {
-      const selected = value === state.selected ? " selected" : "";
-      return `<option value="${value}"${selected}>${escapeHtml(SANCTIFICATION_LABELS[value])}</option>`;
-    })
-    .join("");
-
-  return `
-    <hr>
-    <section class="demiplane-sanctification">
-      <p><strong>Sanctification:</strong>
-        <select class="demiplane-sanctification-select">${options}</select>
-      </p>
-      <p class="hint">Demiplane doesn't export this, so it was guessed on import. Set it here, then Update from Demiplane to apply it.</p>
-    </section>`;
-}
-
-/**
- * Wires the sanctification `<select>` to persist the player's choice. The choice
- * is applied on the next "Update from Demiplane": the import honors the stored
- * preference and stops flagging it. (Applying it live would mean rewriting the
- * deity feature's ChoiceSet rules array, which is error-prone, so we defer to
- * the import that already sets sanctification correctly.)
- */
-function attachSanctificationSelect(actor: Actor, dialog: foundry.applications.api.DialogV2): void {
-  const select = dialog.element.querySelector<HTMLSelectElement>(".demiplane-sanctification-select");
-  select?.addEventListener("change", () => {
-    const value = select.value;
-    if (!isSanctification(value)) return;
-    void setSanctificationSelection(actor, value);
-  });
-}
-
-/**
  * Renders one dropdown per ChoiceSet the last import guessed at. Each lists
  * the ChoiceSet's options plus an explicit "not chosen" empty state, so a
  * blind `choices[0]` guess is never presented as the user's decision; a
@@ -352,17 +291,17 @@ function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: C
       const options = record.options
         .map((option) => {
           const selected = option.value === current ? " selected" : "";
-          return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(option.label)}</option>`;
+          return `<option value="${escapeHtml(option.value)}"${selected}>${escapeHtml(localizeChoiceLabel(option.label))}</option>`;
         })
         .join("");
       const guessedLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
       return `
-      <p><strong>${escapeHtml(record.prompt)}:</strong>
+      <p><strong>${escapeHtml(localizeChoiceLabel(record.prompt))}:</strong>
         <select class="demiplane-choice-select" data-choice-key="${escapeHtml(record.key)}">
           <option value="">— choose —</option>${options}
         </select>
       </p>
-      <p class="hint">Guessed "${escapeHtml(guessedLabel ?? "?")}" on import. Pick the right one, then Update from Demiplane to apply it.</p>`;
+      <p class="hint">Guessed "${escapeHtml(localizeChoiceLabel(guessedLabel ?? "?"))}" on import. Pick the right one, then Update from Demiplane to apply it.</p>`;
     })
     .join("\n");
 
@@ -395,11 +334,11 @@ function buildChoicePicksSection(records: UnresolvedChoice[], overrides: ChoiceO
       } else if (record.source === "override") {
         const selectedLabel = record.options.find((o) => o.value === stored)?.label ?? stored;
         const guessLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
-        detail = `your pick "${escapeHtml(selectedLabel)}" is in effect (would have guessed "${escapeHtml(guessLabel ?? "?")}")`;
+        detail = `your pick "${escapeHtml(localizeChoiceLabel(selectedLabel))}" is in effect (would have guessed "${escapeHtml(localizeChoiceLabel(guessLabel ?? "?"))}")`;
       } else {
         detail = `stored pick "${escapeHtml(stored)}" is stale — the ChoiceSet offered different options`;
       }
-      const label = record ? escapeHtml(record.prompt) : escapeHtml(key);
+      const label = record ? escapeHtml(localizeChoiceLabel(record.prompt)) : escapeHtml(key);
       return `<li>${label}: ${detail}
         <button type="button" class="demiplane-choice-delete" data-choice-key="${escapeHtml(key)}" title="Delete this pick">
           <i class="fa-solid fa-trash" inert></i> Delete

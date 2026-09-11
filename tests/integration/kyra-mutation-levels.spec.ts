@@ -10,6 +10,7 @@ import {
   setWriteLevel,
   restoreWriteLevel,
   waitForSyncRelease,
+  storeGuessedPicks,
 } from "./helpers.js";
 
 const CHARACTER_UUID = process.env.KYRA_UUID ?? "";
@@ -50,6 +51,9 @@ test.describe("Kyra Write Levels", () => {
       await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
       const imported = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
       expect(imported.summary.errors).toHaveLength(1);
+      // Adopt the guesses so later re-imports apply silently instead of
+      // re-flagging; correctness of picks is covered by reimport.spec.ts.
+      await storeGuessedPicks(page, CHARACTER_UUID, imported.summary.unresolvedChoices);
       // Imports hold the export suspension for seconds AFTER returning; any
       // mutation inside that window loses its hook queues (deletes
       // unrecoverably), so wait it out before touching the actor.

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { choiceKeyFor, resolveUserOverride, unresolvedChoiceRecord } from "../../src/import/choice-overrides.js";
+import {
+  choiceKeyFor,
+  resolveUserOverride,
+  unresolvedChoiceRecord,
+  localizeChoiceLabel,
+} from "../../src/import/choice-overrides.js";
 import type { ChoiceSetContext } from "../../src/import/choice-set-types.js";
 
 function context(overrides: Partial<ChoiceSetContext> = {}): ChoiceSetContext {
@@ -54,6 +59,27 @@ describe("resolveUserOverride", () => {
 
   it("returns null for a different ChoiceSet key", () => {
     expect(resolveUserOverride(context(), { "other::choice": "crafting" })).toBeNull();
+  });
+});
+
+describe("localizeChoiceLabel", () => {
+  it("passes raw display strings through when i18n is unavailable", () => {
+    expect(localizeChoiceLabel("Forest Lore")).toBe("Forest Lore");
+  });
+
+  it("resolves translation keys through game.i18n", () => {
+    const gameGlobal = globalThis as unknown as { game?: Record<string, unknown> };
+    const savedGame = gameGlobal.game;
+    try {
+      gameGlobal.game = {
+        ...((savedGame ?? {}) as Record<string, unknown>),
+        i18n: { localize: (key: string) => (key === "SOME.KEY" ? "Translated" : key) },
+      };
+      expect(localizeChoiceLabel("SOME.KEY")).toBe("Translated");
+      expect(localizeChoiceLabel("Plain")).toBe("Plain");
+    } finally {
+      gameGlobal.game = savedGame;
+    }
   });
 });
 
