@@ -556,10 +556,10 @@
 
 /* Greyed-out actor directory context-menu entry while a sync is in flight
    for that actor. Foundry has no native `disabled` for context entries, so
-   the entry stays visible but inert: faded, non-interactive
-   (`pointer-events: none` swallows clicks — no toast, no dialog), hover
-   highlight killed, with an inline "(syncing…)" reason since the entry
-   markup offers no hook for a title attribute. */
+   the entry stays visible but faded with an inline "(syncing…)" reason.
+   It remains *clickable* so the JS guard can explain why (and so Playwright
+   can still target it); the guard silently swallows the click when syncing,
+   so no stray dialog opens. Hover highlight is killed so it reads as inactive. */
 #context-menu .context-item.demiplane-sync-disabled,
 #context-menu .context-item.demiplane-sync-disabled:hover {
   opacity: 0.45;
@@ -567,9 +567,6 @@
   background: none;
   border: none;
   box-shadow: none;
-}
-#context-menu .context-item.demiplane-sync-disabled {
-  pointer-events: none;
 }
 #context-menu .context-item.demiplane-sync-disabled span::after {
   content: " (syncing…)";

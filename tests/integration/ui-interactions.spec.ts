@@ -5,6 +5,7 @@ import {
   deleteAllActors,
   createAndImportCharacter,
   stopCoverage,
+  waitForSyncRelease,
 } from "./helpers.js";
 
 /**
@@ -47,6 +48,10 @@ test.describe("Module UI interactions", () => {
     await deleteAllActors(page);
     await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
     await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
+    // The import holds the sync pause for a grace window after returning so
+    // late hooks stay suppressed; wait for it to clear so the UI (header button
+    // + context menu) is not greyed when the tests start.
+    await waitForSyncRelease(page, VALEROS_UUID);
     // The import renames the actor to the Demiplane name, so re-resolve by the
     // characterId flag rather than the created name.
     actorId = await page.evaluate(
