@@ -77,12 +77,12 @@ export async function dismissTours(page: Page): Promise<void> {
         .first()
         .click()
         .catch(() => {});
-      await page.waitForTimeout(500);
+      await page.waitForFunction(() => !document.querySelector(".tour"), { timeout: 1000 }).catch(() => {});
     }
     if (Date.now() > deadline) {
       return;
     }
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(100);
   }
 }
 
@@ -116,7 +116,7 @@ export async function dismissOverlays(page: Page): Promise<void> {
     }
     if (!clicked) return;
     if (Date.now() > deadline) return;
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(100);
   }
 }
 
@@ -156,7 +156,9 @@ export async function loginAsGamemaster(page: Page): Promise<void> {
       return;
     }
 
-    await page.waitForTimeout(2000);
+    await page
+      .waitForFunction(() => ["/game", "/auth", "/join"].some((s) => location.href.includes(s)), { timeout: 2000 })
+      .catch(() => {});
   }
 
   throw new Error(`Failed to reach /game. Current URL: ${page.url()}`);
@@ -203,7 +205,7 @@ export async function joinAsGamemaster(page: Page): Promise<void> {
     const saveContinue = page.getByRole("button", { name: "Save and Continue" });
     if (await saveContinue.isVisible({ timeout: 2000 }).catch(() => false)) {
       await saveContinue.click().catch(() => {});
-      await page.waitForTimeout(2000);
+      await saveContinue.waitFor({ state: "hidden", timeout: 2000 }).catch(() => {});
     }
     const ready = await page
       .waitForFunction(() => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true, {
@@ -328,7 +330,7 @@ export async function setWriteLevel(
   level: string,
   softDelete: boolean
 ): Promise<{ level: string | undefined; softDelete: boolean | undefined }> {
-  return await page.evaluate(
+  const result = await page.evaluate(
     async ({ moduleId, level, softDelete }) => {
       // @ts-expect-error Foundry global
       const prevLevel = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
@@ -338,16 +340,34 @@ export async function setWriteLevel(
       await game.settings.set(moduleId, "syncWriteLevel", level);
       // @ts-expect-error Foundry global
       await game.settings.set(moduleId, "syncSoftDelete", softDelete);
-      await new Promise((r) => setTimeout(r, 2000));
+      return { level: prevLevel, softDelete: prevSoft };
+    },
+    { moduleId: MODULE_ID, level, softDelete }
+  );
+  await page
+    .waitForFunction(
+      ({ moduleId, level }) => {
+        // @ts-expect-error Foundry global
+        return (
+          (
+            globalThis as unknown as { game: { settings: { get: (m: string, k: string) => unknown } } }
+          ).game.settings.get(moduleId, "syncWriteLevel") === level
+        );
+      },
+      { moduleId, level },
+      { timeout: 2000 }
+    )
+    .catch(() => {});
+  await page
+    .evaluate(async () => {
       // @ts-expect-error Foundry global
       for (const app of Object.values(ui.windows ?? {})) {
         const title = (app as { options?: { window?: { title?: string } } })?.options?.window?.title ?? "";
         if (title.includes("Pre-Release")) await (app as { close: () => Promise<void> }).close();
       }
-      return { level: prevLevel, softDelete: prevSoft };
-    },
-    { moduleId: MODULE_ID, level, softDelete }
-  );
+    })
+    .catch(() => {});
+  return result;
 }
 
 /**

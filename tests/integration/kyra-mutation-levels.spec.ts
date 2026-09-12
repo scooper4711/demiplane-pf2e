@@ -299,7 +299,6 @@ test.describe("Kyra Write Levels", () => {
       if (page && savedSettings) {
         await restoreWriteLevel(page, savedSettings);
       }
-      await new Promise((r) => setTimeout(r, 5000));
       const restore = await withApiRetry("restore engines", async () => {
         const res = await client.updateCharacter({
           id: CHARACTER_UUID,

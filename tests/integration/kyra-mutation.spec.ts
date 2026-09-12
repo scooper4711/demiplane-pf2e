@@ -288,7 +288,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
         const data = await withApiRetry("poll push", () => client.fetchCharacterData(CHARACTER_UUID));
         remote = Object.fromEntries(data.engines.map((e) => [e.name, e.value]));
         if (Object.entries(remoteWants).every(([k, v]) => JSON.stringify(remote[k]) === JSON.stringify(v))) break;
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 1000));
       }
       expect(remote["character_hit-points_current"], "remote hp persisted").toBe(expected.hpValue);
       expect(remote["character_hero-points"], "remote hero points persisted").toBe(expected.heroPoints);
@@ -401,9 +401,6 @@ test.describe("Kyra Mutation Round-Trip", () => {
       if (page && savedSettings) {
         await restoreWriteLevel(page, savedSettings);
       }
-      // Quiescence: any debounce timer armed before auto-sync went off fires
-      // into a disabled writer (a no-op) instead of landing after the restore.
-      await new Promise((r) => setTimeout(r, 5000));
       const restore = await withApiRetry("restore engines", async () => {
         const res = await client.updateCharacter({
           id: CHARACTER_UUID,
