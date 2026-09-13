@@ -215,7 +215,54 @@ export class ExportManager {
     }
   }
 
+  /**
+   * Per-character lock serializing this client's own overlapping flushes.
+   *
+   * A flush runs several sequential round trips (conflict check, fetch, push,
+   * post-push re-baseline) and only writes the `lastUpdated`/`engineSig`
+   * baseline at the very end. Without this lock a second debounced flush for the
+   * same character could enter while the first is still in flight and run its
+   * conflict check against the not-yet-committed baseline: it sees the server
+   * `updated` already advanced by the first push and, when the first push
+   * changed engine content, a differing signature — a FALSE conflict that
+   * triggers a needless wipe-and-re-import. Serializing per character closes
+   * that window so each flush sees the previous one's committed baseline.
+   *
+   * In-memory and this-client-only, exactly like `journalLocks`. It does not
+   * replace the cross-client sync pause (a replicated actor flag): that
+   * coordinates *between* clients, while this serializes one client's own
+   * flushes, which the pause deliberately never blocks.
+   */
+  private readonly flushLocks = new Map<string, Promise<void>>();
+
+  /**
+   * Serializes flushes per character (see {@link flushLocks}) around the real
+   * work in {@link flushInternal}. Chains onto any in-flight flush for the same
+   * character so the next one starts only after the previous has committed its
+   * conflict baseline.
+   */
   async flush(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
+    const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
+    // No linked character: nothing to serialize on. Run directly and let
+    // flushInternal report the missing-id error consistently.
+    if (!characterId) return this.flushInternal(actor, opts);
+
+    const prior = this.flushLocks.get(characterId);
+    let release!: () => void;
+    const mine = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.flushLocks.set(characterId, mine);
+    try {
+      if (prior) await prior;
+      return await this.flushInternal(actor, opts);
+    } finally {
+      release();
+      if (this.flushLocks.get(characterId) === mine) this.flushLocks.delete(characterId);
+    }
+  }
+
+  private async flushInternal(actor: Actor, opts: { enforceElection?: boolean } = {}): Promise<ExportResult> {
     // Auto-sync is the master write switch: when it is off, no path — neither the
     // debounced hooks nor the manual "Update to Demiplane" button — may write to
     // Demiplane. Guarding here (and in exportCampaignNotes) covers every writer.

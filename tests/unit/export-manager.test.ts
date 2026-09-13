@@ -848,6 +848,120 @@ describe("ExportManager", () => {
     });
   });
 
+  describe("flush serializes overlapping flushes per character", () => {
+    /**
+     * Builds a client whose server `updated` advances when `updateCharacter`
+     * lands, and whose `fetchCharacterData` reflects the current server timestamp.
+     * `updateCharacter` parks on a gate the test releases, so a first flush can be
+     * held mid-push while a second flush is launched — reproducing the overlap
+     * that used to produce a false conflict.
+     */
+    function createRaceClient() {
+      const engines = [
+        {
+          id: "eng-hp",
+          name: "character_hit-points_current",
+          value: 30,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-hp",
+          args: { id: null },
+        },
+      ];
+      const state = { updated: "2026-08-27T10:00:00.000Z" };
+      let releaseFirstWrite: () => void;
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
+      let firstWriteSeen = false;
+      let signalFirstParked: () => void;
+      // Resolves once flush #1's write has advanced the server timestamp and is
+      // parked — the exact moment a second flush would see advanced-server /
+      // stale-local without the lock.
+      const firstParked = new Promise<void>((resolve) => {
+        signalFirstParked = resolve;
+      });
+
+      // After the first write lands, the server's engine content differs from the
+      // pre-flush baseline (flush #1 changed an item engine) — so a second flush
+      // comparing the fresh content against the STALE engineSig would see a real
+      // content difference and declare a conflict. This is the item/equipped churn
+      // that turned the timestamp race into a false conflict in the live session.
+      const changedEngines = [
+        ...engines,
+        {
+          id: "eng-item",
+          name: "de-item-is-equipped",
+          value: 1,
+          type: "CustomDemiplaneEngine",
+          saveType: "CharacterSheet",
+          storeType: "override",
+          demiplaneEngineId: "de-item",
+          args: { id: null },
+        },
+      ];
+
+      const client = createMockClient({
+        fetchCharacterUpdated: vi.fn(() => Promise.resolve(state.updated)),
+        fetchCharacterData: vi.fn(() =>
+          Promise.resolve({ engines: firstWriteSeen ? changedEngines : engines, updated: state.updated })
+        ),
+        updateCharacter: vi.fn(async () => {
+          // The write lands on the server first (advancing `updated`), then the
+          // FIRST write parks so a second flush can try to run against it.
+          state.updated = `2026-08-27T1${firstWriteSeen ? "2" : "1"}:00:00.000Z`;
+          if (!firstWriteSeen) {
+            firstWriteSeen = true;
+            signalFirstParked();
+            await firstWriteGate;
+          }
+          return { success: true, message: null, result: null };
+        }),
+      });
+
+      return { client, engines, firstParked: () => firstParked, release: () => releaseFirstWrite() };
+    }
+
+    it("holds the second flush until the first re-baselines, so no false conflict occurs", async () => {
+      const { client, engines, firstParked, release } = createRaceClient();
+      const manager = new ExportManager(client as never);
+      const onConflict = vi.fn().mockResolvedValue(undefined);
+      manager.setOnConflictHandler(onConflict);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T10:00:00.000Z");
+      actor.setFlag("demiplane-pf2e", "engineSig", computeEngineSig(engines));
+
+      // Flush #1 begins; wait until it has advanced the server timestamp and
+      // parked mid-write. Now the server is ahead of the stored flag.
+      manager.queueChange(actor as never, "character_hit-points_current", 25);
+      const first = manager.flush(actor as never);
+      await firstParked();
+
+      // Flush #2 is launched while flush #1 is still mid-push (server already
+      // advanced, flush #1 not yet re-baselined). Without the mutex its conflict
+      // check reads advanced-server vs. stale-flag and declares a false conflict;
+      // with the mutex it waits for flush #1 to finish and re-baseline first.
+      manager.queueChange(actor as never, "character_hero-points", 1);
+      const second = manager.flush(actor as never);
+      // Give an unlocked flush #2 ample microtasks to reach its conflict check
+      // and (incorrectly) fire the conflict handler before we release flush #1.
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+
+      release();
+      const [firstResult, secondResult] = await Promise.all([first, second]);
+
+      // The guarantee under test: the second flush never mistakes the first
+      // flush's own committed write for a third-party edit. Both succeed and the
+      // conflict handler (which would re-import) is never invoked. (The second
+      // flush may find no work to push once the first clears the shared buffer;
+      // what matters is that it does not conflict.)
+      expect(firstResult.success).toBe(true);
+      expect(secondResult.success).toBe(true);
+      expect(secondResult.conflict).toBeUndefined();
+      expect(onConflict).not.toHaveBeenCalled();
+    });
+  });
+
   describe("flush retains pending changes on failure", () => {
     it("keeps pending changes when all retries fail", async () => {
       const client = createMockClient({
