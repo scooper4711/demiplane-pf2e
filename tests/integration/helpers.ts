@@ -354,7 +354,7 @@ export async function setWriteLevel(
           ).game.settings.get(moduleId, "syncWriteLevel") === level
         );
       },
-      { moduleId, level },
+      { moduleId: MODULE_ID, level },
       { timeout: 2000 }
     )
     .catch(() => {});
