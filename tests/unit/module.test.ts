@@ -24,7 +24,10 @@ describe("module entrypoint", () => {
     globalThis.game.settings.registerMenu = vi.fn();
     hooksOn = vi.fn();
     (globalThis as unknown as { Hooks: { on: unknown } }).Hooks.on = hooksOn;
-    hooksOnce = (globalThis as unknown as { Hooks: { once: ReturnType<typeof vi.fn> } }).Hooks.once;
+    // Create a fresh mock for hooksOnce before importing the module, so calls
+    // to Hooks.once() during import are captured properly (Vitest 5.0.0 fix)
+    hooksOnce = vi.fn();
+    (globalThis as unknown as { Hooks: { once: unknown } }).Hooks.once = hooksOnce;
     button = { addEventListener: vi.fn() };
     actionButtons = { querySelector: vi.fn().mockReturnValue(null), appendChild: vi.fn() };
     (globalThis as unknown as { document: { createElement: ReturnType<typeof vi.fn> } }).document = {
@@ -122,6 +125,28 @@ describe("module entrypoint", () => {
     expect(prompt).toHaveBeenCalledWith(
       expect.objectContaining({ window: expect.objectContaining({ title: expect.stringContaining("Pre-Release") }) })
     );
+    await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "none");
+  });
+
+  it("finishes initialization even while the pre-release warning is still open", async () => {
+    await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "text");
+    globalThis.game.modules.get = () => ({ version: "0.9.0-beta.1" });
+    const prompt = globalThis.foundry.applications.api.DialogV2.prompt;
+    // The warning never resolves (user hasn't dismissed it). Initialization must
+    // still complete so an import started meanwhile runs against wired singletons.
+    prompt.mockClear();
+    prompt.mockReturnValue(new Promise<void>(() => undefined));
+
+    await onceHook("ready")?.();
+
+    expect(prompt).toHaveBeenCalled();
+    // HookManager and the rest registered despite the un-dismissed dialog.
+    expect(typeof onHook("updateItem")).toBe("function");
+    expect(typeof onHook("createItem")).toBe("function");
+    expect(typeof onHook("deleteItem")).toBe("function");
+
+    prompt.mockResolvedValue(undefined);
+    globalThis.game.modules.get = () => undefined;
     await globalThis.game.settings.set("demiplane-pf2e", "syncWriteLevel", "none");
   });
 
