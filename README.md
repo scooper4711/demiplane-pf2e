@@ -189,7 +189,7 @@ Huge thanks to the beta testers whose feedback shaped this module: **AKA_Kira**,
 
 If this module saves you time at the table, consider supporting development:
 
-[Support on Ko-fi](https://ko-fi.com/coop207627)
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/coop207627)
 
 ---
 
