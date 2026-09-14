@@ -17,14 +17,21 @@ describe("module entrypoint", () => {
   let actionButtons: { querySelector: ReturnType<typeof vi.fn>; appendChild: ReturnType<typeof vi.fn> };
 
   beforeAll(async () => {
+    // Set up all mocks BEFORE importing the module so top-level hook registrations are captured
     installFoundryMocks();
+    
     // Node has no DOM; directory-icon probes `instanceof HTMLElement`, so a
     // stand-in constructor is enough for those checks to resolve false.
     vi.stubGlobal("HTMLElement", class FakeHTMLElement {});
+    
     globalThis.game.settings.registerMenu = vi.fn();
+    
+    // Create fresh vi.fn() mocks for Hooks.on and Hooks.once BEFORE module import
     hooksOn = vi.fn();
-    (globalThis as unknown as { Hooks: { on: unknown } }).Hooks.on = hooksOn;
-    hooksOnce = (globalThis as unknown as { Hooks: { once: ReturnType<typeof vi.fn> } }).Hooks.once;
+    hooksOnce = vi.fn();
+    (globalThis as unknown as { Hooks: { on: unknown; once: unknown } }).Hooks.on = hooksOn;
+    (globalThis as unknown as { Hooks: { on: unknown; once: unknown } }).Hooks.once = hooksOnce;
+    
     button = { addEventListener: vi.fn() };
     actionButtons = { querySelector: vi.fn().mockReturnValue(null), appendChild: vi.fn() };
     (globalThis as unknown as { document: { createElement: ReturnType<typeof vi.fn> } }).document = {
@@ -36,6 +43,8 @@ describe("module entrypoint", () => {
       confirm: vi.fn(),
     };
     globalThis.game.actors.contents = [];
+    
+    // NOW import the module after all mocks are in place
     await import("../../src/module.js");
   });
 
