@@ -110,6 +110,16 @@ describe("sync-issues", () => {
     expect(hooks.filter((h) => h.event === ISSUES_CHANGED_EVENT)).toHaveLength(0);
   });
 
+  it("stores plain language instead of raw JWT auth failures", async () => {
+    const actor = createFlagActor() as unknown as Actor;
+    addImportIssue(actor, "GraphQL: could not verify: Jwt expired");
+    addExportIssue(actor, "GraphQL errors: invalid JWT");
+
+    expect([...getImportIssues(actor)].some((issue) => issue.includes("token has expired"))).toBe(true);
+    expect([...getImportIssues(actor)].some((issue) => issue.includes("Jwt expired"))).toBe(false);
+    expect([...getExportIssues(actor)].some((issue) => issue.includes("rejected the token"))).toBe(true);
+  });
+
   // Regression: against real Foundry, setFlag defers the visible flag update
   // until its promise resolves. Batching must survive that; a per-message loop
   // would keep only the last message.

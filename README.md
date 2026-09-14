@@ -143,7 +143,7 @@ The easiest way to get your token is with a Chrome browser extension that captur
 2. Log in to [Demiplane Nexus](https://app.demiplane.com) in Chrome.
 3. Open any character sheet on Demiplane.
 4. Click the extension icon — it will show the captured token.
-5. Copy the token. If the value starts with `Bearer `, remove that prefix — you only need the long string after it.
+5. Copy the token. If the value starts with `Bearer `, you can paste the whole thing — the module strips that prefix automatically.
 6. In Foundry, open **Settings > Module Settings > Demiplane PF2e Sync**, paste the token into **Demiplane Authorization Token**, and save.
 
 <details>
@@ -153,7 +153,7 @@ The easiest way to get your token is with a Chrome browser extension that captur
 2. Open developer tools (**F12** or **Cmd+Option+I**) and select the **Network** tab.
 3. Open a character sheet or refresh one that is already open.
 4. Find a request to `https://apiv4.demiplane.com/v1/graphql`.
-5. Open the request headers and copy the value of the `Authorization` header, without the `Bearer ` prefix.
+5. Open the request headers and copy the value of the `Authorization` header (a leading `Bearer ` is fine — the module strips it).
 6. Paste into the module settings as above.
 
 </details>
@@ -163,6 +163,8 @@ The token is stored as a world setting so players can import characters they own
 ## Troubleshooting
 
 **"No Demiplane token configured"** — Ask the GM to configure the authorization token. See the [Getting the Demiplane Token](#getting-the-demiplane-token) section above.
+
+**"Your Demiplane token has expired"** — Demiplane tokens expire. Repeat the [Getting the Demiplane Token](#getting-the-demiplane-token) steps above and paste the fresh token into the module settings.
 
 **Some items show as unresolved after import** — A few Demiplane items may not have an exact match in the Foundry PF2e compendium yet. The import skips those and lists them in the Demiplane dialog so you can add them manually. The Demiplane icon shifts appearance to red on the linked actor's titlebar while such sync issues are outstanding. A GM can also resolve them for everyone using the [Demiplane Mapping](#mapping-unknown-items-gm-only) screen so future imports pick them up automatically. Feat-granting and ancestry choices increasingly resolve on their own, and a push that conflicts with newer Demiplane edits recovers according to your write level instead of always forcing a re-import.
 

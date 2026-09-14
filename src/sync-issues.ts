@@ -1,5 +1,6 @@
 import { MODULE_ID } from "./import/types.js";
 import type { ChoiceKey, ChoiceOverrides, UnmappedSlug, UnresolvedChoice } from "./import/types.js";
+import { toUserFacingSyncError } from "./token.js";
 
 export const ISSUES_CHANGED_EVENT = "demiplaneSyncIssuesChanged";
 
@@ -167,7 +168,10 @@ export function clearAllIssues(actor: Actor): void {
 
 export function addImportIssue(actor: Actor, message: string): void {
   const issues = getImportIssues(actor);
-  issues.add(message);
+  // Stored issues are shown verbatim in the sync dialog, so translate raw API
+  // auth failures (e.g. an expired JWT) into plain language here — the one
+  // choke point every import error passes through.
+  issues.add(toUserFacingSyncError(message));
   void writeIssueSet(actor, "import", issues);
   markUnacknowledged(actor);
   notifyChanged(actor);
@@ -187,7 +191,7 @@ export function addImportIssue(actor: Actor, message: string): void {
 export async function addImportIssues(actor: Actor, messages: string[]): Promise<void> {
   if (messages.length === 0) return;
   const issues = getImportIssues(actor);
-  for (const message of messages) issues.add(message);
+  for (const message of messages) issues.add(toUserFacingSyncError(message));
   await writeIssueSet(actor, "import", issues);
   markUnacknowledged(actor);
   notifyChanged(actor);
@@ -195,7 +199,9 @@ export async function addImportIssues(actor: Actor, messages: string[]): Promise
 
 export function addExportIssue(actor: Actor, message: string): void {
   const issues = getExportIssues(actor);
-  issues.add(message);
+  // As with imports: export issues render verbatim in the dialog, so auth
+  // failures become plain language at this choke point.
+  issues.add(toUserFacingSyncError(message));
   void writeIssueSet(actor, "export", issues);
   markUnacknowledged(actor);
   notifyChanged(actor);

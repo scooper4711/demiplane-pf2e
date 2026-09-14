@@ -24,6 +24,7 @@ import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.
 import { getChoiceOverrides } from "../sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
+import { normalizeDemiplaneToken } from "../token.js";
 import { computeEngineSig } from "../engine-sig.js";
 import { resolveGrantedFeatsBySlug } from "./stream-engines.js";
 import {
@@ -228,7 +229,7 @@ export class ImportOrchestrator {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${normalizeDemiplaneToken(token)}`,
         },
         body: JSON.stringify({ query: CHARACTER_DATA_QUERY, variables: { id: characterId } }),
       });

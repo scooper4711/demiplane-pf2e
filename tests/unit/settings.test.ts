@@ -14,6 +14,7 @@ vi.mock("@scooper4711/demiplane-api", () => ({
 }));
 
 import { registerSettings } from "../../src/settings.js";
+import { TOKEN_HELP_URL } from "../../src/token.js";
 
 describe("settings", () => {
   let register: ReturnType<typeof vi.fn>;
@@ -212,6 +213,15 @@ describe("settings", () => {
     expect(settingsGet).not.toHaveBeenCalledWith("demiplane-pf2e", "demiplaneToken");
   });
 
+  it("strips a pasted Bearer prefix before validating", async () => {
+    registerSettings();
+    settingsCallback()?.({}, html);
+    tokenInput.value = "Bearer freshly-pasted-token";
+    hoisted.validateToken.mockResolvedValue({ valid: true });
+    await button._handler?.();
+    expect(hoisted.setToken).toHaveBeenCalledWith("freshly-pasted-token");
+  });
+
   it("does not call the API when the token input is empty", async () => {
     registerSettings();
     settingsCallback()?.({}, html);
@@ -221,6 +231,45 @@ describe("settings", () => {
     expect(prompt).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining("Enter a Demiplane authorization token") })
     );
+  });
+
+  describe("Token how-to link", () => {
+    it("registers a plain-text hint and appends the link live in the DOM", () => {
+      registerSettings();
+      const call = register.mock.calls.find((c) => c[1] === "demiplaneToken");
+      expect(call).toBeDefined();
+      // Foundry escapes hint strings, so markup here would show as source.
+      expect(call![2].hint).not.toContain("<a");
+
+      const appended: unknown[] = [];
+      const hintEl = {
+        appendChild: vi.fn((node: unknown) => {
+          appended.push(node);
+        }),
+        dataset: {} as Record<string, string>,
+      } as unknown as HTMLElement;
+      const group = {
+        querySelector: vi.fn((sel: string) =>
+          String(sel).includes("hint") || String(sel).includes("notes") ? hintEl : null
+        ),
+      };
+      const tokenField = { closest: vi.fn().mockReturnValue(group), querySelector: vi.fn() };
+      const htmlWithHint = {
+        querySelector: vi.fn((sel: string) => (String(sel).includes("demiplaneToken") ? tokenField : null)),
+      } as unknown as Parameters<NonNullable<ReturnType<typeof settingsCallback>>>[1];
+
+      // Render twice: the link must be appended exactly once.
+      settingsCallback()?.({}, htmlWithHint);
+      settingsCallback()?.({}, htmlWithHint);
+
+      const links = appended.filter(
+        (node): node is HTMLAnchorElement =>
+          typeof node === "object" && node !== null && "href" in (node as Record<string, unknown>)
+      );
+      expect(links).toHaveLength(1);
+      expect(links[0]!.href).toBe(TOKEN_HELP_URL);
+      expect(links[0]!.textContent).toBe("How to get your token");
+    });
   });
 
   describe("Write to Demiplane hint", () => {

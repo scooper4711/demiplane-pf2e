@@ -23,6 +23,7 @@ import { canImportCharacters, onImportButtonClick } from "./directory-import.js"
 import { registerModuleApi } from "./module-api.js";
 import { registerSyncNotice } from "./sync-notice.js";
 import { isWritingEnabled, WRITE_LEVEL_SETTING } from "./write-level.js";
+import { normalizeDemiplaneToken } from "./token.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -53,7 +54,7 @@ async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
   client = new DemiplaneClient();
-  const storedToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+  const storedToken = normalizeDemiplaneToken((game.settings.get(MODULE_ID, "demiplaneToken") as string) ?? "");
   if (storedToken) {
     client.setToken(storedToken);
   }
@@ -123,7 +124,7 @@ function registerDuplicateLinkGuard(): void {
 function registerTokenSyncHooks(): void {
   Hooks.on("updateSetting", ((setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
-      const newToken = game.settings.get(MODULE_ID, "demiplaneToken") as string;
+      const newToken = normalizeDemiplaneToken((game.settings.get(MODULE_ID, "demiplaneToken") as string) ?? "");
       if (newToken) {
         client.setToken(newToken);
       }

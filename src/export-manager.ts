@@ -5,6 +5,7 @@ import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
 import { isWritingEnabled } from "./write-level.js";
+import { toUserFacingSyncError } from "./token.js";
 import { isClientElectedWriter } from "./sync-election.js";
 import {
   ChangeBuffer,
@@ -449,7 +450,9 @@ export class ExportManager {
 
   private notifyFailure(error: string | undefined): void {
     if (typeof ui !== "undefined" && ui.notifications) {
-      ui.notifications.error(`Demiplane sync failed: ${error ?? "Unknown error"}`);
+      // Toasts show raw push errors, so an expired token reads as plain
+      // language here too (the persisted issue is translated in addExportIssue).
+      ui.notifications.error(`Demiplane sync failed: ${toUserFacingSyncError(error ?? "Unknown error")}`);
     }
   }
 

@@ -8,6 +8,7 @@ import {
   WRITE_LEVEL_DESCRIPTIONS,
   DEFAULT_WRITE_LEVEL,
 } from "./write-level.js";
+import { TOKEN_HELP_URL, normalizeDemiplaneToken, toUserFacingSyncError } from "./token.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -32,7 +33,9 @@ export function registerSettings(): void {
 
   game.settings.register(MODULE_ID, "demiplaneToken", {
     name: "Demiplane Authorization Token",
-    hint: "Token used for Demiplane API requests. See the module README for how to obtain it. Only the GM can enter or change this value.",
+    // Plain text: Foundry escapes hint strings, so markup here would show as
+    // source. The how-to link is appended live by enhanceTokenHint below.
+    hint: "Token used for Demiplane API requests. Only the GM can enter or change this value.",
     scope: "world",
     config: true,
     type: String,
@@ -61,6 +64,7 @@ export function registerSettings(): void {
   Hooks.on("renderSettingsConfig", ((_app: unknown, html: SettingsHtml) => {
     hideTokenSettingFromPlayers(html);
     addTokenValidationButton(html);
+    enhanceTokenHint(html);
     enhanceWriteLevelHint(html);
   }) as (...args: unknown[]) => void);
 }
@@ -95,6 +99,33 @@ function addTokenValidationButton(html: SettingsHtml): void {
 function findTokenSetting(html: SettingsHtml): HTMLElement | null {
   const tokenInput = html.querySelector(`input[name="${MODULE_ID}.demiplaneToken"]`);
   return tokenInput?.closest(".form-group") ?? null;
+}
+
+/**
+ * Appends a "How to get your token" link to the token hint. Done in the DOM —
+ * not in the registered hint string, which Foundry escapes — so non-technical
+ * GMs are one click from the README instructions.
+ */
+function enhanceTokenHint(html: SettingsHtml): void {
+  if (!game.user?.isGM) return;
+  const tokenSetting = findTokenSetting(html);
+  if (!tokenSetting) return;
+  const hint = tokenSetting.querySelector(".hint, .notes, p.hint") as HTMLElement | null;
+  if (!hint || typeof hint.appendChild !== "function" || hint.dataset.tokenHelpEnhanced === "true") return;
+  // eslint-disable-next-line no-restricted-syntax -- document is an untyped DOM global outside PF2e seams
+  const doc = document as unknown as {
+    createElement?: (tag: string) => HTMLAnchorElement;
+    createTextNode?: (text: string) => Text;
+  };
+  if (typeof document === "undefined" || typeof doc.createElement !== "function") return;
+  const link = doc.createElement("a");
+  link.href = TOKEN_HELP_URL;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = "How to get your token";
+  if (typeof doc.createTextNode === "function") hint.appendChild(doc.createTextNode(" "));
+  hint.appendChild(link);
+  hint.dataset.tokenHelpEnhanced = "true";
 }
 
 function enhanceWriteLevelHint(html: SettingsHtml): void {
@@ -145,7 +176,7 @@ function enhanceWriteLevelHint(html: SettingsHtml): void {
 }
 
 async function validateDemiplaneToken(token: string): Promise<void> {
-  const trimmed = token.trim();
+  const trimmed = normalizeDemiplaneToken(token);
   if (!trimmed) {
     await showTokenValidationDialog("No token entered", "Enter a Demiplane authorization token before validating.");
     return;
@@ -161,8 +192,10 @@ async function validateDemiplaneToken(token: string): Promise<void> {
       "The Demiplane authorization token is valid and was accepted by the API."
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "The API rejected the token.";
-    await showTokenValidationDialog("Token rejected", `The token could not be validated: ${message}`);
+    await showTokenValidationDialog(
+      "Token rejected",
+      `The token could not be validated: ${toUserFacingSyncError(error)}`
+    );
   }
 }
 

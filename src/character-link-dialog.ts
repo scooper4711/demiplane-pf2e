@@ -2,6 +2,7 @@ import { MODULE_ID } from "./import/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
 import { DEMIPLANE_SHEET_BASE } from "./config.js";
+import { toUserFacingSyncError } from "./token.js";
 import { findActorLinkedTo } from "./actor-link.js";
 
 /**
@@ -101,8 +102,7 @@ export class CharacterLinkDialog {
     try {
       await this.client.fetchCharacterVersion(uuid);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      ui.notifications.error(`Could not access Demiplane character: ${message}`);
+      ui.notifications.error(`Could not access Demiplane character: ${toUserFacingSyncError(error)}`);
       return;
     }
 
