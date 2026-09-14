@@ -194,7 +194,7 @@ describe("sync-flows", () => {
 
     it("pushes engines and exports string campaign notes on success", async () => {
       const { deps, exportManager } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "full");
       const notes = vi.spyOn(exportManager, "exportCampaignNotes").mockResolvedValue(undefined);
       vi.spyOn(exportManager, "flush").mockResolvedValue({ success: true });
       const actor = linkedActor();
@@ -208,7 +208,7 @@ describe("sync-flows", () => {
 
     it("skips the journal push when campaign notes are not a string", async () => {
       const { deps, exportManager } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "full");
       const notes = vi.spyOn(exportManager, "exportCampaignNotes").mockResolvedValue(undefined);
       vi.spyOn(exportManager, "flush").mockResolvedValue({ success: true });
 
@@ -227,7 +227,7 @@ describe("sync-flows", () => {
       };
       const exportManager = new ExportManager(client);
       const importCharacter = vi.fn().mockResolvedValue(summary());
-      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity-delete");
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "full");
 
       const result = await exportLinkedCharacter(linkedActor(), {
         exportManager,
@@ -340,9 +340,9 @@ describe("sync-flows", () => {
       vi.useRealTimers();
     });
 
-    it("re-imports (not warn-only) when quantity or higher is being written", async () => {
+    it("re-imports (not warn-only) when session mode or higher is being written", async () => {
       const { deps, importCharacter } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text-quantity");
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "session");
       await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", TOKEN);
       const actor = linkedActor();
 
@@ -355,14 +355,14 @@ describe("sync-flows", () => {
       await vi.runAllTimersAsync();
     });
 
-    it("warns without re-importing at the text-only tier", async () => {
+    it("warns without re-importing at story mode", async () => {
       const { deps, importCharacter } = makeDeps();
-      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "text");
+      await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "story");
       const actor = linkedActor();
 
       await handlePushConflict(actor, deps);
 
-      // At text-only, session info is NOT pushed, so a re-import would clobber it.
+      // At story mode, session info is NOT pushed, so a re-import would clobber it.
       expect(importCharacter).not.toHaveBeenCalled();
       expect(globalThis.ui.notifications.warn).toHaveBeenCalledWith(
         expect.stringContaining("re-importing overwrites your local changes")

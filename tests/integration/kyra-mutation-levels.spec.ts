@@ -21,10 +21,19 @@ const MODULE_ID = "demiplane-pf2e";
 /**
  * Write-level gates: at each tier, mutations gated above it must not reach
  * Demiplane, while mutations at or below it must. One actor walks the tiers
- * in order (none → text → text-quantity → delete-gate), so each phase's
- * remote diff proves exactly what its tier permits. The top tier's
- * hard-delete path is covered by kyra-mutation.spec.ts; soft-delete by
+ * in order (read-only → story → session → delete-gate at story), so each
+ * phase's remote diff proves exactly what its tier permits. Hard deletes
+ * (full sync) are covered by kyra-mutation.spec.ts; session soft-deletes by
  * kyra-mutation-soft-delete.spec.ts.
+ *
+ * New tiers:
+ * - read-only (default): nothing pushes; exportNow refuses.
+ * - story: biography/appearance/personality/campaign, languages, organized
+ *   play, campaign notes — but not inventory/currency and not anything ending
+ *   in "points" (HP, temp HP, hero points, focus).
+ * - session: story plus hit/temp/hero/focus points, currency, item quantity/
+ *   equipped/container, spell slots, and soft-delete (quantity 0, no prompt).
+ * - full: session plus hard delete (engine removed, confirmation prompt).
  */
 test.describe("Kyra Write Levels", () => {
   test.skip(!DEMIPLANE_TOKEN || !CHARACTER_UUID, "DEMIPLANE_TOKEN and KYRA_UUID env vars required");
@@ -43,7 +52,7 @@ test.describe("Kyra Write Levels", () => {
     const savedHp = saved.engines.find((e) => e.name === "character_hit-points_current")?.value;
 
     let page: Page | undefined;
-    let savedSettings: { level: string | undefined; softDelete: boolean | undefined } | undefined;
+    let savedSettings: { level: string | undefined } | undefined;
     try {
       page = await browser.newPage();
       await loginAsGamemaster(page);
@@ -51,12 +60,7 @@ test.describe("Kyra Write Levels", () => {
       await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
       const imported = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
       expect(imported.summary.errors).toHaveLength(1);
-      // Adopt the guesses so later re-imports apply silently instead of
-      // re-flagging; correctness of picks is covered by reimport.spec.ts.
       await storeGuessedPicks(page, CHARACTER_UUID, imported.summary.unresolvedChoices);
-      // Imports hold the export suspension for seconds AFTER returning; any
-      // mutation inside that window loses its hook queues (deletes
-      // unrecoverably), so wait it out before touching the actor.
       await waitForSyncRelease(page, CHARACTER_UUID);
 
       const mutate = (
@@ -134,8 +138,6 @@ test.describe("Kyra Write Levels", () => {
           i.id !== qtyItem?.id &&
           i.id !== equipItem?.id &&
           i.containerId === null &&
-          // Unique name: the resurrection check matches by name, so a shared
-          // name would false-pass.
           itemTargets.filter((j) => j.name === i.name).length === 1
       );
       if (!gold || !qtyItem || !equipItem || !deleteItem) {
@@ -152,8 +154,8 @@ test.describe("Kyra Write Levels", () => {
       const equipCarry = equipHeldNow ? "worn" : "held";
       const equipHands = equipHeldNow ? 0 : 1;
 
-      // ---- Phase 1: none — exportNow refuses, remote untouched. ----
-      savedSettings = await setWriteLevel(page, "none", false);
+      // ---- Phase 1: read-only — exportNow refuses, remote untouched. ----
+      savedSettings = await setWriteLevel(page, "read-only");
       await mutate({ "system.attributes.hp.value": 3, "system.details.gender.value": "MUT-gender" }, [
         { id: gold.id, update: { "system.quantity": (gold.quantity as number) + 111 } },
       ]);
@@ -162,8 +164,8 @@ test.describe("Kyra Write Levels", () => {
       expect(noneResult.error ?? "").toMatch(/off/i);
       expect(await remoteSig()).toEqual(savedSig);
 
-      // ---- Phase 2: text — text lands, quantity/equipped do not. ----
-      await setWriteLevel(page, "text", false);
+      // ---- Phase 2: story — biography lands, but points/currency/quantity/equipped do not. ----
+      await setWriteLevel(page, "story");
       await mutate({ "system.attributes.hp.value": 3, "system.details.gender.value": "MUT-gender" }, [
         { id: gold.id, update: { "system.quantity": (gold.quantity as number) + 111 } },
         { id: qtyItem.id, update: { "system.quantity": (qtyItem.quantity as number) + 3 } },
@@ -172,15 +174,15 @@ test.describe("Kyra Write Levels", () => {
           update: { "system.equipped.carryType": equipCarry, "system.equipped.handsHeld": equipHands },
         },
       ]);
-      const textResult = (await push()) as { success: boolean };
-      expect(textResult.success).toBe(true);
-      const afterText = await remoteSig();
-      const textDiff = diffNames(savedSig, afterText);
-      expect(textDiff).toContain("character_hit-points_current");
-      expect(textDiff).toContain("character_appearance_gender");
-      expect(afterText["character_hit-points_current"]).toBe(JSON.stringify(3));
-      // Currency is text-tier, so it lands here too.
-      expect(afterText["character_currency_gold"]).toBe(JSON.stringify((gold.quantity as number) + 111));
+      const storyResult = (await push()) as { success: boolean };
+      expect(storyResult.success).toBe(true);
+      const afterStory = await remoteSig();
+      const storyDiff = diffNames(savedSig, afterStory);
+      expect(storyDiff).toContain("character_appearance_gender");
+      expect(afterStory["character_appearance_gender"]).toBe(JSON.stringify("MUT-gender"));
+      // Points and currency are session-tier, so they must not land at story.
+      expect(afterStory["character_hit-points_current"]).toBe(savedSig["character_hit-points_current"]);
+      expect(afterStory["character_currency_gold"]).toBe(savedSig["character_currency_gold"]);
       // Quantity/equipped-gated engines must be byte-identical to baseline.
       const gated = (s: Record<string, string>) =>
         Object.fromEntries(
@@ -188,24 +190,26 @@ test.describe("Kyra Write Levels", () => {
             ([k]) => k.endsWith("--quantity") || k.endsWith("-is-equipped") || k.includes("_equipped-id")
           )
         );
-      expect(gated(afterText)).toEqual(gated(savedSig));
+      expect(gated(afterStory)).toEqual(gated(savedSig));
 
-      // ---- Phase 3: text-quantity — quantity and equipped land too. ----
+      // ---- Phase 3: session — quantity, equipped, currency, and points land too. ----
       // Absolute values (not increments): prior phases left local state that
       // never reached Demiplane, so expectations must not depend on it.
-      await setWriteLevel(page, "text-quantity", false);
+      await setWriteLevel(page, "session");
       const backpackWant = (qtyItem.quantity as number) + 10;
-      await mutate({}, [
+      const goldWant = (gold.quantity as number) + 111;
+      await mutate({ "system.attributes.hp.value": 3 }, [
+        { id: gold.id, update: { "system.quantity": goldWant } },
         { id: qtyItem.id, update: { "system.quantity": backpackWant } },
         {
           id: equipItem.id,
           update: { "system.equipped.carryType": equipCarry, "system.equipped.handsHeld": equipHands },
         },
       ]);
-      const qtyResult = (await push()) as { success: boolean };
-      expect(qtyResult.success).toBe(true);
+      const sessionResult = (await push()) as { success: boolean };
+      expect(sessionResult.success).toBe(true);
       // Prove it from the Demiplane side: wipe and re-import, then read the
-      // actor (gold asserted the text tier above; it persists untouched).
+      // actor (gender from story persists too).
       const reimported = await page.evaluate(
         async ({ characterId, moduleId, token, qtyName, equipName }) => {
           // @ts-expect-error Foundry global
@@ -215,11 +219,15 @@ test.describe("Kyra Write Levels", () => {
           const qty = [...actor.items].find((i: { name: string }) => i.name === qtyName);
           const equip = [...actor.items].find((i: { name: string }) => i.name === equipName);
           const goldItem = [...actor.items].find((i: { system: { slug?: string } }) => i.system.slug === "gold-pieces");
+          const hp = actor.system.attributes.hp.value as number;
+          const gender = actor.system.details.gender.value as string;
           return {
             qty: (qty as { system: { quantity: number } } | undefined)?.system.quantity,
             carry: (equip as { system: { equipped: { carryType: string } } } | undefined)?.system.equipped.carryType,
             hands: (equip as { system: { equipped: { handsHeld: number } } } | undefined)?.system.equipped.handsHeld,
             gold: (goldItem as { system: { quantity: number } } | undefined)?.system.quantity,
+            hp,
+            gender,
           };
         },
         {
@@ -234,15 +242,17 @@ test.describe("Kyra Write Levels", () => {
       expect(reimported.qty).toBe(backpackWant);
       expect(reimported.carry).toBe(equipCarry);
       expect(reimported.hands).toBe(equipHands);
-      expect(reimported.gold).toBe((gold.quantity as number) + 111);
-      // The re-import holds its own grace window; the phase-4 delete must
-      // reach the hook, or the gate test passes for the wrong reason.
+      expect(reimported.gold).toBe(goldWant);
+      expect(reimported.hp).toBe(3);
+      expect(reimported.gender).toBe("MUT-gender");
       await waitForSyncRelease(page, CHARACTER_UUID);
 
-      // ---- Phase 4: deletes stay local below the deletion tier. ----
-      // No confirmation dialog may appear here: the gate rejects the delete
-      // before any prompt. The target is re-resolved by (unique) name: the
-      // phase-3 re-import replaced every document ID.
+      // ---- Phase 4: deletes stay local below session (story/read-only). ----
+      // The gate rejects the delete before any prompt. Target re-resolved by
+      // (unique) name: the phase-3 re-import replaced every document ID.
+      // We drop back to story to prove the gate: a session delete would
+      // soft-delete (quantity 0) and stay gone, but a story delete stays local.
+      await setWriteLevel(page, "story");
       await page.evaluate(
         async ({ characterId, moduleId, deleteName }) => {
           // @ts-expect-error Foundry global
@@ -254,13 +264,8 @@ test.describe("Kyra Write Levels", () => {
         { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name },
         { timeout: 120_000 }
       );
-      // The gate rejects the delete before any prompt, so no dialog may
-      // appear. The delete hook runs synchronously inside delete(), so only
-      // the dialog's own async render needs flushing — two animation frames,
-      // no fixed sleep.
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Set quantity to 0 on Demiplane" })).toHaveCount(0);
       const stillThere = await page.evaluate(
         ({ characterId, moduleId, deleteName }) => {
           // @ts-expect-error Foundry global
@@ -272,8 +277,6 @@ test.describe("Kyra Write Levels", () => {
       expect(stillThere).toBe(false);
       const gatePush = (await push()) as { success: boolean };
       expect(gatePush.success).toBe(true);
-      // The item's base engine must still be on Demiplane (same slug match
-      // the push itself uses: name-derived, -rm stripped).
       const slugOf = (engineName: string) =>
         (engineName.split("/").pop() ?? "").replace(/\.eng$/, "").replace(/-rm$/, "");
       const afterGate = await withApiRetry("fetch engines", () => client.fetchCharacterData(CHARACTER_UUID));
@@ -281,7 +284,6 @@ test.describe("Kyra Write Levels", () => {
         (e) => e.name.startsWith("tabula/item/") && slugOf(e.name) === deleteItem.slug
       );
       expect(basePresent).toBe(true);
-      // A wipe re-import resurrects it locally (remote never lost it).
       const resurrected = await page.evaluate(
         async ({ characterId, moduleId, token, deleteName }) => {
           // @ts-expect-error Foundry global

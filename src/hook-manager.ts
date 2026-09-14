@@ -1,9 +1,26 @@
+/* eslint-disable max-lines -- Hook reactions plus their manual-push re-queue helpers are cohesive; per-capability gating is inherently branchy and splitting would scatter one concern */
 import { MODULE_ID, INVENTORY_ITEM_TYPES } from "./import/types.js";
 import { debugLog } from "./import/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
 import type { EquippedState } from "./export/change-buffer.js";
 import { isSyncActive } from "./sync-pause.js";
-import { canWriteText, canWriteQuantity, canWriteDeletes, isSoftDeleteEnabled } from "./write-level.js";
+import {
+  canWriteBiography,
+  canWriteLanguages,
+  canWriteOrganizedPlayId,
+  canWriteCampaignNotes,
+  canWriteHitPoints,
+  canWriteHeroPoints,
+  canWriteFocusPoints,
+  canWriteCurrency,
+  canWriteSpellSlots,
+  canWriteInventoryQuantity,
+  canWriteInventoryEquipped,
+  canWriteInventoryContainer,
+  canSoftDeleteInventory,
+  canDeleteInventory,
+  isWritingEnabled,
+} from "./write-level.js";
 import { DEMIPLANE_ICON_SRC } from "./config.js";
 import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
 import { queueSpellcastingEntryChanges, queueSpellSlotResync } from "./export/spellcasting-entry-sync.js";
@@ -30,11 +47,7 @@ const LANGUAGE_SEPARATOR = ", ";
 /** The Foundry actor path holding the character's full (merged) language list. */
 const LANGUAGES_PATH = "system.details.languages.value";
 
-const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
-  "system.attributes.hp.value": "character_hit-points_current",
-  "system.attributes.hp.temp": "character_hit-points_temp",
-  "system.resources.heroPoints.value": "character_hero-points",
-  "system.resources.focus.value": "character_focus_current",
+const STORY_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.gender.value": "character_appearance_gender",
   "system.details.age.value": "character_appearance_age",
   "system.details.ethnicity.value": "character_appearance_ethnicity",
@@ -53,6 +66,38 @@ const ACTOR_FIELD_MAPPINGS: Record<string, string> = {
   "system.details.biography.edicts": "character_personality_edicts",
   "system.details.biography.anathema": "character_personality_anathema",
 };
+
+/**
+ * Session-tier actor fields: everything ending in "points" (hit points,
+ * temporary hit points, hero points, focus points). Each entry names its own
+ * write capability so permissions move independently.
+ */
+const POINT_FIELD_WRITERS: Array<{ path: string; store: string; can: () => boolean; label: string }> = [
+  {
+    path: "system.attributes.hp.value",
+    store: "character_hit-points_current",
+    can: canWriteHitPoints,
+    label: "hit points",
+  },
+  {
+    path: "system.attributes.hp.temp",
+    store: "character_hit-points_temp",
+    can: canWriteHitPoints,
+    label: "hit points",
+  },
+  {
+    path: "system.resources.heroPoints.value",
+    store: "character_hero-points",
+    can: canWriteHeroPoints,
+    label: "hero points",
+  },
+  {
+    path: "system.resources.focus.value",
+    store: "character_focus_current",
+    can: canWriteFocusPoints,
+    label: "focus points",
+  },
+];
 
 const TREASURE_ITEM_MAP: Record<string, string> = {
   "platinum-pieces": "character_currency_platinum",
@@ -77,27 +122,29 @@ interface DeletableItem {
 }
 
 /**
- * Queues current HP, temporary HP, and hero points from a linked actor
- * so they can be flushed immediately (manual push / exportNow).
+ * Queues current HP, temporary HP, hero points, and focus points from a linked
+ * actor so they can be flushed immediately (manual push / exportNow). Each
+ * resource checks its own capability so permissions move independently.
  */
 export function queueCombatResourceChanges(exportManager: ExportManager, actor: Actor): void {
-  // HP, hero points, and currency are text-tier fields: a manual push at a
-  // lower tier must not write them (the master switch in exportLinkedCharacter
-  // only blocks level `none`, so each re-queue entry point enforces its own tier).
-  if (!canWriteText()) return;
+  // Points fields are session-tier: a manual push at story mode must not write
+  // them (the master switch in exportLinkedCharacter only blocks read-only, so
+  // each re-queue entry point enforces its own capability).
   const hitPoints = characterSystem(actor).attributes?.hp;
-  if (typeof hitPoints?.value === "number") {
-    exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
-  }
-  if (typeof hitPoints?.temp === "number") {
-    exportManager.queueChange(actor, "character_hit-points_temp", hitPoints.temp);
+  if (canWriteHitPoints()) {
+    if (typeof hitPoints?.value === "number") {
+      exportManager.queueChange(actor, "character_hit-points_current", hitPoints.value);
+    }
+    if (typeof hitPoints?.temp === "number") {
+      exportManager.queueChange(actor, "character_hit-points_temp", hitPoints.temp);
+    }
   }
   const heroPoints = characterSystem(actor).resources?.heroPoints?.value;
-  if (typeof heroPoints === "number") {
+  if (canWriteHeroPoints() && typeof heroPoints === "number") {
     exportManager.queueChange(actor, "character_hero-points", heroPoints);
   }
   const focus = characterSystem(actor).resources?.focus?.value;
-  if (typeof focus === "number") {
+  if (canWriteFocusPoints() && typeof focus === "number") {
     exportManager.queueChange(actor, "character_focus_current", focus);
   }
 }
@@ -108,29 +155,30 @@ export function queueCombatResourceChanges(exportManager: ExportManager, actor: 
  * slots) rather than only combat resources.
  */
 export function queueAllItemChanges(exportManager: ExportManager, actor: Actor): void {
-  // Levels apply to manual pushes too: currency is text-tier, but quantity
-  // and equipped state require the quantity tier. Without per-kind gating a
-  // manual push at "text fields only" would leak item writes past the bound.
-  const writeText = canWriteText();
-  const writeQuantity = canWriteQuantity();
+  // Levels apply to manual pushes too: each aspect checks its own capability.
+  // Without gating, a manual push at story mode would leak session writes past
+  // the bound.
+  if (
+    !canWriteInventoryQuantity() &&
+    !canWriteCurrency() &&
+    !canWriteInventoryEquipped() &&
+    !canWriteInventoryContainer() &&
+    !canWriteSpellSlots()
+  ) {
+    return;
+  }
   // `actor.items` is typed as the common base collection, but at runtime (and
   // in the PF2e system) every entry is a client Item. Narrow once here so the
   // PF2e field reads below type-check.
   // eslint-disable-next-line no-restricted-syntax -- base-collection → client Item narrowing; runtime-guaranteed
   const items = Array.from(actor.items) as unknown as Item[];
   for (const item of items) {
-    queueSingleItemChanges(exportManager, actor, item, writeText, writeQuantity);
-    if (writeQuantity) queueSpellSlotResync(exportManager, actor, item);
+    queueSingleItemChanges(exportManager, actor, item);
+    if (canWriteSpellSlots()) queueSpellSlotResync(exportManager, actor, item);
   }
 }
 
-function queueSingleItemChanges(
-  exportManager: ExportManager,
-  actor: Actor,
-  item: Item,
-  writeText: boolean,
-  writeQuantity: boolean
-): void {
+function queueSingleItemChanges(exportManager: ExportManager, actor: Actor, item: Item): void {
   const system = itemSystem(item);
   const slug = system?.slug;
   if (typeof slug !== "string") return;
@@ -140,16 +188,18 @@ function queueSingleItemChanges(
 
   if (typeof system?.quantity === "number") {
     if (slug in TREASURE_ITEM_MAP) {
-      if (!writeText) return;
+      if (!canWriteCurrency()) return;
       exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, system.quantity);
     } else {
-      if (!writeQuantity) return;
+      if (!canWriteInventoryQuantity()) return;
       exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", system.quantity);
     }
   }
 
-  if (writeQuantity) {
+  if (canWriteInventoryEquipped()) {
     queueEquippedIfChanged(exportManager, actor, item, slug, demiplaneSlug, system);
+  }
+  if (canWriteInventoryContainer()) {
     queueContainerState(exportManager, actor, item, slug, demiplaneSlug, system);
   }
 }
@@ -250,16 +300,18 @@ function queueEquipped(
  * value the next import overwrites. The import side still reads it.
  */
 export function queueAllDetailChanges(exportManager: ExportManager, actor: Actor): void {
-  // Detail fields are text-tier; a manual push below that tier writes nothing.
-  if (!canWriteText()) return;
+  // Each detail aspect checks its own capability so permissions move
+  // independently; a manual push below every detail capability writes nothing.
+  if (!canWriteBiography() && !canWriteOrganizedPlayId() && !canWriteLanguages()) return;
   queueMappedDetailFields(exportManager, actor);
   queueOrganizedPlayId(exportManager, actor);
   queueAdditionalLanguages(exportManager, actor);
 }
 
-/** Queues each ACTOR_FIELD_MAPPINGS field from the actor's current value. */
+/** Queues each STORY_FIELD_MAPPINGS field from the actor's current value. */
 function queueMappedDetailFields(exportManager: ExportManager, actor: Actor): void {
-  for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
+  if (!canWriteBiography()) return;
+  for (const [actorPath, storeName] of Object.entries(STORY_FIELD_MAPPINGS)) {
     const value = readActorPath(actor, actorPath);
     if (value === undefined || value === null) continue;
 
@@ -273,6 +325,7 @@ function queueMappedDetailFields(exportManager: ExportManager, actor: Actor): vo
 
 /** Queues the combined organized play ID when both PFS numbers are present. */
 function queueOrganizedPlayId(exportManager: ExportManager, actor: Actor): void {
+  if (!canWriteOrganizedPlayId()) return;
   const pfs = characterSystem(actor).pfs;
   if (typeof pfs?.playerNumber === "number" && typeof pfs?.characterNumber === "number") {
     exportManager.queueChange(actor, "character_organizedplayid", `${pfs.playerNumber}-${pfs.characterNumber}`);
@@ -288,6 +341,7 @@ function queueOrganizedPlayId(exportManager: ExportManager, actor: Actor): void 
  * the derived `build.languages.granted` — is subtracted before pushing.
  */
 export function queueAdditionalLanguages(exportManager: ExportManager, actor: Actor): void {
+  if (!canWriteLanguages()) return;
   const all = characterSystem(actor).details.languages?.value ?? [];
   const granted = new Set(characterSystem(actor).build.languages.granted.map((entry) => entry.slug));
   const additional = all
@@ -339,23 +393,38 @@ export class HookManager {
     if (!this.isLinkedCharacterActor(actor)) return;
     // While any client is importing or pushing this character, actor updates are
     // just the sync echoing to other clients — don't queue them back to Demiplane.
-    // Checked before the write-level guard so an import doesn't log a misleading
+    // Checked before the capability guards so an import doesn't log a misleading
     // "nothing pushed" note for its own writes.
     if (isSyncActive(actor)) return;
-    if (!this.writeAllowed("text", actor.name)) return;
-
-    for (const [actorPath, storeName] of Object.entries(ACTOR_FIELD_MAPPINGS)) {
-      const value = this.getChangeValue(changes, actorPath);
-      if (value === undefined || value === null) continue;
-
-      // Array fields (edicts, anathema) are stored as arrays in Foundry but as
-      // semicolon-separated strings in Demiplane.
-      if (Array.isArray(value)) {
-        this.exportManager.queueChange(actor, storeName, value.join("; "));
-      } else if (typeof value === "number" || typeof value === "string") {
-        this.exportManager.queueChange(actor, storeName, value);
-      }
+    if (!isWritingEnabled()) {
+      debugLog(
+        `"${actor.name ?? "character"}" changed, but writing to Demiplane is off — nothing pushed to Demiplane.`
+      );
+      return;
     }
+
+    if (canWriteBiography()) {
+      for (const [actorPath, storeName] of Object.entries(STORY_FIELD_MAPPINGS)) {
+        const value = this.getChangeValue(changes, actorPath);
+        if (value === undefined || value === null) continue;
+
+        // Array fields (edicts, anathema) are stored as arrays in Foundry but as
+        // semicolon-separated strings in Demiplane.
+        if (Array.isArray(value)) {
+          this.exportManager.queueChange(actor, storeName, value.join("; "));
+        } else if (typeof value === "number" || typeof value === "string") {
+          this.exportManager.queueChange(actor, storeName, value);
+        }
+      }
+    } else if (this.touchedAny(changes, Object.keys(STORY_FIELD_MAPPINGS))) {
+      debugLog(
+        `"${actor.name ?? "character"}" changed (biography), but the write level does not permit it — nothing pushed to Demiplane.`
+      );
+    }
+
+    // Points fields (HP, temp HP, hero points, focus) are session-tier: story
+    // mode edits biography without touching adventuring-day state.
+    this.queuePointChanges(actor, changes);
 
     // Organized play ID is a single Demiplane field ("123456-2001") that maps
     // to two Foundry fields (playerNumber + characterNumber).
@@ -365,8 +434,37 @@ export class HookManager {
     this.queueCampaignNotesChange(actor, changes);
 
     // Languages need the granted set subtracted, so they can't be a plain
-    // ACTOR_FIELD_MAPPINGS entry.
+    // STORY_FIELD_MAPPINGS entry.
     this.queueLanguagesChange(actor, changes);
+  }
+
+  /**
+   * Queues points changes (HP, temp HP, hero points, focus) when present. Each
+   * resource checks its own capability — and only when that resource actually
+   * changed, so story-only edits never log a points denial.
+   */
+  private queuePointChanges(actor: Actor, changes: Record<string, unknown>): void {
+    const denied = new Set<string>();
+    let queued = false;
+    for (const { path, store, can, label } of POINT_FIELD_WRITERS) {
+      const value = this.getChangeValue(changes, path);
+      if (value === undefined || value === null || (typeof value !== "number" && typeof value !== "string")) {
+        continue;
+      }
+      if (!can()) {
+        denied.add(label);
+        continue;
+      }
+      this.exportManager.queueChange(actor, store, value);
+      queued = true;
+    }
+    if (denied.size > 0 && !queued) {
+      this.denyWrite([...denied].join(", "), actor.name);
+    } else if (denied.size > 0) {
+      debugLog(
+        `"${actor.name ?? "character"}" changed (${[...denied].join(", ")}), but the write level does not permit it — those fields were not pushed to Demiplane.`
+      );
+    }
   }
 
   /**
@@ -380,6 +478,10 @@ export class HookManager {
    */
   private queueLanguagesChange(actor: Actor, changes: Record<string, unknown>): void {
     if (this.getChangeValue(changes, LANGUAGES_PATH) === undefined) return;
+    if (!canWriteLanguages()) {
+      this.denyWrite("languages", actor.name);
+      return;
+    }
     queueAdditionalLanguages(this.exportManager, actor);
   }
 
@@ -387,6 +489,10 @@ export class HookManager {
     const pfs = this.getChangeValue(changes, "system.pfs.playerNumber");
     const charNum = this.getChangeValue(changes, "system.pfs.characterNumber");
     if (pfs === undefined && charNum === undefined) return;
+    if (!canWriteOrganizedPlayId()) {
+      this.denyWrite("organized play ID", actor.name);
+      return;
+    }
 
     const system = characterSystem(actor);
     const player = typeof pfs === "number" ? pfs : system?.pfs?.playerNumber;
@@ -400,6 +506,10 @@ export class HookManager {
   private queueCampaignNotesChange(actor: Actor, changes: Record<string, unknown>): void {
     const notes = this.getChangeValue(changes, "system.details.biography.campaignNotes");
     if (typeof notes !== "string") return;
+    if (!canWriteCampaignNotes()) {
+      this.denyWrite("campaign notes", actor.name);
+      return;
+    }
     void this.exportManager.exportCampaignNotes(actor, notes);
   }
 
@@ -410,37 +520,91 @@ export class HookManager {
 
     // A spellcasting entry has no slug; its updates carry cast/expended slot
     // changes (prepared casters) or remaining-slot changes (spontaneous casters),
-    // which ride different write tiers — gated inside the extracted handler
-    // rather than by the physical-item quantity guard below.
+    // gated on the spell-slots capability inside the extracted handler rather
+    // than by the physical-item guards below.
     if ((item as { type?: string }).type === "spellcastingEntry") {
       queueSpellcastingEntryChanges(this.exportManager, actor, item, changes);
       return;
     }
 
-    if (!this.writeAllowed("quantity", actor.name)) return;
-
     const slug = itemSystem(item).slug ?? undefined;
     const dpFlags = (item.flags?.[MODULE_ID] as { demiplaneSlug?: unknown } | undefined) ?? {};
     const demiplaneSlug = typeof dpFlags?.demiplaneSlug === "string" ? dpFlags.demiplaneSlug : undefined;
 
-    const quantity = this.getNestedValue(changes, "system.quantity");
-    if (typeof quantity === "number") {
-      if (typeof slug === "string" && slug in TREASURE_ITEM_MAP) {
-        this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
-      } else if (typeof slug === "string") {
-        this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", quantity, undefined, true);
-      }
-    }
+    this.queueQuantityChange(actor, slug, demiplaneSlug, changes);
+    this.queueEquippedUpdate(item, actor, slug, demiplaneSlug, changes);
+    this.queueContainerUpdate(item, actor, slug, demiplaneSlug, changes);
+  }
 
+  /** Queues a quantity change, distinguishing currency (treasure) from inventory. */
+  private queueQuantityChange(
+    actor: Actor,
+    slug: string | undefined,
+    demiplaneSlug: string | undefined,
+    changes: Record<string, unknown>
+  ): void {
+    const quantity = this.getNestedValue(changes, "system.quantity");
+    if (typeof quantity !== "number" || typeof slug !== "string") return;
+    if (slug in TREASURE_ITEM_MAP) {
+      if (!canWriteCurrency()) {
+        this.denyWrite("currency", actor.name);
+        return;
+      }
+      this.exportManager.queueChange(actor, TREASURE_ITEM_MAP[slug]!, quantity);
+      return;
+    }
+    if (!canWriteInventoryQuantity()) {
+      this.denyWrite("inventory quantity", actor.name);
+      return;
+    }
+    this.exportManager.queueItemChange(actor, slug, demiplaneSlug, "quantity", quantity, undefined, true);
+  }
+
+  /** Queues an equipped-state change when one is present and permitted. */
+  private queueEquippedUpdate(
+    item: Item,
+    actor: Actor,
+    slug: string | undefined,
+    demiplaneSlug: string | undefined,
+    changes: Record<string, unknown>
+  ): void {
+    if (!this.equippedChanged(changes) || typeof slug !== "string") return;
+    if (!canWriteInventoryEquipped()) {
+      this.denyWrite("equipped state", actor.name);
+      return;
+    }
     this.handleEquippedChange(item, actor, slug, demiplaneSlug, changes);
+  }
+
+  /** Queues a container move when one is present and permitted. */
+  private queueContainerUpdate(
+    item: Item,
+    actor: Actor,
+    slug: string | undefined,
+    demiplaneSlug: string | undefined,
+    changes: Record<string, unknown>
+  ): void {
+    if (!this.containerIdChanged(changes) || typeof slug !== "string") return;
+    if (!canWriteInventoryContainer()) {
+      this.denyWrite("container placement", actor.name);
+      return;
+    }
     this.handleContainerChange(item, actor, slug, demiplaneSlug, changes);
+  }
+
+  /** Whether an item update touched equipped state (as a flat key or nested). */
+  private equippedChanged(changes: Record<string, unknown>): boolean {
+    return (
+      Object.keys(changes).some((key) => key === "system.equipped" || key.startsWith("system.equipped.")) ||
+      this.getNestedValue(changes, "system.equipped") !== undefined
+    );
   }
 
   /**
    * Queues a container move when an item's `system.containerId` changes: moved
    * into a container, out to the top level, or from one container to another.
-   * This is an item update (not a delete), so it rides the same quantity tier as
-   * equipped/quantity edits — the guard is already applied in `onItemUpdate`.
+   * This is an item update (not a delete), so it rides the container capability
+   * like equipped/quantity edits — the guard is already applied in `onItemUpdate`.
    *
    * The queued value carries the target container's unique Demiplane engine id
    * (read from the container item's import stamp) so the push writes the right
@@ -483,10 +647,7 @@ export class HookManager {
     demiplaneSlug: string | undefined,
     changes: Record<string, unknown>
   ): void {
-    const equippedChanged =
-      Object.keys(changes).some((key) => key === "system.equipped" || key.startsWith("system.equipped.")) ||
-      this.getNestedValue(changes, "system.equipped") !== undefined;
-    if (!equippedChanged || typeof slug !== "string") return;
+    if (!this.equippedChanged(changes) || typeof slug !== "string") return;
 
     const itemType = (item as { type?: string })?.type;
     const equipped = this.resolveEffectiveEquipped(item, changes);
@@ -521,8 +682,11 @@ export class HookManager {
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
     // Creates are never pushed to Demiplane (only logged for diagnostics); the
-    // text-tier gate keeps the console note consistent with the other handlers.
-    if (!this.writeAllowed("text", actor.name)) return;
+    // writing-enabled gate keeps the console note consistent with the other handlers.
+    if (!isWritingEnabled()) {
+      this.denyWrite("item creation", actor.name);
+      return;
+    }
     debugLog(`Item created on linked actor: ${item.name}; granted choices: ${this.getGrantedChoiceLog(item)}`);
   }
 
@@ -549,7 +713,12 @@ export class HookManager {
     const actor = item.actor;
     if (!actor || !this.isLinkedCharacterActor(actor)) return;
     if (isSyncActive(actor)) return;
-    if (!this.writeAllowed("delete", actor.name)) return;
+    // Deletion needs a delete capability: soft delete (quantity 0) or hard
+    // delete. Below those levels the deletion stays local.
+    if (!canSoftDeleteInventory() && !canDeleteInventory()) {
+      this.denyWrite("item deletion", actor.name);
+      return;
+    }
 
     const target = this.resolveDeletableItem(item);
     if (!target) return;
@@ -595,16 +764,17 @@ export class HookManager {
 
   /**
    * Propagates a deleted inventory item to Demiplane. Only reached for a
-   * Demiplane-controlled inventory item deleted while the write level permits
-   * deletions and no import/sync is in flight.
+   * Demiplane-controlled inventory item deleted while a delete capability is
+   * permitted and no import/sync is in flight.
    *
-   * In soft-delete mode the item's Demiplane quantity is set to 0 — a reversible
+   * A soft delete sets the item's Demiplane quantity to 0 — a reversible
    * change with no data loss (it's restored by raising the quantity), so it
    * needs no confirmation and is queued immediately. A hard delete is
-   * irreversible from here, so it stays behind an explicit confirmation dialog.
+   * irreversible from here, so it stays behind an explicit confirmation
+   * dialog.
    */
   private async confirmAndQueueDelete(actor: Actor, itemName: string, target: DeletableItem): Promise<void> {
-    if (isSoftDeleteEnabled() && typeof target.slug === "string") {
+    if (!canDeleteInventory() && typeof target.slug === "string") {
       debugLog(`Item soft-deleted (quantity 0) on Demiplane, no prompt: ${itemName} (${target.slot})`);
       this.exportManager.queueItemChange(actor, target.slug, target.demiplaneSlug, "quantity", 0, target.itemType);
       return;
@@ -658,22 +828,19 @@ export class HookManager {
   }
 
   /**
-   * Whether the active write level permits `kind`. When it doesn't, logs a calm,
-   * reassuring note (so a reader of the console sees the change was noticed and
-   * deliberately not pushed) rather than staying silent or hinting at a push
-   * that never happens.
+   * Logs a calm, reassuring note when a change was noticed but deliberately not
+   * pushed (so a reader of the console sees it wasn't missed) rather than
+   * staying silent or hinting at a push that never happens.
    */
-  private writeAllowed(kind: "text" | "quantity" | "delete", actorName: string | null | undefined): boolean {
-    const predicate: Record<typeof kind, () => boolean> = {
-      text: canWriteText,
-      quantity: canWriteQuantity,
-      delete: canWriteDeletes,
-    };
-    if (predicate[kind]()) return true;
+  private denyWrite(what: string, actorName: string | null | undefined): void {
     debugLog(
-      `"${actorName ?? "character"}" changed (${kind}), but the write level does not permit it — nothing pushed to Demiplane.`
+      `"${actorName ?? "character"}" changed (${what}), but the write level does not permit it — nothing pushed to Demiplane.`
     );
-    return false;
+  }
+
+  /** Whether an actor-update payload touched any of the given change paths. */
+  private touchedAny(changes: Record<string, unknown>, paths: string[]): boolean {
+    return paths.some((path) => this.getChangeValue(changes, path) !== undefined);
   }
 
   private getChangeValue(changes: Record<string, unknown>, path: string): unknown {

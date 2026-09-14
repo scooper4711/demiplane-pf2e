@@ -4,7 +4,7 @@ import { addExportIssue } from "./sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
-import { canWriteText } from "./write-level.js";
+import { isWritingEnabled } from "./write-level.js";
 import { isClientElectedWriter } from "./sync-election.js";
 import {
   ChangeBuffer,
@@ -21,17 +21,14 @@ const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
 
 /**
- * The master write switch. When the write level is "none", the module must never
- * write to Demiplane through any path — automatic hooks or the manual push button
- * alike. Every Demiplane write funnels through `flush` or `exportCampaignNotes`,
- * so both consult this. The specific tier a change requires (quantity, delete) is
- * enforced at queue time; anything that reached the buffer was already permitted,
- * so the master gate only asks whether writing is enabled at all (the lowest
- * tier, `text`).
+ * The master write switch. When writing is disabled ("read-only"), the module
+ * must never write to Demiplane through any path — automatic hooks or the
+ * manual push button alike. Every Demiplane write funnels through `flush` or
+ * `exportCampaignNotes`, so both consult this. The specific capability a change
+ * requires (spell slots, deletes, …) is enforced at queue time; anything that
+ * reached the buffer was already permitted, so the master gate only asks
+ * whether writing is enabled at all.
  */
-function isWritingEnabled(): boolean {
-  return canWriteText();
-}
 
 export type {
   CastChange,

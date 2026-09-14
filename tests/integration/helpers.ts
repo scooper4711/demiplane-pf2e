@@ -319,30 +319,22 @@ export async function withApiRetry<T>(label: string, fn: () => Promise<T>): Prom
 }
 
 /**
- * Sets the module write level (and soft-delete flag) for mutation tests,
- * returning the previous values for restoration. Enabling any writing tier
- * on a dev build pops the pre-release warning — expected here, so it is
- * accepted. Every mutation spec must restore what it found: the seeded world
- * default is deliberately the safest tier.
+ * Sets the module write level for mutation tests, returning the previous
+ * value for restoration. Enabling any writing tier on a dev build pops the
+ * pre-release warning — expected here, so it is accepted. Every mutation spec
+ * must restore what it found: the seeded world default is deliberately the
+ * safest tier (`read-only`).
  */
-export async function setWriteLevel(
-  page: Page,
-  level: string,
-  softDelete: boolean
-): Promise<{ level: string | undefined; softDelete: boolean | undefined }> {
+export async function setWriteLevel(page: Page, level: string): Promise<{ level: string | undefined }> {
   const result = await page.evaluate(
-    async ({ moduleId, level, softDelete }) => {
+    async ({ moduleId, level }) => {
       // @ts-expect-error Foundry global
       const prevLevel = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
       // @ts-expect-error Foundry global
-      const prevSoft = game.settings.get(moduleId, "syncSoftDelete") as boolean | undefined;
-      // @ts-expect-error Foundry global
       await game.settings.set(moduleId, "syncWriteLevel", level);
-      // @ts-expect-error Foundry global
-      await game.settings.set(moduleId, "syncSoftDelete", softDelete);
-      return { level: prevLevel, softDelete: prevSoft };
+      return { level: prevLevel };
     },
-    { moduleId: MODULE_ID, level, softDelete }
+    { moduleId: MODULE_ID, level }
   );
   await page
     .waitForFunction(
@@ -397,17 +389,12 @@ export async function waitForSyncRelease(page: Page, characterId: string): Promi
 /**
  * Restores a write level previously saved by setWriteLevel. Best-effort by
  * design: cleanup must never throw.
- */ export async function restoreWriteLevel(
-  page: Page,
-  saved: { level: string | undefined; softDelete: boolean | undefined }
-): Promise<void> {
+ */ export async function restoreWriteLevel(page: Page, saved: { level: string | undefined }): Promise<void> {
   await page
     .evaluate(
       async ({ moduleId, saved }) => {
         // @ts-expect-error Foundry global
-        await game.settings.set(moduleId, "syncWriteLevel", saved.level ?? "none");
-        // @ts-expect-error Foundry global
-        await game.settings.set(moduleId, "syncSoftDelete", saved.softDelete ?? false);
+        await game.settings.set(moduleId, "syncWriteLevel", saved.level ?? "read-only");
       },
       { moduleId: MODULE_ID, saved }
     )

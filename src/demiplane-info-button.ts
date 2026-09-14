@@ -1,7 +1,7 @@
 import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
 import { MODULE_ID, formatUnmapped } from "./import/types.js";
 import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
-import { canWriteText } from "./write-level.js";
+import { isWritingEnabled } from "./write-level.js";
 import { isSyncActive } from "./sync-pause.js";
 import { localizeChoiceLabel } from "./import/choice-overrides.js";
 import {
@@ -167,7 +167,7 @@ function buildDialogButtons(
  * reads as inactive rather than broken.
  */
 function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
-  const writingOn = canWriteText();
+  const writingOn = isWritingEnabled();
   const syncing = isSyncActive(actor);
   const tooltip = !writingOn
     ? "Set a “Write to Demiplane” level in the module settings to push to Demiplane."

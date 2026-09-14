@@ -11,7 +11,7 @@
 
 # Demiplane PF2e Sync for Foundry VTT
 
-_Written with AI assistance. See [below](#-regarding-the-use-of-ai) for a statement about the use of AI in this project._
+_Written with AI assistance. See [below](#regarding-the-use-of-ai) for a statement about the use of AI in this project._
 
 Build your Pathfinder 2e character on [Demiplane Nexus](https://app.demiplane.com), then bring it straight into your Foundry game. No copy-pasting stats, no manual data entry, no "wait, what level did I take Fleet at?"
 
@@ -45,28 +45,30 @@ The import builds your character the same way as if you dragged and dropped each
 
 ## Syncing Back to Demiplane
 
-The module can push session state from Foundry back to the linked Demiplane sheet. How much it pushes is controlled by the **Write to Demiplane** setting, which has four levels — each includes everything the level before it does:
+When you change your character in Foundry, the module can keep your Demiplane sheet up to date. How much it writes back is controlled by the **Write to Demiplane** setting (under Game Settings). Each level includes everything from the levels before it, and the description under the menu changes to tell you what the level you’ve picked will do.
 
-| Level                                       | What it pushes                                                                                            |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **No writing to Demiplane** (default)       | Nothing. The module only ever reads.                                                                      |
-| **Text fields only**                        | Hit points, temporary hit points, hero points, currency, languages, biography and appearance details      |
-| **Text fields + item quantity/equipped**    | The above, plus item quantity and equipped state (including 1H/2H hand assignment and armor worn-in-slot) |
-| **Text fields + quantity + item deletions** | The above, plus propagating an item deletion back to Demiplane                                            |
+| Level                   | What gets written to Demiplane when you edit in Foundry                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Read-only** (default) | Nothing — Foundry never changes your Demiplane sheet. Good for Pathfinder Society play or when the GM doesn’t have permission to edit your Demiplane character.                                                                                                                                                                                                                                                                                                    |
+| **Story mode**          | Biography and appearance, languages, organized play ID, and campaign notes can all be edited in Foundry and written to Demiplane. Inventory and any field ending in “points” (hit points, hero points, focus points) stays only in Foundry.                                                                                                                                                                                                                        |
+| **Session mode**        | Everything in Story Mode, plus hit points (current and temp), hero points, focus points, coins, spell slots, and inventory (how many you have, whether it’s worn, held in one or two hands, invested, and which container it’s in).<br>Deleting an item here doesn’t truly delete it — it just sets its amount to 0 on Demiplane. You can get it back later by raising the amount again. At this level, items with an amount of 0 are hidden when you next import. |
+| **Full sync**           | The same as Session Mode, but deleting an item actually removes it from Demiplane. You’ll always be asked to confirm first.                                                                                                                                                                                                                                                                                                                                        |
 
-A fresh install starts at **No writing to Demiplane**, so nothing is ever written until a GM opts in. Deity is build-derived and is never pushed. Adding a new item in Foundry is not synced back to Demiplane.
+A new install starts at **Read-only**, so the module won’t change anything on Demiplane until a GM chooses a higher level.
 
-**Deleting an item is the most invasive write, so it has two safeguards.** It only happens at the top level, and even then, deleting a Demiplane-controlled item from a character's inventory always pops up a confirmation before removing it on Demiplane — you can keep it on Demiplane while removing it locally. Deleting an item you added yourself in Foundry (one that never came from Demiplane) never prompts and never pushes. Deletions caused by the module's own re-import never prompt either.
+Deity can come from either the “deity” text field, or from the class definition for e.g. clerics and champions. It is never written to Demiplane at any level — your choice still shows up when you import, but changing it in Foundry won’t change Demiplane. Adding a brand-new item in Foundry (something that didn’t come from Demiplane) isn’t sent to Demiplane either.
 
-**Soft-delete (belt and suspenders).** There's a separate **Soft-delete items (set quantity to 0)** option that only takes effect at the deletions write level. With it on, deleting an item sets its Demiplane quantity to 0 instead of removing it, so you can restore it later just by raising the quantity again — and the importer skips quantity-0 items so a soft-deleted item stays gone. With it off (the default), a quantity of 0 is treated as a real quantity and imports as-is, which is handy for consumables you top up in town rather than re-adding from the compendium each time.
+**Deleting an item is the most permanent change.** In Session mode it’s reversible (the amount just goes to 0, no pop-up). In Full sync it truly removes the item from Demiplane and you’ll always get a pop-up asking you to confirm — you can choose to keep it on Demiplane and just remove it in Foundry. In Read-only or Story mode, deleting in Foundry only removes it in Foundry. If you delete something you added yourself in Foundry that never came from Demiplane, it never asks and never tries to change Demiplane. A quantity of 0 only means “deleted” at Session mode; at every other level 0 is just a normal amount (useful if you use up a consumable and want to set it back to a few later).
 
-Writing happens automatically as you edit (debounced by two seconds, rate-limited). You can also push on demand from the actor sheet's **Demiplane** header button (**Push to Demiplane**), or from the console with `game.modules.get("demiplane-pf2e").api.exportNow(actor)`.
+When you edit your character in Foundry, you’ll see the change appear on your Demiplane sheet a few seconds later — you don’t need to press anything else. If you want it to go right away, you can also click **Push to Demiplane** at the top of your character sheet.
 
-Spell usage syncs back too: prepared slots you cast, spontaneous slots you spend, and focus points you use are all reflected on the Demiplane sheet, so it tracks the adventuring day. Inventory organization also survives the round trip — moving items in and out of containers, including multiple and renamed containers, syncs both ways.
+Spell use and inventory organization carry over as well — casting a prepared spell, spending a spontaneous spell slot or a focus point, or moving items in and out of backpacks and pouches (even when you’ve renamed or added extra containers) will show up on Demiplane the same way.
+
+> **Do not edit the same character in Demiplane and in Foundry at the same time.** If you import into Foundry and then edit in Demiplane, your next change in Foundry will trigger a full re-import of your character, and you risk losing your Foundry edits.
 
 Still on the roadmap:
 
-- Adding inventory items in Foundry pushing to Demiplane
+- Adding inventory items in Foundry write to Demiplane
 - Pets/Familiars/Summons
 - Starfinder support
 
@@ -189,7 +191,7 @@ If this module saves you time at the table, consider supporting development:
 
 ---
 
-## 🦾 Regarding the use of AI:
+## Regarding the use of AI:
 
 I used AI as a coding assistant while building this. I'm a software engineer with decades of professional experience. I could have written every line myself, but AI let me move faster. I drove the architecture and design decisions, followed industry best practices for code quality, and made sure everything is human-readable and maintainable. The project has SonarCloud quality gates and a full test suite that must pass before any release.
 

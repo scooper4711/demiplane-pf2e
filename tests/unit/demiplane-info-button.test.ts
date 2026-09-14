@@ -50,7 +50,7 @@ describe("demiplane-info-button", () => {
       settings: {
         get: vi.fn((_m: string, k: string) => {
           if (k === "demiplaneToken") return "tok";
-          if (k === "syncWriteLevel") return autoSyncEnabled ? "text-quantity-delete" : "none";
+          if (k === "syncWriteLevel") return autoSyncEnabled ? "full" : "read-only";
           return undefined;
         }),
       },

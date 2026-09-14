@@ -2,7 +2,12 @@ import { MODULE_ID } from "./import/types.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { registerSlugMappingSettings } from "./slug-mapping.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
-import { WRITE_LEVEL_SETTING, WRITE_LEVEL_LABELS, DEFAULT_WRITE_LEVEL, SOFT_DELETE_SETTING } from "./write-level.js";
+import {
+  WRITE_LEVEL_SETTING,
+  WRITE_LEVEL_LABELS,
+  WRITE_LEVEL_DESCRIPTIONS,
+  DEFAULT_WRITE_LEVEL,
+} from "./write-level.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -13,21 +18,16 @@ export function registerSettings(): void {
 
   game.settings.register(MODULE_ID, WRITE_LEVEL_SETTING, {
     name: "Write to Demiplane",
-    hint: "How much of a linked character to push back to Demiplane as you edit it. Each level includes the ones before it. Deleting an item from a character's inventory is the most invasive write, so it requires the highest level and always asks for confirmation before removing the item on Demiplane. (Deity is build-derived and never pushed.)",
+    // Static fallback — replaced live on renderSettingsConfig so the hint always
+    // describes the *currently selected* value, not the last-saved one. Keep it
+    // short; the old wall of text is now per-level. The registered hint is still
+    // used as the first paint before the live hook runs.
+    hint: WRITE_LEVEL_DESCRIPTIONS[DEFAULT_WRITE_LEVEL]!,
     scope: "world",
     config: true,
     type: String,
     choices: WRITE_LEVEL_LABELS,
     default: DEFAULT_WRITE_LEVEL,
-  });
-
-  game.settings.register(MODULE_ID, SOFT_DELETE_SETTING, {
-    name: "Soft-delete items (set quantity to 0)",
-    hint: "Only applies when the Write to Demiplane level includes item deletions. When on, deleting an item sets its Demiplane quantity to 0 instead of removing it, so it can be restored later by raising the quantity again; the importer then skips quantity-0 items so a soft-deleted item stays gone. Has no effect at lower write levels, where deletions are not written at all.",
-    scope: "world",
-    config: true,
-    type: Boolean,
-    default: false,
   });
 
   game.settings.register(MODULE_ID, "demiplaneToken", {
@@ -61,6 +61,7 @@ export function registerSettings(): void {
   Hooks.on("renderSettingsConfig", ((_app: unknown, html: SettingsHtml) => {
     hideTokenSettingFromPlayers(html);
     addTokenValidationButton(html);
+    enhanceWriteLevelHint(html);
   }) as (...args: unknown[]) => void);
 }
 
@@ -94,6 +95,53 @@ function addTokenValidationButton(html: SettingsHtml): void {
 function findTokenSetting(html: SettingsHtml): HTMLElement | null {
   const tokenInput = html.querySelector(`input[name="${MODULE_ID}.demiplaneToken"]`);
   return tokenInput?.closest(".form-group") ?? null;
+}
+
+function enhanceWriteLevelHint(html: SettingsHtml): void {
+  const select = html.querySelector(`select[name="${MODULE_ID}.${WRITE_LEVEL_SETTING}"]`) as HTMLSelectElement | null;
+  if (!select) return;
+  const formGroup = select.closest(".form-group") as HTMLElement | null;
+  if (!formGroup) return;
+  // Foundry renders the hint as p.hint / p.notes / .hint — be permissive.
+  const hint = formGroup.querySelector(".hint, .notes, p.hint") as HTMLElement | null;
+  if (!hint) return;
+
+  const update = () => {
+    const val = (select.value ?? DEFAULT_WRITE_LEVEL) as keyof typeof WRITE_LEVEL_DESCRIPTIONS;
+    const desc = WRITE_LEVEL_DESCRIPTIONS[val] ?? WRITE_LEVEL_DESCRIPTIONS[DEFAULT_WRITE_LEVEL]!;
+    // Render with line breaks so multi-line hints (Session) break where
+    // intended. Keep it as DOM nodes rather than raw innerHTML so the
+    // description stays plain text. Fall back to plain text in test stubs
+    // where document/hint DOM APIs are not fully mocked.
+    // eslint-disable-next-line no-restricted-syntax -- document is an untyped DOM global outside PF2e seams
+    const docCreateTextNode = (document as unknown as { createTextNode?: (t: string) => Text }).createTextNode;
+    const canBuild =
+      typeof document !== "undefined" &&
+      typeof document.createElement === "function" &&
+      typeof docCreateTextNode === "function" &&
+      typeof hint.appendChild === "function";
+    if (canBuild) {
+      hint.textContent = "";
+      for (const [i, line] of desc.split("\n").entries()) {
+        if (i > 0) hint.appendChild(document.createElement("br"));
+        hint.appendChild(document.createTextNode(line));
+      }
+    } else {
+      hint.textContent = desc;
+    }
+    // Small affordance for tests / styling: exposes which level is displayed.
+    hint.setAttribute("data-write-level", val);
+  };
+
+  // Avoid double-binding if Foundry re-renders the same DOM node.
+  if ((select as HTMLSelectElement & { dataset: DOMStringMap }).dataset.writeLevelHintEnhanced === "true") {
+    update();
+    return;
+  }
+  (select as HTMLSelectElement & { dataset: DOMStringMap }).dataset.writeLevelHintEnhanced = "true";
+  select.addEventListener("change", update);
+  select.addEventListener("input", update);
+  update();
 }
 
 async function validateDemiplaneToken(token: string): Promise<void> {

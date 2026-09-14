@@ -1,7 +1,7 @@
 import { MODULE_ID } from "../import/types.js";
 import type { ExportManager } from "../export-manager.js";
 import { itemSystem, type Pf2eSpellSlotRank } from "../pf2e-types.js";
-import { canWriteQuantity } from "../write-level.js";
+import { canWriteSpellSlots } from "../write-level.js";
 
 /**
  * Export sync for spellcasting-entry slot state. Two independent concerns share
@@ -9,11 +9,11 @@ import { canWriteQuantity } from "../write-level.js";
  *
  * - Prepared casters (wizard/cleric) track individual cast spells via a
  *   `prepared[i].expended` toggle → Demiplane's `<preparedEngineId>-is-cast`
- *   flag. Rides the quantity tier (like item quantity/equipped).
+ *   flag. Rides the spell-slots capability (like item quantity/equipped).
  * - Spontaneous casters (bard/sorcerer) track remaining casts per rank via
  *   `slot{rank}.value` → Demiplane's
- *   `character_spell-feature_{feature}_spell-slots_rank-{N}_current`. Rides the
- *   text tier (the lowest, like HP/hero points/focus).
+ *   `character_spell-feature_{feature}_spell-slots_rank-{N}_current`. Also
+ *   spell-slots: slots are adventuring-day state, like HP.
  *
  * The two are distinguished by import-stamped flags: `preparedSlotEngineIds`
  * (prepared) and `spellFeature` (spontaneous). An entry may carry either.
@@ -58,9 +58,9 @@ function changedSlotsOf(changes: Record<string, unknown>): Record<string, unknow
 
 /**
  * Queues the slot changes carried by a spellcasting-entry update. Both concerns
- * are spent-resource tracking ("spell ammo"), so both ride the quantity tier —
- * gated here since the caller routes spellcasting entries around the
- * physical-item quantity guard.
+ * are spent-resource tracking ("spell ammo"), so both ride the spell-slots
+ * capability — gated here since the caller routes spellcasting entries around
+ * the physical-item guards.
  */
 export function queueSpellcastingEntryChanges(
   exportManager: ExportManager,
@@ -68,7 +68,7 @@ export function queueSpellcastingEntryChanges(
   item: Item,
   changes: Record<string, unknown>
 ): void {
-  if (!canWriteQuantity()) return;
+  if (!canWriteSpellSlots()) return;
   const changedSlots = changedSlotsOf(changes);
   if (!changedSlots) return;
 
@@ -137,9 +137,11 @@ function queueSpontaneousSlotChanges(
 /**
  * Queues a spontaneous entry's current remaining slot counts for a full re-sync
  * push (the manual "Update to Demiplane"). Only entries stamped with a feature
- * slug contribute. The caller enforces the quantity tier.
+ * slug contribute. The caller enforces the spell-slots capability; this
+ * re-checks so direct callers are gated too.
  */
 export function queueSpellSlotResync(exportManager: ExportManager, actor: Actor, item: Item): void {
+  if (!canWriteSpellSlots()) return;
   if ((item as { type?: string }).type !== "spellcastingEntry") return;
   const feature = readSpellFeature(item);
   if (!feature) return;
