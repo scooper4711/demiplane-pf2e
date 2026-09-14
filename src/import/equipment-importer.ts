@@ -14,7 +14,7 @@ import { fetchStreamEngineLines } from "./stream-engines.js";
 import { debugLog } from "./debug-log.js";
 import { EQUIPMENT_PACK } from "../config.js";
 import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
-import { isSoftDeleteEnabled } from "../write-level.js";
+import { shouldSkipZeroQuantityItems } from "../write-level.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
 import { getPackIndex, type PackIndex } from "./pack-index.js";
 import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
@@ -528,11 +528,12 @@ async function finishEquipmentItem(
   const system = data.system as Record<string, unknown>;
 
   const quantity = state.quantityMap.get(demiplaneId) ?? (system.quantity as number | undefined) ?? 1;
-  // In soft-delete mode a quantity of 0 marks an item the user "deleted" on the
-  // sheet; skip it so a soft-deleted item stays gone. Otherwise a 0 is a real
-  // quantity (e.g. a consumable the player tops up in town) and imports as-is.
-  if (quantity === 0 && isSoftDeleteEnabled()) {
-    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 with soft-delete enabled`);
+  // In session mode a quantity of 0 marks an item the user "deleted" on the
+  // sheet; skip it so a soft-deleted item stays gone. At every other tier a 0
+  // is a real quantity (e.g. a consumable the player tops up in town) and
+  // imports as-is.
+  if (quantity === 0 && shouldSkipZeroQuantityItems()) {
+    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 in session mode`);
     return null;
   }
   system.quantity = quantity;
@@ -607,10 +608,10 @@ async function buildFixedSpellConsumable(
   if (!doc) return recordUnmapped();
 
   const quantity = state.quantityMap.get(demiplaneId) ?? 1;
-  // Soft-deleted (quantity 0) items are skipped in soft-delete mode; see
+  // Quantity-0 items are skipped only in session mode (soft deletes); see
   // finishEquipmentItem for the rationale.
-  if (quantity === 0 && isSoftDeleteEnabled()) {
-    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 with soft-delete enabled`);
+  if (quantity === 0 && shouldSkipZeroQuantityItems()) {
+    debugLog(`[equipment] "${demiplaneSlug}" skipped: quantity 0 in session mode`);
     return null;
   }
 

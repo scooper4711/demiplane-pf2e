@@ -60,7 +60,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
     // failure happened before these were assigned. A masking finally-error
     // that skips the restore is data loss — never let that happen again.
     let page: Page | undefined;
-    let savedSettings: { level: string | undefined; softDelete: boolean | undefined } | undefined;
+    let savedSettings: { level: string | undefined } | undefined;
     try {
       page = await browser.newPage();
       await loginAsGamemaster(page);
@@ -146,8 +146,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
         `Mutation targets: currency=${currency.name} qty=${qtyItem.name} equip=${equipItem.name} delete=${deleteItem.name}`
       );
 
-      // Full writing (deletion tier, hard deletes) for the push.
-      savedSettings = await setWriteLevel(page, "text-quantity-delete", false);
+      // Full sync for the push (hard deletes with prompt).
+      savedSettings = await setWriteLevel(page, "full");
 
       // Mutate every pushable field, then read back the actor state as the
       // expectations ( guards against Foundry clamping anything we sent).

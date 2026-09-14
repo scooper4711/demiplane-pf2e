@@ -22,7 +22,7 @@ import { buildUpdateFromDemiplaneOption } from "./actor-context-menu.js";
 import { canImportCharacters, onImportButtonClick } from "./directory-import.js";
 import { registerModuleApi } from "./module-api.js";
 import { registerSyncNotice } from "./sync-notice.js";
-import { canWriteText, WRITE_LEVEL_SETTING } from "./write-level.js";
+import { isWritingEnabled, WRITE_LEVEL_SETTING } from "./write-level.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -61,8 +61,8 @@ async function initializeModule(): Promise<void> {
   importOrchestrator = new ImportOrchestrator(client);
   exportManager = new ExportManager(client);
   // On a push conflict, recover based on the write level: re-import when session
-  // info (quantity/equipped/cast) is being pushed and therefore already lives on
-  // Demiplane, or warn-only at the text tier where a silent re-import would
+  // info (HP/quantity/equipped/cast) is being pushed and therefore already lives on
+  // Demiplane, or warn-only at story mode where a silent re-import would
   // clobber unsynced local session state. See handlePushConflict.
   exportManager.setOnConflictHandler((actor) => handlePushConflict(actor, flowDeps()));
   hookManager = new HookManager(exportManager);
@@ -89,8 +89,8 @@ async function initializeModule(): Promise<void> {
   // (client, orchestrator, hook manager, module API) must be complete before
   // the user can act, so an import started while the dialog is still open runs
   // against fully-wired singletons instead of half-initialized ones. Only
-  // applies once writing to Demiplane is enabled (any level other than "none").
-  if (canWriteText() && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
+  // applies once writing to Demiplane is enabled (any level other than "read-only").
+  if (isWritingEnabled() && isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)) {
     void showPreReleaseWarning();
   }
 }
@@ -134,7 +134,7 @@ function registerTokenSyncHooks(): void {
     // re-warned before writing.
     if (
       setting.key === `${MODULE_ID}.${WRITE_LEVEL_SETTING}` &&
-      canWriteText() &&
+      isWritingEnabled() &&
       isPreReleaseVersion(game.modules.get(MODULE_ID)?.version)
     ) {
       showPreReleaseWarning();

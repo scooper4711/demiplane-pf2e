@@ -29,10 +29,9 @@ const LANGUAGE_LABELS: Record<string, string> = {
 vi.stubGlobal("game", {
   settings: {
     get: (_moduleId: string, key: string) => {
-      // `autoSyncEnabled` true = full write (delete tier); false = no writing.
+      // `autoSyncEnabled` true = full write (hard-delete tier); false = no writing.
       // Tests that need an intermediate tier set `writeLevel` directly.
-      if (key === "syncWriteLevel") return writeLevel ?? (autoSyncEnabled ? "text-quantity-delete" : "none");
-      if (key === "syncSoftDelete") return softDeleteEnabled;
+      if (key === "syncWriteLevel") return writeLevel ?? (autoSyncEnabled ? "full" : "read-only");
       if (key === "debugImport") return debugEnabled;
       return undefined;
     },
@@ -69,7 +68,6 @@ const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;
 /** When set, overrides the autoSyncEnabled→tier mapping for intermediate-tier tests. */
 let writeLevel: string | undefined;
-let softDeleteEnabled = false;
 let debugEnabled = true;
 
 function createMockExportManager() {
@@ -125,7 +123,6 @@ describe("HookManager", () => {
     vi.clearAllMocks();
     autoSyncEnabled = true;
     writeLevel = undefined;
-    softDeleteEnabled = false;
     confirmDelete = true;
     debugEnabled = true;
     for (const key of Object.keys(hookRegistry)) {
@@ -225,8 +222,8 @@ describe("HookManager", () => {
       expect(exportManager.queueItemDelete).toHaveBeenCalledWith(actor, "armored-coat");
     });
 
-    it("soft-deletes by pushing quantity 0 with no prompt when enabled", async () => {
-      softDeleteEnabled = true;
+    it("soft-deletes by pushing quantity 0 with no prompt in session mode", async () => {
+      writeLevel = "session";
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -356,6 +353,49 @@ describe("HookManager", () => {
       await settle();
 
       expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+    });
+
+    it("does not prompt or queue a delete at story mode (stays local)", async () => {
+      writeLevel = "story";
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook(
+        "deleteItem",
+        importedItem(actor, "Armored Coat", { type: "armor", system: { slug: "armored-coat" } })
+      );
+      await settle();
+
+      expect(dialogConfirm).not.toHaveBeenCalled();
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+      expect(exportManager.queueItemChange).not.toHaveBeenCalled();
+    });
+
+    it("soft-deletes without prompting below full sync (session queues quantity 0)", async () => {
+      // Session mode is the soft-delete tier: reversible, so no prompt. Full
+      // sync upgrades to a prompted hard delete (covered above).
+      writeLevel = "session";
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook(
+        "deleteItem",
+        importedItem(actor, "Armored Coat", { type: "armor", system: { slug: "armored-coat" } })
+      );
+      await settle();
+
+      expect(dialogConfirm).not.toHaveBeenCalled();
+      expect(exportManager.queueItemDelete).not.toHaveBeenCalled();
+      expect(exportManager.queueItemChange).toHaveBeenCalledWith(
+        actor,
+        "armored-coat",
+        undefined,
+        "quantity",
+        0,
+        "armor"
+      );
     });
   });
 
@@ -512,6 +552,40 @@ describe("HookManager", () => {
         "character_personality_anathema",
         "leave friends in danger; break promises"
       );
+    });
+  });
+
+  describe("updateActor hook — story/session split", () => {
+    it("queues biography but not HP at story mode", () => {
+      writeLevel = "story";
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook("updateActor", actor, {
+        system: { attributes: { hp: { value: 25 } }, details: { gender: { value: "She/her" } } },
+      });
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_gender", "She/her");
+      expect(exportManager.queueChange).not.toHaveBeenCalledWith(
+        actor,
+        "character_hit-points_current",
+        expect.anything()
+      );
+    });
+
+    it("queues both biography and HP at session mode", () => {
+      writeLevel = "session";
+      const manager = new HookManager(exportManager as never);
+      manager.register();
+
+      const actor = createMockActor();
+      triggerHook("updateActor", actor, {
+        system: { attributes: { hp: { value: 25 } }, details: { gender: { value: "She/her" } } },
+      });
+
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_appearance_gender", "She/her");
+      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_hit-points_current", 25);
     });
   });
 
@@ -724,7 +798,7 @@ describe("HookManager", () => {
       triggerHook("updateActor", createMockActor(), { "system.attributes.hp.value": 20 });
 
       expect(logSpy).toHaveBeenCalledWith(
-        `${MODULE_ID} | [debug] "Test Actor" changed (text), but the write level does not permit it — nothing pushed to Demiplane.`
+        `${MODULE_ID} | [debug] "Test Actor" changed, but writing to Demiplane is off — nothing pushed to Demiplane.`
       );
       logSpy.mockRestore();
     });
@@ -1242,10 +1316,10 @@ describe("HookManager", () => {
       );
     });
 
-    it("rides the quantity tier — does not queue at the text-only tier", () => {
-      // Spell slots are spent-resource tracking ("spell ammo"), so they need the
-      // quantity tier, same as prepared cast tracking and item quantity.
-      writeLevel = "text";
+    it("rides session mode — does not queue at story mode", () => {
+      // Spell slots are spent-resource tracking ("spell ammo"), so they need
+      // session mode, same as prepared cast tracking and item quantity.
+      writeLevel = "story";
       const manager = new HookManager(exportManager as never);
       manager.register();
 
@@ -1277,8 +1351,8 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_focus_current", 1);
     });
 
-    it("queues nothing below the text tier", () => {
-      writeLevel = "none";
+    it("queues nothing below session mode", () => {
+      writeLevel = "story";
       const actor = {
         ...createMockActor(),
         system: {
@@ -1450,8 +1524,8 @@ describe("HookManager", () => {
       );
     });
 
-    it("at the text tier queues currency but not quantity or equipped state", () => {
-      writeLevel = "text";
+    it("at story mode queues neither currency nor quantity/equipped state", () => {
+      writeLevel = "story";
       const actor = {
         ...createMockActor(),
         items: [
@@ -1472,14 +1546,14 @@ describe("HookManager", () => {
 
       queueAllItemChanges(exportManager as never, actor as never);
 
-      // Currency is text-tier and still syncs.
-      expect(exportManager.queueChange).toHaveBeenCalledWith(actor, "character_currency_gold", 35);
-      // Quantity and equipped state require the quantity tier.
+      // Currency is session-tier now, so nothing syncs at story mode.
+      expect(exportManager.queueChange).not.toHaveBeenCalled();
+      // Quantity and equipped state require session mode.
       expect(exportManager.queueItemChange).not.toHaveBeenCalled();
     });
 
-    it("queues nothing below the text tier", () => {
-      writeLevel = "none";
+    it("queues nothing at read-only", () => {
+      writeLevel = "read-only";
       const actor = {
         ...createMockActor(),
         items: [
@@ -1586,8 +1660,8 @@ describe("HookManager", () => {
       expect(exportManager.queueChange).not.toHaveBeenCalledWith(actor, "character_organizedplayid", expect.anything());
     });
 
-    it("queues nothing below the text tier", () => {
-      writeLevel = "none";
+    it("queues nothing at read-only", () => {
+      writeLevel = "read-only";
       const actor = createDetailActor();
 
       queueAllDetailChanges(exportManager as never, actor as never);

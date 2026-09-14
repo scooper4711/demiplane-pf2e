@@ -16,7 +16,7 @@ import {
   markConflictNotified,
   clearConflictNotified,
 } from "./sync-issues.js";
-import { canWriteText, canWriteQuantity } from "./write-level.js";
+import { isWritingEnabled, canWriteSessionState } from "./write-level.js";
 
 // Re-exported so wiring and tests share one definition.
 export type { ExportResult };
@@ -158,10 +158,10 @@ function scheduleSyncRelease(
 }
 
 export async function exportLinkedCharacter(actor: Actor, deps: SyncFlowDeps): Promise<ExportResult> {
-  // The write level is the master write switch. At "none" the push would be a
+  // The write level is the master write switch. At "read-only" the push would be a
   // no-op, so tell the user plainly rather than doing the work and reporting a
   // misleading "pushed" success.
-  if (!canWriteText()) {
+  if (!isWritingEnabled()) {
     ui.notifications.warn(
       `Writing to Demiplane is off, so nothing was pushed for "${actor.name}". Set a write level in the module settings to sync to Demiplane.`
     );
@@ -210,8 +210,8 @@ export async function pushCharacterEngines(actor: Actor, deps: SyncFlowDeps): Pr
       ui.notifications.info(`Pushed character data for "${actor.name}" to Demiplane.`);
     }
     // A conflict is recovered by the registered conflict handler
-    // (handlePushConflict), which flush invokes: re-import at the quantity tier,
-    // warn-only at text-only. The manual path adds no separate handling so the
+    // (handlePushConflict), which flush invokes: re-import at session mode or
+    // higher, warn-only at story mode. The manual path adds no separate handling so the
     // two paths recover identically.
     return result;
   } finally {
@@ -271,19 +271,20 @@ export function notifyConflict(actor: Actor): void {
  *
  * The concern that motivated warn-only is losing local *session* state (HP,
  * spells cast, ammo spent) to a silent re-import. But that state is only at risk
- * when it isn't being pushed: at the text-only tier the module never writes it,
- * so a re-import would clobber unsynced session info. At `text-quantity` and
- * above the session info is pushed to Demiplane as it changes, so it already
- * lives on the server — a re-import pulls it right back. Only the handful of
- * edits still buffered in the current debounce window are lost (and the user is
+ * when it isn't being pushed: at story mode the module never writes it, so a
+ * re-import would clobber unsynced session info. At session mode and above the
+ * session info is pushed to Demiplane as it changes, so it already lives on
+ * the server — a re-import pulls it right back. Only the handful of edits
+ * still buffered in the current debounce window are lost (and the user is
  * looking right at the field they just changed), so an automatic re-import is
  * safe and keeps both sides consistent.
  *
- * Therefore: re-import when quantity (or higher) is being written; otherwise
- * warn and leave the actor untouched for the user to re-import when convenient.
+ * Therefore: re-import when session state (HP, points, currency, spell slots,
+ * inventory) is being written; otherwise warn and leave the actor untouched
+ * for the user to re-import when convenient.
  */
 export async function handlePushConflict(actor: Actor, deps: SyncFlowDeps): Promise<void> {
-  if (canWriteQuantity()) {
+  if (canWriteSessionState()) {
     await reimportActorOnConflict(actor, deps);
     return;
   }
@@ -293,7 +294,7 @@ export async function handlePushConflict(actor: Actor, deps: SyncFlowDeps): Prom
 /**
  * Re-imports an actor from Demiplane after a push conflict, refreshing both its
  * actor state and the stored `lastUpdated`/`engineSig` baseline (which resolves
- * the conflict). Only used at the quantity-or-higher write level, where session
+ * the conflict). Only used when session state is being written, where session
  * info has already been pushed — see {@link handlePushConflict}.
  *
  * A warn toast explains *why* the character is being refreshed (a conflict);

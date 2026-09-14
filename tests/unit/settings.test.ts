@@ -100,7 +100,13 @@ describe("settings", () => {
   it("registers the user-facing module settings", () => {
     registerSettings();
     const keys = register.mock.calls.map((c) => c[1]);
-    expect(keys).toEqual(expect.arrayContaining(["syncWriteLevel", "syncSoftDelete", "demiplaneToken", "debugImport"]));
+    expect(keys).toEqual(expect.arrayContaining(["syncWriteLevel", "demiplaneToken", "debugImport"]));
+  });
+
+  it("no longer registers a soft-delete setting", () => {
+    registerSettings();
+    const keys = register.mock.calls.map((c) => c[1]);
+    expect(keys).not.toContain("syncSoftDelete");
   });
 
   it("registers one slug mapping setting per kind", () => {
@@ -215,5 +221,58 @@ describe("settings", () => {
     expect(prompt).toHaveBeenCalledWith(
       expect.objectContaining({ content: expect.stringContaining("Enter a Demiplane authorization token") })
     );
+  });
+
+  describe("Write to Demiplane hint", () => {
+    it("registers the hint as the default level's description", () => {
+      registerSettings();
+      const call = register.mock.calls.find((c) => c[1] === "syncWriteLevel");
+      expect(call).toBeDefined();
+      // Must be the short per-level text, not the old wall that listed all tiers.
+      expect(call![2].hint).toContain("Nothing is written to Demiplane");
+      expect(call![2].hint).not.toContain("Text fields only");
+    });
+
+    it("shows the hint for the currently selected value without saving", () => {
+      registerSettings();
+      const cb = settingsCallback();
+      expect(cb).toBeTypeOf("function");
+
+      const hintEl = { textContent: "initial", setAttribute: vi.fn() } as unknown as HTMLElement;
+      const hintQuery = vi.fn((sel: string) =>
+        String(sel).includes("hint") || String(sel).includes("notes") ? hintEl : null
+      );
+      const writeSelect = {
+        value: "story",
+        closest: vi.fn(() => ({ querySelector: hintQuery }) as unknown as HTMLElement),
+        addEventListener: vi.fn(),
+        dataset: {} as Record<string, string>,
+      } as unknown as HTMLSelectElement;
+
+      const htmlWithSelect = {
+        querySelector: vi.fn((sel: string) => {
+          if (String(sel).includes("syncWriteLevel")) return writeSelect;
+          if (String(sel).includes("demiplaneToken")) return input;
+          return null;
+        }),
+      } as unknown as Parameters<NonNullable<ReturnType<typeof settingsCallback>>>[1];
+
+      cb!({}, htmlWithSelect);
+
+      // Immediately reflects the pending selection, not just the saved value.
+      expect(hintEl.textContent).toContain("Biography and appearance");
+      expect(hintEl.setAttribute).toHaveBeenCalledWith("data-write-level", "story");
+
+      // Simulate the GM picking another value — hint updates live via the
+      // change listener, without pressing Save.
+      const changeHandler = (writeSelect.addEventListener as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => c[0] === "change"
+      )?.[1] as (() => void) | undefined;
+      expect(changeHandler).toBeTypeOf("function");
+      (writeSelect as { value: string }).value = "full";
+      changeHandler!();
+      expect(hintEl.textContent).toContain("actually removes it from Demiplane");
+      expect(hintEl.setAttribute).toHaveBeenCalledWith("data-write-level", "full");
+    });
   });
 });

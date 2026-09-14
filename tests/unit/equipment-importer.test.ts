@@ -407,10 +407,9 @@ describe("applyEquipment", () => {
     expect((itemData.system as Record<string, unknown>).quantity).toBe(0);
   });
 
-  // With soft-delete on, a quantity of 0 marks a deleted item, so it is skipped.
-  it("skips a quantity-0 item when soft-delete is enabled", async () => {
-    await game.settings.set("demiplane-pf2e", "syncWriteLevel", "text-quantity-delete");
-    await game.settings.set("demiplane-pf2e", "syncSoftDelete", true);
+  // In session mode, a quantity of 0 marks a soft-deleted item, so it is skipped.
+  it("skips a quantity-0 item in session mode", async () => {
+    await game.settings.set("demiplane-pf2e", "syncWriteLevel", "session");
 
     const actor = createMockActor();
     const engines: DemiplaneEngineEntry[] = [
