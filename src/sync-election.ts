@@ -22,7 +22,7 @@ export function isClientElectedWriter(actor: Actor): boolean {
   if (typeof game === "undefined" || !game.user || !game.users) return true;
 
   const me = game.user;
-  const eligible = game.users.filter((u) => u.active && isEligible(u, actor));
+  const eligible = game.users.filter((u) => u.active && isEligibleWriter(u, actor));
   if (eligible.length === 0) return false;
 
   eligible.sort((a, b) => writerTier(a) - writerTier(b) || a.name.localeCompare(b.name));
@@ -31,7 +31,15 @@ export function isClientElectedWriter(actor: Actor): boolean {
   return elected.id === me.id;
 }
 
-function isEligible(user: User, actor: Actor): boolean {
+/**
+ * Whether a user is eligible to be the writer for an actor: any Game Master or
+ * Assistant GM, or a user with OWNER permission on the actor. This is the set
+ * the election chooses from — and, by the same definition, the set that should
+ * be told when a sync happens (the elected one already learns via the sync-flow
+ * notifications; the rest find out through the sync notice). Exported so those
+ * two features share one definition rather than re-deriving the rule.
+ */
+export function isEligibleWriter(user: User, actor: Actor): boolean {
   if (user.role === CONST.USER_ROLES.GAMEMASTER) return true;
   if (user.role === CONST.USER_ROLES.ASSISTANT) return true;
   return actor.testUserPermission(user, CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER);

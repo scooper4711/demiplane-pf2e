@@ -21,6 +21,7 @@ import type { ExportCharacterFn, ImportCharacterFn, SyncFlowDeps } from "./sync-
 import { buildUpdateFromDemiplaneOption } from "./actor-context-menu.js";
 import { canImportCharacters, onImportButtonClick } from "./directory-import.js";
 import { registerModuleApi } from "./module-api.js";
+import { registerSyncNotice } from "./sync-notice.js";
 import { canWriteText, WRITE_LEVEL_SETTING } from "./write-level.js";
 
 let client: DemiplaneClient;
@@ -68,6 +69,7 @@ async function initializeModule(): Promise<void> {
   new CharacterLinkDialog(client);
 
   hookManager.register();
+  registerSyncNotice();
   registerDuplicateLinkGuard();
   registerDemiplaneInfoButton(importFn, exportFn);
   registerTitlebarDot();
