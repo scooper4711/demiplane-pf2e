@@ -1,5 +1,5 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { stampImported } from "./types.js";
+import { MODULE_ID, stampImported } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
 import {
@@ -377,19 +377,35 @@ async function addFeatureKnownSpells(actor: Actor, spells: GrantedSpell[], summa
 }
 
 /**
- * Finds an existing spontaneous (repertoire) spellcasting entry matching the
- * tradition, so a granted known spell joins the class's own repertoire rather
- * than a separate entry. Returns undefined when the character has none.
+ * Finds an existing Demiplane-imported spontaneous (repertoire) spellcasting
+ * entry matching the tradition, so a granted known spell joins the class's own
+ * repertoire rather than a separate entry. Returns undefined when the character
+ * has none.
+ *
+ * Only entries this module imported are considered. Hand-crafted entries a user
+ * built in Foundry (e.g. a macro that gathers a staff's spells into a
+ * spontaneous arcane entry) must never receive Demiplane-granted spells: the
+ * module does not manage user content, and merging into it both corrupts the
+ * user's entry and leaves the granted spells outside the class repertoire. A
+ * user entry lacks the `imported` flag, so skipping unflagged entries excludes
+ * it; when no imported repertoire entry exists the caller creates its own.
  */
 function findRepertoireEntryId(actor: Actor, tradition: string): string | undefined {
   for (const item of Array.from(actor.items)) {
     if (item.type !== "spellcastingEntry") continue;
+    if (!isImportedEntry(item)) continue;
     const system = itemSystem(item);
     if (system.prepared?.value === "spontaneous" && system.tradition?.value === tradition) {
       return item.id ?? undefined;
     }
   }
   return undefined;
+}
+
+/** Whether a spellcasting entry was created by this module's import (vs. hand-crafted). */
+function isImportedEntry(item: { flags?: Record<string, unknown> }): boolean {
+  const flags = item.flags?.[MODULE_ID] as { imported?: unknown } | undefined;
+  return flags?.imported === true;
 }
 
 /** Title-cases a tradition slug for a generated entry name (e.g. "occult" → "Occult"). */

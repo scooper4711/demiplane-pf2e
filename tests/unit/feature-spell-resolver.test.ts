@@ -473,10 +473,12 @@ describe("feature-spell-resolver", () => {
         })
       );
 
-      // The bard's occult repertoire entry already exists (created by applySpells).
+      // The bard's occult repertoire entry already exists (created by import, so
+      // it carries the imported flag — only imported entries are match targets).
       const bardEntry = {
         id: "bard-entry",
         type: "spellcastingEntry",
+        flags: { "demiplane-pf2e": { imported: true } },
         system: { prepared: { value: "spontaneous" }, tradition: { value: "occult" } },
       };
       const actor = createMockActor({ items: [bardEntry] });
@@ -495,6 +497,49 @@ describe("feature-spell-resolver", () => {
       expect(created.flat().some((i) => i.type === "spellcastingEntry")).toBe(false);
       const soothe = created.flat().find((i) => (i.system as { slug?: string })?.slug === "soothe");
       expect((soothe?.system as { location: { value: string } }).location.value).toBe("bard-entry");
+    });
+
+    it("does not add a known spell to a hand-crafted (non-imported) entry; creates its own", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Soothe", system: { slug: "soothe", level: { value: 1 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [ndjsonLine("feat-1", [ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" })])].join("\n"),
+        })
+      );
+
+      // A user-made spontaneous occult entry (e.g. a staff macro's entry). It has
+      // no imported flag, so the module must NOT dump granted spells into it.
+      const staffEntry = {
+        id: "staff-entry",
+        type: "spellcastingEntry",
+        system: { prepared: { value: "spontaneous" }, tradition: { value: "occult" } },
+      };
+      const actor = createMockActor({ items: [staffEntry] });
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [featureEngine("tabula/class-feature/maestro-rm.eng", "feat-1")],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls
+        .map((c) => c[1] as Array<Record<string, unknown>>)
+        .flat();
+      // The module created its own entry rather than reusing the staff entry.
+      const newEntry = created.find((i) => i.type === "spellcastingEntry");
+      expect(newEntry).toBeDefined();
+      expect(newEntry?.name).toBe("Occult Spells");
+      // The granted spell landed in the new entry, never the hand-crafted one.
+      const soothe = created.find((i) => (i.system as { slug?: string })?.slug === "soothe");
+      expect((soothe?.system as { location: { value: string } }).location.value).not.toBe("staff-entry");
     });
 
     it("creates a spontaneous entry for a known spell when no matching entry exists", async () => {
