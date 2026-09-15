@@ -1,6 +1,7 @@
 import { stampImported } from "./types.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { DEITIES_PACK } from "../config.js";
+import { findPacksWithItemTypes } from "./pack-discovery.js";
 import { toPlainData } from "../pf2e-types.js";
 
 /**
@@ -104,21 +105,27 @@ async function applyDeity(
   updates: Record<string, unknown>,
   summary: ImportSummary
 ): Promise<void> {
-  // Deity — add as item from pf2e.deities compendium
+  // Deity — add as an item from the deities sources, official first.
   if (!deityName) return;
-  const deityPack = game.packs.get(DEITIES_PACK);
-  if (!deityPack) return;
-  const index = await deityPack.getIndex();
-  const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());
-  if (!match) {
-    updates["system.details.deity.value"] = deityName;
-    summary.log.push(`! deity "${deityName}" not found in compendium, set as text only`);
-    return;
-  }
-  const deityDoc = await deityPack.getDocument(match._id);
-  if (deityDoc) {
+  const packKeys = [DEITIES_PACK, ...(await findPacksWithItemTypes(["deity"])).filter((key) => key !== DEITIES_PACK)];
+  for (const packKey of packKeys) {
+    const pack = game.packs.get(packKey);
+    if (!pack) continue;
+    let index;
+    try {
+      index = await pack.getIndex();
+    } catch {
+      continue;
+    }
+    const match = index.find((e) => e.name?.toLowerCase() === deityName.toLowerCase());
+    if (!match) continue;
+    const deityDoc = await pack.getDocument(match._id);
+    if (!deityDoc) return;
     const deityData = toPlainData(deityDoc);
     await actor.createEmbeddedDocuments("Item", [stampImported(deityData)]);
     summary.log.push(`+ deity: ${deityName}`);
+    return;
   }
+  updates["system.details.deity.value"] = deityName;
+  summary.log.push(`! deity "${deityName}" not found in any deity source, set as text only`);
 }

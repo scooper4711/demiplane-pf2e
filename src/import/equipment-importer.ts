@@ -13,10 +13,10 @@ import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
 import { fetchStreamEngineLines } from "./stream-engines.js";
 import { debugLog } from "./debug-log.js";
 import { EQUIPMENT_PACK } from "../config.js";
+import { loadEquipmentSources, findEquipmentEntry, type EquipmentSource } from "./equipment-sources.js";
 import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
 import { shouldSkipZeroQuantityItems } from "../write-level.js";
-import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
-import { getPackIndex, type PackIndex } from "./pack-index.js";
+import { getPackIndex } from "./pack-index.js";
 import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
 import { createContainersFirst } from "./container-placement.js";
 
@@ -56,8 +56,7 @@ interface PendingItem {
 
 /** The compendium and per-character data needed to resolve one item engine. */
 interface EquipmentBuildContext {
-  equipPack: CompendiumCollection;
-  equipIndex: PackIndex;
+  sources: EquipmentSource[];
   state: EquipmentState;
   /** Item engine stream id → the fixed spell it carries (scrolls/wands). */
   specialSpells: Map<string, SpecialItemSpell>;
@@ -251,30 +250,6 @@ function resolveEquippedState(demiplaneId: string, state: EquipmentState, itemTy
   };
 }
 
-export function findBySlug(equipIndex: PackIndex, slug: string): { _id: string } | undefined {
-  const exact = equipIndex.find((e) => e.system?.slug === slug);
-  if (exact) return exact;
-
-  const plural = `${slug}s`;
-  const pluralMatch = equipIndex.find((e) => e.system?.slug === plural);
-  if (pluralMatch) return pluralMatch;
-
-  // Named ranked specialty scrolls/wands are normalized to end in `-Nth-rank`,
-  // but most compendium entries carry a trailing `-spell` (e.g.
-  // `wand-of-widening-9th-rank-spell`). A few (e.g. Legerdemain) don't, which the
-  // exact match above already covers.
-  if (/-\d+(?:st|nd|rd|th)-rank$/.test(slug)) {
-    const withSpell = equipIndex.find((e) => e.system?.slug === `${slug}-spell`);
-    if (withSpell) return withSpell;
-  }
-
-  const fallbackSlug = slug.replace(/-(basic|lesser|greater|moderate|major|superb)$/, "");
-  if (fallbackSlug !== slug) {
-    return equipIndex.find((e) => e.system?.slug === fallbackSlug);
-  }
-  return undefined;
-}
-
 /**
  * Whether to skip importing an item engine because another element granted it.
  *
@@ -327,15 +302,14 @@ export async function applyEquipment(
     summary.unmapped.push({ slug, kind: "equipment" });
   });
 
-  const equipPack = game.packs.get(EQUIPMENT_PACK);
-  if (!equipPack) {
-    summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
+  const sources = await loadEquipmentSources();
+  if (sources.length === 0) {
+    summary.errors.push("No equipment compendium found");
     return;
   }
 
   const ctx: EquipmentBuildContext = {
-    equipPack,
-    equipIndex: await getPackIndex(equipPack, ["system.slug"]),
+    sources,
     state: buildEquipmentState(engines),
     specialSpells: await fetchSpecialItemSpells(itemEngines),
   };
@@ -481,12 +455,12 @@ async function buildEquipmentItem(
   const mapped = await resolveMappedItem("equipment", demiplaneSlug);
   if (mapped) return finishEquipmentItem(mapped, eng, ctx, demiplaneSlug, slug, summary);
 
-  const indexEntry = findBySlug(ctx.equipIndex, slug);
-  if (!indexEntry) {
+  const found = findEquipmentEntry(ctx.sources, slug);
+  if (!found) {
     return buildFixedSpellConsumable(eng, ctx, demiplaneSlug, summary, skipped);
   }
 
-  const doc = await ctx.equipPack.getDocument(indexEntry._id);
+  const doc = await found.source.pack.getDocument(found.entry._id);
   if (!doc) return null;
 
   const data = toPlainData(doc);
@@ -498,7 +472,7 @@ async function buildEquipmentItem(
   // carried-spell attach in finishEquipmentItem re-runs on the next import (which
   // hits the mapping branch above), so caching this does not empty the item.
   await recordResolvedMapping("equipment", demiplaneSlug, {
-    uuid: `Compendium.${EQUIPMENT_PACK}.Item.${indexEntry._id}`,
+    uuid: `Compendium.${found.source.packKey}.Item.${found.entry._id}`,
     name: (data.name as string | undefined) ?? demiplaneSlug,
   });
 
@@ -601,10 +575,10 @@ async function buildFixedSpellConsumable(
   if (!special) return recordUnmapped();
 
   const genericSlug = genericConsumableSlug(special.itemType, special.rank);
-  const indexEntry = findBySlug(ctx.equipIndex, genericSlug);
-  if (!indexEntry) return recordUnmapped();
+  const found = findEquipmentEntry(ctx.sources, genericSlug);
+  if (!found) return recordUnmapped();
 
-  const doc = await ctx.equipPack.getDocument(indexEntry._id);
+  const doc = await found.source.pack.getDocument(found.entry._id);
   if (!doc) return recordUnmapped();
 
   const quantity = state.quantityMap.get(demiplaneId) ?? 1;

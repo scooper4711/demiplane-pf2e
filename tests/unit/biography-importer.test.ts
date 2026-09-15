@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
+import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applyBiography } from "../../src/import/biography-importer.js";
+import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+
+// Pack discovery caches per item-type set; packs change between tests.
+beforeEach(() => {
+  clearPackDiscoveryCache();
+});
 
 describe("applyBiography", () => {
   beforeEach(() => {
@@ -139,5 +145,23 @@ describe("applyBiography", () => {
     await applyBiography(actor as never, [], summary);
 
     expect(actor.update).not.toHaveBeenCalled();
+  });
+
+  it("resolves a deity from a third-party pack when the official pack misses", async () => {
+    installFoundryMocks({
+      "pf2e.deities": createMockPack([
+        { _id: "deity1", name: "Cayden Cailean", system: { slug: "cayden-cailean" }, type: "deity" },
+      ]),
+      "sf2e-anachronism.deities": createMockPack([
+        { _id: "d2", name: "Triune", system: { slug: "triune" }, type: "deity" },
+      ]),
+    });
+    const actor = createMockActor();
+    const engines = [makeDeityEngine("Triune", "triune-rm")];
+    const summary = makeSummary();
+    await applyBiography(actor as never, engines, summary);
+
+    expect(actor.createEmbeddedDocuments).toHaveBeenCalled();
+    expect(summary.log).toContain("+ deity: Triune");
   });
 });

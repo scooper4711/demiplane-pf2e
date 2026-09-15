@@ -2,8 +2,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applyEquipment, applyCurrency } from "../../src/import/equipment-importer.js";
 import { applyCraftingFormulas } from "../../src/import/crafting-formulas.js";
+import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
 import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/slug-mapping.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+
+// Pack discovery caches per item-type set; packs change between tests.
+beforeEach(() => {
+  clearPackDiscoveryCache();
+});
 
 describe("applyEquipment", () => {
   beforeEach(() => {
@@ -1432,5 +1438,96 @@ describe("applyCraftingFormulas", () => {
     await applyEquipment(actor as never, [formulaEngine("ablative-armor-plating")], makeSummary());
     // A formula engine must never become an inventory item.
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe("third-party equipment sources", () => {
+  beforeEach(() => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        { _id: "ls1", name: "Longsword", system: { slug: "longsword" }, type: "weapon" },
+      ]),
+      "sf2e-anachronism.equipment": createMockPack([
+        { _id: "sg1", name: "Star Gun", system: { slug: "star-gun" }, type: "weapon" },
+      ]),
+    });
+    registerSlugMappingSettings();
+  });
+
+  function makeSummary(): ImportSummary {
+    return { itemsImported: 0, itemsSkipped: 0, unmapped: [], unresolvedChoices: [], errors: [], log: [] };
+  }
+
+  it("resolves an item from a third-party pack when the official pack misses", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "w1",
+        name: "tabula/item/star-gun-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "star-gun-rm" },
+        demiplaneEngineId: "sg-in-hand",
+      },
+    ];
+
+    await applyEquipment(actor as never, engines, makeSummary());
+
+    const created = [...actor.items];
+    expect(created.map((i) => (i as { name?: string }).name)).toContain("Star Gun");
+    expect(getAllMappings("equipment")["star-gun-rm"]?.uuid).toBe("Compendium.sf2e-anachronism.equipment.Item.sg1");
+  });
+
+  it("prefers the official pack when both hold the slug", async () => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        { _id: "ls1", name: "Longsword", system: { slug: "longsword" }, type: "weapon" },
+      ]),
+      "sf2e-anachronism.equipment": createMockPack([
+        { _id: "ls2", name: "Longsword", system: { slug: "longsword" }, type: "weapon" },
+      ]),
+    });
+    registerSlugMappingSettings();
+    const actor = createMockActor();
+
+    await applyEquipment(
+      actor as never,
+      [
+        {
+          id: "w1",
+          name: "tabula/item/longsword-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "longsword-rm" },
+          demiplaneEngineId: "sword-in-hand",
+        },
+      ],
+      makeSummary()
+    );
+
+    expect(getAllMappings("equipment")["longsword-rm"]?.uuid).toBe("Compendium.pf2e.equipment-srd.Item.ls1");
+  });
+
+  it("resolves a crafting formula from a third-party pack", async () => {
+    const actor = createMockActor();
+    await applyCraftingFormulas(
+      actor as never,
+      [
+        {
+          id: "f-sg",
+          name: "tabula/item/star-gun-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "star-gun-rm", name: "Star Gun", sourceRow: "manual-sheet-drawer", metaItemType: "formula" },
+          demiplaneEngineId: "eng-star-gun",
+        },
+      ],
+      makeSummary()
+    );
+
+    const call = actor.update.mock.calls.find(
+      (c: unknown[]) => (c[0] as Record<string, unknown>)["system.crafting.formulas"] !== undefined
+    );
+    expect(call).toBeDefined();
+    expect((call![0] as Record<string, unknown>)["system.crafting.formulas"]).toEqual([
+      { uuid: "Compendium.sf2e-anachronism.equipment.Item.sg1" },
+    ]);
   });
 });

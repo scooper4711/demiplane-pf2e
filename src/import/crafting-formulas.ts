@@ -1,9 +1,7 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { isFormulaEngine, normalizeEquipmentSlug, rawEquipmentSlug } from "./slug-utils.js";
-import { findBySlug } from "./equipment-importer.js";
-import { getPackIndex } from "./pack-index.js";
+import { findBySlug, loadEquipmentSources, type EquipmentSource } from "./equipment-sources.js";
 import { resolveMappedItem, recordResolvedMapping, getMapping } from "../slug-mapping.js";
-import { EQUIPMENT_PACK } from "../config.js";
 import { debugLog } from "./debug-log.js";
 
 /**
@@ -38,16 +36,15 @@ export async function applyCraftingFormulas(
   );
   if (formulaEngines.length === 0) return;
 
-  const equipPack = game.packs.get(EQUIPMENT_PACK);
-  if (!equipPack) {
-    summary.errors.push(`${EQUIPMENT_PACK} compendium not found`);
+  const sources = await loadEquipmentSources();
+  if (sources.length === 0) {
+    summary.errors.push("No equipment compendium found");
     return;
   }
-  const equipIndex = await getPackIndex(equipPack, ["system.slug"]);
 
   const resolvedUuids: string[] = [];
   for (const eng of formulaEngines) {
-    const uuid = await resolveFormulaUuid(eng, equipIndex, summary);
+    const uuid = await resolveFormulaUuid(eng, sources, summary);
     if (uuid) resolvedUuids.push(uuid);
   }
   if (resolvedUuids.length === 0) return;
@@ -75,13 +72,14 @@ function mergeFormulas(existing: CraftingFormula[], addUuids: string[]): Craftin
 /**
  * Resolves a formula engine to the compendium UUID of the item it crafts,
  * reusing the equipment resolution: a GM mapping wins, then the equipment
- * compendium by normalized slug. Records the resolution so it's editable, or
- * surfaces the slug as unmapped (kind "equipment") when nothing matches — the
- * GM then maps it from the Equipment section like any other unresolved item.
+ * sources (official first) by normalized slug. Records the resolution so it's
+ * editable, or surfaces the slug as unmapped (kind "equipment") when nothing
+ * matches — the GM then maps it from the Equipment section like any other
+ * unresolved item.
  */
 async function resolveFormulaUuid(
   eng: DemiplaneEngineEntry,
-  equipIndex: Awaited<ReturnType<typeof getPackIndex>>,
+  sources: EquipmentSource[],
   summary: ImportSummary
 ): Promise<string | null> {
   const demiplaneSlug = rawEquipmentSlug(eng);
@@ -89,15 +87,16 @@ async function resolveFormulaUuid(
   const mapped = await resolveMappedItem("equipment", demiplaneSlug);
   if (mapped) return getMapping("equipment", demiplaneSlug)?.uuid ?? null;
 
-  const indexEntry = findBySlug(equipIndex, normalizeEquipmentSlug(demiplaneSlug));
-  if (!indexEntry) {
-    debugLog(`[formula] "${demiplaneSlug}" did not resolve in the equipment compendium; recorded as unmapped`);
-    summary.unmapped.push({ slug: demiplaneSlug, kind: "equipment" });
-    return null;
+  for (const source of sources) {
+    const indexEntry = findBySlug(source.index, normalizeEquipmentSlug(demiplaneSlug));
+    if (!indexEntry) continue;
+    const uuid = `Compendium.${source.packKey}.Item.${indexEntry._id}`;
+    const name = (eng.args?.name as string | undefined) || demiplaneSlug;
+    await recordResolvedMapping("equipment", demiplaneSlug, { uuid, name });
+    return uuid;
   }
 
-  const uuid = `Compendium.${EQUIPMENT_PACK}.Item.${indexEntry._id}`;
-  const name = (eng.args?.name as string | undefined) || demiplaneSlug;
-  await recordResolvedMapping("equipment", demiplaneSlug, { uuid, name });
-  return uuid;
+  debugLog(`[formula] "${demiplaneSlug}" did not resolve in any equipment source; recorded as unmapped`);
+  summary.unmapped.push({ slug: demiplaneSlug, kind: "equipment" });
+  return null;
 }
