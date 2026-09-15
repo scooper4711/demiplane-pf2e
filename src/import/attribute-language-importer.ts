@@ -230,7 +230,17 @@ export async function applyLanguages(
 
   const rawLanguages = (langEngine.value as string)
     .split(/[,\n\r;]+/)
-    .map((l) => l.trim().toLowerCase().replace(/\s+/g, "-"))
+    .map((l) =>
+      l
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        // Demiplane free text can carry trailing punctuation ("Akitonian.")
+        // that would otherwise miss the compendium slug by one character.
+        // Use Unicode letter/number classes so non-ASCII language names
+        // (e.g. umlauts, accents) survive trimming instead of being stripped.
+        .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
+    )
     .filter(Boolean);
 
   const validLanguages = Object.keys(pf2eLanguages());

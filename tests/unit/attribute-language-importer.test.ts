@@ -274,7 +274,7 @@ describe("applyLanguages", () => {
       }
     ).CONFIG = {
       PF2E: {
-        languages: { common: "Common", draconic: "Draconic", elven: "Elven" },
+        languages: { common: "Common", draconic: "Draconic", elven: "Elven", akitonian: "Akitonian" },
       },
     };
   });
@@ -328,6 +328,25 @@ describe("applyLanguages", () => {
     await applyLanguages(actor as never, engines, summary);
 
     expect(summary.log.some((l) => l.includes("not found") && l.includes("klingon"))).toBe(true);
+  });
+
+  it("strips trailing punctuation from free-text languages", async () => {
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      {
+        id: "1",
+        name: "character-languages-user",
+        type: "CustomDemiplaneEngine",
+        args: {},
+        value: "Elven, Akitonian.",
+      },
+    ];
+    const summary = makeSummary();
+    await applyLanguages(actor as never, engines, summary);
+
+    expect(actor.update).toHaveBeenCalledWith({
+      "system.details.languages.value": ["common", "elven", "akitonian"],
+    });
   });
 });
 
