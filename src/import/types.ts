@@ -66,6 +66,21 @@ export interface DemiplaneEngineEntry {
 export type ItemCategory = "ancestry" | "heritage" | "background" | "class" | "feat" | "equipment";
 
 /**
+ * Item types accepted for each kind. Single source of truth for the mapping
+ * editor's drop guard, pack discovery (browse buttons, import fallback), and
+ * anywhere else a kind must meet concrete compendium item types.
+ */
+export const EXPECTED_TYPES: Record<SlugKind, string[]> = {
+  equipment: ["weapon", "armor", "equipment", "consumable", "treasure", "backpack", "shield"],
+  feat: ["feat"],
+  spell: ["spell"],
+  ancestry: ["ancestry"],
+  heritage: ["heritage"],
+  background: ["background"],
+  class: ["class"],
+};
+
+/**
  * The kind of thing an unresolved slug was. Extends `ItemCategory` with `spell`,
  * which resolves through the spells compendium rather than the generic lookup.
  */

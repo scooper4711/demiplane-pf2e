@@ -4,9 +4,11 @@ import {
   applySearchFilter,
   browseAction,
   clearAction,
+  clearKindPackCache,
   collectSections,
   dropOntoRow,
   EXPECTED_TYPES,
+  findKindPackKeys,
   getDemiplaneMappingAppClass,
   isAcceptedType,
   openFinder,
@@ -26,6 +28,11 @@ function linkedActor(name: string, unmapped: UnmappedSlug[]) {
   actor.getFlag = vi.fn((_module: string, key: string) => flags[key]);
   return actor;
 }
+
+// Pack discovery caches per kind; packs change between tests, so reset every time.
+beforeEach(() => {
+  clearKindPackCache();
+});
 
 describe("collectSections", () => {
   beforeEach(() => {
@@ -201,34 +208,103 @@ describe("openFinder", () => {
   /** Access the mutable game global the mocks install. */
   const gameGlobal = () => globalThis as unknown as { game: Record<string, unknown> };
 
-  beforeEach(() => {
-    installFoundryMocks();
-  });
-
-  it("opens the individual compendium pack window for a kind without a browser tab", async () => {
+  /** A pack window double: constructable with `new`, like the real applicationClass. */
+  function packWindow() {
     const render = vi.fn();
-    // vitest 4 requires a constructable implementation (not an arrow) because
-    // the code under test invokes this mock with `new`.
     const applicationClass = vi.fn().mockImplementation(function () {
       return { render };
     });
-    const classesPack = { applicationClass };
-    gameGlobal().game.packs = { get: vi.fn().mockReturnValue(classesPack) };
+    return { applicationClass, render };
+  }
+
+  beforeEach(() => {
+    installFoundryMocks();
+    clearKindPackCache();
+  });
+
+  it("opens every pack holding the kind, official and third-party alike", async () => {
+    const official = packWindow();
+    const thirdParty = packWindow();
+    installFoundryMocks({
+      "pf2e.ancestries": {
+        ...createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
+        ...official,
+      },
+      "sf2e-anachronism.ancestries": {
+        ...createMockPack([{ _id: "v1", name: "Vesk", system: { slug: "vesk" }, type: "ancestry" }]),
+        ...thirdParty,
+      },
+      // No ancestries here: must not open.
+      "pf2e.feats-srd": {
+        ...createMockPack([{ _id: "f1", name: "Toughness", system: { slug: "toughness" }, type: "feat" }]),
+        ...packWindow(),
+      },
+    });
+
+    await openFinder("ancestry");
+
+    expect(official.applicationClass).toHaveBeenCalled();
+    expect(official.render).toHaveBeenCalledWith({ force: true });
+    expect(thirdParty.applicationClass).toHaveBeenCalled();
+    expect(thirdParty.render).toHaveBeenCalledWith({ force: true });
+  });
+
+  it("opens the individual compendium pack window for a kind without a browser tab", async () => {
+    const { applicationClass, render } = packWindow();
+    installFoundryMocks({
+      "pf2e.classes": {
+        ...createMockPack([{ _id: "c1", name: "Cleric", system: { slug: "cleric" }, type: "class" }]),
+        applicationClass,
+      },
+    });
 
     await openFinder("class");
 
     // Mirrors the sidebar: instantiate the pack's own application, then render.
-    expect(applicationClass).toHaveBeenCalledWith({ collection: classesPack });
+    expect(applicationClass).toHaveBeenCalledWith({ collection: expect.objectContaining({}) });
     expect(render).toHaveBeenCalledWith({ force: true });
   });
 
   it("warns when a kind has no compendium source", async () => {
-    gameGlobal().game.packs = { get: vi.fn().mockReturnValue(null) };
     gameGlobal().game.pf2e = undefined;
 
     await openFinder("class");
 
     expect(ui.notifications.warn).toHaveBeenCalledWith(expect.stringContaining("No compendium source"));
+  });
+
+  it("skips packs the user is not allowed to see", async () => {
+    const visible = packWindow();
+    installFoundryMocks({
+      "pf2e.ancestries": {
+        ...createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
+        ...visible,
+      },
+      "hidden.ancestries": {
+        ...createMockPack([{ _id: "h1", name: "Hiddenfolk", system: { slug: "hiddenfolk" }, type: "ancestry" }]),
+        ...packWindow(),
+        testUserPermission: () => false,
+      },
+    });
+    // The permission gate only applies with a logged-in user (always true live).
+    (globalThis as { game: { user?: unknown } }).game.user = {};
+    try {
+      expect(await findKindPackKeys("ancestry")).toEqual(["pf2e.ancestries"]);
+      await openFinder("ancestry");
+      expect(visible.applicationClass).toHaveBeenCalled();
+    } finally {
+      delete (globalThis as { game: { user?: unknown } }).game.user;
+    }
+  });
+
+  it("caches pack discovery per kind for the session", async () => {
+    const pack = createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]);
+    installFoundryMocks({ "pf2e.ancestries": pack });
+
+    await findKindPackKeys("ancestry");
+    await findKindPackKeys("ancestry");
+
+    expect(pack.getIndex).toHaveBeenCalledTimes(1);
   });
 
   it("opens the PF2e Compendium Browser tab for a browsable kind", async () => {
@@ -615,7 +691,7 @@ describe("mapping target resolution", () => {
         { _id: "noimg", name: "No Image", system: { slug: "no-image" } },
         { _id: "emptyimg", name: "Empty Image", system: { slug: "empty-image" }, img: "" },
       ]),
-      "pf2e.ancestries": createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" } }]),
+      "pf2e.ancestries": createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
     });
     registerSlugMappingSettings();
   });
@@ -673,6 +749,21 @@ describe("mapping target resolution", () => {
     const ancestry = sectionFor("ancestry", await collectSections());
 
     expect(ancestry?.canBrowse).toBe(false);
+  });
+
+  it("treats a third-party pack as a browse source without the official pack", async () => {
+    installFoundryMocks({
+      "sf2e-anachronism.ancestries": createMockPack([
+        { _id: "v1", name: "Vesk", system: { slug: "vesk" }, type: "ancestry" },
+      ]),
+    });
+    registerSlugMappingSettings();
+    globalThis.game.actors.contents = [linkedActor("Kyra", [{ slug: "vesk", kind: "ancestry" }])];
+
+    const ancestry = sectionFor("ancestry", await collectSections());
+
+    expect(ancestry?.canBrowse).toBe(true);
+    expect(await findKindPackKeys("ancestry")).toEqual(["sf2e-anachronism.ancestries"]);
   });
 });
 

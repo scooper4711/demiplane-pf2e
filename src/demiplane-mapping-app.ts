@@ -1,5 +1,7 @@
 import { MODULE_ID } from "./import/types.js";
 import type { SlugKind } from "./import/types.js";
+import { EXPECTED_TYPES } from "./import/types.js";
+import { findPacksWithItemTypes, clearPackDiscoveryCache } from "./import/pack-discovery.js";
 import { getUnmappedSlugs } from "./sync-issues.js";
 import { getAllMappings, setMapping, clearMapping } from "./slug-mapping.js";
 import { exportAction, importAction } from "./mapping-share.js";
@@ -60,27 +62,20 @@ const KIND_TABS: Partial<Record<SlugKind, "equipment" | "feat" | "spell">> = {
 };
 
 /**
- * Ancestry, heritage, background and class have no Compendium Browser tab, so
- * those sections open the individual compendium pack window instead (see
- * `openCompendiumPack`).
+ * Ancestry, heritage, background and class have no Compendium Browser tab.
+ * Their browse buttons open the matching compendium pack windows instead,
+ * discovered by item type (official and third-party alike) via
+ * {@link findPacksWithItemTypes}. Thin wrappers so pack discovery stays cached
+ * and tests have a stable seam.
  */
-const KIND_PACKS: Partial<Record<SlugKind, string>> = {
-  ancestry: "pf2e.ancestries",
-  heritage: "pf2e.heritages",
-  background: "pf2e.backgrounds",
-  class: "pf2e.classes",
-};
+export function clearKindPackCache(): void {
+  clearPackDiscoveryCache();
+}
 
-/** Item types accepted for each kind, used to reject a mismatched drop. */
-const EXPECTED_TYPES: Record<SlugKind, string[]> = {
-  equipment: ["weapon", "armor", "equipment", "consumable", "treasure", "backpack", "shield"],
-  feat: ["feat"],
-  spell: ["spell"],
-  ancestry: ["ancestry"],
-  heritage: ["heritage"],
-  background: ["background"],
-  class: ["class"],
-};
+/** Pack keys holding at least one item of the kind's accepted types. */
+export function findKindPackKeys(kind: SlugKind): Promise<string[]> {
+  return findPacksWithItemTypes(EXPECTED_TYPES[kind]);
+}
 
 /** Whether an item of `itemType` may be mapped onto a slug of `kind`. */
 export function isAcceptedType(kind: SlugKind, itemType: string): boolean {
@@ -382,20 +377,31 @@ async function collectSections(): Promise<SlugSection[]> {
   }
   await applyMappingTargets(mappedRows);
 
-  return KIND_ORDER.map((kind) => buildSection(kind, rowsByKind.get(kind)!)).filter(
-    (section) => section.rows.length > 0
+  // Non-tab kinds (ancestry, heritage, background, class) browse by opening
+  // pack windows; discover which packs hold those item types — official and
+  // third-party alike — so the browse buttons see the same sources the
+  // system's own pickers do. Only kinds that will actually render a section
+  // pay for discovery.
+  const discoverKinds = KIND_ORDER.filter((kind) => !(kind in KIND_TABS) && rowsByKind.get(kind)!.size > 0);
+  const discovered = await Promise.all(
+    discoverKinds.map(async (kind) => [kind, await findKindPackKeys(kind)] as const)
   );
+  const packKeysByKind = new Map<SlugKind, string[]>(discovered);
+
+  return KIND_ORDER.map((kind) =>
+    buildSection(kind, rowsByKind.get(kind)!, kind in KIND_TABS || (packKeysByKind.get(kind) ?? []).length > 0)
+  ).filter((section) => section.rows.length > 0);
 }
 
 /** Assembles one section (sorted rows + column flags) for a kind. */
-function buildSection(kind: SlugKind, bySlug: Map<string, SlugRow>): SlugSection {
+function buildSection(kind: SlugKind, bySlug: Map<string, SlugRow>, browsable: boolean): SlugSection {
   const rows = [...bySlug.values()].sort((a, b) => a.slug.localeCompare(b.slug));
   return {
     kind,
     label: KIND_LABELS[kind],
     rows,
     hasUnmapped: rows.some((row) => row.unmapped),
-    canBrowse: kind in KIND_TABS || (KIND_PACKS[kind] !== undefined && game.packs.get(KIND_PACKS[kind]!) != null),
+    canBrowse: browsable,
     // The Feat Slot column is only meaningful for feats; other sections omit it.
     isFeat: kind === "feat",
   };
@@ -520,14 +526,19 @@ async function openFinder(kind: SlugKind): Promise<void> {
     return;
   }
 
-  const packKey = KIND_PACKS[kind];
-  const pack = packKey ? game.packs.get(packKey) : undefined;
-  if (pack) {
-    openCompendiumPack(pack);
+  // No browser tab: open every pack holding this kind's item types (official
+  // and third-party alike), mirroring the compendium sidebar. Usually one or
+  // two windows; the GM drags from whichever holds the item they want.
+  const packs: unknown[] = [];
+  for (const key of await findKindPackKeys(kind)) {
+    const pack = game.packs.get(key);
+    if (pack) packs.push(pack);
+  }
+  if (packs.length === 0) {
+    ui.notifications.warn(`No compendium source found for ${KIND_LABELS[kind]} items.`);
     return;
   }
-
-  ui.notifications.warn(`No compendium source found for ${KIND_LABELS[kind]} items.`);
+  for (const pack of packs) openCompendiumPack(pack);
 }
 
 /**

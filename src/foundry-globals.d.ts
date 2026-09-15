@@ -23,6 +23,12 @@ declare global {
     };
     packs: {
       get(key: string): CompendiumCollection | undefined;
+      /**
+       * Every installed pack, e.g. to discover which packs hold a given item
+       * type the way PF2e's own tools do (Compendium Browser source scan,
+       * ABCPicker gather). Permission checks still apply per pack.
+       */
+      filter(fn: (pack: CompendiumCollection) => boolean): CompendiumCollection[];
     };
     settings: {
       get(module: string, key: string): unknown;

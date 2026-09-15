@@ -14,6 +14,11 @@ export function createMockPack(
   }> = []
 ) {
   return {
+    // Every test pack holds Items; `collection` is filled in from the pack key
+    // by createMockPacks below.
+    collection: "",
+    documentName: "Item",
+    testUserPermission: () => true,
     getIndex: vi.fn().mockResolvedValue(items),
     getDocument: vi.fn().mockImplementation(async (id: string) => {
       const item = items.find((i) => i._id === id);
@@ -24,9 +29,12 @@ export function createMockPack(
 
 // Mock game.packs collection
 export function createMockPacks(packMap: Record<string, ReturnType<typeof createMockPack>> = {}) {
+  for (const [key, pack] of Object.entries(packMap)) {
+    if (!pack.collection) pack.collection = key;
+  }
   return {
     get: vi.fn().mockImplementation((key: string) => packMap[key] ?? null),
-    filter: vi.fn().mockReturnValue(Object.values(packMap)),
+    filter: vi.fn().mockImplementation((fn: (pack: unknown) => boolean) => Object.values(packMap).filter(fn)),
   };
 }
 

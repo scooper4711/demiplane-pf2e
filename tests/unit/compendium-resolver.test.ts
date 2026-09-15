@@ -5,7 +5,13 @@ import {
   resolveSlugToUuid,
   resolveSpellFromCompendium,
 } from "../../src/import/compendium-resolver.js";
+import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
 import { registerSlugMappingSettings, setMapping, getMapping } from "../../src/slug-mapping.js";
+
+// Pack discovery caches per item-type set; packs change between tests.
+beforeEach(() => {
+  clearPackDiscoveryCache();
+});
 
 describe("resolveCompendiumItem", () => {
   beforeEach(() => {
@@ -51,6 +57,73 @@ describe("resolveCompendiumItem", () => {
   it("returns null for unknown slug", async () => {
     const result = await resolveCompendiumItem("nonexistent-feat-rm", "feat");
     expect(result).toBeNull();
+  });
+});
+
+describe("third-party compendium fallback", () => {
+  beforeEach(() => {
+    registerSlugMappingSettings();
+  });
+
+  it("resolves an ancestry from a third-party pack when official packs miss", async () => {
+    installFoundryMocks({
+      "pf2e.ancestries": createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
+      "sf2e-anachronism.ancestries": createMockPack([
+        { _id: "v1", name: "Skittermander", system: { slug: "skittermander" }, type: "ancestry" },
+      ]),
+    });
+
+    const result = await resolveCompendiumItem("skittermander", "ancestry");
+
+    expect((result as Record<string, unknown>).name).toBe("Skittermander");
+    expect(getMapping("ancestry", "skittermander")?.uuid).toBe("Compendium.sf2e-anachronism.ancestries.Item.v1");
+  });
+
+  it("prefers the official pack when both hold the slug", async () => {
+    installFoundryMocks({
+      "pf2e.ancestries": createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
+      "sf2e-anachronism.ancestries": createMockPack([
+        { _id: "v1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" },
+      ]),
+    });
+
+    const result = await resolveCompendiumItem("dwarf", "ancestry");
+
+    expect(getMapping("ancestry", "dwarf")?.uuid).toBe("Compendium.pf2e.ancestries.Item.a1");
+    expect(result).not.toBeNull();
+  });
+
+  it("resolves a heritage slug from a third-party pack", async () => {
+    installFoundryMocks({
+      "pf2e.heritages": createMockPack([]),
+      "sf2e-anachronism.heritages": createMockPack([
+        { _id: "g1", name: "Gadraveech Skittermander", system: { slug: "gadraveech-skittermander" }, type: "heritage" },
+      ]),
+    });
+
+    expect(await resolveSlugToUuid("gadraveech-skittermander")).toBe("Compendium.sf2e-anachronism.heritages.Item.g1");
+  });
+
+  it("resolves a spell from a third-party pack when the official spells miss", async () => {
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([{ _id: "sp1", name: "Heal", system: { slug: "heal" }, type: "spell" }]),
+      "sf2e-anachronism.spells": createMockPack([
+        { _id: "s1", name: "Starlight", system: { slug: "starlight" }, type: "spell" },
+      ]),
+    });
+
+    const result = await resolveSpellFromCompendium("starlight-rm");
+
+    expect((result as Record<string, unknown>).name).toBe("Starlight");
+  });
+
+  it("still returns null when no pack anywhere holds the slug", async () => {
+    installFoundryMocks({
+      "pf2e.ancestries": createMockPack([{ _id: "a1", name: "Dwarf", system: { slug: "dwarf" }, type: "ancestry" }]),
+    });
+
+    expect(await resolveCompendiumItem("nonexistent-ancestry", "ancestry")).toBeNull();
+    expect(getMapping("ancestry", "nonexistent-ancestry")).toBeUndefined();
   });
 });
 
