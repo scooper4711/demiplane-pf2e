@@ -119,4 +119,15 @@ describe("groupSpells", () => {
     expect(main).toHaveLength(2);
     expect(innate).toHaveLength(1);
   });
+
+  it("files a Spell Runes feat spell as innate, not a spell group", () => {
+    // Runescarred's Spell Runes grants its spell once per day as an innate
+    // spell — it must not form a (config-less) main group that would trip the
+    // unknown-source error.
+    const { main, innate } = groupSpells([
+      spell("mystic-armor-rm", { parentSpellFeature: "spell-runes-spellcasting", selectionRank: 1 }),
+    ]);
+    expect(main).toHaveLength(0);
+    expect(innate).toHaveLength(1);
+  });
 });

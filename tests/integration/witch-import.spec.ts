@@ -61,16 +61,8 @@ test.describe("Witch Import", () => {
     await page.close();
   });
 
-  test("flags the unknown spell-runes source as a sync error", () => {
-    // The sheet shows Mystic Armor in an extra slot from the Spell Runes feat,
-    // but its `spell-runes-spellcasting` feature has no CLASS_SPELLCASTING
-    // entry. Unknown sources must be loud, not silent (see spell-importer), so
-    // the import carries exactly one sync error naming the source and the
-    // skipped spell — and drops nothing else.
-    expect(result.summary.itemsSkipped).toBe(0);
-    expect(result.summary.errors).toHaveLength(1);
-    expect(result.summary.errors[0]).toContain("spell-runes-spellcasting");
-    expect(result.summary.errors[0]).toContain("mystic-armor");
+  test("reports no import errors", () => {
+    expect(result.summary.errors).toEqual([]);
   });
 
   test("correct name, level, ancestry, background, class", () => {
@@ -209,33 +201,27 @@ test.describe("Witch Import", () => {
     }
   });
 
-  test("files Root Reading and Timber as innate spells", () => {
+  test("files Root Reading, Timber, and Mystic Armor as innate spells", () => {
     // Root Reading (runescarred dedication) and Timber (adapted cantrip) are
-    // select-spells without a school marker, so both land in innate — the
-    // entry takes its name from the first one's feat.
+    // select-spells without a school marker, and Mystic Armor comes from the
+    // Spell Runes feat (once per day as an innate spell) — all three land in
+    // innate, and the entry takes its name from the first one's feat.
     // NOTE: the entry reads tradition arcane (runescarred) even though Timber
     // is the witch's occult adapted cantrip — innate entries carry one
     // tradition and the importer names/traditions from the first spell.
     const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
     expect(innateEntries).toHaveLength(1);
     expect(innateEntries[0]!.name).toBe("Runescarred Dedication (Innate)");
-    expect(innateEntries[0]!.spells).toEqual(["root-reading", "timber"]);
+    expect(innateEntries[0]!.spells).toEqual(["mystic-armor", "root-reading", "timber"]);
     // Dedication spells, never hexes.
     const hexes = result.spellcasting.find((e) => e.name === "Hexes");
     expect(hexes!.spells).not.toContain("root-reading");
     expect(hexes!.spells).not.toContain("timber");
+    expect(hexes!.spells).not.toContain("mystic-armor");
   });
 
   test("imports the three-point focus pool", () => {
     expect(result.focus.value).toBe(3);
     expect(result.focus.max).toBe(3);
-  });
-
-  test("leaves mystic armor out until runes spellcasting is taught", () => {
-    // The skipped runes spell is nowhere: not in the spellbook, not
-    // standalone. (The sync error above is its paper trail.)
-    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(witchEntry!.spells).not.toContain("mystic-armor");
-    expect(result.standaloneSpells).not.toContain("mystic-armor");
   });
 });

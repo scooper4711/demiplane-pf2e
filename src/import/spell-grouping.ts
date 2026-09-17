@@ -47,6 +47,15 @@ export interface GroupedSpells {
 const RITUAL_FEATURE = "ritual";
 
 /**
+ * The `parentSpellFeature` Demiplane gives the Runescarred dedication's Spell
+ * Runes feat. The feat grants its chosen spell (e.g. Mystic Armor) as a
+ * once-per-day innate spell — not a class spellbook — so file it with the
+ * innate bucket rather than forming a (config-less) spell group that would
+ * trip the unknown-source error.
+ */
+const RUNES_SPELLCASTING_FEATURE = "spell-runes-spellcasting";
+
+/**
  * Marks a selected spell as a witch hex. The player picks hexes (e.g. Phase
  * Familiar, the level-1 hex choice) through a `hex-spells-rm` builder row, so
  * the chosen spell engine's `sourceRow` carries that fragment. Such a pick is a
@@ -104,6 +113,11 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     }
 
     const parentFeature = eng.args?.parentSpellFeature as string | undefined;
+
+    if (parentFeature === RUNES_SPELLCASTING_FEATURE) {
+      innateSpells.push(eng);
+      continue;
+    }
 
     // A ritual belongs to no class spellbook — PF2e keeps rituals in an
     // ephemeral entry it builds from the character's ritual-trait spells — so
