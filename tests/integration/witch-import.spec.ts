@@ -61,8 +61,16 @@ test.describe("Witch Import", () => {
     await page.close();
   });
 
-  test("reports no import errors", () => {
-    expect(result.summary.errors).toEqual([]);
+  test("flags the unknown spell-runes source as a sync error", () => {
+    // The sheet shows Mystic Armor in an extra slot from the Spell Runes feat,
+    // but its `spell-runes-spellcasting` feature has no CLASS_SPELLCASTING
+    // entry. Unknown sources must be loud, not silent (see spell-importer), so
+    // the import carries exactly one sync error naming the source and the
+    // skipped spell — and drops nothing else.
+    expect(result.summary.itemsSkipped).toBe(0);
+    expect(result.summary.errors).toHaveLength(1);
+    expect(result.summary.errors[0]).toContain("spell-runes-spellcasting");
+    expect(result.summary.errors[0]).toContain("mystic-armor");
   });
 
   test("correct name, level, ancestry, background, class", () => {
@@ -223,14 +231,11 @@ test.describe("Witch Import", () => {
     expect(result.focus.max).toBe(3);
   });
 
-  test("notes the unimported mystic-armor slot", () => {
-    // NOTE: the sheet shows Mystic Armor in an extra slot from the Spell Runes
-    // feat, but its `spell-runes-spellcasting` feature has no entry in
-    // CLASS_SPELLCASTING, so the importer logs `unknown source` and skips it.
-    // Assert the current behavior until that feature is taught.
+  test("leaves mystic armor out until runes spellcasting is taught", () => {
+    // The skipped runes spell is nowhere: not in the spellbook, not
+    // standalone. (The sync error above is its paper trail.)
     const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
     expect(witchEntry!.spells).not.toContain("mystic-armor");
     expect(result.standaloneSpells).not.toContain("mystic-armor");
-    expect(result.summary.log.some((l) => l.includes('unknown source "spell-runes-spellcasting"'))).toBe(true);
   });
 });

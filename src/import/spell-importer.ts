@@ -81,7 +81,17 @@ async function importSpellGroup(
   summary: ImportSummary
 ): Promise<number> {
   if (!group.config) {
-    summary.log.push(`! spells: unknown source "${group.source}", skipping ${String(group.spellbook.length)} spells`);
+    // Unknown spellcasting feature (e.g. a new Demiplane dedication granting
+    // spells through its own `parentSpellFeature`). Skipping silently would
+    // lose the player's spells without a trace, so surface it as a sync error
+    // naming the source and the skipped spells.
+    const slugs = [...group.spellbook, ...group.prepared, ...group.curriculumSpellbook, ...group.curriculumPrepared]
+      .map((eng) => String(eng.args?.slug ?? "?"))
+      .filter((slug, index, all) => all.indexOf(slug) === index);
+    summary.errors.push(
+      `Unknown spellcasting source "${group.source}" — skipped ${String(slugs.length)} spell(s) (${slugs.join(", ")}). ` +
+        `The importer doesn't recognize this Demiplane spellcasting feature yet.`
+    );
     return 0;
   }
 
