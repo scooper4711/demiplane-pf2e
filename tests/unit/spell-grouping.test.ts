@@ -82,4 +82,41 @@ describe("groupSpells", () => {
     expect(innate).toHaveLength(1);
     expect(innate[0]!.name).toBe("tabula/spell/root-reading.eng");
   });
+
+  it("files a school-selected spell in the class spellbook, not innate", () => {
+    // A universalist's Grease is an extra known spell cast with class slots
+    // (sourceRow names the school selection row), so it joins the wizard group
+    // rather than the innate bucket.
+    const { main, innate } = groupSpells([
+      spell("frostbite-rm", { parentSpellFeature: "wizard-spellcasting-rm" }),
+      spell("grease-rm", {
+        sourceType: "select-spell",
+        sourceRow: "…_select-spell-school-of-unified-magical-theory-rm-…",
+      }),
+    ]);
+
+    expect(main).toHaveLength(1);
+    expect(main[0]!.spellbook).toHaveLength(2);
+    expect(innate).toHaveLength(0);
+  });
+
+  it("falls back to innate for school spells without exactly one class group", () => {
+    const schoolSpell = () =>
+      spell("grease-rm", {
+        sourceType: "select-spell",
+        sourceRow: "…_select-spell-school-of-unified-magical-theory-rm-…",
+      });
+
+    // No class group to attach to.
+    expect(groupSpells([schoolSpell()]).innate).toHaveLength(1);
+
+    // Multiclass ambiguity: rather than guess or duplicate, keep prior behavior.
+    const { main, innate } = groupSpells([
+      spell("frostbite-rm", { parentSpellFeature: "wizard-spellcasting-rm" }),
+      spell("soothe-rm", { parentSpellFeature: "bard-spellcasting-rm" }),
+      schoolSpell(),
+    ]);
+    expect(main).toHaveLength(2);
+    expect(innate).toHaveLength(1);
+  });
 });

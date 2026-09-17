@@ -59,11 +59,25 @@ function isSelectedHexSpell(eng: DemiplaneEngineEntry): boolean {
   return typeof sourceRow === "string" && sourceRow.includes(HEX_SELECTION_MARKER);
 }
 
+/**
+ * Marks a selected spell as a school spell (e.g. a universalist's Grease via
+ * `select-spell-school-of-unified-magical-theory-rm`). A school spell is an
+ * extra known spell cast with the class's own slots — not an innate spell —
+ * so it joins the class spellbook group rather than the innate bucket.
+ */
+const SCHOOL_SELECTION_MARKER = "select-spell-school-";
+
+function isSchoolSpell(eng: DemiplaneEngineEntry): boolean {
+  const sourceRow = eng.args?.sourceRow as string | undefined;
+  return typeof sourceRow === "string" && sourceRow.includes(SCHOOL_SELECTION_MARKER);
+}
+
 export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
   const hexSpells: DemiplaneEngineEntry[] = [];
+  const schoolSpells: DemiplaneEngineEntry[] = [];
   const fontSpells: DemiplaneEngineEntry[] = [];
   const rituals: DemiplaneEngineEntry[] = [];
 
@@ -75,7 +89,17 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
 
     const sourceType = eng.args?.sourceType as string | undefined;
     if (sourceType === "select-spell") {
-      (isSelectedHexSpell(eng) ? hexSpells : innateSpells).push(eng);
+      if (isSelectedHexSpell(eng)) {
+        hexSpells.push(eng);
+        continue;
+      }
+      // School spells join the class group below; anything else selected
+      // (e.g. a dedication cantrip) stays innate.
+      if (isSchoolSpell(eng)) {
+        schoolSpells.push(eng);
+        continue;
+      }
+      innateSpells.push(eng);
       continue;
     }
 
@@ -95,6 +119,17 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     if (!parentFeature || parentFeature === "scroll" || parentFeature === "wand") continue;
 
     addToGroup(getOrCreateGroup(mainGroups, parentFeature), eng);
+  }
+
+  // School spells are known spells cast with class slots, so they join the
+  // class spellbook — but only when exactly one class group exists. With zero
+  // or several (multiclass ambiguity), keep the previous behavior (innate)
+  // rather than guessing or duplicating across entries.
+  const classGroups = [...mainGroups.values()].filter((group) => group.source in CLASS_SPELLCASTING);
+  if (classGroups.length === 1) {
+    for (const eng of schoolSpells) addToGroup(classGroups[0]!, eng);
+  } else {
+    innateSpells.push(...schoolSpells);
   }
 
   return { main: [...mainGroups.values()], innate: innateSpells, hexes: hexSpells, font: fontSpells, rituals };

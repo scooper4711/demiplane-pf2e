@@ -318,6 +318,39 @@ describe("feature-spell-resolver", () => {
     expect(result.focus[0].isFocus).toBe(true);
   });
 
+  it("routes a focus-pool grant to focus even with hex-like saveDC machinery", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            // Battle-magic school Force Bolt as Demiplane actually emits it: a
+            // save DC (hex heuristic signal) and a concrete tradition
+            // (repertoire signal) on the same engine as its focus point. The
+            // focus-pool flag takes precedence over both heuristics — never a
+            // hex, never repertoire.
+            ndjsonLine("feat-1", [
+              ADD_SPELL("force-bolt-rm", 1, { tradition: "arcane", saveDC: ["spell"] }),
+              { type: "add-focus-point", addFocus: 1 },
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [featureEngine("tabula/class-feature/school-of-battle-magic-rm.eng", "feat-1")],
+      5,
+      3
+    );
+
+    expect(result.hexes).toHaveLength(0);
+    expect(result.known).toHaveLength(0);
+    expect(result.focus).toHaveLength(1);
+    expect(result.focus[0].slug).toBe("force-bolt-rm");
+    expect(result.focus[0].isFocus).toBe(true);
+  });
+
   it("drops spells above the character level", async () => {
     vi.stubGlobal(
       "fetch",

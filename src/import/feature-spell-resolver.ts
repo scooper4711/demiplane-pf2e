@@ -348,9 +348,17 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
  * loop stays a simple dispatch and this holds the (mutually exclusive) decision.
  */
 function buildGrantedSpell(mod: AddSpellModifier, hexFocusGroup: boolean): GrantedSpell {
-  const isInnate = mod.isInnate === true && mod.forcesFocus !== true;
-  const isHex = !isInnate && isHexGrant(mod, hexFocusGroup);
-  const isKnown = !isInnate && !isHex && (isRepertoireGrant(mod) || isInheritedRepertoireGrant(mod, hexFocusGroup));
+  // A grant sharing an engine with an add-focus-point IS a focus-pool spell by
+  // definition (that's what forcesFocus records) — it takes precedence over the
+  // hex and repertoire heuristics below, which key off the same signals a focus
+  // grant can carry (a school focus spell like Force Bolt has both a save DC
+  // and a concrete tradition). Without this, such a grant misfiles as a hex
+  // (via saveDC) or repertoire (via concrete tradition).
+  const isFocusPool = mod.forcesFocus === true;
+  const isInnate = !isFocusPool && mod.isInnate === true;
+  const isHex = !isFocusPool && !isInnate && isHexGrant(mod, hexFocusGroup);
+  const isKnown =
+    !isFocusPool && !isInnate && !isHex && (isRepertoireGrant(mod) || isInheritedRepertoireGrant(mod, hexFocusGroup));
   return {
     slug: mod.addSpell,
     tradition: mod.tradition ?? "arcane",
