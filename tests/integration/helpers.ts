@@ -574,6 +574,12 @@ export interface ImportResult {
    * ritual imported as a standalone item rather than vanishing.
    */
   standaloneSpells: string[];
+  /**
+   * Slugs of spells flagged as signature spells (`system.location.signature`),
+   * e.g. a sorcerer's signature repertoire spells. Lets specs assert the
+   * signature marking survived the import.
+   */
+  signatureSpells: string[];
 }
 
 export async function createAndImportCharacter(
@@ -708,6 +714,13 @@ export async function createAndImportCharacter(
             .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
             .sort();
         })(),
+        signatureSpells: actor.items
+          .filter(
+            (i: { type: string; system: { location?: { signature?: boolean } } }) =>
+              i.type === "spell" && i.system.location?.signature === true
+          )
+          .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
+          .sort(),
         equipment: actor.items
           .filter((i: { type: string }) =>
             ["weapon", "armor", "shield", "equipment", "consumable", "backpack", "ammo"].includes(i.type)
