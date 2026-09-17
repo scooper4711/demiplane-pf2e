@@ -34,6 +34,15 @@ export interface AddSpellModifier {
   parentFeature?: string;
   autoScaleSpellLevel?: boolean;
   /**
+   * Focus-spell casting machinery Demiplane stamps on a hex grant: a save DC
+   * source (e.g. `["spell"]`) and/or a spell-attack source
+   * (`"spellcasting-modifier"`). A witch feature grants a hex (which carries
+   * this machinery) alongside a plain spell added to the prepared list (which
+   * does not), so these fields separate the two. See {@link isHexGrant}.
+   */
+  saveDC?: string[];
+  spellAttack?: string;
+  /**
    * Set by the resolver (not present in raw Demiplane data) when this grant
    * shares an engine with an `add-focus-point`, marking it a focus-pool spell
    * regardless of tradition or `isKnown` (e.g. a wizard curriculum's Force Bolt).

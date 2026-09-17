@@ -499,6 +499,7 @@ export interface ImportResult {
     itemsSkipped: number;
     errors: string[];
     log: string[];
+    unmapped: Array<{ slug: string; kind: string }>;
     unresolvedChoices: Array<{ key: string; options: Array<{ value: string; label: string }> }>;
   };
   name: string;
@@ -531,6 +532,17 @@ export interface ImportResult {
   currency: { pp: number; gp: number; sp: number; cp: number };
   hp: { value: number; max: number; temp: number };
   heroPoints: number;
+  /**
+   * Spellcasting entries and the slugs of the spells filed under each, keyed by
+   * entry name. Lets spell-focused specs (e.g. the witch's hexes) assert both
+   * the entry (name / prepared type / tradition) and its contents.
+   */
+  spellcasting: Array<{
+    name: string;
+    prepared: string;
+    tradition: string;
+    spells: string[];
+  }>;
 }
 
 export async function createAndImportCharacter(
@@ -605,6 +617,26 @@ export async function createAndImportCharacter(
           temp: actor.system.attributes.hp.temp,
         },
         heroPoints: actor.system.resources?.heroPoints?.value ?? 0,
+        spellcasting: actor.items
+          .filter((i: { type: string }) => i.type === "spellcastingEntry")
+          .map(
+            (entry: {
+              id: string;
+              name: string;
+              system: { prepared?: { value?: string }; tradition?: { value?: string } };
+            }) => ({
+              name: entry.name,
+              prepared: entry.system.prepared?.value ?? "",
+              tradition: entry.system.tradition?.value ?? "",
+              spells: actor.items
+                .filter(
+                  (i: { type: string; system: { location?: { value?: string } } }) =>
+                    i.type === "spell" && i.system.location?.value === entry.id
+                )
+                .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
+                .sort(),
+            })
+          ),
         equipment: actor.items
           .filter((i: { type: string }) =>
             ["weapon", "armor", "shield", "equipment", "consumable", "backpack", "ammo"].includes(i.type)

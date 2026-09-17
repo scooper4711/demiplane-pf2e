@@ -36,6 +36,8 @@ export interface SpellGroup {
 export interface GroupedSpells {
   main: SpellGroup[];
   innate: DemiplaneEngineEntry[];
+  /** Witch hexes the player selected (e.g. Phase Familiar) — focus spells. */
+  hexes: DemiplaneEngineEntry[];
   font: DemiplaneEngineEntry[];
   /** Rituals — spells with no spellcasting entry; PF2e gathers them ephemerally. */
   rituals: DemiplaneEngineEntry[];
@@ -44,10 +46,24 @@ export interface GroupedSpells {
 /** The `parentSpellFeature` value Demiplane tags a known ritual with. */
 const RITUAL_FEATURE = "ritual";
 
+/**
+ * Marks a selected spell as a witch hex. The player picks hexes (e.g. Phase
+ * Familiar, the level-1 hex choice) through a `hex-spells-rm` builder row, so
+ * the chosen spell engine's `sourceRow` carries that fragment. Such a pick is a
+ * focus spell bound for the "Hexes" entry, not an innate spell.
+ */
+const HEX_SELECTION_MARKER = "hex-spells-rm";
+
+function isSelectedHexSpell(eng: DemiplaneEngineEntry): boolean {
+  const sourceRow = eng.args?.sourceRow as string | undefined;
+  return typeof sourceRow === "string" && sourceRow.includes(HEX_SELECTION_MARKER);
+}
+
 export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
+  const hexSpells: DemiplaneEngineEntry[] = [];
   const fontSpells: DemiplaneEngineEntry[] = [];
   const rituals: DemiplaneEngineEntry[] = [];
 
@@ -59,7 +75,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
 
     const sourceType = eng.args?.sourceType as string | undefined;
     if (sourceType === "select-spell") {
-      innateSpells.push(eng);
+      (isSelectedHexSpell(eng) ? hexSpells : innateSpells).push(eng);
       continue;
     }
 
@@ -81,7 +97,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     addToGroup(getOrCreateGroup(mainGroups, parentFeature), eng);
   }
 
-  return { main: [...mainGroups.values()], innate: innateSpells, font: fontSpells, rituals };
+  return { main: [...mainGroups.values()], innate: innateSpells, hexes: hexSpells, font: fontSpells, rituals };
 }
 
 function getOrCreateGroup(groups: Map<string, SpellGroup>, parentFeature: string): SpellGroup {

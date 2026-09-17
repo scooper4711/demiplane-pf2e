@@ -44,6 +44,7 @@ describe("applySpells", () => {
         { _id: "sp9", name: "Stabilize", system: { slug: "stabilize" }, type: "spell" },
         { _id: "sp10", name: "Bless", system: { slug: "bless" }, type: "spell" },
         { _id: "sp11", name: "Sanctuary", system: { slug: "sanctuary" }, type: "spell" },
+        { _id: "sp12", name: "Phase Familiar", system: { slug: "phase-familiar" }, type: "spell" },
         {
           _id: "rit1",
           name: "Halt Death",
@@ -119,6 +120,35 @@ describe("applySpells", () => {
     expect(entries).toHaveLength(1);
     const entryData = (entries[0][1] as Array<Record<string, unknown>>)[0];
     expect((entryData.system as Record<string, Record<string, unknown>>).prepared.value).toBe("innate");
+  });
+
+  it("creates a focus Hexes entry for a selected hex", async () => {
+    const actor = createMockActor();
+    // A witch's spellbook spell establishes the class config (occult/int); the
+    // selected hex (Phase Familiar) then lands in a focus "Hexes" entry.
+    const engines: DemiplaneEngineEntry[] = [
+      makeSpellEngine("electric-arc-rm", 0, "witch-spellcasting-rm"),
+      {
+        id: "hex1",
+        name: "tabula/spell/phase-familiar-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "phase-familiar-rm",
+          sourceType: "select-spell",
+          sourceRow: "…_hex-spells-rm-…_select-spell-hex-spells-rm-…",
+        },
+      },
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    const entries = actor.createEmbeddedDocuments.mock.calls
+      .flatMap((c: unknown[]) => c[1] as Array<Record<string, unknown>>)
+      .filter((i) => i.type === "spellcastingEntry");
+    const hexEntry = entries.find((e) => e.name === "Hexes");
+    expect(hexEntry).toBeDefined();
+    expect((hexEntry!.system as Record<string, Record<string, unknown>>).prepared.value).toBe("focus");
+    expect((hexEntry!.system as Record<string, Record<string, unknown>>).tradition.value).toBe("occult");
   });
 
   it("skips scroll-sourced spells", async () => {

@@ -50,4 +50,36 @@ describe("groupSpells", () => {
     expect(main[0]!.spellbook).toHaveLength(1);
     expect(rituals).toHaveLength(1);
   });
+
+  it("routes a selected hex into the hexes bucket, not innate", () => {
+    // A player picks a hex (e.g. Phase Familiar) through a hex-spells-rm builder
+    // row, so its select-spell engine's sourceRow carries that marker. It is a
+    // focus spell bound for the Hexes entry, not an innate spell.
+    const { hexes, innate } = groupSpells([
+      spell("phase-familiar-rm", {
+        sourceType: "select-spell",
+        sourceRow: "…_hex-spells-rm-…_select-spell-hex-spells-rm-…",
+      }),
+    ]);
+
+    expect(hexes).toHaveLength(1);
+    expect(hexes[0]!.args?.slug).toBeUndefined();
+    expect(hexes[0]!.name).toBe("tabula/spell/phase-familiar-rm.eng");
+    expect(innate).toHaveLength(0);
+  });
+
+  it("keeps a non-hex selected spell (dedication cantrip) in the innate bucket", () => {
+    // Runescarred's Root Reading is a select-spell whose sourceRow does not name
+    // the hex group, so it stays innate rather than becoming a hex.
+    const { hexes, innate } = groupSpells([
+      spell("root-reading", {
+        sourceType: "select-spell",
+        sourceRow: "…_select-spell-runescarred-dedication-…",
+      }),
+    ]);
+
+    expect(hexes).toHaveLength(0);
+    expect(innate).toHaveLength(1);
+    expect(innate[0]!.name).toBe("tabula/spell/root-reading.eng");
+  });
 });

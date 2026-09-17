@@ -86,7 +86,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [] });
   });
 
   it("categorizes innate vs focus vs known spells", async () => {
@@ -141,6 +141,154 @@ describe("feature-spell-resolver", () => {
     expect(result.known[0].isFocus).toBe(false);
   });
 
+  describe("witch hexes", () => {
+    /** The class spellcasting-feature modifier that declares a focus group. */
+    const SPELLCASTING_FEATURE = (focusSlug: string, focusName: string) => ({
+      type: "v2-add-spellcasting-feature",
+      slug: "witch-spellcasting-rm",
+      focusSlug,
+      focusName,
+      hasFocusGroup: true,
+    });
+
+    /** A hex grant carries focus-casting machinery (save DC / spell attack). */
+    const HEX = (slug: string, opts: Record<string, unknown> = {}) =>
+      ADD_SPELL(slug, 1, { isKnown: true, tradition: "inherit", saveDC: ["spell"], ...opts });
+
+    it("splits a lesson's hex from its accompanying prepared spell", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("hex-spells", "Hexes")]),
+              // Lesson of Vengeance: the Needle of Vengeance hex (focus machinery)
+              // plus Phantom Pain, a plain spell for the prepared repertoire.
+              // Phantom Pain's real grant OMITS the tradition field entirely
+              // (not even "inherit"), so build it without one to guard that the
+              // repertoire test treats absent-tradition like inherited.
+              ndjsonLine("feat-1", [
+                HEX("needle-of-vengeance-rm", { spellAttack: "spellcasting-modifier" }),
+                { type: "add-spell", level: 1, addSpell: "phantom-pain-rm", isKnown: true },
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/witch-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/lesson-of-vengeance-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.hexes.map((h) => h.slug)).toEqual(["needle-of-vengeance-rm"]);
+      expect(result.hexes[0].isHex).toBe(true);
+      // The plain sibling spell joins the prepared repertoire, not the hexes.
+      expect(result.known.map((k) => k.slug)).toEqual(["phantom-pain-rm"]);
+      expect(result.focus).toHaveLength(0);
+    });
+
+    it("treats a directly-taken feat's hex grant (Cackle) as a hex", async () => {
+      // Request-aware so the test actually exercises engine collection: the
+      // Cackle grant is only returned when the feat engine id (feat-1) is
+      // requested. A collector that ignores tabula/feat/ engines would never
+      // ask for it, so the hex would silently vanish.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((_url: string, init: { body: string }) => {
+          const body = JSON.parse(init.body) as { engineIdsBySource: Record<string, string[]> };
+          const ids = body.engineIdsBySource["pathfinder2e-v2"] ?? [];
+          const lines: string[] = [];
+          if (ids.includes("class-1")) lines.push(ndjsonLine("class-1", [SPELLCASTING_FEATURE("hex-spells", "Hexes")]));
+          // Cackle's hex carries no save DC, but names the hex focus group.
+          if (ids.includes("feat-1"))
+            lines.push(
+              ndjsonLine("feat-1", [ADD_SPELL("cackle-rm", 1, { isKnown: true, parentFeature: "hex-spells" })])
+            );
+          return Promise.resolve({ ok: true, text: async () => lines.join("\n") });
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [featureEngine("tabula/class/witch-rm.eng", "class-1"), featureEngine("tabula/feat/cackle-rm.eng", "feat-1")],
+        5,
+        3
+      );
+
+      expect(result.hexes.map((h) => h.slug)).toEqual(["cackle-rm"]);
+      expect(result.known).toHaveLength(0);
+      expect(result.focus).toHaveLength(0);
+    });
+
+    it("does not route inherited-tradition grants to repertoire without a hex focus group", async () => {
+      // The bard declares a composition (not hex) focus group, so its
+      // inherited-tradition composition cantrip stays a focus spell.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("composition-spells", "Composition Spells")]),
+              ndjsonLine("feat-1", [ADD_SPELL("courageous-anthem-rm", 1, { isKnown: true, tradition: "inherit" })]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/bard-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/maestro-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.known).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["courageous-anthem-rm"]);
+    });
+
+    it("does not treat a non-witch focus grant with casting machinery as a hex", async () => {
+      // A sorcerer bloodline focus spell carries the same save-DC / spell-attack
+      // machinery a hex does, but the sorcerer declares no hex focus group. It
+      // must fall to the focus bucket, never a witch "Hexes" entry.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("bloodline-spells", "Bloodline Spells")]),
+              ndjsonLine("feat-1", [
+                ADD_SPELL("ancestral-memories-rm", 1, {
+                  isKnown: true,
+                  tradition: "inherit",
+                  saveDC: ["spell"],
+                  spellAttack: "spellcasting-modifier",
+                }),
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/sorcerer-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/bloodline-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.hexes).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["ancestral-memories-rm"]);
+    });
+  });
+
   it("routes a spell to focus when its engine also grants a focus point", async () => {
     vi.stubGlobal(
       "fetch",
@@ -193,7 +341,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [] });
   });
 
   describe("add-feat grant expansion", () => {

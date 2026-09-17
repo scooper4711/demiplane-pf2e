@@ -13,8 +13,9 @@ export async function applySpells(
   engines: DemiplaneEngineEntry[],
   summary: ImportSummary
 ): Promise<void> {
-  const { main, innate, font, rituals } = groupSpells(engines);
-  if (main.length === 0 && innate.length === 0 && font.length === 0 && rituals.length === 0) return;
+  const { main, innate, hexes, font, rituals } = groupSpells(engines);
+  if (main.length === 0 && innate.length === 0 && hexes.length === 0 && font.length === 0 && rituals.length === 0)
+    return;
 
   let totalAdded = 0;
 
@@ -24,6 +25,10 @@ export async function applySpells(
 
   if (innate.length > 0) {
     totalAdded += await importInnateSpells(actor, innate, main, engines, summary);
+  }
+
+  if (hexes.length > 0) {
+    totalAdded += await importHexSpells(actor, hexes, main, summary);
   }
 
   if (font.length > 0) {
@@ -156,6 +161,35 @@ async function importInnateSpells(
     classConfig?.ability ?? "cha"
   );
   const slugToId = await addSpells(actor, entryId, innate, summary);
+  return slugToId.size;
+}
+
+/** The label PF2e uses for a witch's focus-spell (hex) spellcasting entry. */
+const HEX_ENTRY_NAME = "Hexes";
+
+/**
+ * Imports player-selected hexes (e.g. Phase Familiar) into a focus "Hexes"
+ * entry. Hexes are focus spells cast with the witch's tradition and ability, so
+ * the entry borrows both from the class config; PF2e derives the focus-pool size
+ * from the number of spells here. Feature-granted hexes (patron/lesson hexes,
+ * Cackle) join this same entry later via {@link applyFeatureGrantedSpells},
+ * which reuses the "Hexes" entry rather than creating a second one.
+ */
+async function importHexSpells(
+  actor: Actor,
+  hexes: DemiplaneEngineEntry[],
+  main: SpellGroup[],
+  summary: ImportSummary
+): Promise<number> {
+  const classConfig = main[0]?.config;
+  const entryId = await createEntry(
+    actor,
+    HEX_ENTRY_NAME,
+    classConfig?.tradition ?? "occult",
+    "focus",
+    classConfig?.ability ?? "int"
+  );
+  const slugToId = await addSpells(actor, entryId, hexes, summary);
   return slugToId.size;
 }
 
