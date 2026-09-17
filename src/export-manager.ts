@@ -6,6 +6,7 @@ import { computeEngineSig } from "./engine-sig";
 import { isRemoteSyncActive } from "./sync-pause.js";
 import { isWritingEnabled } from "./write-level.js";
 import { toUserFacingSyncError } from "./token.js";
+import { syncClientToken } from "./token-source.js";
 import { isClientElectedWriter } from "./sync-election.js";
 import {
   ChangeBuffer,
@@ -160,7 +161,7 @@ export class ExportManager {
 
     const characterId = actor.getFlag(MODULE_ID, "characterId") as string | undefined;
     if (!characterId) return;
-    if (!this.client.isAuthenticated()) return;
+    if (!syncClientToken(this.client)) return;
 
     // Defer to a sync already in progress on another client; that client's
     // import/push is authoritative and would otherwise conflict with our write.
@@ -351,7 +352,11 @@ export class ExportManager {
   }
 
   private checkAuthentication(actor: Actor): string | null {
-    if (this.client.isAuthenticated()) return null;
+    // Reconcile the client with the live setting before checking, so a token
+    // added after this client started (or one this client never saw an
+    // updateSetting event for) still authenticates the push. The setting — not
+    // the client's cached copy — is the source of truth.
+    if (syncClientToken(this.client)) return null;
     const error = "No Demiplane token configured. Ask your GM to set it in module settings.";
     addExportIssue(actor, error);
     this.notifyFailure(error);

@@ -1,27 +1,16 @@
 /**
- * Demiplane bearer-token helpers: normalization and user-facing error text.
+ * Demiplane token helpers: user-facing error text.
  *
- * Non-technical GMs paste whatever the browser extension or DevTools hands
- * them — often including the `Bearer ` scheme prefix — and raw GraphQL auth
- * failures ("GraphQL errors: could not verify: Jwt expired") mean nothing to
- * them. Both are handled here, in one place, so every entry point behaves the
- * same way.
+ * Raw GraphQL auth failures ("GraphQL errors: could not verify: Jwt expired")
+ * mean nothing to a non-technical GM, so they are translated to plain language
+ * here, in one place, so every entry point reports the same way. Token
+ * normalization (trimming, stripping a pasted `Bearer ` prefix) lives in the
+ * demiplane-api client (`normalizeBearerToken` / `setToken`), the single owner
+ * of what a clean credential is.
  */
 
 /** Link to the README section explaining how to obtain a token. */
 export const TOKEN_HELP_URL = "https://github.com/scooper4711/demiplane-pf2e#getting-the-demiplane-token";
-
-const BEARER_PREFIX_RE = /^bearer\s+/i;
-
-/**
- * Normalizes a pasted token: trims whitespace and strips a leading `Bearer `
- * scheme prefix (case-insensitive), since extensions and DevTools copy the
- * whole `Authorization` header value. Idempotent — already-clean tokens pass
- * through unchanged.
- */
-export function normalizeDemiplaneToken(raw: string): string {
-  return raw.trim().replace(BEARER_PREFIX_RE, "").trim();
-}
 
 /** Hasura/GraphQL phrasings meaning the token expired. */
 const TOKEN_EXPIRED_RE = /jwt[^a-z]*expir|expir[^a-z]*jwt|jwt[^a-z]*could not verify|could not verify[^a-z]*jwt/i;

@@ -1,5 +1,5 @@
 import { MODULE_ID } from "./import/types.js";
-import { DemiplaneClient } from "@scooper4711/demiplane-api";
+import { DemiplaneClient, normalizeBearerToken } from "@scooper4711/demiplane-api";
 import { registerSlugMappingSettings } from "./slug-mapping.js";
 import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
 import {
@@ -8,7 +8,7 @@ import {
   WRITE_LEVEL_DESCRIPTIONS,
   DEFAULT_WRITE_LEVEL,
 } from "./write-level.js";
-import { TOKEN_HELP_URL, normalizeDemiplaneToken, toUserFacingSyncError } from "./token.js";
+import { TOKEN_HELP_URL, toUserFacingSyncError } from "./token.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;
@@ -176,14 +176,15 @@ function enhanceWriteLevelHint(html: SettingsHtml): void {
 }
 
 async function validateDemiplaneToken(token: string): Promise<void> {
-  const trimmed = normalizeDemiplaneToken(token);
-  if (!trimmed) {
+  // Normalize to decide emptiness (a scheme-only paste counts as "no token");
+  // setToken normalizes again for the value it actually stores.
+  if (!normalizeBearerToken(token)) {
     await showTokenValidationDialog("No token entered", "Enter a Demiplane authorization token before validating.");
     return;
   }
 
   const client = new DemiplaneClient();
-  client.setToken(trimmed);
+  client.setToken(token);
 
   try {
     await client.validateToken();

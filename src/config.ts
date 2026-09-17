@@ -29,8 +29,13 @@ export const DEMIPLANE_ERROR_ICON_SRC = `modules/${MODULE_ID}/assets/demiplane-e
 /** Ko-fi donation link shown in the info dialog. */
 export const KOFI_URL = "https://ko-fi.com/coop207627";
 
-/** Demiplane GraphQL API endpoint used to fetch character data. */
-export const DEMIPLANE_GRAPHQL_URL = "https://apiv4.demiplane.com/v1/graphql";
+/**
+ * Demiplane engine cache source for PF2e v2 characters. Its id list includes
+ * every engine the character can access — including indirectly granted feats
+ * that never appear in the `engines` selection array — so it is both the source
+ * key sent to stream-engines and the lookup set for resolving `add-feat` grants.
+ */
+export const PF2E_ENGINE_SOURCE = "pathfinder2e-v2";
 
 /** Compendium pack keys referenced across the importer. */
 export const SPELLS_PACK = "pf2e.spells-srd";

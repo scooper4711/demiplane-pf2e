@@ -1,34 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  normalizeDemiplaneToken,
-  toUserFacingTokenError,
-  toUserFacingSyncError,
-  TOKEN_HELP_URL,
-} from "../../src/token.js";
-
-describe("normalizeDemiplaneToken", () => {
-  it("passes a clean token through unchanged", () => {
-    expect(normalizeDemiplaneToken("abc.def.ghi")).toBe("abc.def.ghi");
-  });
-
-  it("strips a leading Bearer prefix", () => {
-    expect(normalizeDemiplaneToken("Bearer abc.def.ghi")).toBe("abc.def.ghi");
-  });
-
-  it("strips the prefix case-insensitively and trims whitespace", () => {
-    expect(normalizeDemiplaneToken("  bearer abc.def.ghi  ")).toBe("abc.def.ghi");
-    expect(normalizeDemiplaneToken("BEARER abc.def.ghi")).toBe("abc.def.ghi");
-  });
-
-  it("does not strip bearer appearing later in the token", () => {
-    expect(normalizeDemiplaneToken("abc bearer def")).toBe("abc bearer def");
-  });
-
-  it("is idempotent", () => {
-    const once = normalizeDemiplaneToken("Bearer abc.def.ghi");
-    expect(normalizeDemiplaneToken(once)).toBe(once);
-  });
-});
+import { toUserFacingTokenError, toUserFacingSyncError, TOKEN_HELP_URL } from "../../src/token.js";
 
 describe("toUserFacingTokenError", () => {
   it("translates the observed expired-JWT failure", () => {

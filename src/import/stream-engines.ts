@@ -1,11 +1,11 @@
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
+import { PF2E_ENGINE_SOURCE } from "../config.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
 
-/** Source key and nexus slug sent to stream-engines for PF2e v2 characters. */
-const ENGINE_SOURCE = "pathfinder2e-v2";
+/** Nexus slug sent to stream-engines for PF2e v2 characters. */
 const NEXUS_SLUG = "pathfinder2e";
 
 /** A single spell-slot entry inside a `v2-add-spell-slots` modifier. */
@@ -374,7 +374,7 @@ async function postStreamEngines(engineIds: string[], label: string): Promise<st
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        engineIdsBySource: { [ENGINE_SOURCE]: engineIds },
+        engineIdsBySource: { [PF2E_ENGINE_SOURCE]: engineIds },
         isSheet: true,
         nexusSlug: NEXUS_SLUG,
       }),

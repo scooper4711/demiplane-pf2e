@@ -23,7 +23,7 @@ import { canImportCharacters, onImportButtonClick } from "./directory-import.js"
 import { registerModuleApi } from "./module-api.js";
 import { registerSyncNotice } from "./sync-notice.js";
 import { isWritingEnabled, WRITE_LEVEL_SETTING } from "./write-level.js";
-import { normalizeDemiplaneToken } from "./token.js";
+import { syncClientToken } from "./token-source.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;
@@ -54,10 +54,10 @@ async function initializeModule(): Promise<void> {
   debugLog(`Ready`);
 
   client = new DemiplaneClient();
-  const storedToken = normalizeDemiplaneToken((game.settings.get(MODULE_ID, "demiplaneToken") as string) ?? "");
-  if (storedToken) {
-    client.setToken(storedToken);
-  }
+  // Seed the client from the setting. Import and push both reconcile the client
+  // just-in-time (see token-source.ts), so this is a convenience, not the only
+  // chance to authenticate.
+  syncClientToken(client);
 
   importOrchestrator = new ImportOrchestrator(client);
   exportManager = new ExportManager(client);
@@ -124,10 +124,7 @@ function registerDuplicateLinkGuard(): void {
 function registerTokenSyncHooks(): void {
   Hooks.on("updateSetting", ((setting: { key: string }) => {
     if (setting.key === `${MODULE_ID}.demiplaneToken`) {
-      const newToken = normalizeDemiplaneToken((game.settings.get(MODULE_ID, "demiplaneToken") as string) ?? "");
-      if (newToken) {
-        client.setToken(newToken);
-      }
+      syncClientToken(client);
     }
 
     // The pre-release warning is tied to writing being enabled. Show it whenever
