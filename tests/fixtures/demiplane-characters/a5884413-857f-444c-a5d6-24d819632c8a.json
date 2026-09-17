@@ -1,0 +1,2446 @@
+{
+  "characterId": "a5884413-857f-444c-a5d6-24d819632c8a",
+  "dumpedAt": "2026-09-17T16:18:23.757Z",
+  "name": "Valeros",
+  "level": 5,
+  "avatarUrl": "https://demiplane-prod-app-avatar.s3.us-west-2.amazonaws.com/5a7689b5-cf32-4d9b-9c24-e1dc9def796e.png",
+  "viewPermission": 2,
+  "editPermission": 3,
+  "engineCacheIdsBySource": {
+    "common": [
+      "92fa45e4-ff41-4a07-93fb-0d5db6a47357",
+      "43bb7eed-28e1-4971-a45c-d2573e4f7aa8",
+      "90251222-7d95-4a95-b30f-05c02b21cd1f",
+      "26419ee1-a631-484a-b739-b039dca9ef17",
+      "cfb6a741-43d7-4e7a-8882-1513f19d9f62",
+      "f7d6c10c-c349-4567-9200-5dc4cee0af45",
+      "0f1a00a4-9f15-497f-afa4-569b7e317c95",
+      "a97e3beb-4f7e-49ac-bfa7-024efcdccfad",
+      "2109c3f2-9be6-44f3-b9e1-14db13493b8d",
+      "e7dab348-aa36-4e5b-b30f-e37018b55c62",
+      "5710c924-0b75-4b64-a66d-5bd091405cda",
+      "082d6104-40ad-4760-be73-dab095b35864",
+      "2f24be71-f27c-438b-80d3-0c4e5d510d46",
+      "74a5b77d-04fb-4bfd-a0db-4bb7508d06f7",
+      "b2ae2912-81b0-4833-b892-7ac148a87a58",
+      "49ca27bc-37bb-4f9b-90c7-0d24fedb316b",
+      "426acf46-6cf2-4cd6-b6f5-f632b2d26936",
+      "b2625642-56f4-486b-ab64-578a6988bb7d",
+      "9ff18c0c-83a0-4d28-8af5-d642069d1f3c",
+      "2ec8f558-d107-4079-89f0-fd7cc7f297c1",
+      "7eef044e-c88e-4422-8053-76d949080952",
+      "b3149be8-62a4-4215-a17b-b42cb2f245f1",
+      "f28d87a0-ce18-4636-9cc5-29cc4e3393fb",
+      "6f9c329a-db7f-45cf-8d86-ffda7918ace9",
+      "ec889290-a609-4485-83f2-52a9e7f54681",
+      "19f666ff-1930-4f26-8c04-113ce5985284",
+      "a04ce536-d2f7-4613-b9db-1c198e7f9ec7",
+      "bf27acc3-7375-411b-98fb-e1d8a6c5320a",
+      "cb964425-0eb6-4032-9b2e-f02e7b7fc19f",
+      "709bd663-96c3-4fb7-8468-c5c906d9b650",
+      "d3c9852b-1bc5-4684-91fc-2028ce8707c2",
+      "387bf394-f088-4b0b-9b16-8dbf3c3638ef",
+      "653c2bec-4d9c-483c-9981-aa47fa1a7c9e",
+      "fc904ae8-0de8-4a34-81f1-5729be1e56a2",
+      "06d6ded1-7266-4ae1-adc0-8a81464eeb16",
+      "7d5ce948-3b8c-4bbf-a834-49ca15e02151",
+      "b310f9a9-0c34-4243-a640-383f38ed11aa",
+      "47a41222-20fd-40c8-9447-917e9615dc5f",
+      "d94e538b-9984-4657-9eef-b28275dd4bb4",
+      "61300dda-a43f-4410-ab74-7c68917998dc",
+      "ce668ba8-b74d-4f89-aa44-f61b1156071c",
+      "d4477578-b3bb-49e2-ac51-7f0a80c9af34",
+      "265a1363-a5db-414d-9ac4-e3951e7bd0c4",
+      "6b699894-5663-4d01-858a-3fd4bf7ac398",
+      "71b86865-ddf4-4d2c-8b21-3b78c4805015",
+      "1fd4e7da-6f8c-490a-ace7-28f8d067515a",
+      "26e48fad-e869-4b8c-9e0b-8e953b04a0e6",
+      "59bf2e95-f650-4e67-bfd3-77fcb6e6f401",
+      "54e229e0-5ba5-4b21-887d-9547f9ae7ed0",
+      "3a6bf3c7-0d4a-4550-83df-5b9997e43061",
+      "7ce871ff-d249-4ad4-af43-1fb62bbc919f",
+      "9ff6fbac-2c5b-432e-a04d-7bba0e1cc264",
+      "29d1e888-8606-42ec-8c8f-4266409450bb",
+      "2debaf58-2d67-4754-80d2-d33b9940134f",
+      "5a56a295-deb2-4749-9955-ca64478b43e6",
+      "ff7f5ca1-fddb-4c94-b3ce-f6b4796d3c2b",
+      "ab318271-3be5-41ca-9043-817bfd9af354",
+      "e12fdc9d-6f8a-441a-83a7-451abb1eb4b6",
+      "a0388b25-a6b6-4075-80ce-dd44059358fb",
+      "7122b270-0d33-46de-8eb1-5fc29ec7ba84",
+      "553d4761-3880-4f2d-b28a-4915fb35f458",
+      "ddc01b8b-a0c5-4301-b61a-c7a11d9bd523",
+      "9f40c305-75ef-42bb-8a36-e06e9f46bfa2",
+      "27c5dc1f-90f8-42a8-b08c-7686217901ee",
+      "e0b3f30b-9546-452e-8180-ef4bdf9bb6a4",
+      "3cd7b98a-3655-4073-8d94-cb8716c2394e",
+      "b491eeb0-ec52-4812-9a50-a1f41cef522b",
+      "fab39c0f-cc59-4b59-9623-1213833927e7"
+    ],
+    "shared": [
+      "b0be4380-07f7-466b-b1a6-3c3556c56880",
+      "dc6169b3-c78a-43c6-ad4a-c1b6b0325134",
+      "8f682d03-d884-4ce8-bbe0-8a4a434158b8",
+      "8963115d-818e-4121-94e9-3c6bb9fdd6d6",
+      "3d1227b2-f11f-4a75-9ee7-998a04eb7cf3",
+      "3c1592ea-82b1-457b-97aa-cab9523ea482",
+      "1579e600-830f-4dc6-bc4e-f95da04b35d3",
+      "7b9ba6bc-fe24-4235-a9d7-a163f0d1f87f",
+      "89ca0b79-b6ff-43ca-8b93-590f4740974f",
+      "6b7743ec-06ae-4cc0-9ce2-15a3681b57d1",
+      "a13e81e1-c9a9-4836-9631-6428c627de6c",
+      "39f58519-7bed-4ccc-ad2b-0213448bf103",
+      "015e77b9-7a4c-4b86-aadf-f67a5e4ae4a0",
+      "db7615b1-2da3-4def-bc8b-a7a25dc888fc",
+      "1b178eb3-fa1a-47ab-bdff-b88bacb1c49f",
+      "08ae6407-786e-4321-9c9e-6b5df2063997",
+      "c1656651-d9b6-4e16-b8d4-d42b02bd07df",
+      "f98328c1-3b3a-42ea-bab7-98b97c4eaa0f",
+      "a96444ca-0e71-4974-ad14-1b2071fc9c37",
+      "63e21c51-8015-47f9-ad82-d598b6f80100",
+      "b5e77eff-ed4c-4e27-9183-d3516e94fbd8",
+      "079992ea-e3fd-4f83-a3d4-21fda3665307",
+      "78de1e51-2301-4ebb-9d3b-3a912788bdb5",
+      "2078328e-6dae-463d-8e3b-2f44b7f9741b",
+      "e616b6dd-b14c-432b-973b-ccb43400807a",
+      "6e131d3c-f012-4dfe-90e0-36dca278c32c",
+      "92a8cb3e-dfd6-4c46-932e-84362e7edc3f",
+      "556852fa-cf92-4107-b8d6-4a1079d9866c",
+      "3a4015de-c3e9-4dad-9287-aa362df1b738",
+      "821d69d5-fba5-4b79-aab9-e760d7c50291",
+      "0f8f3bee-82f5-4bc4-9494-a0699c16854b",
+      "8c1c6096-0636-45e9-97c5-3650c2e0624a",
+      "b04ab98a-b7ef-4860-b14a-4396d600737e",
+      "1c320092-e914-4a84-9d07-e3acb9d208f8",
+      "9f197181-067d-4903-977e-09c5ef5f73cd",
+      "79ced630-786f-428b-9500-f13503cc040e",
+      "e648c835-e17b-4277-a767-463e9321fd96",
+      "b8a90b41-899d-410c-9c30-56267be0b58d",
+      "00bbd76a-10cb-4aff-b270-078ea6218777",
+      "0073a9e5-2855-4294-bb91-ab3194574a79",
+      "d69e129f-78ec-472f-9f7f-2afc9122e256",
+      "cf427109-53cb-4f9a-9ed9-f0be51635dad",
+      "1bfa58b5-5494-4e67-ae34-95541729ce9e",
+      "81207cc8-5473-4c1f-9b50-37c11b01aaa2",
+      "06c38468-c38a-44fb-8888-b882b7e32148",
+      "f421cebb-27c9-4a15-b97f-e9197de83aa0",
+      "218c0985-759a-4b36-9514-d54b76a50e81",
+      "6b54eaff-5e04-4675-a43b-992aaf609625",
+      "90bdfa4d-7356-4f3a-bd9b-d3aa6248dbcb",
+      "3568db67-00d3-4bf7-a6dc-bd6d74dce692",
+      "bfc13a17-4c44-4f8b-801a-a0fba3ebdde3",
+      "4ca3523a-9382-4b12-9f1f-d75b68badb69",
+      "1ba03e15-014a-4c9a-9914-6f9841ae2160",
+      "f504ca2c-5591-4953-afa6-c509faf954d3",
+      "da8de6b1-853d-4a22-9171-4a2f0c5d316f",
+      "f6ad9f88-c6bb-47e8-8ca3-bf78e369d8c8",
+      "77144773-c63e-46a0-95bc-7da6c1440602",
+      "8af72bf4-bbdc-49cd-b219-7791672a3d85",
+      "8d13ccf1-11e9-47a2-bc03-503b0f1d3d1e",
+      "c622855e-a9f0-4fec-bd09-5ddc3603f6cc",
+      "0029db99-48d3-48ad-8265-b8e03fd36414",
+      "c6017abe-c93e-4ba1-912f-22c362b419e3",
+      "3a32eedb-bb91-4b8c-b4b5-a4b286067499",
+      "376b5f0e-b61e-4b9e-889f-0016ac59ae4c",
+      "8d7a1138-46a5-4dac-9921-f3c942ca76ae",
+      "4a0e5d5e-f29a-4bd9-a2e9-160116ea70ea",
+      "2c529304-2009-44ac-88c1-fc15603a0a41",
+      "9505e2ea-107a-4c11-af64-b95af0dd10aa",
+      "e23d7e57-3db5-47dd-acc7-3828eb69f4ef",
+      "14d96814-ea86-4f4d-8fd6-112a4fc9b3f9"
+    ],
+    "pathfinder2e-v2": [
+      "eab9c683-8132-441e-96b3-545637c42079",
+      "79ae596a-3207-49b3-9c18-86c1f2c2e4f2",
+      "5a43d207-8633-4582-a2ed-2eb2581d79a6",
+      "0be401e6-4414-42c5-983c-fe1ec06768cb",
+      "809c1f9b-6c35-49cf-a060-b7b407ca0f5d",
+      "46a071e6-1d20-4d21-9f9c-43f4437ef11c",
+      "77c5c8a3-99a3-4fc9-bcd9-642a7a730ba3",
+      "4b2b9603-d3b1-404e-8068-5c5dc89f9e30",
+      "cb66b0d0-47a9-4d8c-9923-cdbc7b9a712a",
+      "80427d16-b2f5-44b7-a89f-a3e91f500a8c",
+      "bc1147a6-785b-4b09-a737-43352fbc5897",
+      "de7385c9-f2c2-4821-be70-b365c8f38997",
+      "0c74cc94-0559-441f-80a3-0464f822d9c0",
+      "ec451876-fde3-4272-91d9-8a7f7caea82c",
+      "7a4ad82f-f4ec-438c-a9bc-ece2f71a962d",
+      "2bc3e1e0-ef71-48f8-b4e9-e55d250d971c",
+      "bd1be12c-1258-427a-84ff-e5f01161d3df",
+      "3225ac7b-d582-4dbf-b57e-99d238f7791c",
+      "71a52dc4-8286-46db-865e-22975c2135cf",
+      "517b8033-1d55-48c7-be22-95ce9530a3db",
+      "1c334c41-8b66-4fff-9d2a-4ce92d87ae20",
+      "54a9527f-eafd-471b-b9ec-32f8f02be0c1",
+      "0b79d658-5cff-406c-b018-390f5ef426a1",
+      "08c6338e-4031-403a-a891-f70e00b33391",
+      "0dc3d70a-8e88-419e-879c-903f239edf1a",
+      "cfea72e2-8bb8-47b1-9d2f-6e933e0855b2",
+      "2b3e5856-03ce-4b4c-80e2-eb3fb80cdaae",
+      "01bf3c54-3eed-471e-9a01-ee3467a262ef",
+      "fdf49528-47e3-4ea1-9913-562ebb60ed1a",
+      "ef4ad9dd-84ed-4daa-8614-46794d7dfbb3",
+      "745eab5c-4251-4ddc-a515-0fe4d4769b31",
+      "3bd35f9e-6cd6-42bc-a336-b7be8f4c9205",
+      "c27e4f2d-668b-4fcd-b6e5-fa7ce659f50f",
+      "48d5a055-9b15-4ddf-8acc-d790fe200dd3",
+      "5eac4ebc-3738-46b8-aa61-7f3dbb06fa75",
+      "6690a076-cdbf-40e7-82aa-86c6b1ffb31b",
+      "9130d18b-bbad-419e-8a9e-cc19c99cdd47",
+      "3b7f1a29-91f7-448b-9cd6-9319e76e5375",
+      "263005c7-d570-4952-8617-229dfcb0832c",
+      "28113d39-1901-4fc8-9fa5-ec8ad7e295b5",
+      "a0a6806e-454c-4fb2-8582-7d7d00acb2fd",
+      "0be2db42-c5c8-474f-84a4-ff5698e10e1d",
+      "d02a245e-b972-424f-accd-fd30a10a281b",
+      "a07c05c4-dd2c-478c-90b9-ef19cbdccbaf",
+      "2d86c3b8-df03-4ae3-a582-96267287e10f",
+      "43713457-3d41-4b1d-bc7d-12f342b319d1",
+      "44443fa8-778d-496c-863b-1d39ab24ac5c",
+      "b3c072f1-01c4-47b8-94af-7b3eac256e63",
+      "56765c03-ccda-4eb1-bb42-2e42ead3e08d",
+      "0f736134-3e9c-49a0-af08-40e6c0d0eec9",
+      "a91817c9-9aec-42e4-8ba8-5b113e8ff5cb",
+      "e4705545-e6d3-46d1-b557-44d9515d3b0c",
+      "43de7a9c-fa6c-43e4-bcc7-c6f236e5d808",
+      "ca8b9e72-c4f9-4f52-a280-27c1b1931fbd",
+      "c15fa141-ba8d-41c6-811e-6fa5a81f5c62",
+      "08ff7b2c-57eb-4feb-8733-30bffed3cee7",
+      "972c4933-90ab-47ca-927c-ba8b7b3a128b",
+      "b7fbcd28-cec2-4bdc-9da3-9d3e73910cc9",
+      "678eac77-53e9-47f1-adfe-830d8a79b9a4",
+      "c0ae9893-2b9d-4554-8701-e23a95392ac8",
+      "986a3d53-4b49-4957-8052-236f8c5c3984",
+      "c6ebd614-09dd-41bb-8848-c33b49489b19",
+      "f2faf05e-0ca3-4528-af6a-461d8d92ba2c",
+      "4d1afc0c-edd9-4915-a4bd-75be81e3ead4",
+      "e21933f1-8f09-4075-81a3-11d2805bfb40",
+      "283417f8-0543-4967-be18-d4aa85ee41ce",
+      "d1d72b08-2fc6-4502-bb34-80912f63145a",
+      "5fae8dd9-a6bd-4184-82bc-a971820221f1",
+      "0279ef87-8a29-4f45-a7e5-fe2ee7503697",
+      "20767e4a-4609-4002-951f-7ae7c3478a53",
+      "6bafa7af-b33d-4d9d-b6a2-a5f87a7667c0",
+      "e20120ce-a47e-49e6-9b02-29b278c44a3c",
+      "3edb78bb-9a74-4bd2-81b3-b99a835d8d3b",
+      "20ae6c55-8e1d-4c71-92ff-3f58a3301b0e",
+      "2ef91e94-6e91-4672-a3a8-63c327b6e6bd",
+      "4239d061-4dcf-46f1-9fa8-f303b2bf7059",
+      "f48f3ceb-045e-4184-bed0-d75230710fd8",
+      "1dc30b09-3005-4f21-93f0-00831513f251",
+      "c0870340-8720-4314-b1ba-1a2eaac143ff",
+      "6fd5b4f7-489a-462a-9cf7-503c5e3648d9",
+      "5cbed551-a41d-4787-bbba-e034504b469c",
+      "c66e91a3-1de9-4d7b-9b5e-af3a82c6c6e0",
+      "9f62e9bf-b1cb-4212-81f4-f43abd1275ad",
+      "06a2ca76-7e51-4cef-86b2-95420b708b03",
+      "6ac2d49d-30ae-46c4-a408-59d3d5a093ea",
+      "3801f884-070e-4363-bdda-26ce35d047e2",
+      "3aa4b221-ad5b-4262-aa77-78d4df9a2832",
+      "aab770ce-cfd6-435f-a67f-dbd733b6f8c2",
+      "5054c36b-4270-4a5c-bd67-1086ed9db59f",
+      "59ef17bd-1010-45d2-a284-3cf323ce1c9a",
+      "f88c3d92-109a-4273-bd0c-84bbfef6960e",
+      "f495fa9e-dfc9-4337-b4c1-93b0827c4442",
+      "5ff52e47-62d8-4a08-93e3-5e240873f572",
+      "bfaebf9d-7598-486d-90a8-8c034fb0f085",
+      "fddd11d5-e35f-48a1-9a38-1d2cbe4e3c82",
+      "16874e85-2ef1-467d-9b7d-8d103c3d9fc8",
+      "c703c99c-1f4e-4900-b980-ce1cd11102d5",
+      "fd3ca6ae-3db9-47b5-93e4-04663093c5aa",
+      "2a7ad8b6-d877-422c-a634-5b535dbe1bea",
+      "9eb29af4-dbf9-4b78-bff7-13e8d9043ad0",
+      "9963e236-b89a-4aa0-90de-7f47d6339d6e",
+      "2100d0b0-ac2c-4b0c-9e92-79d9edf54b9e",
+      "00577b52-cf8c-41ee-b4b5-345eb4302bcf",
+      "ecb5aa09-3c23-4c4e-8750-48c106ff7555",
+      "2dc7ff37-b7e0-45b5-abf6-37f6623824ce",
+      "45c6c343-794b-44ba-8e0e-72dc88331c55",
+      "bd3c5440-569b-4dba-a6b8-18a905e83b4d",
+      "37eac402-11b9-46e0-a887-cb4828ad4a21",
+      "fff46bdb-4807-43b6-818b-231827b3ba54",
+      "f290d902-a8f2-4d99-baf1-1ad5203a04ee",
+      "0ef3691b-df89-49fd-8d28-7af553990fd6",
+      "97c14512-2547-4dec-b298-cf66f3f1ea95",
+      "96451e66-15b0-4201-9f0e-aceece3895de",
+      "8f9b0cb4-5bbd-4f05-ab3d-22b52db939e8",
+      "1f8f0169-6b62-4be4-b20c-e40a38e9023a",
+      "3c748d90-4a76-44b4-8ac1-f77699165bfd",
+      "8ee1cb8c-5fe2-4fa0-af1a-5662f76b7f93",
+      "8260567e-c52a-45f2-bd12-81794ee24a2d",
+      "77fe2a4b-3240-42d9-bb5d-a05d61392900",
+      "9cefc691-4f70-4c27-a1ab-b496b1066291",
+      "542105cb-5d4a-4f04-8177-230181d26a41",
+      "98a25e23-a476-4f8b-b350-865b67f2b460",
+      "473aa36c-b9c9-4d95-9ec5-77d80e40715a",
+      "8f4ca604-f8ef-4d10-83f0-aa3b77931be7",
+      "dae7166d-a6ad-4766-b97b-fa6bdcbc96d6",
+      "8e3183bf-1a76-4fde-8493-f7f34df50dd8",
+      "d69efd8a-9efd-40e3-b35f-a29b536991ee",
+      "6483e5d3-bb8d-489c-aa84-d70349fa4ac2",
+      "b3743d78-7fe7-4b76-a98a-a7822cb5f047",
+      "8e19b124-fb74-4f61-831d-51b324df675f",
+      "5b3283a8-9cc2-4fff-9916-94da841b8623",
+      "44ba38fc-ac71-43b4-832d-b8dbbbed802b",
+      "a61565ce-ef72-4a5b-b972-60793ac54512",
+      "145db5dd-f490-4351-8180-4d69e051dd88",
+      "520081da-eda2-4568-9739-933f8b4ef62c",
+      "2934c47f-a068-4c7e-b68a-19cd71bed460",
+      "f437629b-94ab-434e-97b6-cfc4695d19e0",
+      "d4a3dea4-90a1-4b07-9332-63fafd4645a3",
+      "f2afabdd-048b-4470-a1b6-65f8693cfbeb",
+      "84b2e79b-d6b0-4f39-94aa-88d634020e3d",
+      "55f8fd74-781b-45c9-9f84-3ea331e65b66",
+      "da002984-84a7-4d43-b249-04e58692651f",
+      "c4216fe2-a8d4-44cc-9061-20d59cc48924",
+      "541f83a3-8528-41e4-b94d-4d9676c70376",
+      "e4778389-3f67-4c1b-ac0c-703c5ffbb058",
+      "990c023e-a51e-4102-a456-b12b8c0ae1a3",
+      "f17ec18d-ba42-4e0d-899a-97a669ece841",
+      "e6a570f4-6569-4e4b-8c4f-28acbfffa65e",
+      "d447db80-224f-4956-b589-d7b988a53e94",
+      "303982bc-f069-423f-8bc6-324565879b22",
+      "71b48373-898f-4cc7-9c19-41247b13c3ee",
+      "e50aade4-7643-4d7f-9e7f-74c8988fa562",
+      "e620e44f-b193-4c71-9f44-675b0b983a0e",
+      "6fc4a303-7726-4386-901e-e49c23bd90dc",
+      "7f25cd04-101d-49ce-91d7-4269339c49b1",
+      "7908d77e-004b-4432-a552-335b1f0aabe9",
+      "4b78fc6a-ae4a-446d-822b-732909defbab",
+      "321eff86-052b-48e0-b889-3baea8bc8fd6",
+      "d44fe3e9-2284-4027-bca0-44aa633fc66a",
+      "07c75200-dd23-472e-839e-8ff98cf48631",
+      "5f02d316-6a99-4b86-b8bf-3cf81cca9057",
+      "946ae41d-4d71-4db0-84ae-7b887acf74ac",
+      "0bfcc7cf-56f7-429b-a734-bae01d0ac5af",
+      "d85daf06-01a1-4355-afa3-afd5517d975e",
+      "0d79ee49-4c1c-479d-adaa-e4c94875f796",
+      "7211c9f1-b714-4e1c-b915-88ffb49f9041",
+      "43ede4ac-e018-42e2-b123-8e94d28d6f5f",
+      "6ec1d8c1-9b2c-4b29-9180-f0da9947e30e",
+      "ff77cdc0-55af-452a-af41-35656dd6dbd9",
+      "0af6c4ac-e283-4b2e-9676-ded26a41efa6",
+      "7e098a70-a9ef-45f5-94ff-3435918a3861",
+      "447ea638-a5a2-423f-b295-544654500fd1",
+      "11e5bde0-4dcd-43ff-a421-730c01b727fa",
+      "d14708ca-e1a4-44bf-a014-51734c3dea1b",
+      "42447ea5-9360-4aa4-99b0-c3f3e2213778",
+      "baf63c4a-5b9a-40b6-bad8-bf0fb9134ac8",
+      "c1bbdd0f-5ff4-4214-bd5d-14d3b9ff92f8",
+      "c4d67024-0946-4131-a8b8-a9f5f5003b15",
+      "acf53db9-62f3-4865-b910-ad37f3ab11a2",
+      "3b86d6d5-38cd-4152-a786-4f78292bdcdb",
+      "4ffb61f4-ff78-4900-ae68-84b25b59f922",
+      "520c49e0-dbc5-4c33-a85c-b95fe85e44f2",
+      "38f5e19a-67af-4801-8d06-ca5e03b7ff19",
+      "49e168f0-5156-4a96-a879-0db31cac64ec",
+      "c1bb02c5-92f2-475a-9e2f-ddf5bade5453",
+      "0593fa41-d7c1-40cf-8ab9-a118f6fd74d3",
+      "aee22ea3-2075-45be-b256-1fc86281ece2",
+      "6854aa2d-99d8-483a-84c2-65111b4f0d18",
+      "69e964fb-06cf-416b-9e93-6ca75c04a16f",
+      "fe9831e4-c413-4ad3-86ff-056bd116ae0a",
+      "736ca786-3f7e-4bfc-a350-8cf1de033929",
+      "aaf0ce6d-d392-43a9-9942-292755e92344",
+      "47fb6867-4d69-4714-8b6e-a3410b9d0340",
+      "9198f3a6-da23-4706-9d4c-b249a0264b28",
+      "a2f192d2-532f-458f-abf6-5f42c5647205",
+      "cffe93d0-d8da-4d0c-bc0f-ddf21b4953fc",
+      "3af72bb9-533c-489c-829d-f9d7839d12bb",
+      "624937a4-7b84-4557-947e-27d215168dc3",
+      "53edd240-2807-4e80-81c3-7e0c03d981bb",
+      "846db69d-3263-42c8-a20b-0e91e9ded20f",
+      "46696774-7f2d-4ca9-8d5e-cdbc3234b909",
+      "f8ef17f2-3cc0-4af3-9dc1-fb63541b49b5",
+      "134f69eb-fa1d-4df4-9419-9ccd98b2b6e6",
+      "dfa0330a-e312-439f-9a96-e2152b201544",
+      "af2e64e9-f34e-48c6-9976-bec73d716d7c",
+      "saved_view_permission",
+      "af4ef617-033c-420e-ab3d-82d45e1e1827",
+      "3427098d-4898-4f0e-bc3a-fa4bfc728caf",
+      "e82008c4-3bc3-4a19-80c5-d57a9e14953d",
+      "4d08d5ef-46ca-4e24-ac4f-4a7ca5503947",
+      "e86570ed-9602-414d-adb1-474064f14f28",
+      "ddd39521-b0df-403a-b942-c4b106b95f3c",
+      "9757af96-81f9-48b8-9f47-03d3b0d739a7",
+      "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "5ee41f33-df12-42ae-aca1-869b10f11787",
+      "58d9c566-bf62-4337-8577-f838bea3f272",
+      "d88dc418-0bf0-4781-bfa5-895151ef8519",
+      "104c380b-f1b4-410e-849c-9d43785ffe35",
+      "52d742a6-8c40-44c0-bbb7-160f27d0cb14",
+      "27b8a87e-3346-4fde-8a95-20ba14d8da00",
+      "c394caae-67ef-4dbc-bb7f-2662e524b0de",
+      "79505e08-c609-4a76-9619-b3c6f3a2f745",
+      "66a23f9b-c910-4b6f-87e8-85c3e4c0d8ad",
+      "560c36be-1e12-401e-af79-a900f57dc6c6",
+      "1bf8c455-d897-46c1-b660-4d943f55ae77",
+      "090e2ea7-4183-4589-bd97-3f130aa8a6a6",
+      "c10484bc-8154-46e5-aea8-d9fef260251c",
+      "781c8ae5-d508-43df-aa11-b36ac7b8ae5d",
+      "70aec667-0da0-4eef-bc29-e84730542db8",
+      "76d03b52-9a2c-49ea-9602-5ef98b692c38",
+      "31041df5-fd88-41de-9f39-3437a511ac66",
+      "3dc3430c-609d-4efc-9379-ca76e7a08fcc",
+      "eeca405e-ca3d-409f-b720-bf2e7f2e4808",
+      "b839471c-7c86-456b-bf20-6824d8934d3e",
+      "78083ac9-d041-4c64-907f-6c929e9d7f4c",
+      "d34965aa-e0cd-4952-9e32-59fccad5c4ad",
+      "4ab8ae42-ac8d-4589-bcd7-93b232c05e84",
+      "7dac6147-50ba-4fff-862c-915dec49afc7",
+      "7c2b7aef-79de-474f-856d-feddda9337b9",
+      "5b140dc9-1bf4-48ce-a918-17bf403dd712",
+      "0bb50213-0a0f-4d67-98c8-f31ac79f72bd",
+      "ed1cedbf-dab5-4181-b493-fa6b5f85ed6c",
+      "9832d8de-dfaf-4f9a-9933-fd749d4828dd",
+      "00aae08a-f3f4-4ddc-8c61-7d70d917b3f8",
+      "331b1a44-0d89-4416-816b-fb05225bb550",
+      "0964d7a7-ba0a-406f-94f2-394874acf664",
+      "450b3b98-d5b9-4764-8489-8fc7a00e3e6b",
+      "1dfa83f8-1de1-45d4-8f05-3f3b9c3dcff1",
+      "5aecabf6-7b63-42f1-abb2-80d0739ca66f",
+      "f6b6e1a2-47aa-4168-9c3f-7f58a46fa5a2",
+      "dfb9d353-203b-46b2-ad3d-320ca18cd5b1",
+      "a30ddb0d-55f0-4543-bd32-85b1b189fea0",
+      "d6b8e595-5036-49c6-9b92-ebd92a67d141",
+      "544378fe-1351-4360-b989-36734922fcef",
+      "14e931fa-03d8-426c-b4e2-80ef20c4ced0",
+      "f1bdadb1-3edf-48ca-a87f-2329c4745e8e",
+      "c4554ef0-7cfb-4237-9bc9-ad5447e9a515",
+      "59bf84b0-97c1-472d-bee9-894c972baa45",
+      "83e94d66-bc35-4d13-96da-43370e189d66",
+      "cdbdb8b9-0abd-4cb2-bbfc-448e84a50e83",
+      "8e104d7c-142a-4b4f-aaa4-e379c8e98ce1",
+      "1c861f23-f78e-48bb-981f-c6b5d5a1c6c9",
+      "ddb7e1e6-0680-4192-9746-f81109d3304e",
+      "f8e38a5e-5036-4802-8f8e-708a1f94613e",
+      "b58ae64e-f191-4cd4-a719-8c0333276b78",
+      "d8dd4a81-b735-48a6-b250-9ae9c9825e60",
+      "4b395c73-8dab-408e-849d-dad7656ddfde",
+      "a0b579e1-6089-4fc2-aa3e-67ee92e87e14",
+      "b3a28046-b0f0-4587-8b43-95b7da239c33",
+      "729c3455-1cc5-4d1f-b5f8-f5a26880bb7e",
+      "4044f7f2-aea1-4025-a4b0-9ba9c09c4a59",
+      "314e246f-4e48-4d52-ba0a-16eec40a0bd5",
+      "8f3d9f7c-757c-4117-a197-a16734a0b36d",
+      "f6dae02d-89ac-4f7a-bc46-a8ba9a513c90",
+      "a441e659-fbba-4807-8f15-589d5db2533f",
+      "681299d3-540c-4ae2-8ad2-34eaaadf09b3",
+      "0507f4c2-f550-4bf6-ad2f-be48df744e52",
+      "397b1533-17e2-4429-a89f-849921bad499",
+      "d8b0045d-3660-4713-bd46-fcdda8efa680",
+      "bacd02d9-eda8-4a65-8ead-c21fc2541f53",
+      "9574ae1c-4162-4ad1-9716-301bde092b77",
+      "7bbee616-dc7b-4ad7-850a-db6c08471076",
+      "a0949edb-0f3f-46c1-9d3e-b323bf6b2f5c",
+      "efaeb480-a6c1-43cf-a6fb-fb9bc93ebe84",
+      "1e2c52fa-86d7-4c52-a0bf-fbf180c3519a",
+      "4848747b-52a8-45c2-bc95-fdb292b5bff0",
+      "a0da9402-a0b8-4c46-bea1-ebc911a937fe",
+      "57d3ce37-c09a-43d7-8380-7b9509970c70",
+      "69f09c61-a2c5-4563-bab9-247361331e22",
+      "8f3af11d-d6b1-4162-baf3-d9460c71bab8",
+      "d946b62b-9708-4bc9-8fb7-e0e3d3e72a91",
+      "49b8012d-b44e-4098-8e26-f988dfd2867f",
+      "8ffc6dbb-e7a2-4248-bbc4-1cc1c293e62f",
+      "74f4f5e2-3ab9-4a3b-87d3-580dbf98cb03",
+      "f8e2b6bf-5f93-4e7b-b4a5-6aedeabe5bab",
+      "e37c1454-8568-4fd3-babf-1c5a4996079d",
+      "3a271900-b305-429e-91dc-ad0be6e6a8db",
+      "feca1222-9e75-45af-9e95-1ade11452340",
+      "2416fda7-24fd-4866-8b5e-4335bdea6367",
+      "113ace4c-740b-45e0-b882-07061a7b8597",
+      "b95bd7d9-332c-44c4-b730-8d86284eef0e",
+      "3e05bcfd-c58f-4a0d-9bc7-7e00eb6c5984",
+      "bacd5dfb-a916-4237-958a-861ed94123d4",
+      "25058c12-655c-4d2b-a4e5-65892be134d2",
+      "4623fc5a-6f43-4089-b97e-7b55eca6f02c",
+      "a67ef729-1594-44fa-86f2-ce87a7d5a8c1",
+      "145877dd-8efe-4c28-948a-18c79d7dfb79",
+      "7c74a5d0-fd3c-4167-9684-dec46a4de7b0",
+      "db5d1be5-4dab-4c37-a1ef-2b49ac81059b",
+      "0b78ba72-be5e-4196-894f-72e1ce8153d8",
+      "c0cb1a98-1b01-453a-9353-7f8e46778d45",
+      "87b5aaae-7ec7-4992-a83c-6d01eb117582",
+      "c7f801e4-f39c-4406-a160-f6b6e648cfb0",
+      "a5de8f9c-3095-4545-bd63-9cb3f96d94d8",
+      "1003c304-b25e-4090-997b-64a384fb1bc8",
+      "6832878f-f262-4c47-9c66-ef662dad81b4",
+      "217295a2-7fc9-4259-8951-cac2534d20d1",
+      "92b8aeec-9681-475c-b42e-bcceedd18502",
+      "8909b1ab-4055-41be-86ea-a0dd77fbb2c0",
+      "8003e7f0-a3f6-4415-ac18-6b2c35bc6387",
+      "e6928a6f-bc59-44a8-a45e-eda8f45c1c19",
+      "e2ad9011-6d05-4a5c-b0b6-06162c3bb27a",
+      "302123bc-f0ba-4c44-aa64-de70aa687567",
+      "874ec328-d9a0-4a51-bccc-81ff186f2924",
+      "f9d9f15c-56dd-496d-9919-6ee16d778bf7",
+      "57c58cf5-f2e8-4167-9563-70392d9bb903",
+      "681a0921-27e6-4b2e-ab7c-3daec8be145c",
+      "4186eef2-2dcb-4267-9b13-0dbedc1bd7ac",
+      "2dabe876-caa9-4016-958b-c73fa748abb6",
+      "97210046-e89c-4551-99ec-315209028cd7",
+      "c2324dac-4ffd-4093-96de-3db11f5678f8",
+      "ec39daef-b3cd-4ef6-88fe-69404b12c8b7",
+      "e988f509-0911-49be-8dec-3abbc9c7e633",
+      "cdea4bc2-0357-41af-bb44-3c224a4aa7aa",
+      "011608d2-a280-4acd-abda-31aafb04e29a",
+      "c89292f1-5de5-4ea5-84a1-3f02c3f24a58",
+      "be7a9f01-1a5d-486e-9beb-6d71bdc625cc",
+      "53ec0ad1-4221-43ba-993e-28ed5e052bc6",
+      "b6d7717d-8218-4a70-b9d4-c136f4facaf4",
+      "56acc6e7-2e8f-460f-b6d9-d347d14d55c5",
+      "7419d617-93b8-419c-b8e5-b3b44a43ee6c",
+      "d4fd3bb4-530f-468e-bfe7-974b13e3c2ba",
+      "1adc359e-f6a7-49db-bbd5-c3723cb26316",
+      "0207cf06-8864-44f9-abd4-711a00c891b3",
+      "3cfa2381-93bc-4d79-b0ce-75421b472078",
+      "cccb94d6-cced-4260-817d-e24778dd8386",
+      "b8c7e1a4-d0dd-45a5-942f-5323f7b7527a",
+      "c285a6a4-96af-4126-b4ad-3d023e9b0522",
+      "179f8ad6-01a6-4871-b1dd-753772509437",
+      "c44263b5-de0c-4a2d-8e6c-9eb9d7ac7d68",
+      "91c2a6c2-89c4-4925-88b2-b5524bdfbb2a",
+      "4dc3fd9e-cbaf-444e-b4de-e4a57202d06a",
+      "8ce2b767-ee2a-4b1e-a482-0b983fbc37d4",
+      "a4ee0702-9184-4628-a787-7f503e5bdda8",
+      "85f181ae-8435-4daf-9a56-311793c0b8d8",
+      "4af92cd1-4015-42f0-a5a7-7ea0e57661b6",
+      "8b56d4df-a383-4b4e-9fe2-109c24516036",
+      "1013dcb4-f64a-4160-8f44-9d929e99d272",
+      "79981a7d-51d2-4258-ab4b-88c305f44def",
+      "75d677da-e981-4b57-8de6-918c65f2d271",
+      "316e988d-b07f-4898-9cd8-f1efb98a7a00",
+      "e4c57481-1707-4157-95bd-71d95493bcc0",
+      "47412429-3b82-4841-9993-2819ed49da00",
+      "14a25463-1f6e-4c08-a7cb-ddc5179fc268",
+      "5c8f29fb-60e2-41f2-8085-b2b36f687b4a",
+      "b08cb8d4-d49c-4710-b83f-d17a1ab828a6",
+      "02a67ef1-3c55-4d7f-b34b-6ca4a4279526",
+      "4b223391-4158-4f49-8672-e1621b780853",
+      "bd9c294e-89f4-4841-a75d-b8d65c5a3545",
+      "364f0616-b816-4f67-8796-e322710c6d0f",
+      "29b13520-4f43-4037-81c1-bf341eba245b",
+      "a5da6c7e-f777-4111-9a45-98ff46ee03d4",
+      "20249542-dad3-4fbc-96ab-145816a0a39e",
+      "91db0e6a-f304-4188-ba57-0273d14c0728",
+      "0cb15df4-160a-4682-8aa3-2c8ce9e4a46a",
+      "69e13d6c-c979-4802-9284-bb1eb837046c",
+      "d16d90a7-2330-46d9-8d73-53e6cf4850e7",
+      "6604e93f-f0ab-4e3c-81be-f115343e47e8",
+      "a15d027a-9e58-4308-9955-0b65c9d403f5",
+      "aee0a826-e0f8-4414-9307-2ce23f476e73",
+      "1cdf7eec-2c17-49b7-977f-7272763aa6c0",
+      "40864fd4-6a00-4548-ae45-8b122a6ccfe9",
+      "41c0a06f-8672-45bd-bf85-dc3d81dbedf5",
+      "81a1f49b-3e1a-4a15-9cf8-759bfe7f4699",
+      "6330cfc8-e56d-4d14-aee3-07288ea38c64",
+      "0f1dd400-1ec5-4248-8abc-6b3fa3d3e7c0",
+      "1e0f8cf4-995f-4890-beaf-56135a12404d",
+      "4ee6a3f3-8799-419c-ae56-a39edf59fd2b",
+      "0823be22-4c8a-4cc1-ad07-2016c7b538db",
+      "3ca609ed-b235-49f7-8e15-27c829c002fd",
+      "338fe948-7c78-471f-9992-66a862a4525c",
+      "5ece6dfb-3e06-4044-8c1d-e8995302d98b",
+      "d42fc8b0-a67b-4479-9442-cf94b2946bb7",
+      "269c7a66-f5bb-432a-ad46-343c85a99b8b",
+      "6b544246-a527-4e7d-a8a1-c2b2dfd33476",
+      "d8a55353-1fc1-425b-8bc4-653baad9bc0e",
+      "52325b32-543e-4cf2-9b4c-7548f2ff3f05",
+      "e5ef4e6a-8ca6-4783-8918-187969aa4aaa",
+      "1cb11f9c-8efa-488b-901b-3c04200194c6",
+      "f7769f5e-075b-46bb-be47-63b973bb6f09",
+      "10bf44c1-d6b4-4df2-a585-465b8029145b",
+      "42305b00-eae4-427a-beaa-f492e5e94888",
+      "296c33f6-409c-4193-9f5f-be633930820d",
+      "4927add7-b36a-446d-8ffc-26b6100cfeff",
+      "ecc94397-3733-469e-880a-32c0c590fa7a",
+      "93d3d24b-c790-49c6-8b2d-4e8094f40d15",
+      "116b4d67-73fa-4ed4-9e78-4eb973add19b",
+      "e147c78b-b73f-4a20-b1ff-b702fdf06aee",
+      "eedf4db0-854b-44b2-ba53-e4e8dc8b6512",
+      "13a596df-ecac-4cae-aaae-d88f574c0aa0",
+      "f14c3365-a1ed-493f-ba15-f6223bef6ed1",
+      "468063d5-e56d-4c27-b2bf-94d67ffdbfdd",
+      "fae3b84b-d731-4697-91fa-3ec70fdae456",
+      "5595e185-ab8c-44ab-a28f-d19ad1c38df8",
+      "ce83c884-c2d8-4500-bd54-a9dc790dfe32",
+      "2c8f70bc-12ab-4d3c-acb0-e0486da94941",
+      "80576aa2-eed5-4a1c-9539-55b5ca139dba",
+      "763788ed-9412-4047-866c-64ef6d0e515f",
+      "9ecc95ae-ade9-41f0-a802-16f4148d4aa3",
+      "649b5ec6-ce88-4417-9a8c-86abb51f76aa",
+      "a9a1b27c-8dd8-454b-9967-aad0a01af479",
+      "45c1ae60-fdde-4bab-88ff-6c8dc32c0b70",
+      "acc88e08-6f1c-406f-9f07-5ea50950f1ac",
+      "b5098e5e-8286-49f4-8718-e763d2579f24",
+      "0f930384-fda1-4e13-a45d-2025e2f5b7c4",
+      "f85273a7-4b92-4876-b679-a8597af44268",
+      "c41852d4-5af6-420d-a148-9e8ff6e02c78",
+      "0cbd76bc-2872-48f9-bcb4-504bad419b7e",
+      "1a2f2632-2c37-4448-ab2a-ed643c725b03",
+      "3a550114-91d2-4fc5-a60c-52ef7752b3af",
+      "b9b77027-09e9-4762-991b-2de93ede5765",
+      "6a887e52-c256-4751-91fb-ab6ca303044a",
+      "7f08c2f9-940c-45ef-a491-c6f99986e562",
+      "984a7bb5-df47-45f6-b46b-0ef1d3303371",
+      "77fb3bd1-0f3a-4668-a952-9b5445248cdd",
+      "5eedb8b7-70e4-429f-8b28-9dc2e4e5f860",
+      "0e38e7b8-2906-40fa-b830-7494474f86d4",
+      "b7a4a31e-739d-416a-85fe-ce4198d27b44",
+      "7fd1e02f-41ff-405d-afe0-b978feb0a4c6",
+      "49b7d8ba-165d-48a9-84a9-2c3e0bd568d4",
+      "9ec249e9-f8df-48ab-bd06-06c1dd5602ba",
+      "a8d19861-a792-457e-a041-56dc47bac7ac",
+      "c50c0d0a-bd64-4fff-9533-1509978f1ab7",
+      "c2a6a6e0-5df9-418a-8813-02afadd870ab",
+      "b5580fc2-d80a-41a1-9496-d7a8e6aa358d",
+      "a85ffc6c-a308-41c8-8d4e-33048a1ba048",
+      "9d8fb6b1-b0cf-4505-8799-3b087df33753",
+      "97333543-34bf-433a-9089-e8efaf854d25",
+      "f54c34c4-a4e5-4900-8c35-72eef11f3493",
+      "893653c9-66b3-4ba3-a4e2-9d7b54c13582",
+      "a01064e3-451d-46d9-bdf3-eb5a9ab11a93",
+      "2fb277b5-435a-4960-b6b2-aacde4ce90f3",
+      "5c7d7bcf-34af-4efc-932f-f12b9f8f592a",
+      "d76b86b7-55fa-45e1-b127-e148fdcd7d40",
+      "c374efbe-f6a2-451a-8e23-a06e18a91835",
+      "9b0cb381-2d12-409b-9b88-5c86bfe0a89a",
+      "a7ae1c05-e296-4b4a-893e-92e2344a15db",
+      "f276de7b-5e42-4533-b6ea-c8b7e1bd24b4",
+      "3b25155d-023b-4d63-8c14-514e07ad9eb0",
+      "7032c909-4824-4831-a992-a89b07ca5235",
+      "3c1c959d-b039-4052-a64d-64acbd1d0603",
+      "cbe6355e-bd5a-4723-98ee-dd14789bf1bd",
+      "32decac6-4fa9-43d4-9d7c-a6f45885319b",
+      "3dc8f79f-8ccc-4d5f-a7e0-fc639f82eae5",
+      "59fc9b18-026e-49b6-92df-bf4d5a4e540d",
+      "36cdc6cd-8ecd-4ffb-8aa4-431b0f00ac9f",
+      "bc5a94b8-077a-45e0-8601-b07ef766c81a",
+      "a38a1a1b-e316-4c39-bb4b-fc1b0d58dc90",
+      "4e8e4b33-d306-405f-9cf5-9714b4ff7633",
+      "2fc51063-bc60-4a56-93aa-859aeb29a31b",
+      "3063db73-2b08-48d1-907f-baa930fef9f0",
+      "7cbdc132-603b-4983-8f7f-0a3d0392397a",
+      "5509806c-06d4-4d25-a0bf-c0901bd1b798",
+      "8732a3d5-0570-4b5e-aa89-4c242c708fea",
+      "0247431b-fbdb-4d24-aa00-53b1660286ba",
+      "c5badccc-098e-4183-8048-714c4582ceb7",
+      "6e28ef81-ab6b-42fb-99c0-62cfbcc86ab1",
+      "8f41745e-c54d-4238-94a6-16fdfe1351b8",
+      "657b3717-0291-4c9c-bbb6-f1cc20d62498",
+      "072f3711-35d6-4db8-86b1-d1878852eb7f",
+      "3fdd2449-06cd-4ec0-9cdb-c8ee89098728",
+      "836b07f4-89d9-4f06-87ba-09a48bd56e3b",
+      "569fa499-fced-4e3c-a6a3-c99d5ed4014b",
+      "9336dad1-befb-4389-bbbf-f3cf79b88ba4",
+      "b2189fbd-882f-4642-97ef-d7fe8ea9ebaf",
+      "7b75557e-1b0e-428c-b3df-f27933989c59",
+      "8c806f74-dbec-4d03-88e0-562a90f7f24c",
+      "d1d684a1-0ce0-4a8f-87cf-f86c43689990",
+      "283d8591-82a9-4239-8685-6225da5abbb4",
+      "bad55d4a-4c6b-4147-bdd4-20c18c890f4c",
+      "6d852474-26e4-4f2b-bd6d-227e6dbf30f8",
+      "d08c307e-f9ce-4256-897d-e9647a84f32c",
+      "fd2b5ae1-ade5-4be5-b79b-c3a4970f8403",
+      "62dc2418-b936-4513-bf69-fcbdd3c83d23",
+      "3e883e67-8360-4115-b1f1-2634922d4336",
+      "a7971635-5f32-4b7c-89fa-fd14d8bed74e",
+      "4bbd31d9-6fdd-41b0-a952-5c76dd7f0d21",
+      "ebb829f1-1da4-474f-93f0-bd1112a334aa",
+      "a593b1d2-8a1f-4c38-86b4-7ceae6f2425c",
+      "b5615218-b1b5-4509-9093-415dbfdd4f0f",
+      "b49c1af0-ee15-4a94-8011-d222af04b1f3",
+      "ff891472-2f53-499d-8997-6fc2474a0599",
+      "cce0a810-48dd-4b5d-879b-a3da9a69560a",
+      "1c3531bb-ab6c-42b7-be1e-55dab33f76aa",
+      "7bfc372a-985c-46f7-ab5c-7b73850e4fcf",
+      "8aa8a90b-ffae-4b8a-bdcf-f656399a176b",
+      "cc72224a-4122-4d5b-a69a-991b4cc275f6",
+      "b8e18616-75b4-430e-9f63-8313fe8beeb5",
+      "afde9474-1942-42f2-95ac-b8c00e4e3bc7",
+      "afb56dd3-e70c-45b2-9488-833e2ffec582",
+      "3a087628-e691-426d-afbc-8d2cf386c096",
+      "5e9d5d72-3968-4cb0-9f17-f6275cdef4cf",
+      "821a4f6a-5608-4420-9172-19b58d2620c9",
+      "69bd48a0-57c7-4600-97fa-3e58a7063a3f",
+      "06818f35-02b0-4bae-9e89-14094f43ff52",
+      "50b3d4e9-47da-4f92-80e3-cbc657fe677c",
+      "74c4ad8c-e105-4710-a6be-273c5c20ce04",
+      "a874aaec-30d0-4264-a9e2-376c6a8947b4",
+      "55f92ceb-854e-4e6a-a6a6-29260c73fab3",
+      "0fa55303-bf40-4ded-b981-68779d7a92da",
+      "5d538673-85c0-467b-aee0-065c30562266",
+      "0f25d179-3dd7-4b0d-b3e5-b956db804703",
+      "68c81a5a-adfa-4853-9029-4507055df489",
+      "6816722d-b02d-4126-829e-c223a8ca31bb",
+      "c5e250b1-6aeb-4643-b223-45bf5b745545",
+      "ec17fb3f-a4a4-48ac-a3e0-377e7e2e42e7",
+      "1eaf781f-6e63-4099-9af9-2a6d8ad410ea",
+      "dffd9557-3f69-47f2-ba3f-5a4561159a36",
+      "3184bf55-b287-4657-b200-68157b291fc4",
+      "b4cab36d-9024-41b7-b999-04211825a59f",
+      "5442f431-f7bc-4ea6-9041-e8fc31e0b27d",
+      "9090a94b-5b7a-4c58-b953-2d20434f74b7",
+      "b00de621-ebfe-45e5-b596-d1c4098e2f1b",
+      "b7c3cba1-4e2c-473d-84db-a84832e62539",
+      "a9ab0f57-9032-4840-94d2-dcb2b378161c",
+      "04587301-efe3-4764-94e7-e17e21fec1fa",
+      "cab70b2a-2e7e-4d37-aca1-a13e60f9c8c2",
+      "0362af7f-3ea5-4583-bf6a-4d8cfe407efe",
+      "673a5d4a-9d7e-443a-83bf-15eb047e6998",
+      "e55614e5-6daf-443f-bec2-462c59e8a9ca",
+      "b008ce46-e7ad-42cc-a703-a930a2547a4f",
+      "15a5cd18-937a-4b03-86dc-c7bf6b9229d7",
+      "a3d0a936-a593-45e3-bc45-2b9d2125171f",
+      "473993c9-2d04-4305-87be-c056d5d41f01",
+      "1c9a3f3a-6a87-4ff1-a6bd-fa1f985395e7",
+      "413604dd-478a-4b8e-bf59-ace9549e620f",
+      "5cccafcc-bb28-40e2-9287-c9e4c424a7e5",
+      "c15bd95b-199f-407b-ac19-2912d73c58b5",
+      "a388bc6e-2cef-4b27-a016-175046760b17",
+      "ee8c9936-9955-447c-a7be-ae9652ae8fd1",
+      "9efdc655-a830-496f-8459-13eb263c9869",
+      "b05702f5-1b21-4dce-b6cf-1d82691869ab",
+      "b7dca3b0-8807-448d-ad39-abc04392580e",
+      "4d10e6af-b119-4fe5-b934-eb27fdd8fccb",
+      "53259040-a6a0-49f5-a212-3ff40fec75f7",
+      "85be7b49-1f3a-4df5-acd4-ec6fdf12e3a7",
+      "3f50b8cb-ca79-4fc9-8bc5-7cd4d49f9c9b",
+      "f36a0f58-2987-47aa-9c2e-d145227656d7",
+      "849a1ac7-3875-42c3-812b-5fd5692eaa4c",
+      "4ada6f5e-8bfe-42e8-a6c6-d336590401bc",
+      "8bcaab21-ace5-41f6-969e-f515914217e3",
+      "8b5c986c-757c-4c84-93b7-9cfc956ca85e",
+      "e4f83c75-cd94-4455-b9bc-2929f1f697b2",
+      "7541943a-ead5-4532-a8bf-2399f94a9095",
+      "ad747d5c-9258-4911-a4f8-6f2412c089bc",
+      "cd6266f2-d697-4baf-bb72-fa2be4f17e76",
+      "c0c542a9-30f3-47e7-8243-43784501b32d",
+      "a3093797-f0ba-414a-97d4-957b8f08a4b4",
+      "c12265d1-2b1f-4ad3-9e91-66e2931ae6e8",
+      "361a2135-74e8-4084-b976-0c33ee450667",
+      "4652f23b-1956-48c5-a527-663d2395ba79",
+      "30d1e590-fd60-42d0-b222-37f0708f79cf",
+      "fa566d56-706c-4578-a5b6-a31282615c84",
+      "9b9f47e6-dc67-4a25-916b-8fd81fb51235",
+      "78b67306-4966-422c-9038-562aff3bd395",
+      "d03551cc-66d2-4f07-83cb-a7c314694986",
+      "5494139d-599b-4b51-a5e6-b43f582dfe99",
+      "6dcfc21a-105b-472d-98e8-c6af1e07b868",
+      "20781193-c929-4f5a-bff3-af785f179e47",
+      "2c9cb50b-622e-4088-9a04-3c06a9768d52",
+      "2d38a68f-35dc-427c-9ec6-26458fc5e26c",
+      "19f7f290-1b7c-4ff3-a317-152977c2cec0",
+      "30b03079-5612-4ec8-b413-2827edbf9aaa",
+      "14523567-9c61-4b54-8d99-b903c8ba45a5",
+      "ca51c860-12cf-404c-8122-c97d91c5a0d8",
+      "5da09f2c-2713-4fa2-8e38-104d4f1d6767",
+      "42132183-287e-49f1-9bd0-cfc43a9fdfa4",
+      "bf760940-78d8-4ff4-aa62-bdc1988617d3",
+      "d9013f20-420e-486f-9926-31c88ecf4be7",
+      "49a5dca2-bac6-47ca-a40a-153b3476d183",
+      "935648c2-3e52-4976-a0bd-b4ba75ec1b08",
+      "f0c32e36-23e3-4473-858f-c0ca4c7619ab",
+      "18ee4791-728e-4498-a644-011feeaad5f3",
+      "e2e8051d-2baa-4182-8424-f5470c912238",
+      "710272a7-3cb3-420b-8727-5e6f560d8513",
+      "678ad6aa-c4b7-43f7-8a26-ecac81ae3311",
+      "fc206422-aaf3-4ff2-84f3-5a3179f14a92",
+      "1293ad76-2976-435b-9649-ea8a13b60fc3",
+      "3963e2c8-e89a-4e80-854d-3b5794ef63ed",
+      "d4fbaefd-5f98-4a54-84ec-a9a03c1e66a4",
+      "e1135756-f8d1-4b84-9e81-d3beedc4f62e",
+      "de7c1dd6-9c6c-453f-9d42-c621faa0c2fa",
+      "de9bf56c-c731-45e5-9a6f-217be1fd4216",
+      "2467573b-5cbb-4d24-afa8-642394525902",
+      "cd98ba00-a70f-43d1-9c3f-32bd15288475",
+      "a1c7bca7-6123-4a5e-b220-513330e9d2c1",
+      "056e666e-2459-4a89-bae1-1a5540b14578",
+      "77ed55d9-c6fe-4419-8956-54a26246f2ae",
+      "3b97b404-0e1e-49e0-b21d-06cc38f5ef1a",
+      "81dd3c66-ae33-4c45-9c12-70c4037536d2",
+      "0d56c25f-7081-4488-ac1e-de1211475dd1",
+      "ecab11ae-9bb8-4f20-ae4d-2e7b7ef7639b",
+      "82d9df63-2cab-4b48-9d73-07bc7d4f3c47",
+      "8e6c9e71-4e17-43f4-9eb5-c7341f63db3e",
+      "fcbc2bd2-a8e5-4a7f-9a94-441d55a3eae6",
+      "6e848d3c-fd20-4729-9223-dca7c0f0d64e",
+      "f386b47e-d218-4346-b4b8-a516bc61dd0f",
+      "7b58e159-9c2e-4ed0-a8f7-1a410cf5b318",
+      "7f9ba3f5-e2f3-4867-9cad-c3ea64ec2242",
+      "887e2d42-cc21-4f2b-950a-97b7cc7b5cbb",
+      "6dadef1d-b9ef-482d-a8ef-31d160350b33",
+      "8dfeebc2-8766-44b5-b25f-d761453fb1ca",
+      "0deb2bdd-23fc-40b3-9e51-2b4addfe2c53",
+      "d3b5fa2b-ded3-4171-803b-397ab9083b85",
+      "3774f901-c91d-4728-af35-4922274a3e22",
+      "752b37b8-35cd-470d-9253-1d56c48275d3",
+      "a3a81a8d-0e53-4755-ae3d-36ed6f1c30f3",
+      "2783ffa7-8dd2-4727-9d22-4e4716502d7c",
+      "87daab7f-d75f-42e8-bb30-7bbaf23b9b98",
+      "8971d84e-c5a9-484e-825d-719ee76ce620",
+      "97c27fcd-2185-40c8-a4b5-1d09f941e24e",
+      "ff2c1a98-ab84-45e4-984a-959367bd05e4",
+      "3e4c414b-74b4-4af0-9227-79f9879c1528",
+      "b0da9a96-03ab-4744-bd08-77539ccd45c5",
+      "bd5f28f8-7d4a-43d2-8de2-fda4617bcb35",
+      "9da8c14d-e867-44ad-8b41-44d21ee55d88",
+      "86d627eb-d0b0-42a0-bfaf-f2abd2bf2adc",
+      "84de303d-23ec-40f2-874a-76906009950e",
+      "481866d8-0aa2-406f-981f-1261abc311ae",
+      "922ff5d5-fabd-4115-9740-91f3a09fd03a",
+      "b0e86b0e-1a53-4fd2-867a-d4c91474b383",
+      "38aacc36-5d41-486a-8a3f-a9fc97c893c6",
+      "16bffc42-7e2f-4280-9913-1b1af9a082eb",
+      "7d9953d3-db5e-4bfd-863f-fe2481bf8e8d",
+      "3f9879f2-e3ce-4f67-9f0d-7a1bc944ffa2",
+      "45ff6e62-eb87-4650-a96b-dbc2d4ce51ef",
+      "2bd27374-128b-416e-8e44-9d330608a2e2",
+      "630d287a-a03c-403c-9fe4-d3410db5bfca",
+      "5da4d417-2c7e-4a7e-8b35-69d5610e417e",
+      "c5ca4f69-9526-418c-977f-19044f43a228",
+      "285be8e1-d1a9-4f1e-837e-f6e865de781d",
+      "92f5d2ff-2404-4c51-871b-ef9bccc92bce",
+      "a81be093-c369-4826-bf48-c543794ec3d6",
+      "8f51c43c-8c89-4d49-81bb-69649b737ce5",
+      "6ac9da43-30d0-4b56-afa1-a94e76e3d06a",
+      "3a3611a6-7914-4871-b433-7ac50a8742c0",
+      "215d8d48-f0ec-45e3-834f-2eeb07ffac57",
+      "64af9f6a-2099-4291-80a6-92f571f49222",
+      "e47a826d-91d3-4de5-8098-4c39546d7f51",
+      "542fbfd0-ce2d-494d-bd08-71cbd510510e",
+      "c596f56b-defa-48a8-b671-18834c05b6a1",
+      "17714c64-f24e-457a-b254-e94859936f8d",
+      "ec27f99b-4bbf-4d86-ac60-5ec99c1b0b4c",
+      "7a3d37c7-2467-424d-ba7a-adce463c59bb",
+      "a2901026-fac1-4294-adeb-0cd0478debc2",
+      "15a5a708-f7b5-4158-9936-2e112c223188",
+      "90c08a7e-5d30-44d1-bd22-1a424ce00de3",
+      "4b481b8d-f2b4-4352-9fa5-057e9f659423",
+      "0723abe2-fe85-435e-b64b-e6eb647d39b5",
+      "947e5968-808c-482d-ac14-b46ae1efbd9b",
+      "6e147963-1cc0-468c-9ab7-720742e1e9f1",
+      "e22a808a-cbf6-4aa7-a3b4-a3d490bca25e"
+    ]
+  },
+  "engines": [
+    {
+      "id": "3427098d-4898-4f0e-bc3a-fa4bfc728caf",
+      "args": {
+        "id": null
+      },
+      "name": "core/character.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterBuilder",
+      "demiplaneEngineId": "1b35de6e-812c-4df8-988a-4446f496a1d1"
+    },
+    {
+      "id": "custom_character_name",
+      "args": {
+        "id": null
+      },
+      "name": "character_name",
+      "type": "CustomDemiplaneEngine",
+      "value": "Valeros",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "5a001e83-114c-4914-a32f-520b23fe3dee"
+    },
+    {
+      "id": "custom_getting-started-current",
+      "args": {
+        "id": null
+      },
+      "name": "getting-started-current",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "23741c35-3257-4574-92ce-d3e9b08008ee"
+    },
+    {
+      "id": "custom_character_avatar",
+      "args": {
+        "id": null
+      },
+      "name": "character_avatar",
+      "type": "CustomDemiplaneEngine",
+      "value": "https://demiplane-prod-app-avatar.s3.us-west-2.amazonaws.com/5a7689b5-cf32-4d9b-9c24-e1dc9def796e.png",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "d32f9e83-5cdc-4dfc-bcc0-9f14b55b7f7f"
+    },
+    {
+      "id": "e82008c4-3bc3-4a19-80c5-d57a9e14953d",
+      "args": {
+        "id": null
+      },
+      "name": "tabula/ancestry/human-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "6d05d6b8-63d7-4c95-bc60-9271bbb59364"
+    },
+    {
+      "id": "4d08d5ef-46ca-4e24-ac4f-4a7ca5503947",
+      "args": {
+        "id": "225b555e-4f7a-470d-8350-b19f0db53fc8",
+        "name": "Natural Ambition",
+        "slug": "natural-ambition-rm",
+        "sourceRow": "ancestry-feats",
+        "parentEngine": "6d05d6b8-63d7-4c95-bc60-9271bbb59364",
+        "builderSection": "ancestry"
+      },
+      "name": "tabula/feat/natural-ambition-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "00f8b65b-3141-400a-a8b6-e99903e7239f"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "41634b2f-5560-442d-84e8-e35be8612ccd",
+        "name": "Strength",
+        "slug": "strength",
+        "sourceRow": "ancestry-boosts",
+        "parentEngine": "6d05d6b8-63d7-4c95-bc60-9271bbb59364",
+        "builderSection": "ancestry",
+        "selectionGroup": "ancestry"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1d07b256-8083-4037-a6da-a21db2965c84"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "f812d959-69db-4a0f-ac62-abf478b09788",
+        "name": "Dexterity",
+        "slug": "dexterity",
+        "sourceRow": "ancestry-boosts",
+        "parentEngine": "6d05d6b8-63d7-4c95-bc60-9271bbb59364",
+        "builderSection": "ancestry",
+        "selectionGroup": "ancestry"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "f561688a-5caa-4aea-960e-eeb2f7601726"
+    },
+    {
+      "id": "ddd39521-b0df-403a-b942-c4b106b95f3c",
+      "args": {
+        "id": null
+      },
+      "name": "tabula/background/farmhand-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "c71b20f0-a3d8-453b-9ced-d301bded74d1"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "ea91728e-3519-42db-aebd-15d247c8a69e",
+        "name": "Strength",
+        "slug": "strength",
+        "sourceRow": "background-boosts",
+        "parentEngine": "c71b20f0-a3d8-453b-9ced-d301bded74d1",
+        "builderSection": "background",
+        "selectionGroup": "background"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "847d3b46-3c11-4c56-87d0-83b0c8972910"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "6306b3a0-7a66-453b-9be6-9900abc021e4",
+        "name": "Constitution",
+        "slug": "constitution",
+        "sourceRow": "background-boosts",
+        "parentEngine": "c71b20f0-a3d8-453b-9ced-d301bded74d1",
+        "builderSection": "background",
+        "selectionGroup": "background"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "141f9d9e-c075-4e75-ab94-021204480172"
+    },
+    {
+      "id": "9757af96-81f9-48b8-9f47-03d3b0d739a7",
+      "args": {
+        "id": null
+      },
+      "name": "tabula/class/fighter-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "97c324de-ae17-4be2-bc74-0e6182f10731",
+        "name": "Strength",
+        "slug": "strength",
+        "sourceRow": "class-key-attribute",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e",
+        "builderSection": "class",
+        "selectionGroup": "key-attribute"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "31c86dd2-021d-4668-b349-a8b2d1bf4970"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "922c4662-2db5-4564-b851-ca17d579c59d",
+        "name": "Strength",
+        "slug": "strength",
+        "sourceRow": "attribute-boosts-level-1-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-1-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-1-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "698d49c9-4dd0-4c91-ae1e-0e4ce115d53a"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "5057f5cd-9479-4e22-b575-2e46444e8c4c",
+        "name": "Dexterity",
+        "slug": "dexterity",
+        "sourceRow": "attribute-boosts-level-1-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-1-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-1-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1af0a314-9dea-49ea-917a-573d9ba15dad"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "35499779-82c1-40b5-8d14-506f2e595640",
+        "name": "Constitution",
+        "slug": "constitution",
+        "sourceRow": "attribute-boosts-level-1-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-1-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-1-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "13b523d8-dede-41b2-9c4c-0133cd1de0ab"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "7c71ca46-8d84-429b-9f53-b9b0f5c4d043",
+        "name": "Intelligence",
+        "slug": "intelligence",
+        "sourceRow": "attribute-boosts-level-1-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-1-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-1-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1e8b6b20-e5b6-4d61-8e66-fa65cabe5a47"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Crafting",
+        "slug": "crafting",
+        "sourceRow": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_initial-proficiencies-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74_select-skill-initial-proficiencies-fighter-rm-1bd2ed71-b19b-4c1f-a71b-56c488650eb7",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_initial-proficiencies-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "6640d6bc-0f25-49f2-9b3b-45d8b0dbf780"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Diplomacy",
+        "slug": "diplomacy",
+        "sourceRow": "skill-training-fighter-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-training-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "436d7d29-c11d-41d4-b40c-bbbc2cc9c3f1"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Intimidation",
+        "slug": "intimidation",
+        "sourceRow": "skill-training-fighter-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-training-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "12878ad5-fd87-4ae9-805c-e86591523506"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Occultism",
+        "slug": "occultism",
+        "sourceRow": "skill-training-fighter-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-training-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "3a91c33a-5760-460f-8cc7-b6a96cf27069"
+    },
+    {
+      "id": "5ee41f33-df12-42ae-aca1-869b10f11787",
+      "args": {
+        "id": "25f365ca-97f1-4f29-850f-dd6e785f7156",
+        "name": "Double Slice",
+        "slug": "double-slice-rm",
+        "sourceRow": "fighter-feat-level-1-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_fighter-feat-level-1-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/double-slice-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "17f08656-4133-4838-949c-ea87292239ad"
+    },
+    {
+      "id": "58d9c566-bf62-4337-8577-f838bea3f272",
+      "args": {
+        "id": "a45952aa-fc5e-4f57-a9c6-67cf80e8cd54",
+        "name": "Reactive Shield",
+        "slug": "reactive-shield-rm",
+        "sourceRow": "00f8b65b-3141-400a-a8b6-e99903e7239f_select-feat-natural-ambition-rm-1bd2ed71-b19b-4c1f-a71b-56c488650eb7",
+        "parentEngine": "00f8b65b-3141-400a-a8b6-e99903e7239f",
+        "builderSection": "ancestry"
+      },
+      "name": "tabula/feat/reactive-shield-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "3fe47c6a-d3af-45b8-8c66-c350de60f5c7"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Survival",
+        "slug": "survival",
+        "sourceRow": "skill-training-fighter-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-training-fighter-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "17c8299e-83a4-4152-a508-d99dc51ccdce"
+    },
+    {
+      "id": "custom_class-kit-additions--scale-mail-rm-is-selected",
+      "args": {
+        "id": null,
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e"
+      },
+      "name": "class-kit-additions--scale-mail-rm-is-selected",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "91c171b2-9edd-4cac-93f7-6150d05eca66"
+    },
+    {
+      "id": "custom_character_survival_prof",
+      "args": {
+        "id": null,
+        "parentEngine": "character_survival_prof"
+      },
+      "name": "character_survival_prof",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "e337dade-1dd3-4def-b49e-b892e85b2cf8"
+    },
+    {
+      "id": "custom_character_survival_prof--overridden",
+      "args": {
+        "id": null,
+        "parentEngine": "character_survival_prof"
+      },
+      "name": "character_survival_prof--overridden",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "cce3e416-c7af-40c0-a68c-90d955441a30"
+    },
+    {
+      "id": "d88dc418-0bf0-4781-bfa5-895151ef8519",
+      "args": {
+        "id": null,
+        "name": "Warfare Lore",
+        "attribute": "intelligence",
+        "proficiency": 1
+      },
+      "name": "core/selection/skill/custom-skill/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "3d85e387-35cd-4eff-b0e4-a8b376549dc9"
+    },
+    {
+      "id": "104c380b-f1b4-410e-849c-9d43785ffe35",
+      "args": {
+        "id": "d3885cea-f322-442a-8c4f-acb6b7915d6a",
+        "name": "",
+        "slug": "backpack-rm",
+        "sourceRow": "manual-sheet-drawer",
+        "isContainer": true
+      },
+      "name": "tabula/item/backpack-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "086386cf-9188-4363-901c-ae5b58bca761"
+    },
+    {
+      "id": "custom_tab-spells--display",
+      "args": {
+        "id": null
+      },
+      "name": "tab-spells--display",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "2bc8bb8d-ef29-4bb2-9474-692b8336437e"
+    },
+    {
+      "id": "52d742a6-8c40-44c0-bbb7-160f27d0cb14",
+      "args": {
+        "id": "d0abd9a4-c60b-4615-a2e6-1b3136e1e957",
+        "name": "",
+        "slug": "mug-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/mug-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "7b57055b-2625-4b6a-be4b-fe943db42ff3"
+    },
+    {
+      "id": "27b8a87e-3346-4fde-8a95-20ba14d8da00",
+      "args": {
+        "id": "5a019ee0-67ee-4237-9a81-4060aa4a1b37",
+        "name": "",
+        "slug": "longsword-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/longsword-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "e2e3d2eb-9035-4f59-8291-2d207369efcf"
+    },
+    {
+      "id": "c394caae-67ef-4dbc-bb7f-2662e524b0de",
+      "args": {
+        "id": "7b47da8a-0227-49b3-9cd8-33e35a639c84",
+        "name": "",
+        "slug": "shortbow-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/shortbow-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "65cef505-f585-4046-8d4d-e5ae71798e0d"
+    },
+    {
+      "id": "79505e08-c609-4a76-9619-b3c6f3a2f745",
+      "args": {
+        "id": "b62de579-5786-42ce-9d71-571b851b44b0",
+        "name": "",
+        "slug": "arrow-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/arrow-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "03a0423a-f125-4402-851c-64590bd609ee"
+    },
+    {
+      "id": "66a23f9b-c910-4b6f-87e8-85c3e4c0d8ad",
+      "args": {
+        "id": "3b6c881d-59f2-4a04-bcb2-7827a2989da9",
+        "name": "",
+        "slug": "bedroll-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/bedroll-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "2b13eded-1aaf-48aa-bf2a-a77b9b22ab41"
+    },
+    {
+      "id": "560c36be-1e12-401e-af79-a900f57dc6c6",
+      "args": {
+        "id": "91801a25-7882-4450-ad68-7cda094b328b",
+        "name": "",
+        "slug": "chalk-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/chalk-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "304e395b-e0cf-4eb6-8bac-74a376f9e2f4"
+    },
+    {
+      "id": "1bf8c455-d897-46c1-b660-4d943f55ae77",
+      "args": {
+        "id": "a896d998-19c8-41cc-b525-b5dbf3ee0422",
+        "name": "",
+        "slug": "flint-and-steel-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/flint-and-steel-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "16282d74-9f1c-46a3-9fe7-eccb41b72b54"
+    },
+    {
+      "id": "090e2ea7-4183-4589-bd97-3f130aa8a6a6",
+      "args": {
+        "id": "c7a5f9d0-b024-450f-8f52-eb0b39e8465d",
+        "name": "",
+        "slug": "rations-1-week-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/rations-1-week-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "9b3f3437-3869-4cd0-8ca6-b9c03f88507c"
+    },
+    {
+      "id": "c10484bc-8154-46e5-aea8-d9fef260251c",
+      "args": {
+        "id": "4ccbb373-172b-46f0-89f1-e7ca18e381d4",
+        "name": "",
+        "slug": "rope-50-feet-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/rope-50-feet-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "c8eb42c3-0131-4ff3-b51b-bd8ed2e946b0"
+    },
+    {
+      "id": "781c8ae5-d508-43df-aa11-b36ac7b8ae5d",
+      "args": {
+        "id": "ee4b5504-82ae-43ce-b1f3-7c9ca840d52a",
+        "name": "",
+        "slug": "soap-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/soap-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "3a2e9f2b-294f-4cb0-80ce-d54bcce555d3"
+    },
+    {
+      "id": "70aec667-0da0-4eef-bc29-e84730542db8",
+      "args": {
+        "id": "25e364bc-3b05-4716-8b71-6bb1cba569ce",
+        "name": "",
+        "slug": "torch-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/torch-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "217fa31d-b5ef-4583-b76a-f11850485ce2"
+    },
+    {
+      "id": "76d03b52-9a2c-49ea-9602-5ef98b692c38",
+      "args": {
+        "id": "ef15cfab-d042-4a8f-8499-66fe3f7a634a",
+        "name": "",
+        "slug": "waterskin-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/waterskin-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1806ad9f-3f78-4bdb-be8e-7377c5dc192d"
+    },
+    {
+      "id": "custom_character_currency_platinum",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_platinum",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "bfcbe339-826b-429a-97fd-1d6803e36d84"
+    },
+    {
+      "id": "custom_character_currency_gold",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_gold",
+      "type": "CustomDemiplaneEngine",
+      "value": 32,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "e2045a00-efec-400f-be52-be29588fb7b4"
+    },
+    {
+      "id": "custom_character_currency_silver",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_silver",
+      "type": "CustomDemiplaneEngine",
+      "value": 2,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "0c9fb886-8ba2-4464-87eb-5c8c339a3381"
+    },
+    {
+      "id": "custom_character_currency_copper",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_copper",
+      "type": "CustomDemiplaneEngine",
+      "value": 3,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "32f70215-3843-4d2a-b477-3fe48f35f4aa"
+    },
+    {
+      "id": "custom_character_hand_primary_equipped-id",
+      "args": {
+        "id": null,
+        "parentEngine": "e2e3d2eb-9035-4f59-8291-2d207369efcf"
+      },
+      "name": "character_hand_primary_equipped-id",
+      "type": "CustomDemiplaneEngine",
+      "value": "e2e3d2eb-9035-4f59-8291-2d207369efcf",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "a9f52c05-a8b7-47c8-a32b-0d5aa0177f22"
+    },
+    {
+      "id": "custom_character_hand_both_equipped-id",
+      "args": {
+        "id": null
+      },
+      "name": "character_hand_both_equipped-id",
+      "type": "CustomDemiplaneEngine",
+      "value": "na",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "fa214916-8b06-42ab-841f-e1938c941103"
+    },
+    {
+      "id": "custom_03a0423a-f125-4402-851c-64590bd609ee--quantity",
+      "args": {
+        "id": null,
+        "parentEngine": "03a0423a-f125-4402-851c-64590bd609ee"
+      },
+      "name": "03a0423a-f125-4402-851c-64590bd609ee--quantity",
+      "type": "CustomDemiplaneEngine",
+      "value": 20,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "ad7ae9fa-c50b-42e2-988e-053ce28ebe00"
+    },
+    {
+      "id": "custom_2b13eded-1aaf-48aa-bf2a-a77b9b22ab41-container",
+      "args": {
+        "id": null,
+        "parentEngine": "2b13eded-1aaf-48aa-bf2a-a77b9b22ab41"
+      },
+      "name": "2b13eded-1aaf-48aa-bf2a-a77b9b22ab41-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "357a3cfc-55c9-41eb-8999-53b7f47f5e29"
+    },
+    {
+      "id": "custom_304e395b-e0cf-4eb6-8bac-74a376f9e2f4-container",
+      "args": {
+        "id": null,
+        "parentEngine": "304e395b-e0cf-4eb6-8bac-74a376f9e2f4"
+      },
+      "name": "304e395b-e0cf-4eb6-8bac-74a376f9e2f4-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "9915ce7b-fa64-4a69-888b-facf97552155"
+    },
+    {
+      "id": "custom_16282d74-9f1c-46a3-9fe7-eccb41b72b54-container",
+      "args": {
+        "id": null,
+        "parentEngine": "16282d74-9f1c-46a3-9fe7-eccb41b72b54"
+      },
+      "name": "16282d74-9f1c-46a3-9fe7-eccb41b72b54-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "e57502b3-b5e4-4965-897f-ca6aaae54235"
+    },
+    {
+      "id": "custom_9b3f3437-3869-4cd0-8ca6-b9c03f88507c--quantity",
+      "args": {
+        "id": null,
+        "parentEngine": "9b3f3437-3869-4cd0-8ca6-b9c03f88507c"
+      },
+      "name": "9b3f3437-3869-4cd0-8ca6-b9c03f88507c--quantity",
+      "type": "CustomDemiplaneEngine",
+      "value": 2,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "f665d553-dcf5-448b-9d4f-c9316d69eb20"
+    },
+    {
+      "id": "custom_217fa31d-b5ef-4583-b76a-f11850485ce2--quantity",
+      "args": {
+        "id": null,
+        "parentEngine": "217fa31d-b5ef-4583-b76a-f11850485ce2"
+      },
+      "name": "217fa31d-b5ef-4583-b76a-f11850485ce2--quantity",
+      "type": "CustomDemiplaneEngine",
+      "value": 5,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "6676a252-a757-4369-b23c-d0a0f2cc6421"
+    },
+    {
+      "id": "custom_9b3f3437-3869-4cd0-8ca6-b9c03f88507c-container",
+      "args": {
+        "id": null,
+        "parentEngine": "9b3f3437-3869-4cd0-8ca6-b9c03f88507c"
+      },
+      "name": "9b3f3437-3869-4cd0-8ca6-b9c03f88507c-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "51744515-dc5f-4a53-9a0d-17a746432cdd"
+    },
+    {
+      "id": "custom_c8eb42c3-0131-4ff3-b51b-bd8ed2e946b0-container",
+      "args": {
+        "id": null,
+        "parentEngine": "c8eb42c3-0131-4ff3-b51b-bd8ed2e946b0"
+      },
+      "name": "c8eb42c3-0131-4ff3-b51b-bd8ed2e946b0-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "e22a77c8-9c97-411f-a58b-870ee624ef58"
+    },
+    {
+      "id": "custom_3a2e9f2b-294f-4cb0-80ce-d54bcce555d3-container",
+      "args": {
+        "id": null,
+        "parentEngine": "3a2e9f2b-294f-4cb0-80ce-d54bcce555d3"
+      },
+      "name": "3a2e9f2b-294f-4cb0-80ce-d54bcce555d3-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "1dacd913-0231-4391-b437-d257ca695a9a"
+    },
+    {
+      "id": "custom_217fa31d-b5ef-4583-b76a-f11850485ce2-container",
+      "args": {
+        "id": null,
+        "parentEngine": "217fa31d-b5ef-4583-b76a-f11850485ce2"
+      },
+      "name": "217fa31d-b5ef-4583-b76a-f11850485ce2-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "9df51425-56aa-45dc-81e7-7995eb61ffa3"
+    },
+    {
+      "id": "custom_1806ad9f-3f78-4bdb-be8e-7377c5dc192d-container",
+      "args": {
+        "id": null,
+        "parentEngine": "1806ad9f-3f78-4bdb-be8e-7377c5dc192d"
+      },
+      "name": "1806ad9f-3f78-4bdb-be8e-7377c5dc192d-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "bb9288ec-959a-4d5b-a07c-4485e10a7904"
+    },
+    {
+      "id": "custom_character-languages-user",
+      "args": {
+        "id": null
+      },
+      "name": "character-languages-user",
+      "type": "CustomDemiplaneEngine",
+      "value": "Goblin, Kelish",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "30434c41-44d6-44c5-b29f-c1cf106fb845"
+    },
+    {
+      "id": "custom_character_appearance_gender",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_gender",
+      "type": "CustomDemiplaneEngine",
+      "value": "He/him",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "a3c07ac3-e2f4-4aa4-9384-31db497a7d1e"
+    },
+    {
+      "id": "custom_character_personality_catchphrases",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_catchphrases",
+      "type": "CustomDemiplaneEngine",
+      "value": "Noble at heart, and fiercely loyal to those few who earn it. Cayden watch over me — preferably with a drink in hand!",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "435ab0b3-64dd-4e51-a0ff-490b4735339a"
+    },
+    {
+      "id": "custom_character_campaign_other",
+      "args": {
+        "id": null
+      },
+      "name": "character_campaign_other",
+      "type": "CustomDemiplaneEngine",
+      "value": "Valeros was born on a quiet farm in Andoran, where he grew up listening to the tales of traveling merchants soldiers and dreaming of adventure and exploration. Though this longing only increased as he grew older, so too did the demands of helping his aging parents run the farm, and slowly but surely the mounting responsibilities of agricultural life quashed any possibility of travel or seeing the world. Finally, just a month before a marriage of convenience to a local farmer's daughter could lock him into place (but not before he'd sampled a few of the joys of married life), Valeros came to the realization that the door to a storybook life of adventure was at last closing for good. Seized by a sudden, desperate need for a larger life than cattle and corn, Valeros packed quietly and left in the middle of the night with no more than a change of clothes, some pilfered food, and an old axe handle to discourage any ruffians who might seek to divest him of either. It was to become a theme that would follow him for the rest of his life.\n\nIn the years since, Valeros has come a long way from the wide-eyed young man who sought only the joy of exploration (and maybe a pretty, worldly girl or three to regale with his stories). Life on the road, it seems, is much harder than the bards' tales, and adult Valeros has the scars to prove it. Discovering himself to be a deft hand with a sword, Valeros quickly fell in with the rough-and-tumble mercenary crowd, there learning the dirtier, grittier facts of warfare. Though none could deny his prowess with a blade (or better yet, two), Valeros's association with various mercenary groups never seemed to last for long. There was his time as a guard for the Aspis Consortium, which ended when certain shipments kept coming in light under Valeros's watch (never mind that the exploited locals were dying for lack of grain, and only needed a little to make it through the winter). Then there was the stint as a freelance bounty hunter, during which Valeros discovered that it's a lot easier to hunt down escaped murderers than it is to haul in a young woman on the run from a loveless marriage. And of course, there was the infamous incident with the Band of the Mauler, to which Valeros will only say that he was positive their leader had been crushed under that cave-in, or else he never would have touched the man's wife.\n\nIn the end, after acting as hired muscle for dozens of different employers, Valeros finally realized that the only way to keep from getting blamed for things which weren't his fault—not really—was to go into business for himself as an adventurer, traveling with those who properly appreciated him and letting those who didn't fall by the wayside. And if some of those companions happen to be pretty women, such as a certain Varisian sorcerer or elven rogue, all the better.\n\nWhile admittedly not the best at following orders, Valeros is an extremely talented two-blade fighter, easily earning his keep in any group through the tenacity and absolute fearlessness—some might say thoughtlessness—with which he flings himself into combat. Despite his reputation as a bruiser and scofflaw, Valeros has picked up a fair bit of education here and there during his travels, and can even read (something his \"respectable\" parents never learned to do). A worshiper of Cayden Cailean—the only god who properly understands the need for freedom in the common man's existence—Valeros takes an easy-come, easy-go approach to life, wealth, and relationships. Though a fan of fine weapons and creature comforts, the only object he's never without is the tankard on his belt (for you never know when someone might offer you a drink). Noble at heart, and fiercely loyal to those few who manage the considerable feat of establishing themselves in his affections, Valeros nevertheless hides such sentiments under a jaded and crass demeanor, frequently observing that there's nothing better than \"an evening of hard drinking and soft company.\"",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "504b84c1-68b5-40b6-a7c4-1ecbc8bdbd29"
+    },
+    {
+      "id": "custom_character_appearance_birthplace",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_birthplace",
+      "type": "CustomDemiplaneEngine",
+      "value": "A small farming town in Andoran",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "0ca6cfa6-51ea-4a16-ae43-a7f4fe4bf326"
+    },
+    {
+      "id": "custom_character_level",
+      "args": {
+        "id": null
+      },
+      "name": "character_level",
+      "type": "CustomDemiplaneEngine",
+      "value": 5,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "dfe22f5a-bc98-427d-9446-5e94512fbab2"
+    },
+    {
+      "id": "31041df5-fd88-41de-9f39-3437a511ac66",
+      "args": {
+        "id": "2d6677a5-691e-4ad9-a8cf-25fd6004a0ff",
+        "name": "Aggressive Block",
+        "slug": "aggressive-block-rm",
+        "sourceRow": "fighter-feat-level-2-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_fighter-feat-level-2-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/aggressive-block-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "7d0367f1-bd72-4c51-8dff-e6509c4e42bc"
+    },
+    {
+      "id": "3dc3430c-609d-4efc-9379-ca76e7a08fcc",
+      "args": {
+        "id": "2ccba572-4304-40b7-b84d-1f33fa279100",
+        "name": "Combat Climber",
+        "slug": "combat-climber-rm",
+        "sourceRow": "skill-feat-level-2-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-feat-level-2-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/combat-climber-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "bc776c38-dd72-4df0-be9f-5aabb854e3c7"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Athletics",
+        "slug": "athletics",
+        "sourceRow": "skill-increase-level-3-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-increase-level-3-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1867bff4-4608-4316-8a62-1aef8d667e8f"
+    },
+    {
+      "id": "eeca405e-ca3d-409f-b720-bf2e7f2e4808",
+      "args": {
+        "id": "395f6a48-f0d9-4612-8d30-ddf6af1c7555",
+        "name": "Toughness",
+        "slug": "toughness-rm",
+        "sourceRow": "general-feat-level-3-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_general-feat-level-3-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/toughness-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "96bb18a3-0844-4200-bde8-16e848c5fee1"
+    },
+    {
+      "id": "b839471c-7c86-456b-bf20-6824d8934d3e",
+      "args": {
+        "id": "1a0767c4-eec7-49b4-94a7-1f89f69c034e",
+        "name": "",
+        "slug": "half-plate-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/half-plate-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "c51f717a-cd0e-4db5-b901-4953dd5c9654"
+    },
+    {
+      "id": "custom_c51f717a-cd0e-4db5-b901-4953dd5c9654-is-equipped",
+      "args": {
+        "id": null,
+        "parentEngine": "c51f717a-cd0e-4db5-b901-4953dd5c9654"
+      },
+      "name": "c51f717a-cd0e-4db5-b901-4953dd5c9654-is-equipped",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "f8f0ac99-3f39-47c0-9cc7-29f47fe7d496"
+    },
+    {
+      "id": "78083ac9-d041-4c64-907f-6c929e9d7f4c",
+      "args": {
+        "id": "b1b9b492-5053-4064-a37c-e7aaaf0eeb8e",
+        "name": "",
+        "slug": "healing-potion-lesser-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/healing-potion-lesser-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "d137be21-1c54-48ba-964a-2803663d9e82"
+    },
+    {
+      "id": "custom_e2e3d2eb-9035-4f59-8291-2d207369efcf-potency-rune",
+      "args": {
+        "id": null,
+        "parentEngine": "e2e3d2eb-9035-4f59-8291-2d207369efcf"
+      },
+      "name": "e2e3d2eb-9035-4f59-8291-2d207369efcf-potency-rune",
+      "type": "CustomDemiplaneEngine",
+      "value": "1",
+      "saveType": "Character Sheet",
+      "storeType": "override",
+      "demiplaneEngineId": "f65414bb-7568-4b1c-ae73-3196af6dd1c9"
+    },
+    {
+      "id": "d34965aa-e0cd-4952-9e32-59fccad5c4ad",
+      "args": {
+        "id": "2a4017a3-b4a5-4aaf-ae1b-0265545da482",
+        "name": "",
+        "slug": "steel-shield-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/steel-shield-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "6637d4a8-ecfb-4418-9ae6-71a59929735e"
+    },
+    {
+      "id": "custom_character_hand_offhand_equipped-id",
+      "args": {
+        "id": null,
+        "parentEngine": "6637d4a8-ecfb-4418-9ae6-71a59929735e"
+      },
+      "name": "character_hand_offhand_equipped-id",
+      "type": "CustomDemiplaneEngine",
+      "value": "6637d4a8-ecfb-4418-9ae6-71a59929735e",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "ea48d766-c462-471f-ae9d-519a54387f6b"
+    },
+    {
+      "id": "4ab8ae42-ac8d-4589-bcd7-93b232c05e84",
+      "args": {
+        "id": "8b3121d5-94a6-4493-b500-16fa200c949b",
+        "name": "",
+        "slug": "shield-boss-rm",
+        "sourceRow": "manual-sheet-drawer",
+        "isAttachment": true,
+        "parentEngine": "6637d4a8-ecfb-4418-9ae6-71a59929735e",
+        "parentItemID": "6637d4a8-ecfb-4418-9ae6-71a59929735e",
+        "hideFromEquipment": true
+      },
+      "name": "tabula/item/shield-boss-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "f03bab98-cc4d-4133-89d1-efc35f3e781a"
+    },
+    {
+      "id": "7dac6147-50ba-4fff-862c-915dec49afc7",
+      "args": {
+        "id": "ddc034f0-0f08-413d-9f87-e1028187bf99",
+        "name": "",
+        "slug": "grappling-hook-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/grappling-hook-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "ae57eac0-9a85-44a8-bc54-2a1a50beb308"
+    },
+    {
+      "id": "7c2b7aef-79de-474f-856d-feddda9337b9",
+      "args": {
+        "id": "d6168997-8d40-45bc-8b66-3e7fa6cf2f17",
+        "name": "",
+        "slug": "repair-toolkit-basic-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/repair-toolkit-basic-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1e1e2126-2bc2-4445-8a86-1846e0bd7379"
+    },
+    {
+      "id": "custom_ae57eac0-9a85-44a8-bc54-2a1a50beb308-container",
+      "args": {
+        "id": null,
+        "parentEngine": "ae57eac0-9a85-44a8-bc54-2a1a50beb308"
+      },
+      "name": "ae57eac0-9a85-44a8-bc54-2a1a50beb308-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "8aa56093-e3cb-471e-bc86-b413449c0a37"
+    },
+    {
+      "id": "custom_1e1e2126-2bc2-4445-8a86-1846e0bd7379-container",
+      "args": {
+        "id": null,
+        "parentEngine": "1e1e2126-2bc2-4445-8a86-1846e0bd7379"
+      },
+      "name": "1e1e2126-2bc2-4445-8a86-1846e0bd7379-container",
+      "type": "CustomDemiplaneEngine",
+      "value": "086386cf-9188-4363-901c-ae5b58bca761",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "0ab99fd7-8ea1-4334-8bd9-aab95115a64d"
+    },
+    {
+      "id": "5b140dc9-1bf4-48ce-a918-17bf403dd712",
+      "args": {
+        "id": "e9e75d8a-9e2b-4be4-953e-2d7ddeaafb13",
+        "name": "Sword",
+        "slug": "weapon-master-sword",
+        "sourceRow": "fighter-weapon-mastery-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_fighter-weapon-mastery-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/generic-feature/weapon-master-sword.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "266d1b9e-dd40-4d02-9176-bf801df7eb86"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "cb1a407a-1cc1-4c59-9255-ea2a13c01f83",
+        "name": "Constitution",
+        "slug": "constitution",
+        "sourceRow": "attribute-boosts-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-5-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "408960b6-f2c7-4e16-ae26-8b4292703acc"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "7f9fb5e2-9862-4f5d-a28b-3a4ad83445e7",
+        "name": "Wisdom",
+        "slug": "wisdom",
+        "sourceRow": "attribute-boosts-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-5-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "c3c7650d-d55b-4d4e-b076-9b1328bb5c07"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "100f2773-b563-494b-aef6-441f6914646c",
+        "name": "Charisma",
+        "slug": "charisma",
+        "sourceRow": "attribute-boosts-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-5-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1b1a5693-4fd8-4a62-bb60-6d68c0d850cf"
+    },
+    {
+      "id": "e86570ed-9602-414d-adb1-474064f14f28",
+      "args": {
+        "id": "c14c2550-6e08-480b-a746-a69b65fc7943",
+        "name": "Strength",
+        "slug": "strength",
+        "sourceRow": "attribute-boosts-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_attribute-boosts-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class",
+        "selectionGroup": "attribute-boosts-level-5-rm"
+      },
+      "name": "core/selection/attribute/boost.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "82212383-d794-4d3d-85e2-8cf266d8a721"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Intimidation",
+        "slug": "intimidation",
+        "sourceRow": "skill-increase-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-increase-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "b688e4d4-c463-4523-94f6-b5c022ec882e"
+    },
+    {
+      "id": "0bb50213-0a0f-4d67-98c8-f31ac79f72bd",
+      "args": {
+        "id": "2348a6b6-384a-4910-a4be-8ff5e0d2f917",
+        "name": "Haughty Obstinacy",
+        "slug": "haughty-obstinacy-rm",
+        "sourceRow": "ancestry-feat-level-5-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_ancestry-feat-level-5-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/haughty-obstinacy-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "7fc0b0dc-6769-4dbc-b42d-beaac4ce19b0"
+    },
+    {
+      "id": "ed1cedbf-dab5-4181-b493-fa6b5f85ed6c",
+      "args": {
+        "id": "5f544152-0af9-4d3b-9039-403db58d3542",
+        "name": "Powerful Leap",
+        "slug": "powerful-leap-rm",
+        "sourceRow": "skill-feat-level-4-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_skill-feat-level-4-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/powerful-leap-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "61a3ab12-2b68-4109-8c45-9c89c35c31bb"
+    },
+    {
+      "id": "9832d8de-dfaf-4f9a-9933-fd749d4828dd",
+      "args": {
+        "id": "da248dec-5e4a-46db-b9a0-338dea2f3732",
+        "name": "Powerful Shove",
+        "slug": "powerful-shove-rm",
+        "sourceRow": "fighter-feat-level-4-rm",
+        "parentEngine": "59a6d2b8-a7e4-4b01-ac27-1a6a09f4ef6e_8e7d23f1-e804-4b97-aaf5-2609f3273745_fighter-feat-level-4-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/powerful-shove-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "f43f57bd-efbb-4115-acbc-cc5b992823cd"
+    },
+    {
+      "id": "00aae08a-f3f4-4ddc-8c61-7d70d917b3f8",
+      "args": {
+        "id": "760619de-50fd-42e7-ba7c-df9364374a51",
+        "name": "",
+        "slug": "doubling-rings-basic-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/doubling-rings-basic-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "2af98e1b-e4b4-478e-942a-11b964d76e2b"
+    },
+    {
+      "id": "custom_2af98e1b-e4b4-478e-942a-11b964d76e2b-is-equipped",
+      "args": {
+        "id": null,
+        "parentEngine": "2af98e1b-e4b4-478e-942a-11b964d76e2b"
+      },
+      "name": "2af98e1b-e4b4-478e-942a-11b964d76e2b-is-equipped",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "ed2b6bd9-5f39-426b-8da9-36205802962b"
+    },
+    {
+      "id": "custom_e2e3d2eb-9035-4f59-8291-2d207369efcf-striking-rune",
+      "args": {
+        "id": null,
+        "parentEngine": "e2e3d2eb-9035-4f59-8291-2d207369efcf"
+      },
+      "name": "e2e3d2eb-9035-4f59-8291-2d207369efcf-striking-rune",
+      "type": "CustomDemiplaneEngine",
+      "value": "1",
+      "saveType": "Character Sheet",
+      "storeType": "override",
+      "demiplaneEngineId": "3cd9c284-1f9a-4a7d-a31f-c03bfe016f91"
+    },
+    {
+      "id": "331b1a44-0d89-4416-816b-fb05225bb550",
+      "args": {
+        "id": "c2e2538b-acc9-42f5-9681-c2fb9653819b",
+        "name": "",
+        "slug": "pendant-of-the-occult-basic-rm",
+        "sourceRow": "manual-sheet-drawer"
+      },
+      "name": "tabula/item/pendant-of-the-occult-basic-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "aacf2684-1d8c-4dad-91f3-955a249f1bd7"
+    },
+    {
+      "id": "custom_aacf2684-1d8c-4dad-91f3-955a249f1bd7-is-equipped",
+      "args": {
+        "id": null,
+        "parentEngine": "aacf2684-1d8c-4dad-91f3-955a249f1bd7"
+      },
+      "name": "aacf2684-1d8c-4dad-91f3-955a249f1bd7-is-equipped",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "6a25f26d-ee47-41f6-a730-8ecc4fc11e54"
+    },
+    {
+      "id": "custom_selected-pregen-id",
+      "args": {
+        "id": null
+      },
+      "name": "selected-pregen-id",
+      "type": "CustomDemiplaneEngine",
+      "value": "db205646-6843-4321-90a8-cebc8f97d5ea",
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "836af3fe-5e07-4fa3-b2a4-4fcd7c248b57"
+    },
+    {
+      "id": "custom_view-permission",
+      "args": {
+        "id": null
+      },
+      "name": "view-permission",
+      "type": "CustomDemiplaneEngine",
+      "value": 2,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "af3163c3-dd69-469a-b58e-8df4a41a69d0"
+    },
+    {
+      "id": "custom_edit-permission",
+      "args": {
+        "id": null
+      },
+      "name": "edit-permission",
+      "type": "CustomDemiplaneEngine",
+      "value": 3,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "40a79487-ecdb-4c2b-9080-c381acc7f606"
+    },
+    {
+      "id": "0964d7a7-ba0a-406f-94f2-394874acf664",
+      "args": {
+        "id": "b9b1d35a-c5b7-4312-984a-94fe86df01c9",
+        "name": "Skilled Human",
+        "slug": "skilled-human-rm",
+        "sourceRow": "ancestry-heritage",
+        "parentEngine": "6d05d6b8-63d7-4c95-bc60-9271bbb59364",
+        "builderSection": "ancestry"
+      },
+      "name": "tabula/heritage/skilled-human-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "bc278c10-64df-42a6-81e2-a0246342ffe0"
+    },
+    {
+      "id": "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
+      "args": {
+        "id": null,
+        "name": "Acrobatics",
+        "slug": "acrobatics",
+        "sourceRow": "bc278c10-64df-42a6-81e2-a0246342ffe0_select-skill-skilled-human-rm-heritage-choice-1bd2ed71-b19b-4c1f-a71b-56c488650eb7",
+        "parentEngine": "bc278c10-64df-42a6-81e2-a0246342ffe0",
+        "builderSection": "ancestry"
+      },
+      "name": "core/selection/skill/increase/index.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "f5b49b55-91a5-434c-99d2-0c61945fa90c"
+    },
+    {
+      "id": "custom_character_acrobatics_prof",
+      "args": {
+        "id": null,
+        "parentEngine": "character_acrobatics_prof"
+      },
+      "name": "character_acrobatics_prof",
+      "type": "CustomDemiplaneEngine",
+      "value": 2,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "a4de8dfd-2ac0-41c1-820f-c0cc6173f202"
+    },
+    {
+      "id": "custom_character_acrobatics_prof--overridden",
+      "args": {
+        "id": null,
+        "parentEngine": "character_acrobatics_prof"
+      },
+      "name": "character_acrobatics_prof--overridden",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "f66e8781-5c5a-47b0-a060-116926616412"
+    },
+    {
+      "id": "custom_character_appearance_ethnicity",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_ethnicity",
+      "type": "CustomDemiplaneEngine",
+      "value": "Kellid",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "fb9d4989-453c-4917-a01c-71bbc708f1a4"
+    },
+    {
+      "id": "custom_character_appearance_nationality",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_nationality",
+      "type": "CustomDemiplaneEngine",
+      "value": "Andoren",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "1b0fb843-13d1-4393-8c21-09fe639f0558"
+    },
+    {
+      "id": "custom_character_appearance_age",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_age",
+      "type": "CustomDemiplaneEngine",
+      "value": "28",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "f18e4ee9-5798-4160-8cb0-b1f0bde7de59"
+    },
+    {
+      "id": "custom_character_personality_beliefs",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_beliefs",
+      "type": "CustomDemiplaneEngine",
+      "value": "Cayden Cailean",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "3e5dc3c7-0cc6-44f2-8695-2f52e1463275"
+    },
+    {
+      "id": "custom_character_appearance_height",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_height",
+      "type": "CustomDemiplaneEngine",
+      "value": "5' 8\"",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "0c8e7fb4-34d1-4c5c-99f9-ed4da386cab1"
+    },
+    {
+      "id": "custom_character_appearance_weight",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_weight",
+      "type": "CustomDemiplaneEngine",
+      "value": "190 lbs",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "50fc63a6-694f-4c9f-9616-b08dbe5160cb"
+    },
+    {
+      "id": "custom_character_appearance_appearance",
+      "args": {
+        "id": null
+      },
+      "name": "character_appearance_appearance",
+      "type": "CustomDemiplaneEngine",
+      "value": "Ruggedly handsome sellsword with short-cropped dark hair and a roguish grin; battered breastplate, longsword and steel shield, tankard never far from hand.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "b431da8e-22ed-4388-98a2-27f456573136"
+    },
+    {
+      "id": "custom_character_personality_attitude",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_attitude",
+      "type": "CustomDemiplaneEngine",
+      "value": "Boastful and brave to a fault, with a hero’s heart under the swagger — first through the door, last to leave a friend behind.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "49963937-bbcd-4444-9d80-a9c09a7234a2"
+    },
+    {
+      "id": "custom_character_personality_edicts",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_edicts",
+      "type": "CustomDemiplaneEngine",
+      "value": "Drink beer, kill monsters",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "5379dd0d-55fd-4e5b-b1bb-1e72dfe8454c"
+    },
+    {
+      "id": "custom_character_personality_anathema",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_anathema",
+      "type": "CustomDemiplaneEngine",
+      "value": "leave friends in danger",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "3740b1ea-9ed8-4829-bcf9-ed47762b7e7d"
+    },
+    {
+      "id": "custom_character_personality_likes",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_likes",
+      "type": "CustomDemiplaneEngine",
+      "value": "Ale, a fair fight, tall tales, getting paid, the company of friends.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "0a4688b2-a8f4-412c-8474-b3da6f65ed97"
+    },
+    {
+      "id": "custom_character_personality_dislikes",
+      "args": {
+        "id": null
+      },
+      "name": "character_personality_dislikes",
+      "type": "CustomDemiplaneEngine",
+      "value": "Empty tankards, slavers and tyrants, cowards who prey on the weak, mornings after.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "47254cd0-7b90-44b2-b294-eb972d4d7bb6"
+    },
+    {
+      "id": "custom_character_campaign_allies",
+      "args": {
+        "id": null
+      },
+      "name": "character_campaign_allies",
+      "type": "CustomDemiplaneEngine",
+      "value": "Ezren, Seoni, Kyra, Merisiel, Lini and the rest of the iconic company; anyone who buys him an ale.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "a868f548-5611-4b09-8e27-f956a53d647e"
+    },
+    {
+      "id": "custom_character_campaign_enemies",
+      "args": {
+        "id": null
+      },
+      "name": "character_campaign_enemies",
+      "type": "CustomDemiplaneEngine",
+      "value": "The Aspis Consortium; slavers, tyrants, and anyone who threatens his friends.",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "c1fe1c25-d2c8-422d-b93c-120c89a9de95"
+    },
+    {
+      "id": "custom_character_campaign_organizations",
+      "args": {
+        "id": null
+      },
+      "name": "character_campaign_organizations",
+      "type": "CustomDemiplaneEngine",
+      "value": "Pathfinder Society",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "d4792f5b-9e77-4db4-9fc6-137243641ec0"
+    },
+    {
+      "id": "custom_character_organizedplayid",
+      "args": {
+        "id": null
+      },
+      "name": "character_organizedplayid",
+      "type": "CustomDemiplaneEngine",
+      "value": "123456-2001",
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "e1d9e582-c0e0-4374-9e52-cfa943162c48"
+    },
+    {
+      "id": "custom_character_hit-points_current",
+      "args": {
+        "id": null
+      },
+      "name": "character_hit-points_current",
+      "type": "CustomDemiplaneEngine",
+      "value": 40,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "b68e3179-efd3-41fb-be28-d9b26598cbca"
+    },
+    {
+      "id": "custom_character_hit-points_temp",
+      "args": {
+        "id": null
+      },
+      "name": "character_hit-points_temp",
+      "type": "CustomDemiplaneEngine",
+      "value": 12,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "90d7c476-7d35-44ed-a6b0-24d7c4370aea"
+    },
+    {
+      "id": "custom_character_hero-points",
+      "args": {
+        "id": null
+      },
+      "name": "character_hero-points",
+      "type": "CustomDemiplaneEngine",
+      "value": 2,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "8240e9ef-bb9f-4be1-a9bb-f3c7582d463c"
+    },
+    {
+      "id": "custom_character_currency_credits",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_credits",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "ff1032e5-27bb-43b4-a401-b4aab75789a4"
+    },
+    {
+      "id": "custom_character_currency_upb",
+      "args": {
+        "id": null
+      },
+      "name": "character_currency_upb",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "5cc56688-a591-46b6-8fde-4c5e2b703ed5"
+    }
+  ]
+}
