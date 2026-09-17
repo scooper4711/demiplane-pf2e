@@ -58,7 +58,8 @@ test.describe("Kyra Import", () => {
   });
 
   test("correct name, level, ancestry, background, class, deity", () => {
-    expect(result.name).toBe("Kyra");
+    // Renamed on Demiplane to mark this character as an integration fixture.
+    expect(result.name).toBe("FVTT Kyra");
     expect(result.level).toBe(5);
     expect(result.ancestry).toBe("Human");
     expect(result.heritage).toBe("Versatile Human");
