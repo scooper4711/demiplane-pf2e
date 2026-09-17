@@ -556,6 +556,12 @@ export interface ImportResult {
     spells: string[];
     slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
   }>;
+  /**
+   * Spell items filed under no spellcasting entry (e.g. rituals, which PF2e
+   * gathers ephemerally from ritual-trait spells). Lets specs assert a known
+   * ritual imported as a standalone item rather than vanishing.
+   */
+  standaloneSpells: string[];
 }
 
 export async function createAndImportCharacter(
@@ -678,6 +684,18 @@ export async function createAndImportCharacter(
               ),
             })
           ),
+        standaloneSpells: (() => {
+          const entryIds = new Set(
+            actor.items.filter((i: { type: string }) => i.type === "spellcastingEntry").map((e: { id: string }) => e.id)
+          );
+          return actor.items
+            .filter(
+              (i: { type: string; system: { location?: { value?: string } } }) =>
+                i.type === "spell" && !entryIds.has(i.system.location?.value ?? "")
+            )
+            .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
+            .sort();
+        })(),
         equipment: actor.items
           .filter((i: { type: string }) =>
             ["weapon", "armor", "shield", "equipment", "consumable", "backpack", "ammo"].includes(i.type)
