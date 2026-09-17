@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  setFreeArchetype,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -11,6 +12,14 @@ import {
 const CHARACTER_UUID = process.env.WITCH_UUID ?? "";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";
 const ACTOR_NAME = "Witch Import Test";
+
+type SpellcastingEntry = ImportResult["spellcasting"][number];
+
+/** Order-proof placement comparison: sorted `spell:state` pairs per slot. */
+function placed(entry: SpellcastingEntry, slot: string): string[] {
+  const list = entry.slots[slot]?.prepared ?? [];
+  return list.map((p) => `${p.spell}:${p.expended ? "spent" : "ready"}`).sort();
+}
 
 /** The four hexes this witch has: patron (Nudge Fate), a selected hex (Phase
  *  Familiar), the Cackle feat, and the Lesson of Vengeance hex. */
@@ -25,8 +34,8 @@ const GRANTED_WITCH_SPELLS = ["phantom-pain", "sure-strike"];
 
 test.describe("Witch Import", () => {
   // Live Demiplane API required — skipped (not removed) without credentials,
-  // matching the Bard suite. Snapshots the reference witch (Bea Otch Lvl5);
-  // update the expectations if the character is rebuilt on Demiplane.
+  // matching the Bard suite. Snapshots the reference witch (level-5 "FVTT
+  // Witch"); update the expectations if the character is rebuilt on Demiplane.
   test.skip(!DEMIPLANE_TOKEN || !CHARACTER_UUID, "DEMIPLANE_TOKEN and WITCH_UUID env vars required");
 
   let result: ImportResult;
@@ -34,6 +43,9 @@ test.describe("Witch Import", () => {
   test.beforeAll(async ({ browser }) => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
+    // This witch uses the Free Archetype variant (Runescarred); enable it for
+    // the import and restore the world default in afterAll.
+    await setFreeArchetype(page, true);
     await deleteAllActors(page);
     await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
     result = await createAndImportCharacter(page, ACTOR_NAME, CHARACTER_UUID, DEMIPLANE_TOKEN);
@@ -45,19 +57,123 @@ test.describe("Witch Import", () => {
     const page = await browser.newPage();
     await loginAsGamemaster(page);
     await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME);
+    await setFreeArchetype(page, false);
     await page.close();
   });
 
-  test("imports the witch as a Witch", () => {
+  test("reports no import errors", () => {
+    expect(result.summary.errors).toEqual([]);
+  });
+
+  test("correct name, level, ancestry, background, class", () => {
+    // Renamed on Demiplane to mark this character as an integration fixture.
+    expect(result.name).toBe("FVTT Witch");
+    expect(result.level).toBe(5);
+    expect(result.ancestry).toBe("Human");
+    expect(result.heritage).toBe("Versatile Human");
+    expect(result.background).toBe("Cursed");
     expect(result.class).toBe("Witch");
   });
 
-  test("reports no unexpected import errors", () => {
-    // This reference witch uses the Free Archetype variant (Runescarred), which
-    // the seeded test world does not enable — a known, benign warning. Any other
-    // error is a real failure.
-    const unexpected = result.summary.errors.filter((e) => !/Free Archetype/i.test(e));
-    expect(unexpected).toEqual([]);
+  test("imports feats", () => {
+    const names = result.feats.map((f) => f.name);
+    for (const feat of [
+      "Cackle",
+      "Basic Lesson",
+      "Lesson of Vengeance",
+      "Runescarred Dedication",
+      "Spell Runes",
+      "Adapted Cantrip",
+      "Clever Improviser",
+      "Fleet",
+      "Untrained Improvisation",
+      "Dubious Knowledge",
+      "Experienced Professional",
+      "Canny Acumen (Perception)",
+    ]) {
+      expect(names).toContain(feat);
+    }
+  });
+
+  test("imports curse lore and languages", () => {
+    expect(result.loreSkills).toEqual(["Curse Lore"]);
+    expect(result.languages).toEqual(["common"]);
+  });
+
+  test("imports hit points and currency", () => {
+    // Current HP synced from Demiplane; the max is system-derived.
+    expect(result.hp.value).toBe(53);
+    expect(result.hp.max).toBeGreaterThan(0);
+    expect(result.currency).toEqual({ pp: 0, gp: 95, sp: 3, cp: 8 });
+  });
+
+  test("files the full spellbook in a prepared occult entry", () => {
+    // Timber (adapted cantrip) lives in innate instead; everything else known
+    // is filed here.
+    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
+    expect(witchEntry).toBeDefined();
+    expect(witchEntry!.name).toBe("Witch Spells (Occult)");
+    expect(witchEntry!.spells).toEqual([
+      "bane",
+      "befuddle",
+      "bless",
+      "cutting-insult",
+      "enfeeble",
+      "force-barrage",
+      "friendfetch",
+      "grim-tendrils",
+      "haunting-hymn",
+      "inside-ropes",
+      "loose-times-arrow",
+      "message",
+      "murder-of-crows",
+      "needle-darts",
+      "phantom-pain",
+      "phase-bolt",
+      "prestidigitation",
+      "rouse-skeletons",
+      "sigil",
+      "spirit-sense",
+      "sure-strike",
+      "telekinetic-hand",
+      "telekinetic-projectile",
+      "time-jump",
+      "warp-step",
+    ]);
+  });
+
+  test("applies main-entry slot maximums and remaining counts", () => {
+    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
+    expect(witchEntry).toBeDefined();
+    // Base witch progression at level 5; nothing cast, so all slots full.
+    expect(witchEntry!.slots.slot0).toMatchObject({ max: 5, value: 5 });
+    expect(witchEntry!.slots.slot1).toMatchObject({ max: 3, value: 3 });
+    expect(witchEntry!.slots.slot2).toMatchObject({ max: 3, value: 3 });
+    expect(witchEntry!.slots.slot3).toMatchObject({ max: 2, value: 2 });
+  });
+
+  test("places prepared spells with spent states in the main entry", () => {
+    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
+    expect(witchEntry).toBeDefined();
+    // NOTE: six cantrips are prepared on Demiplane but a level-5 witch has
+    // five cantrip slots — the import writes all six and PF2e keeps the first
+    // five, so prestidigitation stays known-but-unplaced. Rank 1: bane,
+    // befuddle, bless. Rank 2: loose time's arrow, murder of crows, spirit
+    // sense. Rank 3: rouse skeletons, time jump — all ready.
+    expect(placed(witchEntry!, "slot0")).toEqual([
+      "haunting-hymn:ready",
+      "inside-ropes:ready",
+      "message:ready",
+      "needle-darts:ready",
+      "phase-bolt:ready",
+    ]);
+    expect(placed(witchEntry!, "slot1")).toEqual(["bane:ready", "befuddle:ready", "bless:ready"]);
+    expect(placed(witchEntry!, "slot2")).toEqual([
+      "loose-times-arrow:ready",
+      "murder-of-crows:ready",
+      "spirit-sense:ready",
+    ]);
+    expect(placed(witchEntry!, "slot3")).toEqual(["rouse-skeletons:ready", "time-jump:ready"]);
   });
 
   test("collects exactly the four hexes into a focus Hexes entry", () => {
@@ -85,22 +201,36 @@ test.describe("Witch Import", () => {
     }
   });
 
-  test("files Root Reading from Runescarred Dedication as an innate spell", () => {
+  test("files Root Reading and Timber as innate spells", () => {
+    // Root Reading (runescarred dedication) and Timber (adapted cantrip) are
+    // select-spells without a school marker, so both land in innate — the
+    // entry takes its name from the first one's feat.
+    // NOTE: the entry reads tradition arcane (runescarred) even though Timber
+    // is the witch's occult adapted cantrip — innate entries carry one
+    // tradition and the importer names/traditions from the first spell.
     const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    const allInnate = innateEntries.flatMap((e) => e.spells);
-    expect(allInnate).toContain("root-reading");
-    // Root Reading is a dedication spell, never a hex.
+    expect(innateEntries).toHaveLength(1);
+    expect(innateEntries[0]!.name).toBe("Runescarred Dedication (Innate)");
+    expect(innateEntries[0]!.spells).toEqual(["root-reading", "timber"]);
+    // Dedication spells, never hexes.
     const hexes = result.spellcasting.find((e) => e.name === "Hexes");
     expect(hexes!.spells).not.toContain("root-reading");
+    expect(hexes!.spells).not.toContain("timber");
   });
 
-  test("prepares no witch spells (none are prepared on this character)", () => {
-    // The character has spellbook spells but nothing placed in prepared slots;
-    // confirm the import did not invent prepared placements.
+  test("imports the three-point focus pool", () => {
+    expect(result.focus.value).toBe(3);
+    expect(result.focus.max).toBe(3);
+  });
+
+  test("notes the unimported mystic-armor slot", () => {
+    // NOTE: the sheet shows Mystic Armor in an extra slot from the Spell Runes
+    // feat, but its `spell-runes-spellcasting` feature has no entry in
+    // CLASS_SPELLCASTING, so the importer logs `unknown source` and skips it.
+    // Assert the current behavior until that feature is taught.
     const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(witchEntry).toBeDefined();
-    // A prepared entry with spells available but none slotted is valid; the
-    // assertion above (granted spells present) already covers list contents.
-    expect(witchEntry!.spells.length).toBeGreaterThan(0);
+    expect(witchEntry!.spells).not.toContain("mystic-armor");
+    expect(result.standaloneSpells).not.toContain("mystic-armor");
+    expect(result.summary.log.some((l) => l.includes('unknown source "spell-runes-spellcasting"'))).toBe(true);
   });
 });

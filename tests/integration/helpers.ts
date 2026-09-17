@@ -24,6 +24,18 @@ const DISMISS_BUTTON_NAMES = [
 ];
 
 /**
+ * Toggles the PF2e "Free Archetype" variant rule (Settings → Pathfinder
+ * Second Edition → Toggle Variant Rules) via the world setting API — the same
+ * backing setting the menu flips, without driving the settings UI.
+ */
+export async function setFreeArchetype(page: Page, enabled: boolean): Promise<void> {
+  await page.evaluate((value: boolean) => {
+    // @ts-expect-error Foundry global
+    return game.settings.set("pf2e", "freeArchetypeVariant", value);
+  }, enabled);
+}
+
+/**
  * Dismisses tour popups only: exits the active tour through Foundry's own
  * API (`foundry.nue.Tour.activeTour.exit()` — exactly what the Escape key
  * invokes), then the tooltip X (`<a data-action="exit">`, which has no
