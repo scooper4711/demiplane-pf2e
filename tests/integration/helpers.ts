@@ -493,6 +493,14 @@ export async function deleteAllActors(page: Page): Promise<void> {
   });
 }
 
+interface SnapshotEntry {
+  name: string;
+  prepared: string;
+  tradition: string;
+  spells: string[];
+  slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
+}
+
 export interface ImportResult {
   summary: {
     itemsImported: number;
@@ -532,16 +540,21 @@ export interface ImportResult {
   currency: { pp: number; gp: number; sp: number; cp: number };
   hp: { value: number; max: number; temp: number };
   heroPoints: number;
+  focus: { value: number; max: number };
   /**
    * Spellcasting entries and the slugs of the spells filed under each, keyed by
    * entry name. Lets spell-focused specs (e.g. the witch's hexes) assert both
-   * the entry (name / prepared type / tradition) and its contents.
+   * the entry (name / prepared type / tradition) and its contents. `slots`
+   * covers slot maximums, current values, and prepared placements (spell slug
+   * plus expended state) per `slotN` key, so specs can assert slot counts and
+   * which spell sits in which slot.
    */
   spellcasting: Array<{
     name: string;
     prepared: string;
     tradition: string;
     spells: string[];
+    slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
   }>;
 }
 
@@ -617,13 +630,24 @@ export async function createAndImportCharacter(
           temp: actor.system.attributes.hp.temp,
         },
         heroPoints: actor.system.resources?.heroPoints?.value ?? 0,
+        focus: {
+          value: actor.system.resources?.focus?.value ?? 0,
+          max: actor.system.resources?.focus?.max ?? 0,
+        },
         spellcasting: actor.items
           .filter((i: { type: string }) => i.type === "spellcastingEntry")
           .map(
             (entry: {
               id: string;
               name: string;
-              system: { prepared?: { value?: string }; tradition?: { value?: string } };
+              system: {
+                prepared?: { value?: string };
+                tradition?: { value?: string };
+                slots?: Record<
+                  string,
+                  { max?: number; value?: number; prepared?: Array<{ id?: string; expended?: boolean }> }
+                >;
+              };
             }) => ({
               name: entry.name,
               prepared: entry.system.prepared?.value ?? "",
@@ -635,6 +659,23 @@ export async function createAndImportCharacter(
                 )
                 .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
                 .sort(),
+              slots: Object.fromEntries(
+                Object.entries(entry.system.slots ?? {})
+                  .filter(([key]) => /^slot\d+$/.test(key))
+                  .map(([key, slot]) => [
+                    key,
+                    {
+                      max: slot.max ?? 0,
+                      value: slot.value ?? 0,
+                      prepared: (slot.prepared ?? []).map((p) => ({
+                        spell:
+                          actor.items.find((s: { id: string; system: { slug?: string } }) => s.id === p.id)?.system
+                            ?.slug ?? "?",
+                        expended: p.expended ?? false,
+                      })),
+                    },
+                  ])
+              ),
             })
           ),
         equipment: actor.items
