@@ -54,11 +54,11 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
   const featureLines = await fetchFeatureSlotLines(options.parentSpellFeature, options.cacheEngineIds ?? []);
   const allLines = [...lines, ...featureLines];
   const unrestricted = collectUnrestrictedSlotSlugs(allLines);
-  const classEntries = extractSlotEntries(lines, slotSlug, unrestricted);
+  const classEntries = extractSlotEntries(lines, slotSlug, unrestricted, options.parentSpellFeature);
   // The class definition wins ties; the feature definition only fills ranks
   // the class leaves empty (e.g. magus rank-1 slots beside class cantrips).
   const coveredRanks = new Set(classEntries.map((entry) => entry.rank));
-  const featureEntries = extractSlotEntries(featureLines, slotSlug, unrestricted).filter(
+  const featureEntries = extractSlotEntries(featureLines, slotSlug, unrestricted, options.parentSpellFeature).filter(
     (entry) => !coveredRanks.has(entry.rank)
   );
 
@@ -128,19 +128,36 @@ const CURRICULUM_SLOT_MARKER = "wizard-school-spellbook-slot";
 function extractSlotEntries(
   lines: RawEngineLine[],
   slotSlug: string,
-  unrestrictedSlugs: Set<string> = new Set()
+  unrestrictedSlugs: Set<string> = new Set(),
+  parentSpellFeature = ""
 ): DemiplaneSlotEntry[] {
   const allSlots: DemiplaneSlotEntry[] = [];
 
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type !== "v2-add-spell-slots" || !mod.slots) continue;
+      if (!modMatchesFeature(mod.slug, parentSpellFeature)) continue;
       const matching = mod.slots.filter((slot) => slotMatches(slot.slug ?? "", slotSlug, unrestrictedSlugs));
       allSlots.push(...matching);
     }
   }
 
   return allSlots;
+}
+
+/**
+ * Whether a slot modifier belongs to the requested spellcasting feature.
+ * Modifiers carry their feature slug (e.g. a class response mixes animist and
+ * apparition slot blocks); without scoping, each entry would count the
+ * other's slots. Modifiers without a slug predate the field and keep the old
+ * include-everything behavior. Comparison is `-rm`-insensitive (Demiplane
+ * mixes `magus-spellcasting` and `magus-spellcasting-rm`).
+ */
+function modMatchesFeature(modSlug: string | undefined, parentSpellFeature: string): boolean {
+  if (parentSpellFeature === "") return true;
+  if (modSlug === undefined || modSlug === "") return true;
+  const norm = (s: string): string => (s.endsWith("-rm") ? s.slice(0, -3) : s);
+  return norm(modSlug) === norm(parentSpellFeature);
 }
 
 /**

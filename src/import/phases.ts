@@ -457,9 +457,10 @@ export class PostProcessingPhase implements ImportPhase {
   /**
    * Adds the current focus-pool value to the actor update, clamped to the pool's
    * derived max. The max is computed by the PF2e system from the character's
-   * focus spells/feats (not written here), so a character with no focus pool
-   * (max 0) gets no focus update. Demiplane omits the `character_focus_current`
-   * engine when the pool is full, so an absent value means "full" (= max).
+   * focus spells/feats (not written here — a stored max would be discarded on
+   * prepare, which re-derives it), so a character with no focus pool (max 0)
+   * gets no focus update. Demiplane omits the `character_focus_current` engine
+   * when the pool is full, so an absent value means "full" (= max).
    */
   private addFocusUpdate(actor: Actor, rawFocus: unknown, updates: Record<string, unknown>): void {
     const focusMax = characterSystem(actor).resources.focus?.max ?? 0;

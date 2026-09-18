@@ -421,4 +421,33 @@ describe("resolveSpellSlots with feature definitions", () => {
     const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "bard-spellcasting-rm" });
     expect(result).toEqual({ cantrips: 5, slots: { 1: 2 } });
   });
+
+  it("scopes fixed entries to the requested feature", async () => {
+    // A class response mixing two features' slot blocks (animist + apparition)
+    // must not double-count: each entry resolves only its own feature.
+    const mixed = [0, 1].map((i) =>
+      defLine(`tabula/class/animist-rm.eng`, `class-${i}`, [
+        {
+          type: "v2-add-spell-slots",
+          slug: i === 0 ? "animist-spellcasting-rm" : "apparition-spellcasting-rm",
+          slots: [{ rank: 1, count: 1 + i, levelPrereq: 1, slug: "" }],
+        },
+      ])
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => mixed.join("\n") }));
+    const animist = await resolveSpellSlots({
+      classEngineId: "class-0",
+      characterLevel: 3,
+      engines: [],
+      parentSpellFeature: "animist-spellcasting-rm",
+    });
+    expect(animist).toEqual({ cantrips: 0, slots: { 1: 1 } });
+    const apparition = await resolveSpellSlots({
+      classEngineId: "class-0",
+      characterLevel: 3,
+      engines: [],
+      parentSpellFeature: "apparition-spellcasting-rm",
+    });
+    expect(apparition).toEqual({ cantrips: 0, slots: { 1: 2 } });
+  });
 });

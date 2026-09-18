@@ -32,6 +32,13 @@ export interface AddSpellModifier {
   isKnown?: boolean;
   spellLevel?: number;
   parentFeature?: string;
+  /**
+   * Conditional grant gate: the spell is granted only when the named character
+   * store holds the given value (e.g. an apparition's vessel spell gated on
+   * its `<apparition>-is-primary` flag). Evaluated against the character's
+   * engines by the importer; absent stores are kept, not dropped.
+   */
+  storeRestriction?: { storeName?: string; storeValue?: string | number } | null;
   autoScaleSpellLevel?: boolean;
   /**
    * Focus-spell casting machinery Demiplane stamps on a hex grant: a save DC
@@ -113,6 +120,16 @@ export interface AddRepertoireCountsModifier {
   slots?: RepertoireCountEntry[];
 }
 
+/**
+ * Marks every spell of a spellcasting feature as a signature spell (e.g. the
+ * animist's apparition spells, `signatureType: "unlimited"`).
+ */
+export interface AddSignatureSpellsModifier {
+  type: "v2-add-signature-spells";
+  featureSlug?: string;
+  signatureType?: string;
+}
+
 /** A single scaling spell slot declared by a class engine (e.g. the magus's
  * `magus-spell-slot-1`, one slot whose rank unlocks with level). Only the
  * identity fields are parsed — rank scaling itself is not currently consumed;
@@ -156,6 +173,7 @@ export type EngineModifier =
   | AddSpecialItemSpellModifier
   | AddSpellSlotsModifier
   | AddRepertoireCountsModifier
+  | AddSignatureSpellsModifier
   | SpellSlotTypeModifier
   | AddSpellcastingFeatureModifier
   | AddFocusPointModifier;
@@ -205,6 +223,10 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "v2-add-spell-slot-type":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         if (typeof mod.slotSlug === "string") results.push(mod as unknown as SpellSlotTypeModifier);
+        break;
+      case "v2-add-signature-spells":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        results.push(mod as unknown as AddSignatureSpellsModifier);
         break;
       case "v2-add-spellcasting-feature":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary

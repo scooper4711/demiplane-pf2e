@@ -86,7 +86,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [], apparition: [], unlimitedSignatures: [] });
   });
 
   it("categorizes innate vs focus vs known spells", async () => {
@@ -374,7 +374,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [], apparition: [], unlimitedSignatures: [] });
   });
 
   describe("add-feat grant expansion", () => {
@@ -1114,6 +1114,102 @@ describe("feature-spell-resolver", () => {
         .map((i) => (i.system as { slug?: string }).slug)
         .sort();
       expect(slugs).toEqual(["boost-eidolon", "evolution-surge"]);
+    });
+  });
+
+  describe("animist apparition spells", () => {
+    const APPARITION_GRANT = (slug: string, opts: Record<string, unknown> = {}) => ({
+      type: "add-spell",
+      level: 1,
+      isKnown: true,
+      addSpell: slug,
+      tradition: "divine",
+      parentFeature: "apparition-spellcasting-rm",
+      ...opts,
+    });
+
+    const classFeatureEngine = {
+      id: "feat-1",
+      name: "tabula/class-feature/custodian-of-groves-and-gardens-rm.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "custodian-of-groves-and-gardens-rm" },
+    } as DemiplaneEngineEntry;
+
+    function stubApparitionDefs(): void {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("feat-1", [
+                APPARITION_GRANT("tangle-vine-rm"),
+                APPARITION_GRANT("protector-tree-rm"),
+                {
+                  ...APPARITION_GRANT("garden-of-healing-rm"),
+                  storeRestriction: { storeName: "custodian-primary", storeValue: "1" },
+                },
+              ]),
+            ].join("\n"),
+        })
+      );
+    }
+
+    it("files apparition grants in the apparition bucket, not focus or repertoire", async () => {
+      stubApparitionDefs();
+      const result = await resolveFeatureGrantedSpells([classFeatureEngine], 3, 3);
+
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+      expect(result.known).toHaveLength(0);
+      // The vessel grant's store is absent from the engines, so it is kept
+      // (absence of evidence isn't absence of the grant) and files as focus.
+      expect(result.focus.map((f) => f.slug)).toEqual(["garden-of-healing-rm"]);
+    });
+
+    it("files a satisfied vessel grant as focus", async () => {
+      stubApparitionDefs();
+      const engines = [
+        classFeatureEngine,
+        { name: "custodian-primary", type: "CustomDemiplaneEngine", value: 1 } as DemiplaneEngineEntry,
+      ];
+      const result = await resolveFeatureGrantedSpells(engines, 3, 3);
+
+      expect(result.focus.map((f) => f.slug)).toEqual(["garden-of-healing-rm"]);
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+    });
+
+    it("drops a vessel grant whose apparition is not primary", async () => {
+      stubApparitionDefs();
+      const engines = [
+        classFeatureEngine,
+        { name: "custodian-primary", type: "CustomDemiplaneEngine", value: 0 } as DemiplaneEngineEntry,
+      ];
+      const result = await resolveFeatureGrantedSpells(engines, 3, 3);
+
+      expect(result.focus).toHaveLength(0);
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+    });
+
+    it("drops apparition grants above the accessible rank", async () => {
+      // Avatar arrives through a granted-feat chain regardless of level; a
+      // level-3 caster with rank-2 slots cannot cast it.
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Tangle Vine", system: { slug: "tangle-vine", level: { value: 0 } }, type: "spell" },
+          { _id: "s2", name: "Avatar", system: { slug: "avatar", level: { value: 10 } }, type: "spell" },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [ndjsonLine("feat-1", [APPARITION_GRANT("tangle-vine-rm"), APPARITION_GRANT("avatar-rm")])].join("\n"),
+        })
+      );
+      const result = await resolveFeatureGrantedSpells([classFeatureEngine], 3, 2);
+
+      expect(result.apparition.map((s) => s.slug)).toEqual(["tangle-vine-rm"]);
     });
   });
 });

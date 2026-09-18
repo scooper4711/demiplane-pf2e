@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Feature-spell routing is inherently large; split would hurt cohesion */
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { MODULE_ID, stampImported } from "./types.js";
 import { debugLog } from "./debug-log.js";
@@ -11,7 +12,8 @@ import {
   type DomainEngineData,
 } from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
-import { getCharacterLevel } from "./spell-slots.js";
+import { getCharacterLevel, applySlotMaximums } from "./spell-slots.js";
+import { deriveClassEntryName } from "./spell-importer.js";
 import { itemSystem } from "../pf2e-types.js";
 import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
 
@@ -26,6 +28,13 @@ export interface GrantedSpell {
   isKnown: boolean;
   /** True for a witch hex — a focus spell cast from the "Hexes" entry. */
   isHex: boolean;
+  /**
+   * True for an animist apparition grant — filed in the apparition entry
+   * rather than the class repertoire. Vessel spells (apparition grants gated
+   * on a satisfied primary-apparition restriction) are NOT apparition spells;
+   * they fall through to focus like any other parent-feature grant.
+   */
+  isApparition: boolean;
   spellLevel: number;
 }
 
@@ -43,8 +52,12 @@ export interface FeatureGrantedSpells {
   known: GrantedSpell[];
   /** Witch hexes — focus spells that live in a dedicated "Hexes" entry. */
   hexes: GrantedSpell[];
+  /** Animist apparition grants — filed in the apparition spellcasting entry. */
+  apparition: GrantedSpell[];
   /** The class's focus-entry label (e.g. "Composition Spells"), when declared. */
   focusEntryName?: string;
+  /** Spellcasting features whose every spell is signature (unlimited). */
+  unlimitedSignatures: string[];
 }
 
 export async function resolveFeatureGrantedSpells(
@@ -57,7 +70,7 @@ export async function resolveFeatureGrantedSpells(
   const domainEngineIds = collectDomainEngineIds(engines);
 
   if (featureEngineIds.length === 0 && domainEngineIds.length === 0) {
-    return { innate: [], focus: [], known: [], hexes: [] };
+    return { innate: [], focus: [], known: [], hexes: [], apparition: [], unlimitedSignatures: [] };
   }
 
   const [modifiers, domainData] = await Promise.all([
@@ -67,16 +80,64 @@ export async function resolveFeatureGrantedSpells(
   modifiers.push(...(await fetchLinkSpellModifiers(engines, cacheEngineIds)));
 
   const focusEntryName = findFocusEntryName(modifiers);
+  const unlimitedSignatures = collectUnlimitedSignatures(modifiers);
   // The witch (hex focus group) files its non-hex granted spells into the
   // prepared repertoire; other classes (e.g. the bard's composition group) file
   // inherited-tradition grants as focus spells. See {@link isInheritedRepertoireGrant}.
   const hexFocusGroup = declaresHexFocusGroup(modifiers);
-  const { innate, focus, known, hexes } = categorizeGrantedSpells(modifiers, characterLevel, hexFocusGroup);
-  const gatedFocus = await filterAccessibleFocusSpells(focus, maxSpellRank);
+  const granted = dropUnsatisfiedStoreGrants(modifiers, engines);
+  const { innate, focus, known, hexes, apparition } = categorizeGrantedSpells(granted, characterLevel, hexFocusGroup);
+  const gatedFocus = await filterAccessibleSpells(focus, maxSpellRank);
   gatedFocus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
+  // The apparition entry is spontaneous: every spell in it must be castable
+  // with the character's slots, so future-rank grants (e.g. Avatar arriving
+  // through a granted-feat chain) are gated out like focus spells. Prepared
+  // repertoires (`known`) are left alone — a spellbook may hold spells above
+  // the caster's slots.
+  const gatedApparition = await filterAccessibleSpells(apparition, maxSpellRank);
 
-  const result: FeatureGrantedSpells = { innate, focus: gatedFocus, known, hexes };
+  const result: FeatureGrantedSpells = {
+    innate,
+    focus: gatedFocus,
+    known,
+    hexes,
+    apparition: gatedApparition,
+    unlimitedSignatures,
+  };
   return focusEntryName !== undefined ? { ...result, focusEntryName } : result;
+}
+
+/**
+ * Spellcasting features Demiplane marks signature-unlimited (every spell of
+ * the feature is a signature spell, e.g. an animist's apparition spells).
+ */
+function collectUnlimitedSignatures(modifiers: EngineModifier[]): string[] {
+  const features: string[] = [];
+  for (const mod of modifiers) {
+    if (mod.type !== "v2-add-signature-spells") continue;
+    if (mod.signatureType !== "unlimited") continue;
+    if (typeof mod.featureSlug === "string" && mod.featureSlug !== "") features.push(mod.featureSlug);
+  }
+  return features;
+}
+
+/**
+ * Drops `add-spell` grants gated on a character store that isn't satisfied
+ * (e.g. an apparition's vessel spell gated on its `<apparition>-is-primary`
+ * flag when another apparition is primary). Stores Demiplane doesn't export
+ * are kept, not dropped — absence of evidence isn't absence of the grant.
+ */
+function dropUnsatisfiedStoreGrants(modifiers: EngineModifier[], engines: DemiplaneEngineEntry[]): EngineModifier[] {
+  return modifiers.filter((mod) => {
+    if (mod.type !== "add-spell") return true;
+    const restriction = mod.storeRestriction;
+    if (!restriction || typeof restriction !== "object") return true;
+    const storeName = restriction.storeName;
+    if (typeof storeName !== "string" || storeName === "") return true;
+    const store = engines.find((e) => e.name === storeName);
+    if (!store) return true;
+    return String(store.value ?? "") === String(restriction.storeValue ?? "");
+  });
 }
 
 /**
@@ -107,13 +168,13 @@ async function fetchLinkSpellModifiers(
 }
 
 /**
- * Drops focus grants above the highest rank the character's slots reach — a
+ * Drops granted spells above the highest rank the character's slots reach — a
  * definition can grant spells for later levels (e.g. a conflux's rank-2 rider
  * alongside its rank-1 spell) that the sheet doesn't show yet. Mirrors the
  * domain gating in {@link collectDomainFocusSpells}. Unresolvable spells count
  * as rank 0, so they still surface as unmapped rather than vanishing.
  */
-async function filterAccessibleFocusSpells(spells: GrantedSpell[], maxSpellRank: number): Promise<GrantedSpell[]> {
+async function filterAccessibleSpells(spells: GrantedSpell[], maxSpellRank: number): Promise<GrantedSpell[]> {
   const ranked = await Promise.all(spells.map(async (spell) => ({ spell, rank: await getSpellRank(spell.slug) })));
   return ranked.filter(({ rank }) => rank <= maxSpellRank).map(({ spell }) => spell);
 }
@@ -223,6 +284,8 @@ function collectSpellModifiers(lineModifiers: EngineModifier[]): EngineModifier[
       spellModifiers.push(grantsFocusPoint ? { ...mod, forcesFocus: true } : mod);
     } else if (mod.type === "v2-add-spellcasting-feature") {
       spellModifiers.push(mod);
+    } else if (mod.type === "v2-add-signature-spells") {
+      spellModifiers.push(mod);
     }
   }
 
@@ -305,6 +368,9 @@ function isRepertoireGrant(mod: AddSpellModifier): boolean {
 /** The focus group Demiplane assigns a witch hex's `add-spell` grant. */
 const HEX_FOCUS_GROUP = "hex-spells";
 
+/** Demiplane's `parentSpellFeature` for animist apparition grants. */
+const APPARITION_SPELLCASTING = "apparition-spellcasting-rm";
+
 /**
  * Recognizes a witch hex among a feature's `add-spell` grants.
  *
@@ -365,7 +431,7 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
 }
 
 /**
- * Sorts feature-granted `add-spell` modifiers into four kinds:
+ * Sorts feature-granted `add-spell` modifiers into five kinds:
  *
  * - **innate** (`isInnate: true`, and no forced focus): cast at will from an
  *   Innate Spells entry (e.g. Seer Elf → Detect Magic).
@@ -375,6 +441,10 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
  *   spontaneous caster's known spell (Maestro muse → Soothe, per
  *   {@link isRepertoireGrant}) or a witch's prepared-list spell that accompanies
  *   a hex (per {@link isInheritedRepertoireGrant}).
+ * - **apparition** (an animist apparition grant): filed in the apparition
+ *   spellcasting entry, never the class repertoire — except a vessel spell
+ *   (gated on a satisfied primary-apparition restriction), which falls through
+ *   to focus like any other parent-feature grant.
  * - **focus** (everything else): a focus-pool spell. This includes the bard's
  *   composition spells (a focus group with inherited tradition) and any grant
  *   sharing an engine with an `add-focus-point` (`forcesFocus`, e.g. a wizard
@@ -384,43 +454,69 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
  * while its plain sibling spell falls through to the repertoire.
  */
 /**
- * Classifies one `add-spell` grant, resolving its kind (innate/hex/known/focus)
- * into the `GrantedSpell` flags. Kept separate from the collection loop so the
- * loop stays a simple dispatch and this holds the (mutually exclusive) decision.
+ * Classifies one `add-spell` grant into its kind. Kept separate from the
+ * collection loop so the loop stays a simple dispatch and this holds the
+ * (mutually exclusive) decision.
  */
-function buildGrantedSpell(mod: AddSpellModifier, hexFocusGroup: boolean): GrantedSpell {
+type GrantKind = "innate" | "hex" | "apparition" | "known" | "focus";
+
+function grantKind(mod: AddSpellModifier, hexFocusGroup: boolean): GrantKind {
   // A grant sharing an engine with an add-focus-point IS a focus-pool spell by
   // definition (that's what forcesFocus records) — it takes precedence over the
   // hex and repertoire heuristics below, which key off the same signals a focus
   // grant can carry (a school focus spell like Force Bolt has both a save DC
   // and a concrete tradition). Without this, such a grant misfiles as a hex
   // (via saveDC) or repertoire (via concrete tradition).
-  const isFocusPool = mod.forcesFocus === true;
-  const isInnate = !isFocusPool && mod.isInnate === true;
-  const isHex = !isFocusPool && !isInnate && isHexGrant(mod, hexFocusGroup);
-  const isKnown =
-    !isFocusPool && !isInnate && !isHex && (isRepertoireGrant(mod) || isInheritedRepertoireGrant(mod, hexFocusGroup));
+  if (mod.forcesFocus === true) return "focus";
+  if (mod.isInnate === true) return "innate";
+  if (isHexGrant(mod, hexFocusGroup)) return "hex";
+  if (isApparitionGrant(mod)) return "apparition";
+  if (isRepertoireGrant(mod) || isInheritedRepertoireGrant(mod, hexFocusGroup)) return "known";
+  return "focus";
+}
+
+function buildGrantedSpell(mod: AddSpellModifier, hexFocusGroup: boolean): GrantedSpell {
+  const kind = grantKind(mod, hexFocusGroup);
   return {
     slug: mod.addSpell,
     tradition: mod.tradition ?? "arcane",
     level: mod.level,
-    isInnate,
-    isKnown,
-    isHex,
-    isFocus: !isInnate && !isHex && !isKnown,
+    isInnate: kind === "innate",
+    isKnown: kind === "known",
+    isHex: kind === "hex",
+    isApparition: kind === "apparition",
+    isFocus: kind === "focus",
     spellLevel: mod.spellLevel ?? 0,
   };
+}
+/**
+ * An animist apparition grant: parented at the apparition spellcasting
+ * feature, without a vessel (primary-apparition) store restriction — vessel
+ * spells keep the restriction through the pre-filter and fall through to
+ * focus. Unsatisfied restrictions never reach here (dropped up front).
+ */
+function isApparitionGrant(mod: AddSpellModifier): boolean {
+  if ((mod.parentFeature ?? "") !== APPARITION_SPELLCASTING) return false;
+  const restriction = mod.storeRestriction;
+  return !restriction || typeof restriction !== "object";
 }
 
 function categorizeGrantedSpells(
   modifiers: EngineModifier[],
   characterLevel: number,
   hexFocusGroup: boolean
-): { innate: GrantedSpell[]; focus: GrantedSpell[]; known: GrantedSpell[]; hexes: GrantedSpell[] } {
+): {
+  innate: GrantedSpell[];
+  focus: GrantedSpell[];
+  known: GrantedSpell[];
+  hexes: GrantedSpell[];
+  apparition: GrantedSpell[];
+} {
   const innate: GrantedSpell[] = [];
   const focus: GrantedSpell[] = [];
   const known: GrantedSpell[] = [];
   const hexes: GrantedSpell[] = [];
+  const apparition: GrantedSpell[] = [];
 
   for (const mod of modifiers) {
     if (mod.type !== "add-spell") continue;
@@ -430,11 +526,12 @@ function categorizeGrantedSpells(
 
     if (spell.isInnate) innate.push(spell);
     else if (spell.isHex) hexes.push(spell);
+    else if (spell.isApparition) apparition.push(spell);
     else if (spell.isKnown) known.push(spell);
     else focus.push(spell);
   }
 
-  return { innate, focus, known, hexes };
+  return { innate, focus, known, hexes, apparition };
 }
 
 /**
@@ -449,15 +546,11 @@ export async function applyFeatureGrantedSpells(
 ): Promise<void> {
   const characterLevel = getCharacterLevel(engines);
   const maxSpellRank = getMaxAccessibleSpellRank(actor, characterLevel);
-  const { innate, focus, known, hexes, focusEntryName } = await resolveFeatureGrantedSpells(
-    engines,
-    characterLevel,
-    maxSpellRank,
-    cacheEngineIds
-  );
+  const { innate, focus, known, hexes, apparition, focusEntryName, unlimitedSignatures } =
+    await resolveFeatureGrantedSpells(engines, characterLevel, maxSpellRank, cacheEngineIds);
 
   debugLog(
-    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus, ${String(known.length)} known, ${String(hexes.length)} hex spells (max rank ${String(maxSpellRank)})`
+    `[feature-spells] Found ${String(innate.length)} innate, ${String(focus.length)} focus, ${String(known.length)} known, ${String(hexes.length)} hex, ${String(apparition.length)} apparition spells (max rank ${String(maxSpellRank)})`
   );
 
   // Focus points are deliberately not written here: the PF2e system derives the
@@ -476,6 +569,17 @@ export async function applyFeatureGrantedSpells(
 
   if (known.length > 0) {
     await addFeatureKnownSpells(actor, known, summary);
+  }
+
+  if (apparition.length > 0) {
+    await addFeatureApparitionSpells(
+      actor,
+      apparition,
+      engines,
+      summary,
+      cacheEngineIds,
+      unlimitedSignatures.includes(APPARITION_SPELLCASTING)
+    );
   }
 
   flagMissingLinkSpells(actor, engines, summary);
@@ -509,8 +613,7 @@ function flagMissingLinkSpells(actor: Actor, engines: DemiplaneEngineEntry[], su
   }
   if (!hasFocusSpells) {
     summary.errors.push(
-      "Summoner has no focus spells — Demiplane doesn't export link spells (Boost Eidolon, Evolution Surge) yet, " +
-        "so the focus pool is empty."
+      "Summoner has no focus spells — the link spells (Boost Eidolon, Evolution Surge) couldn't be added."
     );
   }
 }
@@ -533,6 +636,51 @@ async function addFeatureHexSpells(actor: Actor, spells: GrantedSpell[], summary
     (await createFeatureEntry(actor, HEX_ENTRY_NAME, tradition, "focus"));
 
   await addGrantedSpellsToEntry(actor, entryId, spells, summary, "hex");
+}
+
+/**
+ * Files animist apparition grants in their own spontaneous apparition entry
+ * ("Apparition Spells (Divine)") with the feature's slot progression — never
+ * the class repertoire. Marks every spell signature when the feature declares
+ * unlimited signatures.
+ */
+async function addFeatureApparitionSpells(
+  actor: Actor,
+  spells: GrantedSpell[],
+  engines: DemiplaneEngineEntry[],
+  summary: ImportSummary,
+  cacheEngineIds: string[],
+  signatureUnlimited: boolean
+): Promise<void> {
+  const entryId = await createFeatureEntry(
+    actor,
+    deriveClassEntryName(APPARITION_SPELLCASTING, "divine"),
+    "divine",
+    "spontaneous"
+  );
+
+  await addGrantedSpellsToEntry(actor, entryId, spells, summary, "apparition");
+  await applySlotMaximums(actor, entryId, engines, APPARITION_SPELLCASTING, "", summary, cacheEngineIds);
+
+  if (signatureUnlimited) {
+    await markEntrySpellsSignature(actor, entryId, summary);
+  }
+}
+
+/** Flags every spell filed in an entry as a signature spell. */
+async function markEntrySpellsSignature(actor: Actor, entryId: string, summary: ImportSummary): Promise<void> {
+  const updates: Array<{ _id: string; "system.location.signature": boolean }> = [];
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spell") continue;
+    const location = itemSystem(item).location;
+    const locationId = typeof location === "string" ? location : location?.value;
+    if (locationId !== entryId || typeof item.id !== "string") continue;
+    updates.push({ _id: item.id, "system.location.signature": true });
+  }
+  if (updates.length > 0) {
+    await actor.updateEmbeddedDocuments("Item", updates);
+    summary.log.push(`+ apparition signature: ${String(updates.length)} spells marked as signature`);
+  }
 }
 
 /** Finds an imported focus spellcasting entry by name, so hexes share one entry. */
@@ -771,6 +919,7 @@ async function collectDomainFocusSpells(domainData: DomainEngineData[], maxSpell
       isFocus: true,
       isKnown: false,
       isHex: false,
+      isApparition: false,
       spellLevel: 0,
     }));
 }
