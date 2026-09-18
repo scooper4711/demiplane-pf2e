@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applySpells, deriveClassEntryName } from "../../src/import/spell-importer.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
@@ -247,6 +247,72 @@ describe("applySpells", () => {
     const summary = makeSummary();
     await applySpells(actor as never, [], summary);
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  it("flags a class entry left with spells but no slots", async () => {
+    // A class definition with no slot progression (e.g. summoner) leaves the
+    // spells present but uncastable — a sync error telling the GM to set slot
+    // overrides, not silence.
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "sp1", name: "Detect Magic", system: { slug: "detect-magic" }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/sorcerer-rm.eng", type: "DemiplaneEngine", args: {} },
+      makeSpellEngine("detect-magic-rm", 0, "sorcerer-spellcasting-rm"),
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    expect(summary.errors).toHaveLength(1);
+    expect(summary.errors[0]).toContain("no spell slots");
+  });
+
+  it("stays quiet when the class entry has slots", async () => {
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "sp1", name: "Detect Magic", system: { slug: "detect-magic" }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            id: "class-id",
+            data: {
+              nodes: {
+                "1": {
+                  name: "StringObject",
+                  data: {
+                    string: JSON.stringify({
+                      engineModifiers: [
+                        {
+                          type: "v2-add-spell-slots",
+                          slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+                        },
+                      ],
+                    }),
+                  },
+                },
+              },
+            },
+          }),
+      })
+    );
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/sorcerer-rm.eng", type: "DemiplaneEngine", args: {} },
+      makeSpellEngine("detect-magic-rm", 0, "sorcerer-spellcasting-rm"),
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    expect(summary.errors).toEqual([]);
   });
 
   function makeClericSpell(slug: string, rank: number, spellSlot: string): DemiplaneEngineEntry {

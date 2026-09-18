@@ -449,6 +449,42 @@ export async function applyFeatureGrantedSpells(
   if (known.length > 0) {
     await addFeatureKnownSpells(actor, known, summary);
   }
+
+  flagMissingLinkSpells(actor, engines, summary);
+}
+
+/**
+ * Flags a summoner import with no focus spells at all. Every summoner has
+ * link cantrips (Boost Eidolon, Evolution Surge), but Demiplane currently
+ * exports neither engines nor definitions for them — without this check their
+ * absence (and the empty focus pool) would be silent. Loud, with the gap
+ * named, until Demiplane models link spells.
+ */
+function flagMissingLinkSpells(actor: Actor, engines: DemiplaneEngineEntry[], summary: ImportSummary): void {
+  const isSummoner = engines.some((e) => e.name === "tabula/class/summoner-rm.eng");
+  if (!isSummoner) return;
+
+  const focusEntryIds = new Set<string>();
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spellcastingEntry" || itemSystem(item).prepared?.value !== "focus") continue;
+    if (typeof item.id === "string") focusEntryIds.add(item.id);
+  }
+  let hasFocusSpells = false;
+  for (const item of Array.from(actor.items)) {
+    if (item.type !== "spell") continue;
+    const location = itemSystem(item).location;
+    const entryId = typeof location === "string" ? location : location?.value;
+    if (typeof entryId === "string" && focusEntryIds.has(entryId)) {
+      hasFocusSpells = true;
+      break;
+    }
+  }
+  if (!hasFocusSpells) {
+    summary.errors.push(
+      "Summoner has no focus spells — Demiplane doesn't export link spells (Boost Eidolon, Evolution Surge) yet, " +
+        "so the focus pool is empty."
+    );
+  }
 }
 
 /** The label PF2e uses for a witch's focus-spell (hex) spellcasting entry. */

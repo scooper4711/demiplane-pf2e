@@ -130,4 +130,40 @@ describe("groupSpells", () => {
     expect(main).toHaveLength(0);
     expect(innate).toHaveLength(1);
   });
+
+  it("derives a summoner's config from its eidolon", () => {
+    const eidolon = {
+      id: "eid-1",
+      name: "tabula/eidolon/beast-rm.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "beast-rm" },
+    } as DemiplaneEngineEntry;
+    const { main } = groupSpells([
+      eidolon,
+      spell("detect-magic-rm", { parentSpellFeature: "summoner-spellcasting-rm" }),
+    ]);
+    expect(main).toHaveLength(1);
+    expect(main[0]!.config).toEqual({ tradition: "primal", preparedType: "spontaneous", ability: "cha" });
+  });
+
+  it("leaves a summoner group config-less without a known eidolon", () => {
+    // No eidolon, or one outside the table: downstream import surfaces the
+    // unknown-source sync error rather than guessing a tradition.
+    const noEidolon = groupSpells([spell("detect-magic-rm", { parentSpellFeature: "summoner-spellcasting-rm" })]);
+    expect(noEidolon.main).toHaveLength(1);
+    expect(noEidolon.main[0]!.config).toBeNull();
+
+    const strange = {
+      id: "eid-9",
+      name: "tabula/eidolon/something-new.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "something-new" },
+    } as DemiplaneEngineEntry;
+    const unknown = groupSpells([
+      strange,
+      spell("detect-magic-rm", { parentSpellFeature: "summoner-spellcasting-rm" }),
+    ]);
+    expect(unknown.main).toHaveLength(1);
+    expect(unknown.main[0]!.config).toBeNull();
+  });
 });

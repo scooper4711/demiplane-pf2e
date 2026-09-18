@@ -532,4 +532,58 @@ describe("choice-matchers", () => {
 
     expect(findMatchInChoices(choices, [], "Total Power", map)).toBeNull();
   });
+
+  it("matches the eidolon ChoiceSet against the tabula eidolon engine", () => {
+    // Beast eidolon taken; the blind fallback would pick Aberrant (first).
+    const choices = [
+      { label: "Aberrant Eidolon", value: "Compendium.pf2e.feats-srd.Item.aaaa" },
+      { label: "Beast Eidolon", value: "Compendium.pf2e.feats-srd.Item.bbbb" },
+    ];
+    const engines = [
+      {
+        id: "eid-1",
+        name: "tabula/eidolon/beast-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "beast-rm", sourceRow: "eidolon-type" },
+      },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Eidolon")).toBe(choices[1]);
+  });
+
+  it("matches a feature's ChoiceSet against the engine picked for it", () => {
+    // Evolution Feat: the taken feat's sourceRow names the feature exactly.
+    const evoChoices = [
+      { label: "Advanced Weaponry", value: "Compendium.pf2e.feats-srd.Item.aaaa" },
+      { label: "Energy Heart", value: "Compendium.pf2e.feats-srd.Item.bbbb" },
+    ];
+    const evoEngines = [
+      {
+        id: "feat-1",
+        name: "tabula/feat/energy-heart-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "energy-heart-rm", sourceRow: "evolution-feat-rm" },
+      },
+    ];
+
+    expect(findMatchInChoices(evoChoices, evoEngines, "Evolution Feat")).toBe(evoChoices[1]);
+  });
+
+  it("matches an order ChoiceSet by label prefix", () => {
+    // Druidic Order: the order slug is a prefix of the option label.
+    const choices = [
+      { label: "Animal Order", value: "Compendium.pf2e.feats-srd.Item.aaaa" },
+      { label: "Leaf Order", value: "Compendium.pf2e.feats-srd.Item.bbbb" },
+    ];
+    const engines = [
+      {
+        id: "ord-1",
+        name: "tabula/class-feature/animal-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "animal-rm", sourceRow: "druidic-order-rm" },
+      },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Druidic Order")).toBe(choices[0]);
+  });
 });

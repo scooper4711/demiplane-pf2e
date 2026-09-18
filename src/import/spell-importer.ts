@@ -119,12 +119,34 @@ async function importSpellGroup(
     await markSignatureSpells(actor, engines, slugToId, group.spellbook, summary);
   }
 
+  flagMissingSlots(actor, entryId, group, summary);
+
   // Curriculum entry (wizard only)
   if (group.curriculumSpellbook.length > 0) {
     totalAdded += await importCurriculumSpells(actor, group, engines, summary);
   }
 
   return totalAdded;
+}
+
+/**
+ * Flags a class entry that ended up with spells but no usable slots — the
+ * class definition carries no slot progression (e.g. summoner) and no player
+ * override fills the gap, so the spells are present but uncastable. Loud (a
+ * sync error telling the GM to set slot overrides on Demiplane) rather than a
+ * sheet that looks fine until cast time.
+ */
+function flagMissingSlots(actor: Actor, entryId: string, group: SpellGroup, summary: ImportSummary): void {
+  if (group.spellbook.length === 0 && group.prepared.length === 0) return;
+  const entry = actor.items.get(entryId) as { system?: { slots?: Record<string, { max?: number }> } } | undefined;
+  const slots = entry?.system?.slots ?? {};
+  const hasSlots = Object.values(slots).some((slot) => (slot?.max ?? 0) > 0);
+  if (!hasSlots) {
+    summary.errors.push(
+      `Class "${group.source}" has spells but no spell slots — Demiplane provides no slot progression for it. ` +
+        `Set the slot maximums on the character (builder slot overrides) and re-import.`
+    );
+  }
 }
 
 async function importCurriculumSpells(

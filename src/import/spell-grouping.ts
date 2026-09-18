@@ -1,5 +1,6 @@
 import type { DemiplaneEngineEntry } from "./types.js";
 import { findSpellEngines, isCurriculumSpell } from "./spell-engines.js";
+import { toFoundrySlug } from "./slug-utils.js";
 
 export interface SpellcastingConfig {
   tradition: string;
@@ -27,6 +28,45 @@ const FONT_SPELL_SLOT = "divine-font";
 
 export function isDivineFontSpell(eng: DemiplaneEngineEntry): boolean {
   return (eng.args?.spellSlot as string | undefined) === FONT_SPELL_SLOT;
+}
+
+/** Demiplane's `parentSpellFeature` for summoner repertoire spells. */
+const SUMMONER_SPELLCASTING = "summoner-spellcasting-rm";
+
+/**
+ * Spellcasting tradition by eidolon (foundry slug). Per the eidolon rules, the
+ * summoner's tradition is the eidolon's own. Only beast is covered by a live
+ * fixture — the rest follow the rulebook and want a glance if one shows up in
+ * a fixture with a wrong-tradition entry.
+ */
+const EIDOLON_TRADITIONS: Record<string, string> = {
+  angel: "divine",
+  beast: "primal",
+  construct: "arcane",
+  demon: "divine",
+  dragon: "arcane",
+  fey: "primal",
+  ghost: "occult",
+  plant: "primal",
+  psychopomp: "divine",
+  undead: "occult",
+};
+
+/**
+ * Resolves a spell group's config. Most features are static table entries;
+ * the summoner's tradition comes from its eidolon, so it is derived from the
+ * character's `tabula/eidolon/*` engine. An unknown or missing eidolon yields
+ * null, routing the group to the unknown-source sync error rather than
+ * guessing a tradition.
+ */
+function configForFeature(source: string, engines: DemiplaneEngineEntry[]): SpellcastingConfig | null {
+  if (source !== SUMMONER_SPELLCASTING) return CLASS_SPELLCASTING[source] ?? null;
+  const eidolonSlug = engines.find(
+    (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/eidolon/") && e.args?.slug
+  )?.args?.slug as string | undefined;
+  const tradition = eidolonSlug ? EIDOLON_TRADITIONS[toFoundrySlug(eidolonSlug)] : undefined;
+  if (!tradition) return null;
+  return { tradition, preparedType: "spontaneous", ability: "cha" };
 }
 
 export interface SpellGroup {
@@ -137,7 +177,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     // in a class spellbook — skip them so they don't form a phantom spell group.
     if (!parentFeature || parentFeature === "scroll" || parentFeature === "wand") continue;
 
-    addToGroup(getOrCreateGroup(mainGroups, parentFeature), eng);
+    addToGroup(getOrCreateGroup(mainGroups, parentFeature, engines), eng);
   }
 
   // School spells are known spells cast with class slots, so they join the
@@ -154,11 +194,15 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   return { main: [...mainGroups.values()], innate: innateSpells, hexes: hexSpells, font: fontSpells, rituals };
 }
 
-function getOrCreateGroup(groups: Map<string, SpellGroup>, parentFeature: string): SpellGroup {
+function getOrCreateGroup(
+  groups: Map<string, SpellGroup>,
+  parentFeature: string,
+  engines: DemiplaneEngineEntry[]
+): SpellGroup {
   if (!groups.has(parentFeature)) {
     groups.set(parentFeature, {
       source: parentFeature,
-      config: CLASS_SPELLCASTING[parentFeature] ?? null,
+      config: configForFeature(parentFeature, engines),
       spellbook: [],
       curriculumSpellbook: [],
       prepared: [],

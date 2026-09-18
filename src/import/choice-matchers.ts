@@ -33,6 +33,8 @@ export function findMatchInChoices(
     () => matchCustomSelectionLore(choices, engines, itemName),
     () => matchDeity(choices, engines),
     () => matchDomain(choices, engines),
+    () => matchEidolon(choices, engines),
+    () => matchFeaturePick(choices, engines, itemName),
     () => matchMuse(choices, engines),
     () => matchAdoptedAncestry(choices, engines),
     () => matchWeaponInnovation(choices, engines, itemName),
@@ -142,6 +144,70 @@ function matchDomain(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value : "";
     if (domainSlugs.includes(val) || domainSlugs.includes(toChoiceSlug(choice.label))) return choice;
+  }
+  return null;
+}
+
+/**
+ * Matches the summoner "Eidolon" ChoiceSet against the character's eidolon
+ * engine. The eidolon arrives as a `tabula/eidolon/<slug>.eng` engine (e.g.
+ * `beast-rm`), while the ChoiceSet offers compendium UUIDs labeled "<Type>
+ * Eidolon" ("Beast Eidolon") — so the eidolon slug is compared against the
+ * label minus its " Eidolon" suffix. Without this the import defaults to the
+ * alphabetically-first eidolon (Aberrant), which is wrong for anyone else.
+ */
+function matchEidolon(choices: Choice[], engines: DemiplaneEngineEntry[]): Choice | null {
+  const eidolonSlugs = engines
+    .filter((e) => e.name.includes("/eidolon/") && e.args?.slug)
+    .map((e) => toFoundrySlug(e.args?.slug as string));
+
+  if (eidolonSlugs.length === 0) return null;
+
+  tlog(`[ChoiceSet match] Eidolon strategy - eidolon slugs: [${eidolonSlugs.join(", ")}]`);
+
+  for (const choice of choices) {
+    const labelSlug = toChoiceSlug(choice.label.replace(/\s+eidolon$/i, ""));
+    if (eidolonSlugs.includes(labelSlug)) return choice;
+  }
+  return null;
+}
+
+/**
+ * Matches a ChoiceSet against the engine picked for that very feature — a feat
+ * (or similar) engine whose `sourceRow` names the ChoiceSet's item (e.g. an
+ * `energy-heart-rm` engine with sourceRow `evolution-feat-rm` for the
+ * "Evolution Feat" choice, or the `animal-rm` order engine for "Druidic
+ * Order"). Such an engine is an explicit record of the player's decision for
+ * this feature, so it wins over broad fallbacks. Exact label/value matches are
+ * tried first; labels that merely start with the pick (e.g. "Animal Order"
+ * for the `animal` pick) second.
+ */
+function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
+  if (!itemName) return null;
+  const marker = `${toChoiceSlug(itemName)}-rm`;
+
+  const picks = engines.filter(
+    (e) =>
+      e.type === "DemiplaneEngine" &&
+      e.args?.slug &&
+      String((e.args.sourceRow as string | undefined) ?? "")
+        .split("_")
+        .includes(marker)
+  );
+  if (picks.length === 0) return null;
+
+  const pickSlugs = [...new Set(picks.map((e) => toFoundrySlug(e.args!.slug as string)))];
+  tlog(`[ChoiceSet match] Feature-pick strategy for "${itemName}": [${pickSlugs.join(", ")}]`);
+
+  for (const pass of ["exact", "prefix"] as const) {
+    for (const choice of choices) {
+      const val = typeof choice.value === "string" ? choice.value : "";
+      const labelSlug = toChoiceSlug(choice.label);
+      for (const slug of pickSlugs) {
+        if (val === slug || labelSlug === slug) return choice;
+        if (pass === "prefix" && labelSlug.startsWith(`${slug}-`)) return choice;
+      }
+    }
   }
   return null;
 }

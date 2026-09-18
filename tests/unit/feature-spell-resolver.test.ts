@@ -912,4 +912,64 @@ describe("feature-spell-resolver", () => {
 
     expect(result.focus.map((f) => f.slug)).toEqual(["shooting-star"]);
   });
+
+  describe("summoner link spells", () => {
+    const summonerEngines = [
+      {
+        id: "class-1",
+        name: "tabula/class/summoner-rm.eng",
+        type: "DemiplaneEngine",
+        args: {},
+      } as DemiplaneEngineEntry,
+    ];
+
+    function focusActor(): ReturnType<typeof createMockActor> {
+      return createMockActor({
+        items: [
+          {
+            id: "focus-1",
+            type: "spellcastingEntry",
+            system: { prepared: { value: "focus" }, tradition: { value: "primal" } },
+          },
+          {
+            id: "spell-1",
+            type: "spell",
+            system: { slug: "boost-eidolon", location: { value: "focus-1" } },
+          },
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    });
+
+    it("flags a summoner with no focus spells", async () => {
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, summonerEngines, summary);
+
+      expect(summary.errors).toHaveLength(1);
+      expect(summary.errors[0]).toContain("link spells");
+    });
+
+    it("stays quiet when focus spells exist", async () => {
+      const actor = focusActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, summonerEngines, summary);
+
+      expect(summary.errors).toEqual([]);
+    });
+
+    it("ignores non-summoners", async () => {
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, [], summary);
+
+      expect(summary.errors).toEqual([]);
+    });
+  });
 });
