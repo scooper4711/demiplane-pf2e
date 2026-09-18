@@ -972,7 +972,50 @@ describe("feature-spell-resolver", () => {
       expect(summary.errors).toEqual([]);
     });
 
-    it("grants the universal link cantrips as focus", async () => {
+    it("grants link cantrips from the cached link-spells definition", async () => {
+      // No engine references the link-spells feature; it is resolved by path
+      // out of the character's cached definitions.
+      const linkLine = JSON.stringify({
+        id: "link-def-1",
+        engineName: "tabula/class-feature/link-spells-rm.eng",
+        data: {
+          nodes: {
+            n1: {
+              name: "StringObject",
+              data: {
+                string: JSON.stringify({
+                  engineModifiers: [
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "boost-eidolon-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "evolution-surge-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                  ],
+                }),
+              },
+            },
+          },
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => ({
+          ok: true,
+          text: async () => (String(opts.body ?? "").includes("cache-1") ? linkLine : ""),
+        }))
+      );
+
       const result = await resolveFeatureGrantedSpells(
         [
           {
@@ -983,7 +1026,8 @@ describe("feature-spell-resolver", () => {
           } as DemiplaneEngineEntry,
         ],
         1,
-        1
+        1,
+        ["cache-1"]
       );
 
       expect(result.focus.map((f) => f.slug)).toEqual(["boost-eidolon-rm", "evolution-surge-rm"]);
@@ -1001,6 +1045,46 @@ describe("feature-spell-resolver", () => {
           },
         ]),
       });
+      const linkLine = JSON.stringify({
+        id: "link-def-1",
+        engineName: "tabula/class-feature/link-spells-rm.eng",
+        data: {
+          nodes: {
+            n1: {
+              name: "StringObject",
+              data: {
+                string: JSON.stringify({
+                  engineModifiers: [
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "boost-eidolon-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "evolution-surge-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                  ],
+                }),
+              },
+            },
+          },
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => ({
+          ok: true,
+          text: async () => (String(opts.body ?? "").includes("cache-1") ? linkLine : ""),
+        }))
+      );
       const actor = createMockActor();
       const summary = emptySummary();
 
@@ -1014,7 +1098,8 @@ describe("feature-spell-resolver", () => {
             args: {},
           } as DemiplaneEngineEntry,
         ],
-        summary
+        summary,
+        ["cache-1"]
       );
 
       const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(

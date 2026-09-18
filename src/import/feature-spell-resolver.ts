@@ -64,6 +64,7 @@ export async function resolveFeatureGrantedSpells(
     fetchFeatureModifiers(featureEngineIds, cacheEngineIds),
     fetchDomainEngineData(domainEngineIds),
   ]);
+  modifiers.push(...(await fetchLinkSpellModifiers(engines, cacheEngineIds)));
 
   const focusEntryName = findFocusEntryName(modifiers);
   // The witch (hex focus group) files its non-hex granted spells into the
@@ -71,7 +72,6 @@ export async function resolveFeatureGrantedSpells(
   // inherited-tradition grants as focus spells. See {@link isInheritedRepertoireGrant}.
   const hexFocusGroup = declaresHexFocusGroup(modifiers);
   const { innate, focus, known, hexes } = categorizeGrantedSpells(modifiers, characterLevel, hexFocusGroup);
-  focus.push(...linkSpellsForSummoner(engines));
   const gatedFocus = await filterAccessibleFocusSpells(focus, maxSpellRank);
   gatedFocus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
 
@@ -80,25 +80,30 @@ export async function resolveFeatureGrantedSpells(
 }
 
 /**
- * The summoner's two universal link cantrips. Every summoner has them, but
- * Demiplane exports neither engines nor reachable definitions: the class
- * definition is flat, and the cache's link-spells feature is unreferenced by
- * anything on the character. Granted directly in the definition's shape (see
- * the cached `link-spells-rm` add-spells) so they file as focus spells and
- * pass through rank gating and compendium resolution like any other grant.
+ * Reads the summoner's link-spell grants from the link-spells feature
+ * definition. Every summoner has link cantrips, but Demiplane exports neither
+ * engines nor reachable references for the feature — the class definition is
+ * flat — so it is resolved by path out of the character's cached definitions,
+ * the same cache the feat expansion already downloads. Whatever the
+ * definition grants today (Boost Eidolon, Evolution Surge) flows through
+ * categorization, rank gating, and compendium resolution like any other grant,
+ * as do future link spells from taken feats (Reinforce Eidolon, Eidolon's
+ * Wrath), which arrive through the normal feat path.
  */
-function linkSpellsForSummoner(engines: DemiplaneEngineEntry[]): GrantedSpell[] {
+async function fetchLinkSpellModifiers(
+  engines: DemiplaneEngineEntry[],
+  cacheEngineIds: string[]
+): Promise<EngineModifier[]> {
   if (!engines.some((e) => e.name === "tabula/class/summoner-rm.eng")) return [];
-  return ["boost-eidolon-rm", "evolution-surge-rm"].map((slug) => ({
-    slug,
-    tradition: INHERIT_TRADITION,
-    level: 0,
-    isInnate: false,
-    isFocus: true,
-    isKnown: false,
-    isHex: false,
-    spellLevel: 0,
-  }));
+  if (cacheEngineIds.length === 0) return [];
+
+  const lines = await fetchStreamEngineLines(cacheEngineIds);
+  const modifiers: EngineModifier[] = [];
+  for (const line of lines) {
+    if (line.name !== "tabula/class-feature/link-spells-rm.eng") continue;
+    modifiers.push(...collectSpellModifiers(line.modifiers));
+  }
+  return modifiers;
 }
 
 /**
@@ -677,7 +682,7 @@ function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
     return `${domainEngine.args.name as string} Domain Spells`;
   }
 
-  // Summoner link cantrips file as focus spells (see linkSpellsForSummoner).
+  // Summoner link cantrips file as focus spells (see fetchLinkSpellModifiers).
   if (engines.some((e) => e.name === "tabula/class/summoner-rm.eng")) {
     return "Link Spells";
   }
