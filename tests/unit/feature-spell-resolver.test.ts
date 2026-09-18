@@ -971,5 +971,64 @@ describe("feature-spell-resolver", () => {
 
       expect(summary.errors).toEqual([]);
     });
+
+    it("grants the universal link cantrips as focus", async () => {
+      const result = await resolveFeatureGrantedSpells(
+        [
+          {
+            id: "class-1",
+            name: "tabula/class/summoner-rm.eng",
+            type: "DemiplaneEngine",
+            args: {},
+          } as DemiplaneEngineEntry,
+        ],
+        1,
+        1
+      );
+
+      expect(result.focus.map((f) => f.slug)).toEqual(["boost-eidolon-rm", "evolution-surge-rm"]);
+    });
+
+    it("files link cantrips in a Link Spells entry", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Boost Eidolon", system: { slug: "boost-eidolon", level: { value: 1 } }, type: "spell" },
+          {
+            _id: "s2",
+            name: "Evolution Surge",
+            system: { slug: "evolution-surge", level: { value: 1 } },
+            type: "spell",
+          },
+        ]),
+      });
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [
+          {
+            id: "class-1",
+            name: "tabula/class/summoner-rm.eng",
+            type: "DemiplaneEngine",
+            args: {},
+          } as DemiplaneEngineEntry,
+        ],
+        summary
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      const entry = created.flat().find((i) => i.type === "spellcastingEntry");
+      expect(entry?.name).toBe("Link Spells");
+      expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("focus");
+      const slugs = created
+        .flat()
+        .filter((i) => i.type === "spell")
+        .map((i) => (i.system as { slug?: string }).slug)
+        .sort();
+      expect(slugs).toEqual(["boost-eidolon", "evolution-surge"]);
+    });
   });
 });

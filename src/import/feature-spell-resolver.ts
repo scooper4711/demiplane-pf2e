@@ -71,11 +71,34 @@ export async function resolveFeatureGrantedSpells(
   // inherited-tradition grants as focus spells. See {@link isInheritedRepertoireGrant}.
   const hexFocusGroup = declaresHexFocusGroup(modifiers);
   const { innate, focus, known, hexes } = categorizeGrantedSpells(modifiers, characterLevel, hexFocusGroup);
+  focus.push(...linkSpellsForSummoner(engines));
   const gatedFocus = await filterAccessibleFocusSpells(focus, maxSpellRank);
   gatedFocus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
 
   const result: FeatureGrantedSpells = { innate, focus: gatedFocus, known, hexes };
   return focusEntryName !== undefined ? { ...result, focusEntryName } : result;
+}
+
+/**
+ * The summoner's two universal link cantrips. Every summoner has them, but
+ * Demiplane exports neither engines nor reachable definitions: the class
+ * definition is flat, and the cache's link-spells feature is unreferenced by
+ * anything on the character. Granted directly in the definition's shape (see
+ * the cached `link-spells-rm` add-spells) so they file as focus spells and
+ * pass through rank gating and compendium resolution like any other grant.
+ */
+function linkSpellsForSummoner(engines: DemiplaneEngineEntry[]): GrantedSpell[] {
+  if (!engines.some((e) => e.name === "tabula/class/summoner-rm.eng")) return [];
+  return ["boost-eidolon-rm", "evolution-surge-rm"].map((slug) => ({
+    slug,
+    tradition: INHERIT_TRADITION,
+    level: 0,
+    isInnate: false,
+    isFocus: true,
+    isKnown: false,
+    isHex: false,
+    spellLevel: 0,
+  }));
 }
 
 /**
@@ -652,6 +675,11 @@ function deriveFocusEntryName(engines: DemiplaneEngineEntry[]): string {
   const domainEngine = engines.find((e) => e.type === "DemiplaneEngine" && e.name?.startsWith("tabula/domain/"));
   if (domainEngine?.args?.name) {
     return `${domainEngine.args.name as string} Domain Spells`;
+  }
+
+  // Summoner link cantrips file as focus spells (see linkSpellsForSummoner).
+  if (engines.some((e) => e.name === "tabula/class/summoner-rm.eng")) {
+    return "Link Spells";
   }
 
   return "Focus Spells";
