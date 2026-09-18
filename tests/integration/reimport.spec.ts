@@ -1,5 +1,13 @@
 import { test, expect } from "@playwright/test";
-import { loginAsGamemaster, deleteActorsForCharacter, deleteAllActors, stopCoverage } from "./helpers.js";
+import {
+  loginAsGamemaster,
+  deleteActorsForCharacter,
+  deleteAllActors,
+  stopCoverage,
+  skipMutationTestsIfFlagged,
+} from "./helpers.js";
+
+skipMutationTestsIfFlagged();
 
 const KYRA_UUID = process.env.KYRA_UUID ?? "";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";

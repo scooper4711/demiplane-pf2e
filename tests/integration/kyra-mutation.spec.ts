@@ -11,7 +11,10 @@ import {
   restoreWriteLevel,
   waitForSyncRelease,
   storeGuessedPicks,
+  skipMutationTestsIfFlagged,
 } from "./helpers.js";
+
+skipMutationTestsIfFlagged();
 
 const CHARACTER_UUID = process.env.KYRA_UUID ?? "";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";

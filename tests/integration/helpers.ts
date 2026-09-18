@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { test } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
@@ -22,6 +23,17 @@ const DISMISS_BUTTON_NAMES = [
   "Got it",
   "Don't Show Again",
 ];
+
+/**
+ * Skips the slow mutation/write round-trip specs when SKIP_MUTATION_TESTS=1,
+ * so frequent read-only runs stay fast. These specs (the Kyra mutation files
+ * and the reimport spec) each perform multiple full import/push/re-import
+ * cycles against the live character; run them unflagged after touching write
+ * logic, or select the files explicitly. Call at a spec file's top level.
+ */
+export function skipMutationTestsIfFlagged(): void {
+  test.skip(process.env.SKIP_MUTATION_TESTS === "1", "mutation tests skipped via SKIP_MUTATION_TESTS=1");
+}
 
 /**
  * Toggles the PF2e "Free Archetype" variant rule (Settings → Pathfinder
