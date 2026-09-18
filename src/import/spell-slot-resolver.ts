@@ -68,6 +68,11 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
     // than fixed slots (bard, psychic) fall back to the rank-0 count.
     computed.cantrips = computeRepertoireCantrips(allLines, options.characterLevel);
   }
+  if (computed.cantrips === 0) {
+    // No cantrip data anywhere (e.g. summoner): Demiplane itself counts the
+    // known cantrips, so mirror that rather than demanding an override.
+    computed.cantrips = countKnownCantrips(options.engines, options.parentSpellFeature);
+  }
   return mergeWithOverrides(computed, overrides);
 }
 
@@ -82,6 +87,24 @@ async function fetchFeatureSlotLines(parentSpellFeature: string, cacheEngineIds:
   const resolvedId = bySlug.get(parentSpellFeature);
   if (!resolvedId) return [];
   return fetchStreamEngineLines([resolvedId]);
+}
+
+/**
+ * Counts the distinct rank-0 spells a feature knows (excluding prepared
+ * duplicates, which mirror the spellbook). Last-resort cantrip source when
+ * neither fixed slots nor repertoire counts exist.
+ */
+function countKnownCantrips(engines: DemiplaneEngineEntry[], parentSpellFeature: string): number {
+  const slugs = new Set<string>();
+  for (const engine of engines) {
+    if (!engine.name?.startsWith("tabula/spell/")) continue;
+    if (engine.args?.parentSpellFeature !== parentSpellFeature) continue;
+    if (engine.args?.isPrepare === true) continue;
+    if ((engine.args?.selectionRank as number | undefined) !== 0) continue;
+    const slug = engine.args?.slug as string | undefined;
+    if (typeof slug === "string" && slug !== "") slugs.add(slug);
+  }
+  return slugs.size;
 }
 
 /**

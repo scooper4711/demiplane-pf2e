@@ -250,19 +250,19 @@ describe("applySpells", () => {
   });
 
   it("flags a class entry left with spells but no slots", async () => {
-    // A class definition with no slot progression (e.g. summoner) leaves the
-    // spells present but uncastable — a sync error telling the GM to set slot
-    // overrides, not silence.
+    // A class definition with no slot progression and no known cantrips
+    // leaves the spells present but uncastable — a sync error telling the GM
+    // to set slot overrides, not silence.
     installFoundryMocks({
       "pf2e.spells-srd": createMockPack([
-        { _id: "sp1", name: "Detect Magic", system: { slug: "detect-magic" }, type: "spell" },
+        { _id: "sp1", name: "Fireball", system: { slug: "fireball" }, type: "spell" },
       ]),
     });
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
     const actor = createMockActor();
     const engines: DemiplaneEngineEntry[] = [
       { id: "class-id", name: "tabula/class/sorcerer-rm.eng", type: "DemiplaneEngine", args: {} },
-      makeSpellEngine("detect-magic-rm", 0, "sorcerer-spellcasting-rm"),
+      makeSpellEngine("fireball-rm", 3, "sorcerer-spellcasting-rm"),
     ];
     const summary = makeSummary();
     await applySpells(actor as never, engines, summary);

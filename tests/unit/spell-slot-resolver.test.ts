@@ -422,6 +422,58 @@ describe("resolveSpellSlots with feature definitions", () => {
     expect(result).toEqual({ cantrips: 5, slots: { 1: 2 } });
   });
 
+  it("counts known cantrips with no fixed or repertoire data", async () => {
+    // Summoner: Demiplane models cantrips nowhere, so the import mirrors the
+    // sheet and counts the known rank-0 engines (prepared duplicates excluded).
+    stubFetch("", "", "");
+    const cantrip = (slug: string, isPrepare = false) => ({
+      id: slug,
+      name: `tabula/spell/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: {
+        slug,
+        selectionRank: 0,
+        isPrepare: isPrepare || undefined,
+        parentSpellFeature: "summoner-spellcasting-rm",
+      },
+    });
+    const engines = [
+      cantrip("approximate-rm"),
+      cantrip("caustic-blast-rm"),
+      cantrip("create-earthen-facsimile-rm"),
+      cantrip("deep-breath"),
+      cantrip("detect-magic-rm"),
+      cantrip("detect-magic-rm", true),
+      {
+        id: "toads",
+        name: "tabula/spell/500-toads-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "500-toads-rm", selectionRank: 1, parentSpellFeature: "summoner-spellcasting-rm" },
+      },
+    ];
+    const result = await resolveSpellSlots({ ...options(), engines });
+    expect(result).toEqual({ cantrips: 5, slots: {} });
+  });
+
+  it("prefers fixed cantrips over the known count", async () => {
+    const fixed = defLine("tabula/class/sorcerer-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "sorcerer-spellcasting",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    stubFetch(fixed, "", "");
+    const engines = Array.from({ length: 6 }, (_, i) => ({
+      id: `c${i}`,
+      name: `tabula/spell/cantrip-${i}.eng`,
+      type: "DemiplaneEngine",
+      args: { slug: `cantrip-${i}`, selectionRank: 0, parentSpellFeature: "sorcerer-spellcasting-rm" },
+    }));
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "sorcerer-spellcasting-rm", engines });
+    expect(result).toEqual({ cantrips: 5, slots: {} });
+  });
+
   it("scopes fixed entries to the requested feature", async () => {
     // A class response mixing two features' slot blocks (animist + apparition)
     // must not double-count: each entry resolves only its own feature.
