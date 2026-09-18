@@ -94,6 +94,17 @@ export interface AddSpellSlotsModifier {
   slots?: DemiplaneSlotEntry[];
 }
 
+/** A single scaling spell slot declared by a class engine (e.g. the magus's
+ * `magus-spell-slot-1`, one slot whose rank unlocks with level). Only the
+ * identity fields are parsed — rank scaling itself is not currently consumed;
+ * the declaration marks which fixed-entry slugs belong to a real slot pool
+ * (unrestricted) versus a separate restricted pool (e.g. studious spells). */
+export interface SpellSlotTypeModifier {
+  type: "v2-add-spell-slot-type";
+  slotSlug?: string;
+  hasRestrictions?: boolean;
+}
+
 /**
  * Declares a class's spellcasting feature, including its focus spell group. The
  * `focusName` (e.g. "Composition Spells") is the label Demiplane gives the
@@ -125,6 +136,7 @@ export type EngineModifier =
   | AddStaffSpellsModifier
   | AddSpecialItemSpellModifier
   | AddSpellSlotsModifier
+  | SpellSlotTypeModifier
   | AddSpellcastingFeatureModifier
   | AddFocusPointModifier;
 
@@ -165,6 +177,10 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "v2-add-spell-slots":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellSlotsModifier);
+        break;
+      case "v2-add-spell-slot-type":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        if (typeof mod.slotSlug === "string") results.push(mod as unknown as SpellSlotTypeModifier);
         break;
       case "v2-add-spellcasting-feature":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary

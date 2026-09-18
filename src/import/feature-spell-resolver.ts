@@ -71,10 +71,23 @@ export async function resolveFeatureGrantedSpells(
   // inherited-tradition grants as focus spells. See {@link isInheritedRepertoireGrant}.
   const hexFocusGroup = declaresHexFocusGroup(modifiers);
   const { innate, focus, known, hexes } = categorizeGrantedSpells(modifiers, characterLevel, hexFocusGroup);
-  focus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
+  const gatedFocus = await filterAccessibleFocusSpells(focus, maxSpellRank);
+  gatedFocus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
 
-  const result: FeatureGrantedSpells = { innate, focus, known, hexes };
+  const result: FeatureGrantedSpells = { innate, focus: gatedFocus, known, hexes };
   return focusEntryName !== undefined ? { ...result, focusEntryName } : result;
+}
+
+/**
+ * Drops focus grants above the highest rank the character's slots reach — a
+ * definition can grant spells for later levels (e.g. a conflux's rank-2 rider
+ * alongside its rank-1 spell) that the sheet doesn't show yet. Mirrors the
+ * domain gating in {@link collectDomainFocusSpells}. Unresolvable spells count
+ * as rank 0, so they still surface as unmapped rather than vanishing.
+ */
+async function filterAccessibleFocusSpells(spells: GrantedSpell[], maxSpellRank: number): Promise<GrantedSpell[]> {
+  const ranked = await Promise.all(spells.map(async (spell) => ({ spell, rank: await getSpellRank(spell.slug) })));
+  return ranked.filter(({ rank }) => rank <= maxSpellRank).map(({ spell }) => spell);
 }
 
 /**

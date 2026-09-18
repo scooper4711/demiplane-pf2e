@@ -60,6 +60,8 @@ async function importRituals(actor: Actor, rituals: DemiplaneEngineEntry[], summ
 
 /** Suffix Demiplane appends to a class's spellcasting-feature slug. */
 const SPELLCASTING_SUFFIX = "-spellcasting-rm";
+/** Bare variant (no -rm) Demiplane uses for newer features, e.g. psychic. */
+const BARE_SPELLCASTING_SUFFIX = "-spellcasting";
 
 /**
  * Names the main class spellcasting entry after its class and tradition, e.g.
@@ -67,9 +69,12 @@ const SPELLCASTING_SUFFIX = "-spellcasting-rm";
  * tradition alone when the source slug isn't a recognizable class feature.
  */
 export function deriveClassEntryName(source: string, tradition: string): string {
-  const className = source.endsWith(SPELLCASTING_SUFFIX)
-    ? capitalize(source.slice(0, -SPELLCASTING_SUFFIX.length))
-    : "";
+  let className = "";
+  if (source.endsWith(SPELLCASTING_SUFFIX)) {
+    className = capitalize(source.slice(0, -SPELLCASTING_SUFFIX.length));
+  } else if (source.endsWith(BARE_SPELLCASTING_SUFFIX)) {
+    className = capitalize(source.slice(0, -BARE_SPELLCASTING_SUFFIX.length));
+  }
   const traditionLabel = capitalize(tradition);
   return className !== "" ? `${className} Spells (${traditionLabel})` : `${traditionLabel} Spells`;
 }

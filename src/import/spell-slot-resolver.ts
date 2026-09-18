@@ -41,7 +41,9 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
     return buildProgressionFromOverrides(overrides);
   }
 
-  const slotEntries = await fetchSlotEntries(options.classEngineId, options.slotSlug ?? "");
+  const lines = await fetchStreamEngineLines([options.classEngineId]);
+  const unrestricted = collectUnrestrictedSlotSlugs(lines);
+  const slotEntries = extractSlotEntries(lines, options.slotSlug ?? "", unrestricted);
 
   const computed = computeSlotProgression(slotEntries, options.characterLevel);
   return mergeWithOverrides(computed, overrides);
@@ -58,22 +60,63 @@ export async function fetchSlotEntries(classEngineId: string, slotSlug: string):
 /**
  * Parses NDJSON stream-engines response to extract v2-add-spell-slots entries.
  */
-export function parseSlotEntriesFromNdjson(ndjsonText: string, slotSlug: string): DemiplaneSlotEntry[] {
-  return extractSlotEntries(parseEngineLines(ndjsonText), slotSlug);
+export function parseSlotEntriesFromNdjson(
+  ndjsonText: string,
+  slotSlug: string,
+  unrestrictedSlugs: Set<string> = new Set()
+): DemiplaneSlotEntry[] {
+  return extractSlotEntries(parseEngineLines(ndjsonText), slotSlug, unrestrictedSlugs);
 }
 
-function extractSlotEntries(lines: RawEngineLine[], slotSlug: string): DemiplaneSlotEntry[] {
+/** Marker Demiplane tags wizard school slot entries with. */
+const CURRICULUM_SLOT_MARKER = "wizard-school-spellbook-slot";
+
+function extractSlotEntries(
+  lines: RawEngineLine[],
+  slotSlug: string,
+  unrestrictedSlugs: Set<string> = new Set()
+): DemiplaneSlotEntry[] {
   const allSlots: DemiplaneSlotEntry[] = [];
 
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type !== "v2-add-spell-slots" || !mod.slots) continue;
-      const matching = mod.slots.filter((slot) => (slot.slug ?? "") === slotSlug);
+      const matching = mod.slots.filter((slot) => slotMatches(slot.slug ?? "", slotSlug, unrestrictedSlugs));
       allSlots.push(...matching);
     }
   }
 
   return allSlots;
+}
+
+/**
+ * Whether a fixed slot entry belongs to the requested pool. Curriculum pools
+ * match by slug inclusion; regular pools take empty-slug entries plus entries
+ * tagged with an unrestricted per-slot type (e.g. the magus's
+ * `magus-spell-slot-1`). Restricted pools (divine font, studious spells) and
+ * unknown tags stay out of regular — they are separate pools, not base slots.
+ */
+function slotMatches(slotEntrySlug: string, slotSlug: string, unrestrictedSlugs: Set<string>): boolean {
+  if (slotSlug !== "") return slotEntrySlug === slotSlug;
+  if (slotEntrySlug === "") return true;
+  return unrestrictedSlugs.has(slotEntrySlug) && !slotEntrySlug.includes(CURRICULUM_SLOT_MARKER);
+}
+
+/**
+ * Collects the slot slugs Demiplane declares as unrestricted single-slot
+ * pools (`v2-add-spell-slot-type` without restrictions). Fixed slot entries
+ * carrying one of these slugs count toward the regular pool.
+ */
+export function collectUnrestrictedSlotSlugs(lines: RawEngineLine[]): Set<string> {
+  const slugs = new Set<string>();
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type !== "v2-add-spell-slot-type") continue;
+      if (mod.hasRestrictions === true) continue;
+      if (typeof mod.slotSlug === "string" && mod.slotSlug !== "") slugs.add(mod.slotSlug);
+    }
+  }
+  return slugs;
 }
 
 /**
@@ -130,7 +173,7 @@ export function findSlotOverrides(
 
 function matchesSlotSlug(slotType: string, slotSlug: string): boolean {
   if (slotSlug === "") {
-    return !slotType.includes("wizard-school-spellbook-slot");
+    return !slotType.includes(CURRICULUM_SLOT_MARKER);
   }
   return slotType.includes(slotSlug);
 }

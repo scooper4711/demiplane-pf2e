@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
+  collectUnrestrictedSlotSlugs,
   computeSlotProgression,
   findSlotOverrides,
   parseSlotEntriesFromNdjson,
 } from "../../src/import/spell-slot-resolver.js";
+import type { RawEngineLine } from "../../src/import/stream-engines.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
 import type { DemiplaneSlotEntry } from "../../src/import/spell-slot-resolver.js";
 
@@ -254,5 +256,71 @@ describe("parseSlotEntriesFromNdjson", () => {
     const ndjson = "not valid json\n{also broken";
     const result = parseSlotEntriesFromNdjson(ndjson, "");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("collectUnrestrictedSlotSlugs", () => {
+  it("collects unrestricted slot-type slugs and skips restricted ones", () => {
+    const lines: RawEngineLine[] = [
+      { modifiers: [{ type: "v2-add-spell-slot-type", slotSlug: "magus-spell-slot-1" }] },
+      {
+        modifiers: [
+          { type: "v2-add-spell-slot-type", slotSlug: "studious-spells", hasRestrictions: true },
+          { type: "v2-add-spell-slot-type", slotSlug: "divine-font", hasRestrictions: true },
+        ],
+      },
+      { modifiers: [{ type: "v2-add-spell-slots", slots: [] }] },
+    ];
+    expect(collectUnrestrictedSlotSlugs(lines)).toEqual(new Set(["magus-spell-slot-1"]));
+  });
+});
+
+describe("parseSlotEntriesFromNdjson with slot-type slugs", () => {
+  function magusNdjson(): string {
+    return JSON.stringify({
+      id: "engine-1",
+      data: {
+        nodes: {
+          "1": {
+            name: "StringObject",
+            data: {
+              string: JSON.stringify({
+                name: "Arcane Spellcasting",
+                engineModifiers: [
+                  {
+                    type: "v2-add-spell-slots",
+                    slug: "magus-spellcasting",
+                    slots: [
+                      { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+                      { rank: 1, count: 1, levelPrereq: 1, slug: "magus-spell-slot-1" },
+                      { rank: 1, count: 2, levelPrereq: 1, slug: "studious-spells" },
+                    ],
+                  },
+                  { type: "v2-add-spell-slot-type", slotSlug: "magus-spell-slot-1" },
+                  { type: "v2-add-spell-slot-type", slotSlug: "studious-spells", hasRestrictions: true },
+                ],
+              }),
+            },
+          },
+        },
+      },
+    });
+  }
+
+  it("includes unrestricted tagged entries in the regular pool", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "", new Set(["magus-spell-slot-1"]));
+    expect(result).toHaveLength(2);
+    expect(computeSlotProgression(result, 1)).toEqual({ cantrips: 5, slots: { 1: 1 } });
+  });
+
+  it("excludes restricted tagged entries from the regular pool", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "", new Set(["magus-spell-slot-1"]));
+    expect(result.some((e) => e.slug === "studious-spells")).toBe(false);
+  });
+
+  it("keeps the default behavior without a slug set", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.rank).toBe(0);
   });
 });

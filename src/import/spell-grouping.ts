@@ -16,6 +16,11 @@ export const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
   "oracle-spellcasting-rm": { tradition: "divine", preparedType: "spontaneous", ability: "cha" },
   "witch-spellcasting-rm": { tradition: "occult", preparedType: "prepared", ability: "int" },
   "psychic-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
+  // Demiplane tags psychic spells with the bare feature (no -rm suffix).
+  // Cha is the common key ability; an Int psychic would need a selection
+  // signal Demiplane doesn't export.
+  "psychic-spellcasting": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
+  "magus-spellcasting-rm": { tradition: "arcane", preparedType: "prepared", ability: "int" },
 };
 
 const FONT_SPELL_SLOT = "divine-font";

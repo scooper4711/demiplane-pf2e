@@ -12,6 +12,10 @@ describe("deriveClassEntryName", () => {
   it("falls back to the tradition alone for an unrecognized source", () => {
     expect(deriveClassEntryName("some-other-source", "primal")).toBe("Primal Spells");
   });
+
+  it("names a bare -spellcasting source after its class", () => {
+    expect(deriveClassEntryName("psychic-spellcasting", "occult")).toBe("Psychic Spells (Occult)");
+  });
 });
 
 describe("applySpells", () => {

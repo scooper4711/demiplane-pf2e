@@ -879,4 +879,37 @@ describe("feature-spell-resolver", () => {
       expect(forceBolt).toBeDefined();
     });
   });
+
+  it("drops focus grants above the accessible rank", async () => {
+    // A conflux definition grants its rank-1 spell alongside a rank-2 rider;
+    // a level-1 character only gets the accessible one (same gating as domain
+    // advanced spells).
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "s1", name: "Shooting Star", system: { slug: "shooting-star", level: { value: 1 } }, type: "spell" },
+        { _id: "s2", name: "Water Breathing", system: { slug: "water-breathing", level: { value: 2 } }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            ndjsonLine("feat-1", [
+              ADD_SPELL("shooting-star", 1, { tradition: "arcane" }),
+              ADD_SPELL("water-breathing", 1, { tradition: "arcane" }),
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [featureEngine("tabula/class-feature/conflux-spells.eng", "feat-1")],
+      1,
+      1
+    );
+
+    expect(result.focus.map((f) => f.slug)).toEqual(["shooting-star"]);
+  });
 });
