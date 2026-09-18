@@ -9,7 +9,8 @@ export async function applySlotMaximums(
   engines: DemiplaneEngineEntry[],
   parentSpellFeature: string,
   slotSlug: string,
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<void> {
   const engineId = findEngineIdForSlots(engines, slotSlug);
   if (!engineId) {
@@ -27,6 +28,7 @@ export async function applySlotMaximums(
       engines,
       parentSpellFeature,
       slotSlug,
+      cacheEngineIds,
     });
 
     debugLog(

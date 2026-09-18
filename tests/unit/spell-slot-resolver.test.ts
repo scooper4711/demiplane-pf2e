@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   collectUnrestrictedSlotSlugs,
   computeSlotProgression,
   findSlotOverrides,
   parseSlotEntriesFromNdjson,
+  resolveSpellSlots,
 } from "../../src/import/spell-slot-resolver.js";
 import type { RawEngineLine } from "../../src/import/stream-engines.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
@@ -322,5 +323,102 @@ describe("parseSlotEntriesFromNdjson with slot-type slugs", () => {
     const result = parseSlotEntriesFromNdjson(magusNdjson(), "");
     expect(result).toHaveLength(1);
     expect(result[0]?.rank).toBe(0);
+  });
+});
+
+describe("resolveSpellSlots with feature definitions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function defLine(engineName: string, id: string, modifiers: unknown[]): string {
+    return JSON.stringify({
+      id,
+      engineName,
+      data: {
+        nodes: {
+          n1: {
+            name: "StringObject",
+            data: { string: JSON.stringify({ engineModifiers: modifiers }) },
+          },
+        },
+      },
+    });
+  }
+
+  function stubFetch(classNdjson: string, indexNdjson: string, featureNdjson: string): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        const text = body.includes("cache-1") ? indexNdjson : body.includes("feat-1") ? featureNdjson : classNdjson;
+        return { ok: true, text: async () => text };
+      })
+    );
+  }
+
+  const classOnlyCantrips = defLine("tabula/class/summoner-rm.eng", "class-1", [
+    {
+      type: "v2-add-spell-slots",
+      slug: "summoner-spellcasting",
+      slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+    },
+  ]);
+
+  const featureIndex = defLine("tabula/class-feature/summoner-spellcasting-rm.eng", "feat-1", []);
+
+  const featureRankOne = defLine("tabula/class-feature/summoner-spellcasting-rm.eng", "feat-1", [
+    {
+      type: "v2-add-spell-slots",
+      slug: "summoner-spellcasting",
+      slots: [{ rank: 1, count: 1, levelPrereq: 1, slug: "" }],
+    },
+  ]);
+
+  function options() {
+    return {
+      classEngineId: "class-1",
+      characterLevel: 1,
+      engines: [],
+      parentSpellFeature: "summoner-spellcasting-rm",
+      cacheEngineIds: ["cache-1"],
+    };
+  }
+
+  it("fills ranks the class definition leaves empty from the feature definition", async () => {
+    stubFetch(classOnlyCantrips, featureIndex, featureRankOne);
+    const result = await resolveSpellSlots(options());
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 1 } });
+  });
+
+  it("prefers the class definition on overlapping ranks", async () => {
+    const classRankOne = defLine("tabula/class/summoner-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "summoner-spellcasting-rm",
+        slots: [{ rank: 1, count: 2, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    stubFetch(classRankOne, featureIndex, featureRankOne);
+    const result = await resolveSpellSlots(options());
+    expect(result).toEqual({ cantrips: 0, slots: { 1: 2 } });
+  });
+
+  it("falls back to repertoire cantrips without fixed cantrip slots", async () => {
+    const noCantrips = defLine("tabula/class/bard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 1, count: 2, levelPrereq: 1, slug: "" }],
+      },
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(noCantrips, "", "");
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "bard-spellcasting-rm" });
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 2 } });
   });
 });

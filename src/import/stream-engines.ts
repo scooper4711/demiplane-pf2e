@@ -94,6 +94,25 @@ export interface AddSpellSlotsModifier {
   slots?: DemiplaneSlotEntry[];
 }
 
+/** One repertoire entry: how many spells of a rank the repertoire holds. */
+export interface RepertoireCountEntry {
+  rank?: number;
+  count?: number;
+  levelPrereq?: number;
+  repertoireSlug?: string;
+}
+
+/**
+ * Repertoire capacity granted by a class engine (e.g. a bard's cantrips).
+ * Separate from castable slots: spontaneous cantrip slots fall back to the
+ * rank-0 repertoire count when the class defines no fixed cantrip slots.
+ */
+export interface AddRepertoireCountsModifier {
+  type: "v2-add-repertoire-counts";
+  slug?: string;
+  slots?: RepertoireCountEntry[];
+}
+
 /** A single scaling spell slot declared by a class engine (e.g. the magus's
  * `magus-spell-slot-1`, one slot whose rank unlocks with level). Only the
  * identity fields are parsed — rank scaling itself is not currently consumed;
@@ -136,6 +155,7 @@ export type EngineModifier =
   | AddStaffSpellsModifier
   | AddSpecialItemSpellModifier
   | AddSpellSlotsModifier
+  | AddRepertoireCountsModifier
   | SpellSlotTypeModifier
   | AddSpellcastingFeatureModifier
   | AddFocusPointModifier;
@@ -177,6 +197,10 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "v2-add-spell-slots":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellSlotsModifier);
+        break;
+      case "v2-add-repertoire-counts":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        results.push(mod as unknown as AddRepertoireCountsModifier);
         break;
       case "v2-add-spell-slot-type":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
@@ -257,6 +281,9 @@ export function parseEngineLine(line: string): RawEngineLine {
 /** Extracts the feat slug from a feat engine name, e.g. `tabula/feat/foxfire.eng` → `foxfire`. */
 const FEAT_ENGINE_NAME_RE = /^tabula\/feat\/(.+)\.eng$/;
 
+/** Extracts the feature slug from a class-feature engine name. */
+const CLASS_FEATURE_ENGINE_NAME_RE = /^tabula\/class-feature\/(.+)\.eng$/;
+
 /**
  * Builds a map from feat slug to engine UUID by fetching the given engine
  * definitions and matching those whose engine name is `tabula/feat/<slug>.eng`.
@@ -275,6 +302,24 @@ export async function resolveFeatEngineIdsBySlug(cacheEngineIds: string[]): Prom
   for (const line of lines) {
     if (!line.id || !line.name) continue;
     const slug = FEAT_ENGINE_NAME_RE.exec(line.name)?.[1];
+    if (slug) bySlug.set(slug, line.id);
+  }
+  return bySlug;
+}
+
+/**
+ * Builds a map from class-feature slug to engine UUID, mirroring
+ * {@link resolveFeatEngineIdsBySlug} for `tabula/class-feature/<slug>.eng`
+ * definitions (e.g. a summoner's `summoner-spellcasting-rm` slot source).
+ */
+export async function resolveClassFeatureEngineIdsBySlug(cacheEngineIds: string[]): Promise<Map<string, string>> {
+  const bySlug = new Map<string, string>();
+  if (cacheEngineIds.length === 0) return bySlug;
+
+  const lines = await fetchStreamEngineLines(cacheEngineIds);
+  for (const line of lines) {
+    if (!line.id || !line.name) continue;
+    const slug = CLASS_FEATURE_ENGINE_NAME_RE.exec(line.name)?.[1];
     if (slug) bySlug.set(slug, line.id);
   }
   return bySlug;

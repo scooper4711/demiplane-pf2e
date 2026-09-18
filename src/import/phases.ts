@@ -404,7 +404,7 @@ export class PostProcessingPhase implements ImportPhase {
     // stay here.
     await applyCraftingFormulas(actor, ctx.engines, ctx.summary);
     await applyCurrency(actor, ctx.engines, ctx.summary);
-    await applySpells(actor, ctx.engines, ctx.summary);
+    await applySpells(actor, ctx.engines, ctx.summary, ctx.cacheEngineIds);
     await applyFeatureGrantedSpells(actor, ctx.engines, ctx.summary, ctx.cacheEngineIds);
     await this.syncSessionState(actor, ctx.engines);
   }

@@ -2,8 +2,10 @@ import type { DemiplaneEngineEntry } from "./types.js";
 import {
   fetchStreamEngineLines,
   parseEngineLines,
+  resolveClassFeatureEngineIdsBySlug,
   type DemiplaneSlotEntry,
   type RawEngineLine,
+  type RepertoireCountEntry,
 } from "./stream-engines.js";
 
 export type { DemiplaneSlotEntry };
@@ -28,6 +30,12 @@ export interface ResolveSpellSlotsOptions {
   parentSpellFeature: string;
   /** Optional: filter by slug to get only curriculum or regular slots. Empty string = regular. */
   slotSlug?: string;
+  /**
+   * Cached definition IDs for resolving the feature's own slot source (e.g.
+   * a summoner's `summoner-spellcasting-rm` feature definition, which carries
+   * the ranked slots its flat class definition lacks).
+   */
+  cacheEngineIds?: string[];
 }
 
 /**
@@ -35,18 +43,64 @@ export interface ResolveSpellSlotsOptions {
  * User overrides take priority over the stream-engines computed defaults.
  */
 export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Promise<SpellSlotProgression> {
-  const overrides = findSlotOverrides(options.engines, options.parentSpellFeature, options.slotSlug ?? "");
+  const slotSlug = options.slotSlug ?? "";
+  const overrides = findSlotOverrides(options.engines, options.parentSpellFeature, slotSlug);
 
   if (hasCompleteOverrides(overrides)) {
     return buildProgressionFromOverrides(overrides);
   }
 
   const lines = await fetchStreamEngineLines([options.classEngineId]);
-  const unrestricted = collectUnrestrictedSlotSlugs(lines);
-  const slotEntries = extractSlotEntries(lines, options.slotSlug ?? "", unrestricted);
+  const featureLines = await fetchFeatureSlotLines(options.parentSpellFeature, options.cacheEngineIds ?? []);
+  const allLines = [...lines, ...featureLines];
+  const unrestricted = collectUnrestrictedSlotSlugs(allLines);
+  const classEntries = extractSlotEntries(lines, slotSlug, unrestricted);
+  // The class definition wins ties; the feature definition only fills ranks
+  // the class leaves empty (e.g. magus rank-1 slots beside class cantrips).
+  const coveredRanks = new Set(classEntries.map((entry) => entry.rank));
+  const featureEntries = extractSlotEntries(featureLines, slotSlug, unrestricted).filter(
+    (entry) => !coveredRanks.has(entry.rank)
+  );
 
-  const computed = computeSlotProgression(slotEntries, options.characterLevel);
+  const computed = computeSlotProgression([...classEntries, ...featureEntries], options.characterLevel);
+  if (computed.cantrips === 0) {
+    // Spontaneous cantrips Demiplane models as repertoire capacity rather
+    // than fixed slots (bard, psychic) fall back to the rank-0 count.
+    computed.cantrips = computeRepertoireCantrips(allLines, options.characterLevel);
+  }
   return mergeWithOverrides(computed, overrides);
+}
+
+/**
+ * Fetches the spellcasting feature's own definition (e.g.
+ * `tabula/class-feature/summoner-spellcasting-rm.eng`) for slot sources the
+ * flat class definition lacks. Empty unless the cache resolves the feature.
+ */
+async function fetchFeatureSlotLines(parentSpellFeature: string, cacheEngineIds: string[]): Promise<RawEngineLine[]> {
+  if (cacheEngineIds.length === 0) return [];
+  const bySlug = await resolveClassFeatureEngineIdsBySlug(cacheEngineIds);
+  const resolvedId = bySlug.get(parentSpellFeature);
+  if (!resolvedId) return [];
+  return fetchStreamEngineLines([resolvedId]);
+}
+
+/**
+ * Sums rank-0 repertoire counts at or below the character's level.
+ */
+function computeRepertoireCantrips(lines: RawEngineLine[], characterLevel: number): number {
+  let cantrips = 0;
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type !== "v2-add-repertoire-counts" || !mod.slots) continue;
+      for (const slot of mod.slots as RepertoireCountEntry[]) {
+        if ((slot.rank ?? -1) !== 0) continue;
+        if ((slot.repertoireSlug ?? "") !== "") continue;
+        if ((slot.levelPrereq ?? Number.MAX_SAFE_INTEGER) > characterLevel) continue;
+        cantrips += slot.count ?? 0;
+      }
+    }
+  }
+  return cantrips;
 }
 
 /**

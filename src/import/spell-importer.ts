@@ -11,7 +11,8 @@ const CURRICULUM_SLOT_SLUG = "wizard-school-spellbook-slot";
 export async function applySpells(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<void> {
   const { main, innate, hexes, font, rituals } = groupSpells(engines);
   if (main.length === 0 && innate.length === 0 && hexes.length === 0 && font.length === 0 && rituals.length === 0)
@@ -20,7 +21,7 @@ export async function applySpells(
   let totalAdded = 0;
 
   for (const group of main) {
-    totalAdded += await importSpellGroup(actor, group, engines, summary);
+    totalAdded += await importSpellGroup(actor, group, engines, summary, cacheEngineIds);
   }
 
   if (innate.length > 0) {
@@ -83,7 +84,8 @@ async function importSpellGroup(
   actor: Actor,
   group: SpellGroup,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<number> {
   if (!group.config) {
     // Unknown spellcasting feature (e.g. a new Demiplane dedication granting
@@ -109,7 +111,7 @@ async function importSpellGroup(
   const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
   totalAdded += slugToId.size;
 
-  await applySlotMaximums(actor, entryId, engines, group.source, "", summary);
+  await applySlotMaximums(actor, entryId, engines, group.source, "", summary, cacheEngineIds);
 
   if (preparedType === "prepared") {
     await placePreparedSpells(actor, entryId, group.prepared, slugToId, engines, summary);
@@ -123,7 +125,7 @@ async function importSpellGroup(
 
   // Curriculum entry (wizard only)
   if (group.curriculumSpellbook.length > 0) {
-    totalAdded += await importCurriculumSpells(actor, group, engines, summary);
+    totalAdded += await importCurriculumSpells(actor, group, engines, summary, cacheEngineIds);
   }
 
   return totalAdded;
@@ -153,7 +155,8 @@ async function importCurriculumSpells(
   actor: Actor,
   group: SpellGroup,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<number> {
   const { tradition, preparedType, ability } = group.config!;
   const schoolName = getSchoolName(engines) ?? "Curriculum";
@@ -161,7 +164,7 @@ async function importCurriculumSpells(
   const entryId = await createEntry(actor, entryName, tradition, preparedType, ability);
   const slugToId = await addSpells(actor, entryId, group.curriculumSpellbook, summary);
 
-  await applySlotMaximums(actor, entryId, engines, group.source, CURRICULUM_SLOT_SLUG, summary);
+  await applySlotMaximums(actor, entryId, engines, group.source, CURRICULUM_SLOT_SLUG, summary, cacheEngineIds);
 
   if (group.curriculumPrepared.length > 0) {
     await placePreparedSpells(actor, entryId, group.curriculumPrepared, slugToId, engines, summary);
