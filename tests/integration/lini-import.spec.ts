@@ -46,19 +46,12 @@ test.describe("Lini Import", () => {
     await page.close();
   });
 
-  test("reports only the two known order-guess gaps", () => {
-    // NOTE: neither the Druidic Order pick (Animal) nor the Voice of Nature
-    // pick (Animal Empathy, dictated by the Animal order) matches a ChoiceSet
-    // strategy, so both fall back to the first option. Animal happens to be
-    // first alphabetically, so the guesses are right — but they still surface
-    // for the GM to confirm. A non-Animal order would mis-resolve; that matcher
-    // gap is follow-up work, not this sweep.
+  test("reports no import errors", () => {
+    // The Druidic Order (Animal) and Voice of Nature (Animal Empathy) picks
+    // resolve via the feature-pick matcher from their chosen engines — no
+    // guesses, no fallbacks.
     expect(result.summary.itemsSkipped).toBe(0);
-    expect(result.summary.errors).toHaveLength(2);
-    expect(result.summary.errors[0]).toContain("Druidic Order");
-    expect(result.summary.errors[0]).toContain("Animal Order");
-    expect(result.summary.errors[1]).toContain("Voice of Nature");
-    expect(result.summary.errors[1]).toContain("Animal Empathy");
+    expect(result.summary.errors).toEqual([]);
   });
 
   test("correct name, level, ancestry, background, class", () => {

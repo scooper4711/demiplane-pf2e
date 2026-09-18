@@ -46,14 +46,12 @@ test.describe("Wizard Curriculum Import", () => {
     await page.close();
   });
 
-  test("reports only the junk-language fixture data", () => {
-    // NOTE: the sheet carries a leftover test language
-    // ("zz-invalid-test-language") alongside the four real ones. The importer
-    // correctly reports and skips it. Removing it on Demiplane lets this
-    // tighten to zero errors.
+  test("reports no import errors", () => {
+    // The sheet once carried a leftover test language
+    // ("zz-invalid-test-language") that the importer correctly reported and
+    // skipped; it has since been removed on Demiplane, so this is strict.
     expect(result.summary.itemsSkipped).toBe(0);
-    expect(result.summary.errors).toHaveLength(1);
-    expect(result.summary.errors[0]).toContain("zz-invalid-test-language");
+    expect(result.summary.errors).toEqual([]);
   });
 
   test("correct name, level, ancestry, background, class", () => {
