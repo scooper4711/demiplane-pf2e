@@ -45,8 +45,7 @@ body:
     attributes:
       label: Foundry Actor JSON export (what it should look like)
       description: |
-        If you can, attach the export of a Foundry actor that shows what the character *should* look like — e.g. one you built or corrected manually that contains the elements that were imported incorrectly from Demiplane.
-        This doesn't need to be a complete character build — just include the parts that came out wrong.
+        If you can, correct the actor and export it again so we can compare what was imported vs. what it should look like.
       placeholder: Drag and drop the exported .json file here, or paste its contents.
     validations:
       required: false
@@ -81,6 +80,6 @@ body:
     id: module-version
     attributes:
       label: Demiplane PF2e module version
-      placeholder: "e.g. 0.2.0-beta.3"
+      placeholder: "e.g. 1.0.0"
     validations:
       required: true

@@ -5,10 +5,28 @@ vi.mock("@scooper4711/demiplane-api", () => ({
   updateCustomEngineValue: vi.fn((engines: { name: string; value?: unknown }[], storeName: string, value: unknown) =>
     engines.map((e) => (e.name === storeName ? { ...e, value } : e))
   ),
+  // token-source.ts (used by the push auth gate) normalizes via the client's
+  // exported helper; mirror the real trim + Bearer-strip so the gate behaves.
+  normalizeBearerToken: (raw: string) =>
+    raw
+      .trim()
+      .replace(/^bearer(\s+|$)/i, "")
+      .trim(),
 }));
 
 vi.stubGlobal("ui", {
   notifications: { error: vi.fn() },
+});
+
+vi.stubGlobal("game", {
+  settings: {
+    get: (_moduleId: string, key: string) => {
+      if (key === "syncWriteLevel") return "full";
+      // The push auth gate reconciles the client from this setting.
+      if (key === "demiplaneToken") return "test-token";
+      return undefined;
+    },
+  },
 });
 
 import { ExportManager } from "../../src/export-manager.js";
@@ -40,6 +58,7 @@ function createMockClient(overrides = {}) {
       ],
     }),
     updateCharacter: vi.fn().mockResolvedValue(true),
+    setToken: vi.fn(),
     isAuthenticated: vi.fn().mockReturnValue(true),
     ...overrides,
   };

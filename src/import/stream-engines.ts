@@ -1,11 +1,11 @@
 import { debugLog } from "./debug-log.js";
 import { toFoundrySlug } from "./slug-utils.js";
+import { PF2E_ENGINE_SOURCE } from "../config.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";
 
-/** Source key and nexus slug sent to stream-engines for PF2e v2 characters. */
-const ENGINE_SOURCE = "pathfinder2e-v2";
+/** Nexus slug sent to stream-engines for PF2e v2 characters. */
 const NEXUS_SLUG = "pathfinder2e";
 
 /** A single spell-slot entry inside a `v2-add-spell-slots` modifier. */
@@ -32,7 +32,23 @@ export interface AddSpellModifier {
   isKnown?: boolean;
   spellLevel?: number;
   parentFeature?: string;
+  /**
+   * Conditional grant gate: the spell is granted only when the named character
+   * store holds the given value (e.g. an apparition's vessel spell gated on
+   * its `<apparition>-is-primary` flag). Evaluated against the character's
+   * engines by the importer; absent stores are kept, not dropped.
+   */
+  storeRestriction?: { storeName?: string; storeValue?: string | number } | null;
   autoScaleSpellLevel?: boolean;
+  /**
+   * Focus-spell casting machinery Demiplane stamps on a hex grant: a save DC
+   * source (e.g. `["spell"]`) and/or a spell-attack source
+   * (`"spellcasting-modifier"`). A witch feature grants a hex (which carries
+   * this machinery) alongside a plain spell added to the prepared list (which
+   * does not), so these fields separate the two. See {@link isHexGrant}.
+   */
+  saveDC?: string[];
+  spellAttack?: string;
   /**
    * Set by the resolver (not present in raw Demiplane data) when this grant
    * shares an engine with an `add-focus-point`, marking it a focus-pool spell
@@ -85,6 +101,46 @@ export interface AddSpellSlotsModifier {
   slots?: DemiplaneSlotEntry[];
 }
 
+/** One repertoire entry: how many spells of a rank the repertoire holds. */
+export interface RepertoireCountEntry {
+  rank?: number;
+  count?: number;
+  levelPrereq?: number;
+  repertoireSlug?: string;
+}
+
+/**
+ * Repertoire capacity granted by a class engine (e.g. a bard's cantrips).
+ * Separate from castable slots: spontaneous cantrip slots fall back to the
+ * rank-0 repertoire count when the class defines no fixed cantrip slots.
+ */
+export interface AddRepertoireCountsModifier {
+  type: "v2-add-repertoire-counts";
+  slug?: string;
+  slots?: RepertoireCountEntry[];
+}
+
+/**
+ * Marks every spell of a spellcasting feature as a signature spell (e.g. the
+ * animist's apparition spells, `signatureType: "unlimited"`).
+ */
+export interface AddSignatureSpellsModifier {
+  type: "v2-add-signature-spells";
+  featureSlug?: string;
+  signatureType?: string;
+}
+
+/** A single scaling spell slot declared by a class engine (e.g. the magus's
+ * `magus-spell-slot-1`, one slot whose rank unlocks with level). Only the
+ * identity fields are parsed — rank scaling itself is not currently consumed;
+ * the declaration marks which fixed-entry slugs belong to a real slot pool
+ * (unrestricted) versus a separate restricted pool (e.g. studious spells). */
+export interface SpellSlotTypeModifier {
+  type: "v2-add-spell-slot-type";
+  slotSlug?: string;
+  hasRestrictions?: boolean;
+}
+
 /**
  * Declares a class's spellcasting feature, including its focus spell group. The
  * `focusName` (e.g. "Composition Spells") is the label Demiplane gives the
@@ -116,6 +172,9 @@ export type EngineModifier =
   | AddStaffSpellsModifier
   | AddSpecialItemSpellModifier
   | AddSpellSlotsModifier
+  | AddRepertoireCountsModifier
+  | AddSignatureSpellsModifier
+  | SpellSlotTypeModifier
   | AddSpellcastingFeatureModifier
   | AddFocusPointModifier;
 
@@ -156,6 +215,18 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
       case "v2-add-spell-slots":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellSlotsModifier);
+        break;
+      case "v2-add-repertoire-counts":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        results.push(mod as unknown as AddRepertoireCountsModifier);
+        break;
+      case "v2-add-spell-slot-type":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        if (typeof mod.slotSlug === "string") results.push(mod as unknown as SpellSlotTypeModifier);
+        break;
+      case "v2-add-signature-spells":
+        // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+        results.push(mod as unknown as AddSignatureSpellsModifier);
         break;
       case "v2-add-spellcasting-feature":
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
@@ -232,6 +303,9 @@ export function parseEngineLine(line: string): RawEngineLine {
 /** Extracts the feat slug from a feat engine name, e.g. `tabula/feat/foxfire.eng` → `foxfire`. */
 const FEAT_ENGINE_NAME_RE = /^tabula\/feat\/(.+)\.eng$/;
 
+/** Extracts the feature slug from a class-feature engine name. */
+const CLASS_FEATURE_ENGINE_NAME_RE = /^tabula\/class-feature\/(.+)\.eng$/;
+
 /**
  * Builds a map from feat slug to engine UUID by fetching the given engine
  * definitions and matching those whose engine name is `tabula/feat/<slug>.eng`.
@@ -253,6 +327,56 @@ export async function resolveFeatEngineIdsBySlug(cacheEngineIds: string[]): Prom
     if (slug) bySlug.set(slug, line.id);
   }
   return bySlug;
+}
+
+/**
+ * Builds a map from class-feature slug to engine UUID, mirroring
+ * {@link resolveFeatEngineIdsBySlug} for `tabula/class-feature/<slug>.eng`
+ * definitions (e.g. a summoner's `summoner-spellcasting-rm` slot source).
+ */
+export async function resolveClassFeatureEngineIdsBySlug(cacheEngineIds: string[]): Promise<Map<string, string>> {
+  const bySlug = new Map<string, string>();
+  if (cacheEngineIds.length === 0) return bySlug;
+
+  const lines = await fetchStreamEngineLines(cacheEngineIds);
+  for (const line of lines) {
+    if (!line.id || !line.name) continue;
+    const slug = CLASS_FEATURE_ENGINE_NAME_RE.exec(line.name)?.[1];
+    if (slug) bySlug.set(slug, line.id);
+  }
+  return bySlug;
+}
+
+/**
+ * Expands one round of `add-feat` grants found in the given engine lines into
+ * the granted feats' own engine definitions.
+ *
+ * Some elements (heritages, class features, other feats) grant a feat that
+ * itself carries spell or slot modifiers — e.g. Empty Sky Kitsune → Kitsune
+ * Spell Familiarity → Daze, or Wizard Dedication → Basic Arcana → ranked
+ * slots. The granted feat never appears in the character's `engines` array, so
+ * it is only reachable by resolving each `add-feat` slug to its engine UUID
+ * (via the cache) and fetching that definition. Returns the fetched lines
+ * (empty when there are no grants or the cache can't resolve them). Only one
+ * round is followed, matching the depth Demiplane's own spellcasting archetype
+ * chains need.
+ */
+export async function expandFeatGrantLines(lines: RawEngineLine[], cacheEngineIds: string[]): Promise<RawEngineLine[]> {
+  const grantedSlugs: string[] = [];
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type === "add-feat" && !grantedSlugs.includes(mod.addFeat)) grantedSlugs.push(mod.addFeat);
+    }
+  }
+  if (grantedSlugs.length === 0 || cacheEngineIds.length === 0) return [];
+
+  const bySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
+  const grantedIds = grantedSlugs.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
+  if (grantedIds.length === 0) {
+    debugLog(`[stream-engines] no engine ids resolved for granted feats: ${grantedSlugs.join(", ")}`);
+    return [];
+  }
+  return fetchStreamEngineLines(grantedIds);
 }
 
 /** Parses a full NDJSON stream-engines payload into per-line modifier records. */
@@ -374,7 +498,7 @@ async function postStreamEngines(engineIds: string[], label: string): Promise<st
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        engineIdsBySource: { [ENGINE_SOURCE]: engineIds },
+        engineIdsBySource: { [PF2E_ENGINE_SOURCE]: engineIds },
         isSheet: true,
         nexusSlug: NEXUS_SLUG,
       }),

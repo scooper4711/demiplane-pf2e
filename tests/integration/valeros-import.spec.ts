@@ -44,7 +44,7 @@ test.describe("Valeros Level 5 Import", () => {
   });
 
   test("correct name and level", () => {
-    expect(result.name).toBe("Valeros");
+    expect(result.name).toBe("FVTT Valeros");
     expect(result.level).toBe(5);
   });
 

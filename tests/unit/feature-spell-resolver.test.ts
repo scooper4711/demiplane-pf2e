@@ -86,7 +86,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [], apparition: [], unlimitedSignatures: [] });
   });
 
   it("categorizes innate vs focus vs known spells", async () => {
@@ -141,6 +141,154 @@ describe("feature-spell-resolver", () => {
     expect(result.known[0].isFocus).toBe(false);
   });
 
+  describe("witch hexes", () => {
+    /** The class spellcasting-feature modifier that declares a focus group. */
+    const SPELLCASTING_FEATURE = (focusSlug: string, focusName: string) => ({
+      type: "v2-add-spellcasting-feature",
+      slug: "witch-spellcasting-rm",
+      focusSlug,
+      focusName,
+      hasFocusGroup: true,
+    });
+
+    /** A hex grant carries focus-casting machinery (save DC / spell attack). */
+    const HEX = (slug: string, opts: Record<string, unknown> = {}) =>
+      ADD_SPELL(slug, 1, { isKnown: true, tradition: "inherit", saveDC: ["spell"], ...opts });
+
+    it("splits a lesson's hex from its accompanying prepared spell", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("hex-spells", "Hexes")]),
+              // Lesson of Vengeance: the Needle of Vengeance hex (focus machinery)
+              // plus Phantom Pain, a plain spell for the prepared repertoire.
+              // Phantom Pain's real grant OMITS the tradition field entirely
+              // (not even "inherit"), so build it without one to guard that the
+              // repertoire test treats absent-tradition like inherited.
+              ndjsonLine("feat-1", [
+                HEX("needle-of-vengeance-rm", { spellAttack: "spellcasting-modifier" }),
+                { type: "add-spell", level: 1, addSpell: "phantom-pain-rm", isKnown: true },
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/witch-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/lesson-of-vengeance-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.hexes.map((h) => h.slug)).toEqual(["needle-of-vengeance-rm"]);
+      expect(result.hexes[0].isHex).toBe(true);
+      // The plain sibling spell joins the prepared repertoire, not the hexes.
+      expect(result.known.map((k) => k.slug)).toEqual(["phantom-pain-rm"]);
+      expect(result.focus).toHaveLength(0);
+    });
+
+    it("treats a directly-taken feat's hex grant (Cackle) as a hex", async () => {
+      // Request-aware so the test actually exercises engine collection: the
+      // Cackle grant is only returned when the feat engine id (feat-1) is
+      // requested. A collector that ignores tabula/feat/ engines would never
+      // ask for it, so the hex would silently vanish.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((_url: string, init: { body: string }) => {
+          const body = JSON.parse(init.body) as { engineIdsBySource: Record<string, string[]> };
+          const ids = body.engineIdsBySource["pathfinder2e-v2"] ?? [];
+          const lines: string[] = [];
+          if (ids.includes("class-1")) lines.push(ndjsonLine("class-1", [SPELLCASTING_FEATURE("hex-spells", "Hexes")]));
+          // Cackle's hex carries no save DC, but names the hex focus group.
+          if (ids.includes("feat-1"))
+            lines.push(
+              ndjsonLine("feat-1", [ADD_SPELL("cackle-rm", 1, { isKnown: true, parentFeature: "hex-spells" })])
+            );
+          return Promise.resolve({ ok: true, text: async () => lines.join("\n") });
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [featureEngine("tabula/class/witch-rm.eng", "class-1"), featureEngine("tabula/feat/cackle-rm.eng", "feat-1")],
+        5,
+        3
+      );
+
+      expect(result.hexes.map((h) => h.slug)).toEqual(["cackle-rm"]);
+      expect(result.known).toHaveLength(0);
+      expect(result.focus).toHaveLength(0);
+    });
+
+    it("does not route inherited-tradition grants to repertoire without a hex focus group", async () => {
+      // The bard declares a composition (not hex) focus group, so its
+      // inherited-tradition composition cantrip stays a focus spell.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("composition-spells", "Composition Spells")]),
+              ndjsonLine("feat-1", [ADD_SPELL("courageous-anthem-rm", 1, { isKnown: true, tradition: "inherit" })]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/bard-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/maestro-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.known).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["courageous-anthem-rm"]);
+    });
+
+    it("does not treat a non-witch focus grant with casting machinery as a hex", async () => {
+      // A sorcerer bloodline focus spell carries the same save-DC / spell-attack
+      // machinery a hex does, but the sorcerer declares no hex focus group. It
+      // must fall to the focus bucket, never a witch "Hexes" entry.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("class-1", [SPELLCASTING_FEATURE("bloodline-spells", "Bloodline Spells")]),
+              ndjsonLine("feat-1", [
+                ADD_SPELL("ancestral-memories-rm", 1, {
+                  isKnown: true,
+                  tradition: "inherit",
+                  saveDC: ["spell"],
+                  spellAttack: "spellcasting-modifier",
+                }),
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          featureEngine("tabula/class/sorcerer-rm.eng", "class-1"),
+          featureEngine("tabula/class-feature/bloodline-rm.eng", "feat-1"),
+        ],
+        5,
+        3
+      );
+
+      expect(result.hexes).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["ancestral-memories-rm"]);
+    });
+  });
+
   it("routes a spell to focus when its engine also grants a focus point", async () => {
     vi.stubGlobal(
       "fetch",
@@ -170,6 +318,39 @@ describe("feature-spell-resolver", () => {
     expect(result.focus[0].isFocus).toBe(true);
   });
 
+  it("routes a focus-pool grant to focus even with hex-like saveDC machinery", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            // Battle-magic school Force Bolt as Demiplane actually emits it: a
+            // save DC (hex heuristic signal) and a concrete tradition
+            // (repertoire signal) on the same engine as its focus point. The
+            // focus-pool flag takes precedence over both heuristics — never a
+            // hex, never repertoire.
+            ndjsonLine("feat-1", [
+              ADD_SPELL("force-bolt-rm", 1, { tradition: "arcane", saveDC: ["spell"] }),
+              { type: "add-focus-point", addFocus: 1 },
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [featureEngine("tabula/class-feature/school-of-battle-magic-rm.eng", "feat-1")],
+      5,
+      3
+    );
+
+    expect(result.hexes).toHaveLength(0);
+    expect(result.known).toHaveLength(0);
+    expect(result.focus).toHaveLength(1);
+    expect(result.focus[0].slug).toBe("force-bolt-rm");
+    expect(result.focus[0].isFocus).toBe(true);
+  });
+
   it("drops spells above the character level", async () => {
     vi.stubGlobal(
       "fetch",
@@ -193,7 +374,7 @@ describe("feature-spell-resolver", () => {
       5,
       3
     );
-    expect(result).toEqual({ innate: [], focus: [], known: [] });
+    expect(result).toEqual({ innate: [], focus: [], known: [], hexes: [], apparition: [], unlimitedSignatures: [] });
   });
 
   describe("add-feat grant expansion", () => {
@@ -696,6 +877,339 @@ describe("feature-spell-resolver", () => {
       expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("focus");
       const forceBolt = created.flat().find((i) => (i.system as { slug?: string })?.slug === "force-bolt");
       expect(forceBolt).toBeDefined();
+    });
+  });
+
+  it("drops focus grants above the accessible rank", async () => {
+    // A conflux definition grants its rank-1 spell alongside a rank-2 rider;
+    // a level-1 character only gets the accessible one (same gating as domain
+    // advanced spells).
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "s1", name: "Shooting Star", system: { slug: "shooting-star", level: { value: 1 } }, type: "spell" },
+        { _id: "s2", name: "Water Breathing", system: { slug: "water-breathing", level: { value: 2 } }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            ndjsonLine("feat-1", [
+              ADD_SPELL("shooting-star", 1, { tradition: "arcane" }),
+              ADD_SPELL("water-breathing", 1, { tradition: "arcane" }),
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [featureEngine("tabula/class-feature/conflux-spells.eng", "feat-1")],
+      1,
+      1
+    );
+
+    expect(result.focus.map((f) => f.slug)).toEqual(["shooting-star"]);
+  });
+
+  describe("summoner link spells", () => {
+    const summonerEngines = [
+      {
+        id: "class-1",
+        name: "tabula/class/summoner-rm.eng",
+        type: "DemiplaneEngine",
+        args: {},
+      } as DemiplaneEngineEntry,
+    ];
+
+    function focusActor(): ReturnType<typeof createMockActor> {
+      return createMockActor({
+        items: [
+          {
+            id: "focus-1",
+            type: "spellcastingEntry",
+            system: { prepared: { value: "focus" }, tradition: { value: "primal" } },
+          },
+          {
+            id: "spell-1",
+            type: "spell",
+            system: { slug: "boost-eidolon", location: { value: "focus-1" } },
+          },
+        ],
+      });
+    }
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    });
+
+    it("flags a summoner with no focus spells", async () => {
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, summonerEngines, summary);
+
+      expect(summary.errors).toHaveLength(1);
+      expect(summary.errors[0]).toContain("link spells");
+    });
+
+    it("stays quiet when focus spells exist", async () => {
+      const actor = focusActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, summonerEngines, summary);
+
+      expect(summary.errors).toEqual([]);
+    });
+
+    it("ignores non-summoners", async () => {
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(actor as never, [], summary);
+
+      expect(summary.errors).toEqual([]);
+    });
+
+    it("grants link cantrips from the cached link-spells definition", async () => {
+      // No engine references the link-spells feature; it is resolved by path
+      // out of the character's cached definitions.
+      const linkLine = JSON.stringify({
+        id: "link-def-1",
+        engineName: "tabula/class-feature/link-spells-rm.eng",
+        data: {
+          nodes: {
+            n1: {
+              name: "StringObject",
+              data: {
+                string: JSON.stringify({
+                  engineModifiers: [
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "boost-eidolon-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "evolution-surge-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                  ],
+                }),
+              },
+            },
+          },
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => ({
+          ok: true,
+          text: async () => (String(opts.body ?? "").includes("cache-1") ? linkLine : ""),
+        }))
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          {
+            id: "class-1",
+            name: "tabula/class/summoner-rm.eng",
+            type: "DemiplaneEngine",
+            args: {},
+          } as DemiplaneEngineEntry,
+        ],
+        1,
+        1,
+        ["cache-1"]
+      );
+
+      expect(result.focus.map((f) => f.slug)).toEqual(["boost-eidolon-rm", "evolution-surge-rm"]);
+    });
+
+    it("files link cantrips in a Link Spells entry", async () => {
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Boost Eidolon", system: { slug: "boost-eidolon", level: { value: 1 } }, type: "spell" },
+          {
+            _id: "s2",
+            name: "Evolution Surge",
+            system: { slug: "evolution-surge", level: { value: 1 } },
+            type: "spell",
+          },
+        ]),
+      });
+      const linkLine = JSON.stringify({
+        id: "link-def-1",
+        engineName: "tabula/class-feature/link-spells-rm.eng",
+        data: {
+          nodes: {
+            n1: {
+              name: "StringObject",
+              data: {
+                string: JSON.stringify({
+                  engineModifiers: [
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "boost-eidolon-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                    {
+                      type: "add-spell",
+                      level: 1,
+                      isKnown: true,
+                      addSpell: "evolution-surge-rm",
+                      tradition: "inherit",
+                      parentFeature: "link-spells-rm",
+                    },
+                  ],
+                }),
+              },
+            },
+          },
+        },
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => ({
+          ok: true,
+          text: async () => (String(opts.body ?? "").includes("cache-1") ? linkLine : ""),
+        }))
+      );
+      const actor = createMockActor();
+      const summary = emptySummary();
+
+      await applyFeatureGrantedSpells(
+        actor as never,
+        [
+          {
+            id: "class-1",
+            name: "tabula/class/summoner-rm.eng",
+            type: "DemiplaneEngine",
+            args: {},
+          } as DemiplaneEngineEntry,
+        ],
+        summary,
+        ["cache-1"]
+      );
+
+      const created = (actor.createEmbeddedDocuments as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => c[1] as Array<Record<string, unknown>>
+      );
+      const entry = created.flat().find((i) => i.type === "spellcastingEntry");
+      expect(entry?.name).toBe("Link Spells");
+      expect((entry?.system as { prepared: { value: string } }).prepared.value).toBe("focus");
+      const slugs = created
+        .flat()
+        .filter((i) => i.type === "spell")
+        .map((i) => (i.system as { slug?: string }).slug)
+        .sort();
+      expect(slugs).toEqual(["boost-eidolon", "evolution-surge"]);
+    });
+  });
+
+  describe("animist apparition spells", () => {
+    const APPARITION_GRANT = (slug: string, opts: Record<string, unknown> = {}) => ({
+      type: "add-spell",
+      level: 1,
+      isKnown: true,
+      addSpell: slug,
+      tradition: "divine",
+      parentFeature: "apparition-spellcasting-rm",
+      ...opts,
+    });
+
+    const classFeatureEngine = {
+      id: "feat-1",
+      name: "tabula/class-feature/custodian-of-groves-and-gardens-rm.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "custodian-of-groves-and-gardens-rm" },
+    } as DemiplaneEngineEntry;
+
+    function stubApparitionDefs(): void {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("feat-1", [
+                APPARITION_GRANT("tangle-vine-rm"),
+                APPARITION_GRANT("protector-tree-rm"),
+                {
+                  ...APPARITION_GRANT("garden-of-healing-rm"),
+                  storeRestriction: { storeName: "custodian-primary", storeValue: "1" },
+                },
+              ]),
+            ].join("\n"),
+        })
+      );
+    }
+
+    it("files apparition grants in the apparition bucket, not focus or repertoire", async () => {
+      stubApparitionDefs();
+      const result = await resolveFeatureGrantedSpells([classFeatureEngine], 3, 3);
+
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+      expect(result.known).toHaveLength(0);
+      // The vessel grant's store is absent from the engines, so it is kept
+      // (absence of evidence isn't absence of the grant) and files as focus.
+      expect(result.focus.map((f) => f.slug)).toEqual(["garden-of-healing-rm"]);
+    });
+
+    it("files a satisfied vessel grant as focus", async () => {
+      stubApparitionDefs();
+      const engines = [
+        classFeatureEngine,
+        { name: "custodian-primary", type: "CustomDemiplaneEngine", value: 1 } as DemiplaneEngineEntry,
+      ];
+      const result = await resolveFeatureGrantedSpells(engines, 3, 3);
+
+      expect(result.focus.map((f) => f.slug)).toEqual(["garden-of-healing-rm"]);
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+    });
+
+    it("drops a vessel grant whose apparition is not primary", async () => {
+      stubApparitionDefs();
+      const engines = [
+        classFeatureEngine,
+        { name: "custodian-primary", type: "CustomDemiplaneEngine", value: 0 } as DemiplaneEngineEntry,
+      ];
+      const result = await resolveFeatureGrantedSpells(engines, 3, 3);
+
+      expect(result.focus).toHaveLength(0);
+      expect(result.apparition.map((s) => s.slug).sort()).toEqual(["protector-tree-rm", "tangle-vine-rm"]);
+    });
+
+    it("drops apparition grants above the accessible rank", async () => {
+      // Avatar arrives through a granted-feat chain regardless of level; a
+      // level-3 caster with rank-2 slots cannot cast it.
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Tangle Vine", system: { slug: "tangle-vine", level: { value: 0 } }, type: "spell" },
+          { _id: "s2", name: "Avatar", system: { slug: "avatar", level: { value: 10 } }, type: "spell" },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [ndjsonLine("feat-1", [APPARITION_GRANT("tangle-vine-rm"), APPARITION_GRANT("avatar-rm")])].join("\n"),
+        })
+      );
+      const result = await resolveFeatureGrantedSpells([classFeatureEngine], 3, 2);
+
+      expect(result.apparition.map((s) => s.slug)).toEqual(["tangle-vine-rm"]);
     });
   });
 });

@@ -1,16 +1,27 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const hoisted = vi.hoisted(() => ({ validateToken: vi.fn(), setToken: vi.fn() }));
+const hoisted = vi.hoisted(() => {
+  const normalizeBearerToken = (raw: string): string =>
+    raw
+      .trim()
+      .replace(/^bearer(\s+|$)/i, "")
+      .trim();
+  return { validateToken: vi.fn(), setToken: vi.fn(), normalizeBearerToken };
+});
 
 vi.mock("@scooper4711/demiplane-api", () => ({
   DemiplaneClient: class {
+    // Mirror the real client: normalize (trim + strip Bearer) before storing,
+    // so tests observe the credential the client would actually use now that
+    // stripping is the client's responsibility, not the module's.
     setToken(token: string): void {
-      hoisted.setToken(token);
+      hoisted.setToken(hoisted.normalizeBearerToken(token));
     }
     validateToken(): unknown {
       return hoisted.validateToken();
     }
   },
+  normalizeBearerToken: hoisted.normalizeBearerToken,
 }));
 
 import { registerSettings } from "../../src/settings.js";

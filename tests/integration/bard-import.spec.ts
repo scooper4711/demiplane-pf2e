@@ -53,4 +53,43 @@ test.describe("Bard Import", () => {
     expect(result.background).not.toBeNull();
     expect(result.class).not.toBeNull();
   });
+
+  test("files the bard repertoire in a spontaneous occult entry", () => {
+    // Demiplane "Bard spellcasting" plus the rank-1 spontaneous spells (Alarm,
+    // Soothe, Animate Rope) all join one repertoire, including the Maestro
+    // muse's granted Soothe.
+    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
+    expect(repertoire).toBeDefined();
+    expect(repertoire!.name).toBe("Bard Spells (Occult)");
+    expect(repertoire!.spells).toEqual([
+      "alarm",
+      "animate-rope",
+      "bullhorn",
+      "detect-metal",
+      "forbidding-ward",
+      "haunting-hymn",
+      "infectious-enthusiasm",
+      "soothe",
+    ]);
+  });
+
+  test("collects the compositions into a focus Composition Spells entry", () => {
+    // Counter Performance and Lingering Composition are focus spells;
+    // Courageous Anthem is a cantrip but belongs to the composition group.
+    const compositions = result.spellcasting.find((e) => e.name === "Composition Spells");
+    expect(compositions).toBeDefined();
+    expect(compositions!.prepared).toBe("focus");
+    expect(compositions!.spells).toEqual(["counter-performance", "courageous-anthem", "lingering-composition"]);
+  });
+
+  test("files the Seer Elf spell as innate", () => {
+    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
+    expect(innateEntries.flatMap((e) => e.spells)).toEqual(["detect-magic"]);
+  });
+
+  test("imports the focus pool state", () => {
+    // Two focus points on Demiplane, one currently available.
+    expect(result.focus.value).toBe(1);
+    expect(result.focus.max).toBe(2);
+  });
 });

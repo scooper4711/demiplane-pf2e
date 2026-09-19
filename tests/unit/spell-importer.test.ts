@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applySpells, deriveClassEntryName } from "../../src/import/spell-importer.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
@@ -11,6 +11,10 @@ describe("deriveClassEntryName", () => {
 
   it("falls back to the tradition alone for an unrecognized source", () => {
     expect(deriveClassEntryName("some-other-source", "primal")).toBe("Primal Spells");
+  });
+
+  it("names a bare -spellcasting source after its class", () => {
+    expect(deriveClassEntryName("psychic-spellcasting", "occult")).toBe("Psychic Spells (Occult)");
   });
 });
 
@@ -44,6 +48,7 @@ describe("applySpells", () => {
         { _id: "sp9", name: "Stabilize", system: { slug: "stabilize" }, type: "spell" },
         { _id: "sp10", name: "Bless", system: { slug: "bless" }, type: "spell" },
         { _id: "sp11", name: "Sanctuary", system: { slug: "sanctuary" }, type: "spell" },
+        { _id: "sp12", name: "Phase Familiar", system: { slug: "phase-familiar" }, type: "spell" },
         {
           _id: "rit1",
           name: "Halt Death",
@@ -119,6 +124,35 @@ describe("applySpells", () => {
     expect(entries).toHaveLength(1);
     const entryData = (entries[0][1] as Array<Record<string, unknown>>)[0];
     expect((entryData.system as Record<string, Record<string, unknown>>).prepared.value).toBe("innate");
+  });
+
+  it("creates a focus Hexes entry for a selected hex", async () => {
+    const actor = createMockActor();
+    // A witch's spellbook spell establishes the class config (occult/int); the
+    // selected hex (Phase Familiar) then lands in a focus "Hexes" entry.
+    const engines: DemiplaneEngineEntry[] = [
+      makeSpellEngine("electric-arc-rm", 0, "witch-spellcasting-rm"),
+      {
+        id: "hex1",
+        name: "tabula/spell/phase-familiar-rm.eng",
+        type: "DemiplaneEngine",
+        args: {
+          slug: "phase-familiar-rm",
+          sourceType: "select-spell",
+          sourceRow: "…_hex-spells-rm-…_select-spell-hex-spells-rm-…",
+        },
+      },
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    const entries = actor.createEmbeddedDocuments.mock.calls
+      .flatMap((c: unknown[]) => c[1] as Array<Record<string, unknown>>)
+      .filter((i) => i.type === "spellcastingEntry");
+    const hexEntry = entries.find((e) => e.name === "Hexes");
+    expect(hexEntry).toBeDefined();
+    expect((hexEntry!.system as Record<string, Record<string, unknown>>).prepared.value).toBe("focus");
+    expect((hexEntry!.system as Record<string, Record<string, unknown>>).tradition.value).toBe("occult");
   });
 
   it("skips scroll-sourced spells", async () => {
@@ -213,6 +247,72 @@ describe("applySpells", () => {
     const summary = makeSummary();
     await applySpells(actor as never, [], summary);
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
+  });
+
+  it("flags a class entry left with spells but no slots", async () => {
+    // A class definition with no slot progression and no known cantrips
+    // leaves the spells present but uncastable — a sync error telling the GM
+    // to set slot overrides, not silence.
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "sp1", name: "Fireball", system: { slug: "fireball" }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => "" }));
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/sorcerer-rm.eng", type: "DemiplaneEngine", args: {} },
+      makeSpellEngine("fireball-rm", 3, "sorcerer-spellcasting-rm"),
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    expect(summary.errors).toHaveLength(1);
+    expect(summary.errors[0]).toContain("no spell slots");
+  });
+
+  it("stays quiet when the class entry has slots", async () => {
+    installFoundryMocks({
+      "pf2e.spells-srd": createMockPack([
+        { _id: "sp1", name: "Detect Magic", system: { slug: "detect-magic" }, type: "spell" },
+      ]),
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          JSON.stringify({
+            id: "class-id",
+            data: {
+              nodes: {
+                "1": {
+                  name: "StringObject",
+                  data: {
+                    string: JSON.stringify({
+                      engineModifiers: [
+                        {
+                          type: "v2-add-spell-slots",
+                          slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+                        },
+                      ],
+                    }),
+                  },
+                },
+              },
+            },
+          }),
+      })
+    );
+    const actor = createMockActor();
+    const engines: DemiplaneEngineEntry[] = [
+      { id: "class-id", name: "tabula/class/sorcerer-rm.eng", type: "DemiplaneEngine", args: {} },
+      makeSpellEngine("detect-magic-rm", 0, "sorcerer-spellcasting-rm"),
+    ];
+    const summary = makeSummary();
+    await applySpells(actor as never, engines, summary);
+
+    expect(summary.errors).toEqual([]);
   });
 
   function makeClericSpell(slug: string, rank: number, spellSlot: string): DemiplaneEngineEntry {

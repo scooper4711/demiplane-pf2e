@@ -89,6 +89,7 @@ describe("unresolvedChoiceRecord", () => {
       key: "test-feat::choice",
       source: "guess",
       prompt: "Test Feat",
+      itemLabel: "Test Feat",
       options: [
         { value: "acrobatics", label: "Acrobatics" },
         { value: "crafting", label: "Crafting" },
@@ -107,11 +108,22 @@ describe("unresolvedChoiceRecord", () => {
       "guess"
     );
     expect(record.prompt).toBe("Choose a skill");
+    expect(record.itemLabel).toBe("Test Feat");
   });
 
   it("marks override-applied records with their source", () => {
     const record = unresolvedChoiceRecord(context(), { value: "acrobatics", label: "Acrobatics" }, "override");
     expect(record.source).toBe("override");
     expect(record.key).toBe("test-feat::choice");
+  });
+
+  it("labels the record with item and level when known", () => {
+    const record = unresolvedChoiceRecord(
+      context({ prompt: "Choose" }),
+      { value: "fork", label: "Fork the Path" },
+      "guess",
+      5
+    );
+    expect(record.itemLabel).toBe("Test Feat (level 5)");
   });
 });

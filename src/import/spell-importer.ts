@@ -11,19 +11,25 @@ const CURRICULUM_SLOT_SLUG = "wizard-school-spellbook-slot";
 export async function applySpells(
   actor: Actor,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<void> {
-  const { main, innate, font, rituals } = groupSpells(engines);
-  if (main.length === 0 && innate.length === 0 && font.length === 0 && rituals.length === 0) return;
+  const { main, innate, hexes, font, rituals } = groupSpells(engines);
+  if (main.length === 0 && innate.length === 0 && hexes.length === 0 && font.length === 0 && rituals.length === 0)
+    return;
 
   let totalAdded = 0;
 
   for (const group of main) {
-    totalAdded += await importSpellGroup(actor, group, engines, summary);
+    totalAdded += await importSpellGroup(actor, group, engines, summary, cacheEngineIds);
   }
 
   if (innate.length > 0) {
     totalAdded += await importInnateSpells(actor, innate, main, engines, summary);
+  }
+
+  if (hexes.length > 0) {
+    totalAdded += await importHexSpells(actor, hexes, main, summary);
   }
 
   if (font.length > 0) {
@@ -55,6 +61,8 @@ async function importRituals(actor: Actor, rituals: DemiplaneEngineEntry[], summ
 
 /** Suffix Demiplane appends to a class's spellcasting-feature slug. */
 const SPELLCASTING_SUFFIX = "-spellcasting-rm";
+/** Bare variant (no -rm) Demiplane uses for newer features, e.g. psychic. */
+const BARE_SPELLCASTING_SUFFIX = "-spellcasting";
 
 /**
  * Names the main class spellcasting entry after its class and tradition, e.g.
@@ -62,9 +70,12 @@ const SPELLCASTING_SUFFIX = "-spellcasting-rm";
  * tradition alone when the source slug isn't a recognizable class feature.
  */
 export function deriveClassEntryName(source: string, tradition: string): string {
-  const className = source.endsWith(SPELLCASTING_SUFFIX)
-    ? capitalize(source.slice(0, -SPELLCASTING_SUFFIX.length))
-    : "";
+  let className = "";
+  if (source.endsWith(SPELLCASTING_SUFFIX)) {
+    className = capitalize(source.slice(0, -SPELLCASTING_SUFFIX.length));
+  } else if (source.endsWith(BARE_SPELLCASTING_SUFFIX)) {
+    className = capitalize(source.slice(0, -BARE_SPELLCASTING_SUFFIX.length));
+  }
   const traditionLabel = capitalize(tradition);
   return className !== "" ? `${className} Spells (${traditionLabel})` : `${traditionLabel} Spells`;
 }
@@ -73,10 +84,21 @@ async function importSpellGroup(
   actor: Actor,
   group: SpellGroup,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<number> {
   if (!group.config) {
-    summary.log.push(`! spells: unknown source "${group.source}", skipping ${String(group.spellbook.length)} spells`);
+    // Unknown spellcasting feature (e.g. a new Demiplane dedication granting
+    // spells through its own `parentSpellFeature`). Skipping silently would
+    // lose the player's spells without a trace, so surface it as a sync error
+    // naming the source and the skipped spells.
+    const slugs = [...group.spellbook, ...group.prepared, ...group.curriculumSpellbook, ...group.curriculumPrepared]
+      .map((eng) => String(eng.args?.slug ?? "?"))
+      .filter((slug, index, all) => all.indexOf(slug) === index);
+    summary.errors.push(
+      `Unknown spellcasting source "${group.source}" — skipped ${String(slugs.length)} spell(s) (${slugs.join(", ")}). ` +
+        `The importer doesn't recognize this Demiplane spellcasting feature yet.`
+    );
     return 0;
   }
 
@@ -89,7 +111,7 @@ async function importSpellGroup(
   const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
   totalAdded += slugToId.size;
 
-  await applySlotMaximums(actor, entryId, engines, group.source, "", summary);
+  const hasRankedSlots = await applySlotMaximums(actor, entryId, engines, group.source, "", summary, cacheEngineIds);
 
   if (preparedType === "prepared") {
     await placePreparedSpells(actor, entryId, group.prepared, slugToId, engines, summary);
@@ -99,19 +121,47 @@ async function importSpellGroup(
     await markSignatureSpells(actor, engines, slugToId, group.spellbook, summary);
   }
 
+  flagMissingSlots(hasRankedSlots, group, summary);
+
   // Curriculum entry (wizard only)
   if (group.curriculumSpellbook.length > 0) {
-    totalAdded += await importCurriculumSpells(actor, group, engines, summary);
+    totalAdded += await importCurriculumSpells(actor, group, engines, summary, cacheEngineIds);
   }
 
   return totalAdded;
+}
+
+/**
+ * Flags a class entry that has *ranked* (rank >= 1) spells but no ranked slots
+ * to cast them — the class definition carries no slot progression (e.g.
+ * summoner) and no player override fills the gap, so the spells are present but
+ * uncastable. Loud (a sync error telling the GM to set slot overrides on
+ * Demiplane) rather than a sheet that looks fine until cast time.
+ *
+ * A cantrip-only entry is never flagged: cantrips are at-will and need no
+ * ranked slot. `hasRankedSlots` comes straight from slot resolution, so this
+ * reads the computed result rather than round-tripping through the item.
+ */
+function flagMissingSlots(hasRankedSlots: boolean, group: SpellGroup, summary: ImportSummary): void {
+  if (hasRankedSlots) return;
+  if (!hasRankedSpells(group)) return;
+  summary.errors.push(
+    `Class "${group.source}" has spells but no spell slots in Demiplane's data. ` +
+      `If the sheet shows slots, set them as builder overrides — Demiplane only records values changed from the shown default — and re-import.`
+  );
+}
+
+/** Whether a group holds any rank >= 1 spell (cantrips alone need no slots). */
+function hasRankedSpells(group: SpellGroup): boolean {
+  return [...group.spellbook, ...group.prepared].some((eng) => ((eng.args?.selectionRank as number) ?? 0) >= 1);
 }
 
 async function importCurriculumSpells(
   actor: Actor,
   group: SpellGroup,
   engines: DemiplaneEngineEntry[],
-  summary: ImportSummary
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
 ): Promise<number> {
   const { tradition, preparedType, ability } = group.config!;
   const schoolName = getSchoolName(engines) ?? "Curriculum";
@@ -119,7 +169,7 @@ async function importCurriculumSpells(
   const entryId = await createEntry(actor, entryName, tradition, preparedType, ability);
   const slugToId = await addSpells(actor, entryId, group.curriculumSpellbook, summary);
 
-  await applySlotMaximums(actor, entryId, engines, group.source, CURRICULUM_SLOT_SLUG, summary);
+  await applySlotMaximums(actor, entryId, engines, group.source, CURRICULUM_SLOT_SLUG, summary, cacheEngineIds);
 
   if (group.curriculumPrepared.length > 0) {
     await placePreparedSpells(actor, entryId, group.curriculumPrepared, slugToId, engines, summary);
@@ -156,6 +206,35 @@ async function importInnateSpells(
     classConfig?.ability ?? "cha"
   );
   const slugToId = await addSpells(actor, entryId, innate, summary);
+  return slugToId.size;
+}
+
+/** The label PF2e uses for a witch's focus-spell (hex) spellcasting entry. */
+const HEX_ENTRY_NAME = "Hexes";
+
+/**
+ * Imports player-selected hexes (e.g. Phase Familiar) into a focus "Hexes"
+ * entry. Hexes are focus spells cast with the witch's tradition and ability, so
+ * the entry borrows both from the class config; PF2e derives the focus-pool size
+ * from the number of spells here. Feature-granted hexes (patron/lesson hexes,
+ * Cackle) join this same entry later via {@link applyFeatureGrantedSpells},
+ * which reuses the "Hexes" entry rather than creating a second one.
+ */
+async function importHexSpells(
+  actor: Actor,
+  hexes: DemiplaneEngineEntry[],
+  main: SpellGroup[],
+  summary: ImportSummary
+): Promise<number> {
+  const classConfig = main[0]?.config;
+  const entryId = await createEntry(
+    actor,
+    HEX_ENTRY_NAME,
+    classConfig?.tradition ?? "occult",
+    "focus",
+    classConfig?.ability ?? "int"
+  );
+  const slugToId = await addSpells(actor, entryId, hexes, summary);
   return slugToId.size;
 }
 

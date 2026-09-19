@@ -8,6 +8,11 @@ vi.mock("@scooper4711/demiplane-api", () => ({
     async validateToken(): Promise<void> {}
   },
   findCustomEngineByName: () => undefined,
+  normalizeBearerToken: (raw: string) =>
+    raw
+      .trim()
+      .replace(/^bearer(\s+|$)/i, "")
+      .trim(),
 }));
 
 describe("module entrypoint", () => {

@@ -14,12 +14,13 @@ dir so you never hunt PIDs).
 
 Copy `.env.example` to `.env` and fill in:
 
-| Var                      | Used for                                     |
-| ------------------------ | -------------------------------------------- |
-| `FOUNDRY_LICENSE_KEY`    | First-time seeding (license screen)          |
-| `FOUNDRY_ADMIN_PASSWORD` | Server admin (default `test-admin`)          |
-| `DEMIPLANE_TOKEN`        | Import tests (skipped without it)            |
-| `*_UUID`                 | Reference character IDs for the import specs |
+| Var                      | Used for                                                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `FOUNDRY_LICENSE_KEY`    | First-time seeding (license screen)                                                                                |
+| `FOUNDRY_ADMIN_PASSWORD` | Server admin (default `test-admin`)                                                                                |
+| `DEMIPLANE_TOKEN`        | Import tests (skipped without it)                                                                                  |
+| `*_UUID`                 | Reference character IDs for the import specs                                                                       |
+| `SKIP_MUTATION_TESTS=1`  | Skip the slow mutation round-trip specs (Kyra mutation files + reimport); run unflagged after touching write logic |
 
 Build once before anything touches Foundry:
 

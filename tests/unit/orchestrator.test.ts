@@ -4,6 +4,63 @@ import { ImportOrchestrator } from "../../src/import/orchestrator.js";
 import { ChoiceSetHandler } from "../../src/import/choice-set-handler.js";
 import { collectLoreNames } from "../../src/import/phases.js";
 
+/** The engine selection blob the default happy-path character read returns. */
+const DEFAULT_ENGINES = [
+  {
+    id: "1",
+    name: "tabula/ancestry/human-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "human-rm", sourceRow: "" },
+  },
+  {
+    id: "2",
+    name: "tabula/heritage/versatile-human-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "versatile-human-rm", sourceRow: "" },
+  },
+  {
+    id: "3",
+    name: "tabula/background/farmhand-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "farmhand-rm", sourceRow: "" },
+  },
+  {
+    id: "4",
+    name: "tabula/class/fighter-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "fighter-rm", sourceRow: "" },
+  },
+  {
+    id: "5",
+    name: "tabula/feat/power-attack-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "power-attack-rm", sourceRow: "fighter-feat-level-2-rm" },
+  },
+  {
+    id: "8",
+    name: "tabula/class-feature/weapon-specialization-rm.eng",
+    type: "DemiplaneEngine",
+    args: { slug: "weapon-specialization-rm", sourceRow: "fighter-rm" },
+  },
+  { id: "6", name: "character_name", type: "CustomDemiplaneEngine", args: {}, value: "Test Fighter" },
+  { id: "7", name: "character_level", type: "CustomDemiplaneEngine", args: {}, value: 2 },
+];
+
+/**
+ * Builds a client stand-in for the orchestrator. `fetchCharacterData` is the
+ * seam the orchestrator reads through (it replaced a hand-rolled fetch), so the
+ * character payload — and any thrown fetch error — is configured here.
+ */
+function createMockClient(overrides: Record<string, unknown> = {}) {
+  return {
+    setToken: vi.fn(),
+    isAuthenticated: vi.fn().mockReturnValue(true),
+    fetchCharacterData: vi.fn().mockResolvedValue({ engines: DEFAULT_ENGINES, engineCacheIdsBySource: {} }),
+    fetchCharacterJournals: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
 describe("ImportOrchestrator", () => {
   beforeEach(() => {
     installFoundryMocks({
@@ -24,87 +81,34 @@ describe("ImportOrchestrator", () => {
       "pf2e.spells-srd": createMockPack([]),
       "pf2e.equipment-srd": createMockPack([]),
     });
-
-    // Mock fetch for GraphQL
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({
-        data: {
-          demiplane_user_character: [
-            {
-              data: {
-                engines: [
-                  {
-                    id: "1",
-                    name: "tabula/ancestry/human-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: { slug: "human-rm", sourceRow: "" },
-                  },
-                  {
-                    id: "2",
-                    name: "tabula/heritage/versatile-human-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: { slug: "versatile-human-rm", sourceRow: "" },
-                  },
-                  {
-                    id: "3",
-                    name: "tabula/background/farmhand-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: { slug: "farmhand-rm", sourceRow: "" },
-                  },
-                  {
-                    id: "4",
-                    name: "tabula/class/fighter-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: { slug: "fighter-rm", sourceRow: "" },
-                  },
-                  {
-                    id: "5",
-                    name: "tabula/feat/power-attack-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: {
-                      slug: "power-attack-rm",
-                      sourceRow: "fighter-feat-level-2-rm",
-                    },
-                  },
-                  {
-                    id: "8",
-                    name: "tabula/class-feature/weapon-specialization-rm.eng",
-                    type: "DemiplaneEngine",
-                    args: { slug: "weapon-specialization-rm", sourceRow: "fighter-rm" },
-                  },
-                  {
-                    id: "6",
-                    name: "character_name",
-                    type: "CustomDemiplaneEngine",
-                    args: {},
-                    value: "Test Fighter",
-                  },
-                  {
-                    id: "7",
-                    name: "character_level",
-                    type: "CustomDemiplaneEngine",
-                    args: {},
-                    value: 2,
-                  },
-                ],
-              },
-              version: 1,
-            },
-          ],
-        },
-      }),
-    });
   });
 
-  it("returns error when no token provided", async () => {
-    const orchestrator = new ImportOrchestrator();
+  it("returns error when no token provided and none is configured", async () => {
+    const orchestrator = new ImportOrchestrator(createMockClient() as never);
     const actor = createMockActor();
     const summary = await orchestrator.importCharacter(actor as never, "test-uuid", {});
     expect(summary.errors).toContain("No authentication token provided");
   });
 
+  it("falls back to the configured token setting when no token is passed", async () => {
+    // Structural guarantee: a caller that omits the token still authenticates
+    // from the live setting rather than diverging from the push path.
+    mockChoiceSetPrototype();
+    await globalThis.game.settings.set("demiplane-pf2e", "demiplaneToken", "Bearer configured-token");
+    const client = createMockClient();
+    const orchestrator = new ImportOrchestrator(client as never);
+    const actor = createMockActor();
+
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", {});
+
+    expect(summary.errors).toHaveLength(0);
+    // Authenticated from the setting, normalized (Bearer stripped). beforeEach
+    // reinstalls a fresh settings store, so this value does not leak.
+    expect(client.setToken).toHaveBeenCalledWith("configured-token");
+  });
+
   it("imports basic character structure", async () => {
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(createMockClient() as never);
     const actor = createMockActor();
 
     // Mock the ChoiceSet monkey-patch target
@@ -131,7 +135,7 @@ describe("ImportOrchestrator", () => {
 
   it("drains unresolved choices into the import summary", async () => {
     const drain = vi.spyOn(ChoiceSetHandler.prototype, "drainUnresolvedChoices");
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(createMockClient() as never);
     const actor = createMockActor();
 
     (globalThis as unknown as Record<string, unknown>).game = {
@@ -151,7 +155,7 @@ describe("ImportOrchestrator", () => {
   });
 
   it("stamps lastImportTimestamp after a successful pipeline run", async () => {
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(createMockClient() as never);
     const actor = createMockActor();
 
     (globalThis as unknown as Record<string, unknown>).game = {
@@ -169,24 +173,34 @@ describe("ImportOrchestrator", () => {
     expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastImportTimestamp", expect.any(Number));
   });
 
-  it("handles GraphQL errors", async () => {
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({ errors: [{ message: "Unauthorized" }] }),
+  it("surfaces a non-token GraphQL error verbatim", async () => {
+    const client = createMockClient({
+      fetchCharacterData: vi.fn().mockRejectedValue(new Error('GraphQL errors: field "foo" not found')),
     });
-
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(client as never);
     const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "bad-token" });
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
 
     expect(summary.errors[0]).toContain("GraphQL");
   });
 
-  it("handles missing character", async () => {
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({ data: { demiplane_user_character: [] } }),
+  it("translates a token-rejection failure into plain language", async () => {
+    const client = createMockClient({
+      fetchCharacterData: vi.fn().mockRejectedValue(new Error("GraphQL errors: unauthorized")),
     });
+    const orchestrator = new ImportOrchestrator(client as never);
+    const actor = createMockActor();
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "bad-token" });
 
-    const orchestrator = new ImportOrchestrator();
+    expect(summary.errors[0]).toContain("Demiplane rejected the token");
+  });
+
+  it("handles missing character", async () => {
+    // The client throws `Character not found: <id>` for an empty result set.
+    const client = createMockClient({
+      fetchCharacterData: vi.fn().mockRejectedValue(new Error("Character not found: test-uuid")),
+    });
+    const orchestrator = new ImportOrchestrator(client as never);
     const actor = createMockActor();
     const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
 
@@ -195,38 +209,42 @@ describe("ImportOrchestrator", () => {
 
   it("stores the server updated timestamp when present", async () => {
     mockChoiceSetPrototype();
-    (globalThis as unknown as Record<string, unknown>).fetch = vi.fn().mockResolvedValue({
-      json: async () => ({
-        data: {
-          demiplane_user_character: [{ data: { engines: [] }, updated: "2026-05-05T00:00:00.000Z" }],
-        },
-      }),
+    const client = createMockClient({
+      fetchCharacterData: vi
+        .fn()
+        .mockResolvedValue({ engines: [], engineCacheIdsBySource: {}, updated: "2026-05-05T00:00:00.000Z" }),
     });
-
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(client as never);
     const actor = createMockActor();
     await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
 
     expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastUpdated", "2026-05-05T00:00:00.000Z");
   });
 
-  it("reports fetch failures with Error and non-Error reasons", async () => {
-    const fetchMock = globalThis as unknown as { fetch: ReturnType<typeof vi.fn> };
-    const orchestrator = new ImportOrchestrator();
+  it("reports character-read failures with Error and non-Error reasons", async () => {
     const actor = createMockActor();
 
-    fetchMock.fetch = vi.fn().mockRejectedValueOnce(new Error("down"));
-    const errors = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
-    expect(errors.errors[0]).toContain("Fetch failed: down");
+    const errors = await new ImportOrchestrator(
+      createMockClient({ fetchCharacterData: vi.fn().mockRejectedValue(new Error("down")) }) as never
+    ).importCharacter(actor as never, "test-uuid", { token: "token" });
+    expect(errors.errors[0]).toContain("down");
 
-    fetchMock.fetch = vi.fn().mockRejectedValueOnce("string-fail");
-    const stringErrors = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
-    expect(stringErrors.errors[0]).toContain("Fetch failed: string-fail");
+    const stringErrors = await new ImportOrchestrator(
+      createMockClient({ fetchCharacterData: vi.fn().mockRejectedValue("string-fail") }) as never
+    ).importCharacter(actor as never, "test-uuid", { token: "token" });
+    expect(stringErrors.errors[0]).toContain("string-fail");
+  });
+
+  it("reports a clear error when no client is configured", async () => {
+    const orchestrator = new ImportOrchestrator();
+    const actor = createMockActor();
+    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
+    expect(summary.errors).toContain("No Demiplane client configured");
   });
 
   it("stamps new items through the preCreateItem hook", async () => {
     mockChoiceSetPrototype();
-    const orchestrator = new ImportOrchestrator();
+    const orchestrator = new ImportOrchestrator(createMockClient() as never);
     const actor = createMockActor();
     actor.id = "actor-1";
     (globalThis as unknown as Record<string, unknown>).game = {
@@ -256,11 +274,13 @@ describe("ImportOrchestrator", () => {
 
   it("imports the campaign journal when a client is configured", async () => {
     mockChoiceSetPrototype();
-    const orchestrator = new ImportOrchestrator({
-      fetchCharacterJournals: vi
-        .fn()
-        .mockResolvedValue([{ objectID: "j1", title: "Campaign", description: "Party notes" }]),
-    });
+    const orchestrator = new ImportOrchestrator(
+      createMockClient({
+        fetchCharacterJournals: vi
+          .fn()
+          .mockResolvedValue([{ objectID: "j1", title: "Campaign", description: "Party notes" }]),
+      }) as never
+    );
     const actor = createMockActor();
 
     await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });
@@ -270,9 +290,11 @@ describe("ImportOrchestrator", () => {
 
   it("skips the journal update without a campaign entry", async () => {
     mockChoiceSetPrototype();
-    const orchestrator = new ImportOrchestrator({
-      fetchCharacterJournals: vi.fn().mockResolvedValue([{ objectID: "j2", title: "Other", description: "x" }]),
-    });
+    const orchestrator = new ImportOrchestrator(
+      createMockClient({
+        fetchCharacterJournals: vi.fn().mockResolvedValue([{ objectID: "j2", title: "Other", description: "x" }]),
+      }) as never
+    );
     const actor = createMockActor();
     actor.update.mockClear();
 
@@ -287,9 +309,9 @@ describe("ImportOrchestrator", () => {
   it("survives journal fetch failures with Error and non-Error reasons", async () => {
     mockChoiceSetPrototype();
     for (const failure of [new Error("nope"), "string-fail"]) {
-      const orchestrator = new ImportOrchestrator({
-        fetchCharacterJournals: vi.fn().mockRejectedValueOnce(failure),
-      });
+      const orchestrator = new ImportOrchestrator(
+        createMockClient({ fetchCharacterJournals: vi.fn().mockRejectedValueOnce(failure) }) as never
+      );
       const actor = createMockActor();
 
       const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "fake-token" });

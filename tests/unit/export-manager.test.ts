@@ -5,6 +5,13 @@ vi.mock("@scooper4711/demiplane-api", () => ({
     (engines: { name: string; type: string; value?: unknown; id?: string }[], storeName: string) =>
       engines.find((e) => e.type === "CustomDemiplaneEngine" && e.name === storeName)
   ),
+  // token-source.ts (used by the push auth gate) normalizes via the client's
+  // exported helper; mirror the real trim + Bearer-strip so the gate behaves.
+  normalizeBearerToken: (raw: string) =>
+    raw
+      .trim()
+      .replace(/^bearer(\s+|$)/i, "")
+      .trim(),
 }));
 
 vi.stubGlobal("ui", {
@@ -12,11 +19,17 @@ vi.stubGlobal("ui", {
 });
 
 let autoSyncEnabled = true;
+let configuredToken = "test-token";
 vi.stubGlobal("game", {
   settings: {
     // autoSyncEnabled true = full write; false = no writing.
-    get: (_moduleId: string, key: string) =>
-      key === "syncWriteLevel" ? (autoSyncEnabled ? "full" : "read-only") : undefined,
+    get: (_moduleId: string, key: string) => {
+      if (key === "syncWriteLevel") return autoSyncEnabled ? "full" : "read-only";
+      // The push auth gate reconciles the client from this setting (see
+      // token-source.ts); a non-empty value keeps the client authenticated.
+      if (key === "demiplaneToken") return configuredToken;
+      return undefined;
+    },
   },
 });
 
@@ -83,6 +96,7 @@ function createMockClient(overrides = {}) {
     updateCharacter: vi.fn().mockResolvedValue({ success: true, message: null, result: null }),
     fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-08-27T00:00:00.000Z"),
     updateLastAccess: vi.fn().mockResolvedValue(true),
+    setToken: vi.fn(),
     isAuthenticated: vi.fn().mockReturnValue(true),
     fetchCharacterJournals: vi.fn().mockResolvedValue([]),
     createCharacterJournal: vi.fn().mockResolvedValue({ objectID: "journal-1", title: "Campaign" }),
@@ -100,6 +114,7 @@ describe("ExportManager", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    configuredToken = "test-token";
   });
 
   describe("queueChange accumulates changes and resets timer", () => {
@@ -1184,9 +1199,11 @@ describe("ExportManager", () => {
 
   describe("flush without authentication", () => {
     it("returns an error and notifies the user when no token is configured", async () => {
-      const client = createMockClient({
-        isAuthenticated: vi.fn().mockReturnValue(false),
-      });
+      // Auth is now gated on the live setting (reconciled into the client), not
+      // a cached isAuthenticated flag — so an empty setting is what makes the
+      // push unauthenticated.
+      configuredToken = "";
+      const client = createMockClient();
       const manager = new ExportManager(client as never);
       const actor = createMockActor();
 
@@ -1799,8 +1816,11 @@ describe("ExportManager", () => {
       expect(vi.mocked(client.updateCharacterJournal)).not.toHaveBeenCalled();
     });
 
-    it("does nothing when the client is unauthenticated", async () => {
-      const client = createMockClient({ isAuthenticated: vi.fn().mockReturnValue(false) });
+    it("does nothing when no token is configured", async () => {
+      // No token in settings → the client reconciles to unauthenticated and the
+      // campaign-notes push short-circuits (afterEach restores the token).
+      configuredToken = "";
+      const client = createMockClient();
       const manager = new ExportManager(client as never);
       const actor = createFlagTrackingActor();
 

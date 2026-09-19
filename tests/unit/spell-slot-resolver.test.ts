@@ -1,9 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
+  collectUnrestrictedSlotSlugs,
   computeSlotProgression,
   findSlotOverrides,
   parseSlotEntriesFromNdjson,
+  resolveSpellSlots,
+  slotTypeToRank,
 } from "../../src/import/spell-slot-resolver.js";
+import type { ImportSummary } from "../../src/import/types.js";
+import type { RawEngineLine } from "../../src/import/stream-engines.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
 import type { DemiplaneSlotEntry } from "../../src/import/spell-slot-resolver.js";
 
@@ -110,7 +115,9 @@ describe("findSlotOverrides", () => {
     expect(result.get("cantrip-wizard-school-spellbook-slot")).toBe(2);
   });
 
-  it("ignores overrides without the --overridden flag", () => {
+  it("applies per-character maximums without the --overridden flag", () => {
+    // `_max` engines are authoritative per-character values whether or not
+    // the player pinned them; the flag merely marks a manual pin.
     const engines: DemiplaneEngineEntry[] = [
       {
         id: "custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_cantrip_max",
@@ -122,7 +129,7 @@ describe("findSlotOverrides", () => {
       // No companion --overridden flag
     ];
     const result = findSlotOverrides(engines, "wizard-spellcasting-rm", "");
-    expect(result.size).toBe(0);
+    expect(result.get("cantrip")).toBe(99);
   });
 
   it("ignores overrides for a different spell feature", () => {
@@ -143,6 +150,30 @@ describe("findSlotOverrides", () => {
     ];
     const result = findSlotOverrides(engines, "wizard-spellcasting-rm", "");
     expect(result.size).toBe(0);
+  });
+});
+
+describe("slotTypeToRank", () => {
+  it("maps a bare cantrip token to rank 0", () => {
+    expect(slotTypeToRank("cantrip")).toBe(0);
+  });
+
+  it("maps a prefixed cantrip token (curriculum) to rank 0", () => {
+    expect(slotTypeToRank("cantrip-wizard-school-spellbook-slot")).toBe(0);
+  });
+
+  it("maps rank-N tokens to N", () => {
+    expect(slotTypeToRank("rank-1")).toBe(1);
+    expect(slotTypeToRank("rank-10")).toBe(10);
+  });
+
+  it("extracts the rank from a decorated rank token", () => {
+    expect(slotTypeToRank("rank-2-wizard-school-spellbook-slot")).toBe(2);
+  });
+
+  it("returns null for a token naming neither", () => {
+    expect(slotTypeToRank("focus")).toBeNull();
+    expect(slotTypeToRank("")).toBeNull();
   });
 });
 
@@ -254,5 +285,475 @@ describe("parseSlotEntriesFromNdjson", () => {
     const ndjson = "not valid json\n{also broken";
     const result = parseSlotEntriesFromNdjson(ndjson, "");
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("collectUnrestrictedSlotSlugs", () => {
+  it("collects unrestricted slot-type slugs and skips restricted ones", () => {
+    const lines: RawEngineLine[] = [
+      { modifiers: [{ type: "v2-add-spell-slot-type", slotSlug: "magus-spell-slot-1" }] },
+      {
+        modifiers: [
+          { type: "v2-add-spell-slot-type", slotSlug: "studious-spells", hasRestrictions: true },
+          { type: "v2-add-spell-slot-type", slotSlug: "divine-font", hasRestrictions: true },
+        ],
+      },
+      { modifiers: [{ type: "v2-add-spell-slots", slots: [] }] },
+    ];
+    expect(collectUnrestrictedSlotSlugs(lines)).toEqual(new Set(["magus-spell-slot-1"]));
+  });
+});
+
+describe("parseSlotEntriesFromNdjson with slot-type slugs", () => {
+  function magusNdjson(): string {
+    return JSON.stringify({
+      id: "engine-1",
+      data: {
+        nodes: {
+          "1": {
+            name: "StringObject",
+            data: {
+              string: JSON.stringify({
+                name: "Arcane Spellcasting",
+                engineModifiers: [
+                  {
+                    type: "v2-add-spell-slots",
+                    slug: "magus-spellcasting",
+                    slots: [
+                      { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+                      { rank: 1, count: 1, levelPrereq: 1, slug: "magus-spell-slot-1" },
+                      { rank: 1, count: 2, levelPrereq: 1, slug: "studious-spells" },
+                    ],
+                  },
+                  { type: "v2-add-spell-slot-type", slotSlug: "magus-spell-slot-1" },
+                  { type: "v2-add-spell-slot-type", slotSlug: "studious-spells", hasRestrictions: true },
+                ],
+              }),
+            },
+          },
+        },
+      },
+    });
+  }
+
+  it("includes unrestricted tagged entries in the regular pool", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "", new Set(["magus-spell-slot-1"]));
+    expect(result).toHaveLength(2);
+    expect(computeSlotProgression(result, 1)).toEqual({ cantrips: 5, slots: { 1: 1 } });
+  });
+
+  it("excludes restricted tagged entries from the regular pool", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "", new Set(["magus-spell-slot-1"]));
+    expect(result.some((e) => e.slug === "studious-spells")).toBe(false);
+  });
+
+  it("keeps the default behavior without a slug set", () => {
+    const result = parseSlotEntriesFromNdjson(magusNdjson(), "");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.rank).toBe(0);
+  });
+});
+
+describe("resolveSpellSlots with feature definitions", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function defLine(engineName: string, id: string, modifiers: unknown[]): string {
+    return JSON.stringify({
+      id,
+      engineName,
+      data: {
+        nodes: {
+          n1: {
+            name: "StringObject",
+            data: { string: JSON.stringify({ engineModifiers: modifiers }) },
+          },
+        },
+      },
+    });
+  }
+
+  function stubFetch(classNdjson: string, indexNdjson: string, featureNdjson: string): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        const text = body.includes("cache-1") ? indexNdjson : body.includes("feat-1") ? featureNdjson : classNdjson;
+        return { ok: true, text: async () => text };
+      })
+    );
+  }
+
+  const classOnlyCantrips = defLine("tabula/class/summoner-rm.eng", "class-1", [
+    {
+      type: "v2-add-spell-slots",
+      slug: "summoner-spellcasting",
+      slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+    },
+  ]);
+
+  const featureIndex = defLine("tabula/class-feature/summoner-spellcasting-rm.eng", "feat-1", []);
+
+  const featureRankOne = defLine("tabula/class-feature/summoner-spellcasting-rm.eng", "feat-1", [
+    {
+      type: "v2-add-spell-slots",
+      slug: "summoner-spellcasting",
+      slots: [{ rank: 1, count: 1, levelPrereq: 1, slug: "" }],
+    },
+  ]);
+
+  function options() {
+    return {
+      classEngineId: "class-1",
+      characterLevel: 1,
+      engines: [],
+      parentSpellFeature: "summoner-spellcasting-rm",
+      cacheEngineIds: ["cache-1"],
+    };
+  }
+
+  it("fills ranks the class definition leaves empty from the feature definition", async () => {
+    stubFetch(classOnlyCantrips, featureIndex, featureRankOne);
+    const result = await resolveSpellSlots(options());
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 1 } });
+  });
+
+  it("prefers the class definition on overlapping ranks", async () => {
+    const classRankOne = defLine("tabula/class/summoner-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "summoner-spellcasting-rm",
+        slots: [{ rank: 1, count: 2, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    stubFetch(classRankOne, featureIndex, featureRankOne);
+    const result = await resolveSpellSlots(options());
+    expect(result).toEqual({ cantrips: 0, slots: { 1: 2 } });
+  });
+
+  it("falls back to repertoire cantrips without fixed cantrip slots", async () => {
+    const noCantrips = defLine("tabula/class/bard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 1, count: 2, levelPrereq: 1, slug: "" }],
+      },
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(noCantrips, "", "");
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "bard-spellcasting-rm" });
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 2 } });
+  });
+
+  it("ignores other features' repertoire counts", async () => {
+    // A wizard-archetype entry must not inherit the psychic repertoire size.
+    const psychicRepertoire = defLine("tabula/class/psychic-rm.eng", "class-1", [
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "psychic-spellcasting",
+        slots: [{ rank: 0, count: 3, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(psychicRepertoire, "", "");
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "wizard-spellcasting-archetype-rm" });
+    expect(result).toEqual({ cantrips: 0, slots: {} });
+  });
+
+  it("counts known cantrips with no fixed or repertoire data", async () => {
+    // Summoner: Demiplane models cantrips nowhere, so the import mirrors the
+    // sheet and counts the known rank-0 engines (prepared duplicates excluded).
+    stubFetch("", "", "");
+    const cantrip = (slug: string, isPrepare = false) => ({
+      id: slug,
+      name: `tabula/spell/${slug}.eng`,
+      type: "DemiplaneEngine",
+      args: {
+        slug,
+        selectionRank: 0,
+        isPrepare: isPrepare || undefined,
+        parentSpellFeature: "summoner-spellcasting-rm",
+      },
+    });
+    const engines = [
+      cantrip("approximate-rm"),
+      cantrip("caustic-blast-rm"),
+      cantrip("create-earthen-facsimile-rm"),
+      cantrip("deep-breath"),
+      cantrip("detect-magic-rm"),
+      cantrip("detect-magic-rm", true),
+      {
+        id: "toads",
+        name: "tabula/spell/500-toads-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "500-toads-rm", selectionRank: 1, parentSpellFeature: "summoner-spellcasting-rm" },
+      },
+    ];
+    const result = await resolveSpellSlots({ ...options(), engines });
+    expect(result).toEqual({ cantrips: 5, slots: {} });
+  });
+
+  it("prefers fixed cantrips over the known count", async () => {
+    const fixed = defLine("tabula/class/sorcerer-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "sorcerer-spellcasting",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    stubFetch(fixed, "", "");
+    const engines = Array.from({ length: 6 }, (_, i) => ({
+      id: `c${i}`,
+      name: `tabula/spell/cantrip-${i}.eng`,
+      type: "DemiplaneEngine",
+      args: { slug: `cantrip-${i}`, selectionRank: 0, parentSpellFeature: "sorcerer-spellcasting-rm" },
+    }));
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "sorcerer-spellcasting-rm", engines });
+    expect(result).toEqual({ cantrips: 5, slots: {} });
+  });
+
+  it("scopes fixed entries to the requested feature", async () => {
+    // A class response mixing two features' slot blocks (animist + apparition)
+    // must not double-count: each entry resolves only its own feature.
+    const mixed = [0, 1].map((i) =>
+      defLine(`tabula/class/animist-rm.eng`, `class-${i}`, [
+        {
+          type: "v2-add-spell-slots",
+          slug: i === 0 ? "animist-spellcasting-rm" : "apparition-spellcasting-rm",
+          slots: [{ rank: 1, count: 1 + i, levelPrereq: 1, slug: "" }],
+        },
+      ])
+    );
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => mixed.join("\n") }));
+    const animist = await resolveSpellSlots({
+      classEngineId: "class-0",
+      characterLevel: 3,
+      engines: [],
+      parentSpellFeature: "animist-spellcasting-rm",
+    });
+    expect(animist).toEqual({ cantrips: 0, slots: { 1: 1 } });
+    const apparition = await resolveSpellSlots({
+      classEngineId: "class-0",
+      characterLevel: 3,
+      engines: [],
+      parentSpellFeature: "apparition-spellcasting-rm",
+    });
+    expect(apparition).toEqual({ cantrips: 0, slots: { 1: 2 } });
+  });
+
+  it("sums archetype slots from taken-feat definitions with expansion", async () => {
+    // Wizard dedication grants cantrips; basic arcana (reached through the
+    // dedication's add-feat grant) grants rank 1 — all sharing the archetype
+    // feature slug, summed and gated by level.
+    const dedication = defLine("tabula/feat/wizard-dedication-rm.eng", "feat-ded", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [{ rank: 0, count: 2, levelPrereq: 1, slug: "" }],
+      },
+      { type: "add-feat", addFeat: "basic-arcana-rm" },
+    ]);
+    const index = defLine("tabula/feat/basic-arcana-rm.eng", "feat-basic", []);
+    const basic = defLine("tabula/feat/basic-arcana-rm.eng", "feat-basic", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [{ rank: 1, count: 1, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        if (body.includes("cache-1")) return { ok: true, text: async () => index };
+        if (body.includes("feat-basic")) return { ok: true, text: async () => basic };
+        if (body.includes("feat-ded")) return { ok: true, text: async () => dedication };
+        return { ok: true, text: async () => "" };
+      })
+    );
+    const result = await resolveSpellSlots({
+      classEngineId: "class-1",
+      characterLevel: 4,
+      engines: [
+        {
+          id: "feat-ded",
+          name: "tabula/feat/wizard-dedication-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "wizard-dedication-rm" },
+        },
+      ],
+      parentSpellFeature: "wizard-spellcasting-archetype-rm",
+      cacheEngineIds: ["cache-1"],
+    });
+    expect(result).toEqual({ cantrips: 2, slots: { 1: 1 } });
+  });
+
+  it("lets player overrides win over archetype feat definitions", async () => {
+    // A pinned rank-1 override replaces the feat-derived count; other ranks
+    // still resolve from definitions.
+    const dedication = defLine("tabula/feat/wizard-dedication-rm.eng", "feat-ded", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [
+          { rank: 0, count: 2, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 1, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        if (body.includes("feat-ded")) return { ok: true, text: async () => dedication };
+        return { ok: true, text: async () => "" };
+      })
+    );
+    const engines = [
+      {
+        id: "feat-ded",
+        name: "tabula/feat/wizard-dedication-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "wizard-dedication-rm" },
+      },
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max",
+        name: "character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 5,
+      },
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max--overridden",
+        name: "character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max--overridden",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 1,
+      },
+    ];
+    const result = await resolveSpellSlots({
+      classEngineId: "class-1",
+      characterLevel: 4,
+      engines,
+      parentSpellFeature: "wizard-spellcasting-archetype-rm",
+      cacheEngineIds: ["cache-1"],
+    });
+    expect(result).toEqual({ cantrips: 2, slots: { 1: 5 } });
+  });
+
+  it("merges a lone ranked override without a cantrip override over computed data", async () => {
+    // Regression: the old hasCompleteOverrides short-circuit required cantrip +
+    // one rank before honoring overrides. A single ranked override (no cantrip
+    // one) must still win for its rank while cantrips resolve from the class def.
+    const classDef = defLine("tabula/class/wizard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-rm",
+        slots: [
+          { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 2, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    stubFetch(classDef, "", "");
+    const engines = [
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_rank-1_max",
+        name: "character_spell-feature_wizard-spellcasting-rm_spell-slots_rank-1_max",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 4,
+      },
+    ];
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "wizard-spellcasting-rm",
+      engines,
+    });
+    // Cantrips from the class def (5), rank-1 from the override (4, not 2).
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 4 } });
+  });
+
+  it("honors a complete override set (cantrip + rank) over computed data", async () => {
+    // The case the removed hasCompleteOverrides short-circuit used to handle:
+    // with both a cantrip and a rank override present, each still wins for its
+    // slot after compute-then-merge, independent of the class def's numbers.
+    const classDef = defLine("tabula/class/wizard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-rm",
+        slots: [
+          { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 2, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    stubFetch(classDef, "", "");
+    const override = (slotType: string, value: number) => ({
+      id: `custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_${slotType}_max`,
+      name: `character_spell-feature_wizard-spellcasting-rm_spell-slots_${slotType}_max`,
+      type: "CustomDemiplaneEngine" as const,
+      args: { id: null },
+      value,
+    });
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "wizard-spellcasting-rm",
+      engines: [override("cantrip", 8), override("rank-1", 3)],
+    });
+    expect(result).toEqual({ cantrips: 8, slots: { 1: 3 } });
+  });
+
+  it("logs a breadcrumb when cantrips fall back to the known count", async () => {
+    stubFetch("", "", "");
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
+    const engines = [
+      {
+        id: "c0",
+        name: "tabula/spell/guidance-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "guidance-rm", selectionRank: 0, parentSpellFeature: "summoner-spellcasting-rm" },
+      },
+    ];
+    const result = await resolveSpellSlots({ ...options(), engines, summary });
+    expect(result.cantrips).toBe(1);
+    expect(summary.log.some((l) => l.includes("cantrip max taken from") && l.includes("known"))).toBe(true);
+  });
+
+  it("does not log the known-cantrip breadcrumb when a real source exists", async () => {
+    const withRepertoire = defLine("tabula/class/bard-rm.eng", "class-1", [
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(withRepertoire, "", "");
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "bard-spellcasting-rm",
+      summary,
+    });
+    expect(result.cantrips).toBe(5);
+    expect(summary.log.some((l) => l.includes("known"))).toBe(false);
   });
 });

@@ -307,8 +307,13 @@ function buildUnresolvedChoicesSection(records: UnresolvedChoice[], overrides: C
         })
         .join("");
       const guessedLabel = record.options.find((o) => o.value === record.guessedValue)?.label ?? record.guessedValue;
+      const source = record.itemLabel ?? localizeChoiceLabel(record.prompt);
+      const question =
+        record.itemLabel && record.prompt && record.prompt !== record.itemLabel.replace(/ \(level \d+\)$/, "")
+          ? ` — ${escapeHtml(localizeChoiceLabel(record.prompt))}`
+          : "";
       return `
-      <p><strong>${escapeHtml(localizeChoiceLabel(record.prompt))}:</strong>
+      <p><strong>${escapeHtml(source)}:</strong>${question}
         <select class="demiplane-choice-select" data-choice-key="${escapeHtml(record.key)}">
           <option value="">— choose —</option>${options}
         </select>

@@ -1,6 +1,7 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { characterSystem, pf2eLanguages } from "../pf2e-types.js";
 import { PROFICIENCY_LEGENDARY } from "./pf2e-ranks.js";
+import { resolveRemasterLanguage } from "./remaster-renames.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
 export const VALID_ATTRIBUTES: readonly string[] = ["str", "dex", "con", "int", "wis", "cha"] as const;
@@ -265,9 +266,42 @@ export async function applyLanguages(
   }
 
   if (unmatched.length > 0) {
-    summary.log.push(`! languages not found in Foundry: [${unmatched.join(", ")}]`);
-    summary.errors.push(`Languages not found in Foundry: ${unmatched.join(", ")}`);
+    const { renamed, stillUnmatched } = await applyRemasterRenames(unmatched, actor, summary);
+    matched.push(...renamed);
+    if (stillUnmatched.length > 0) {
+      summary.log.push(`! languages not found in Foundry: [${stillUnmatched.join(", ")}]`);
+      summary.errors.push(`Languages not found in Foundry: ${stillUnmatched.join(", ")}`);
+    }
   }
+}
+
+/**
+ * Retries unmatched languages through the PF2e remaster rename table
+ * (Undercommon → Sakvroth): applies the renamed ones to the actor like any
+ * matched language and returns whatever still doesn't resolve.
+ */
+async function applyRemasterRenames(
+  unmatched: string[],
+  actor: Actor,
+  summary: ImportSummary
+): Promise<{ renamed: string[]; stillUnmatched: string[] }> {
+  const renamed: string[] = [];
+  const stillUnmatched: string[] = [];
+  for (const slug of unmatched) {
+    const renamedSlug = await resolveRemasterLanguage(slug);
+    if (renamedSlug) {
+      renamed.push(renamedSlug);
+      summary.log.push(`+ languages: remaster rename ${slug} → ${renamedSlug}`);
+    } else {
+      stillUnmatched.push(slug);
+    }
+  }
+  if (renamed.length > 0) {
+    const currentLangs = characterSystem(actor).details.languages.value;
+    const newLangs = [...new Set([...currentLangs, ...renamed])];
+    await actor.update({ "system.details.languages.value": newLangs });
+  }
+  return { renamed, stillUnmatched };
 }
 
 /**

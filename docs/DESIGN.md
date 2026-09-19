@@ -219,17 +219,21 @@ The wrap is only live during a user-initiated import, so a hard dependency is di
 
 **Decision:** Spell import is split into two independent resolvers, each handling a different spell source:
 
-1. **`spell-importer`** — Class spellcasting (prepared, spontaneous, spellbook).
-2. **`feature-spell-resolver`** — Focus and innate spells granted by class features/heritage.
+1. **`spell-importer`** — Class spellcasting the player selected (prepared, spontaneous, spellbook, plus player-selected hexes).
+2. **`feature-spell-resolver`** — Focus, innate, hex, apparition, and repertoire spells _granted_ by class features / patrons / lessons / heritage / feats.
 
 **Rationale:** Each spell source has fundamentally different data shapes, resolution logic, and output requirements:
 
-| Resolver               | Data Source                                                      | Output                                           |
-| ---------------------- | ---------------------------------------------------------------- | ------------------------------------------------ |
-| spell-importer         | Character engines (spell entries) + stream-engines (slot counts) | Spellcasting entry + spells with slot placement  |
-| feature-spell-resolver | Stream-engines (feature modifiers with `add-spell`)              | Separate "Focus Spells" or "Innate Spells" entry |
+| Resolver               | Data Source                                                         | Output                                                                     |
+| ---------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| spell-importer         | Character engines (selected spell entries) + stream-engines (slots) | Class spellcasting entry + spells with slot placement; player-picked hexes |
+| feature-spell-resolver | Stream-engines (feature/feat definitions carrying `add-spell` mods) | Innate / Focus / Hexes / apparition entries, or repertoire additions       |
 
 Combining these into a single function would create a 500+ line monolith with deeply nested conditionals. Splitting allows each to be tested, understood, and modified independently.
+
+**Both paths converge on shared entries by name.** A witch's hexes come from _both_ resolvers — the player-selected hex (e.g. Phase Familiar) via `spell-importer`, and patron/lesson/Cackle hexes via `feature-spell-resolver` — so the feature resolver reuses an existing imported focus entry of the same name (`findImportedFocusEntryId`) rather than creating a second "Hexes" entry. The same reuse guards apparition and other named focus entries.
+
+**Grant categorization** (`feature-spell-resolver`) sorts each `add-spell` modifier into exactly one bucket — innate, hex, apparition, known (repertoire), or focus — via a small set of predicates. Order matters: a witch feature grants a hex (Needle of Vengeance) _and_ a plain familiar spell (Phantom Pain) from one engine, so the hex is tested first (it carries the `hex-spells` focus group or, for a witch, focus-casting machinery — a `saveDC`/`spellAttack`) and the plain spell falls through to the repertoire. The machinery test is gated on the class actually declaring a hex focus group, so a non-witch focus grant with the same shape (e.g. a sorcerer bloodline spell) is not misfiled as a hex. A grant with an absent tradition is treated the same as `"inherit"` (both mean "the class's own tradition"), so Phantom Pain — whose grant omits the field — still joins the witch's prepared list.
 
 **Item spells (scrolls/wands):** a spell-bearing scroll or wand is not a spellcasting
 resolver's job. The `equipment-importer` embeds the carried spell as the consumable's
@@ -245,20 +249,39 @@ prepared/spontaneous casting.
 - **Prepared casters** get spells placed into rank-specific slots via `placePreparedSpells()`.
 - **Spontaneous casters** get signature spells marked via `markSignatureSpells()`.
 - **Wizard curriculum** gets a separate spellcasting entry for school-specific spells (filtered by `isCurriculumSpell()` which checks for `wizard-school-spellbook-slot` in the `spellSlot` arg).
-- **Slot maximums** are set by calling the stream-engines API to compute the progression at the character's level.
+- **Player-selected hexes** (a `select-spell` engine whose `sourceRow` names the `hex-spells-rm` builder row) go into a focus "Hexes" entry; feature-granted hexes later join the same entry.
+- **Unknown spellcasting sources** are surfaced as sync errors (naming the source and skipped spells), never silently dropped.
+- **Missing ranked slots** raise a sync error only when the group has rank >= 1 spells but no ranked slots — a cantrip-only entry never false-alarms. The signal comes straight from slot resolution (`applySlotMaximums` returns whether any ranked slot was written), not a re-read of the written Foundry item.
+- **Slot maximums** are computed from stream-engines definitions at the character's level (see below).
 
 **Class-spellcasting module layout:** the `spell-importer` resolver is itself split into focused modules so the top-level file stays an orchestrator:
 
-| Module                  | Responsibility                                                                  |
-| ----------------------- | ------------------------------------------------------------------------------- |
-| `spell-importer.ts`     | Orchestration: group → per-group/curriculum/innate import, entry naming         |
-| `spell-grouping.ts`     | Sorts spell engines into main / innate / divine-font groups; class config table |
-| `spellcasting-entry.ts` | Creates spellcasting entries and a shared resolve-and-stamp spell-item helper   |
-| `prepared-spells.ts`    | Prepared-slot placement, missing-item backfill, signature marking               |
-| `divine-font.ts`        | Cleric Divine Font entry and its slot placement                                 |
-| `spell-slots.ts`        | Slot-maximum resolution (via `spell-slot-resolver`) and character-level lookup  |
+| Module                     | Responsibility                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `spell-importer.ts`        | Orchestration: group -> per-group / curriculum / innate / hex import, entry naming, missing-slot alarm       |
+| `spell-grouping.ts`        | Sorts spell engines into main / innate / hexes / divine-font / ritual groups; resolves each group's config   |
+| `spellcasting-features.ts` | Registry: class config table, special feature slugs, eidolon traditions, and slug-normalization helpers      |
+| `spellcasting-entry.ts`    | Creates spellcasting entries and a shared resolve-and-stamp spell-item helper                                |
+| `prepared-spells.ts`       | Prepared-slot placement, missing-item backfill, signature marking                                            |
+| `divine-font.ts`           | Cleric Divine Font entry and its slot placement                                                              |
+| `spell-slots.ts`           | Writes slot maximums (via `spell-slot-resolver`), reports whether ranked slots exist, character-level lookup |
+| `spell-slot-resolver.ts`   | Computes the slot/cantrip progression from stream-engines definitions and per-character overrides            |
 
-The shared resolve-and-stamp helper in `spellcasting-entry.ts` (`resolveSpellItems`) consolidates the previously-duplicated "resolve slug → stamp imported → set location" pattern used by the regular, prepared, and divine-font paths. `getCharacterLevel` lives in `spell-slots.ts` and is reused by `feature-spell-resolver` rather than duplicated.
+The shared resolve-and-stamp helper in `spellcasting-entry.ts` (`resolveSpellItems`) consolidates the "resolve slug -> stamp imported -> set location" pattern used by the regular, prepared, and divine-font paths. `getCharacterLevel` lives in `spell-slots.ts` and is reused by `feature-spell-resolver`.
+
+**Feature-slug registry** (`spellcasting-features.ts`): the single source of truth for spellcasting-feature identity, so a new caster or a renamed Demiplane feature is a one-file change. It holds:
+
+- `CLASS_SPELLCASTING` — tradition / ability / prepared-type by base-class feature slug.
+- Special routing slugs (`SUMMONER_SPELLCASTING`, `APPARITION_SPELLCASTING`, `HEX_FOCUS_GROUP`, `RUNES_SPELLCASTING_FEATURE`) and the `EIDOLON_TRADITIONS` map.
+- Normalization helpers used across the resolvers: `stripRemasterSuffix`, `isArchetypeSpellcasting` / `baseSpellcastingSlug` (an archetype casts exactly like its base class, so `wizard-spellcasting-archetype-rm` reduces to `wizard-spellcasting-rm`), `featureSlugMatches` (`-rm`-insensitive, so `magus-spellcasting` and `magus-spellcasting-rm` match), `baseConfigForFeature`, and `eidolonTradition` (a summoner's tradition is its eidolon's).
+
+**Slot-maximum resolution** (`spell-slot-resolver.ts`): a spellcasting feature's slots can come from several definitions, so the resolver gathers and merges them:
+
+1. **Per-character overrides win.** `character_spell-feature_{feature}_spell-slots_rank-{N}_max` engines are read as authoritative whether or not a `--overridden` companion marks a manual pin — the resolver always computes the progression, then merges any overrides on top per rank (no "are the overrides complete?" short-circuit).
+2. **Fixed slots** come from `v2-add-spell-slots`, summed across the class definition, the feature's own definition, and (for archetypes) the taken feats — one round of `add-feat` expansion follows a dedication into its basic-spellcasting feat. The class definition wins ties; feature/feat definitions only fill ranks the class leaves empty. Counts are summed over entries whose `levelPrereq <= characterLevel`.
+3. **Cantrip fallbacks.** A spontaneous caster that models cantrips as repertoire capacity (bard, psychic) falls back to the feature's own rank-0 `v2-add-repertoire-counts`. A caster with no cantrip data anywhere (summoner) falls back to counting the known rank-0 spells — a data-mirroring last resort that logs a breadcrumb so a surprising count is traceable.
+
+All feature-slug comparisons in the resolver use `featureSlugMatches`, so a class response mixing several features' slot blocks (animist + apparition) never cross-counts. The one-round `add-feat` expansion is a shared `expandFeatGrantLines` helper in `stream-engines.ts`, used by both this resolver (archetype slot feats) and `feature-spell-resolver` (feats that grant innate spells).
 
 ---
 
@@ -273,7 +296,7 @@ The shared resolve-and-stamp helper in `spellcasting-entry.ts` (`resolveSpellIte
 
 There is no alternative endpoint that returns standard JSON. A proxy server could normalize the format, but that adds infrastructure complexity and a single point of failure.
 
-**Parsing is encapsulated** in a shared pattern across all three resolvers. Each resolver only differs in which `engineModifiers[].type` values it extracts from the inner payload.
+**Parsing is encapsulated** in `stream-engines.ts` and shared by both resolvers. Each caller only differs in which `engineModifiers[].type` values it extracts from the inner payload (`v2-add-spell-slots`, `v2-add-repertoire-counts`, `add-spell`, `add-feat`, `v2-add-spellcasting-feature`, etc.).
 
 ---
 

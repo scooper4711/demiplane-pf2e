@@ -6,6 +6,7 @@ import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
+import { matchPrePredicate } from "./matcher-registry.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
 import { resolveUserOverride, unresolvedChoiceRecord, localizeChoiceLabel } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
@@ -62,6 +63,37 @@ export function formatChoiceSetFallback(fallback: ChoiceSetFallback): string {
   }
   parts.push("Edit the item on the actor sheet if this is wrong.");
   return parts.join(" ");
+}
+
+/**
+ * Reads the owning item's level from the creation payload (e.g. a kineticist
+ * gate junction's 5/9/13/17). Used to scope level-bound choices; undefined
+ * when the payload carries no level, in which case matchers fall back.
+ */
+function itemLevelFromSource(params: PreCreateParams): number | undefined {
+  const system = params.itemSource.system as { level?: { value?: unknown } } | undefined;
+  const level = system?.level?.value;
+  return typeof level === "number" && Number.isInteger(level) ? level : undefined;
+}
+
+/** A compendium document read structurally for roll-option slug extension. */
+interface GrantedItemDoc {
+  slug?: string;
+  system?: { slug?: string };
+  name?: string;
+  toObject?: () => { system?: { slug?: string }; name?: string };
+}
+
+/** Prefers the document slug, then its data, then a sluggified name. */
+function documentSlug(doc: GrantedItemDoc): string | null {
+  const resolved = doc.toObject?.() ?? null;
+  return (
+    doc.slug ??
+    doc.system?.slug ??
+    resolved?.system?.slug ??
+    (typeof doc.name === "string" ? toChoiceSlug(doc.name) : null) ??
+    (typeof resolved?.name === "string" ? toChoiceSlug(resolved.name) : null)
+  );
 }
 
 export class ChoiceSetHandler {
@@ -131,7 +163,6 @@ export class ChoiceSetHandler {
     if (this.boundActorId) return this.boundActorId;
     return "unknown actor";
   }
-
   /**
    * Provides the granting-element-to-granted-feats map so ChoiceSets whose
    * owning element grants a fixed feat (e.g. Total Power → Bone Spikes) resolve
@@ -280,6 +311,9 @@ export class ChoiceSetHandler {
     }
 
     if (await this.shouldPassThroughPreSetSelection(context, params)) {
+      debugLog(
+        `[${this.actorTag()}] ChoiceSet preset passthrough: item=${context.item.name}, flag=${context.flag || "choice"}`
+      );
       return callOriginal();
     }
 
@@ -290,8 +324,15 @@ export class ChoiceSetHandler {
     );
 
     const rollOptions = this.collectRollOptions(context);
+    if (await this.tryPrePredicateMatch(context, params)) return;
+
     const predicate = context.resolveInjectedProperties(context.predicate);
-    if (!predicate.test(rollOptions)) return;
+    if (!predicate.test(rollOptions)) {
+      debugLog(
+        `[${this.actorTag()}] ChoiceSet skipped by predicate: item=${context.item.name}, flag=${context.flag || "choice"}`
+      );
+      return;
+    }
 
     context.choices = await context.inflateChoices(rollOptions, params.tempItems);
     if (!context.choices || context.choices.length === 0) {
@@ -301,7 +342,7 @@ export class ChoiceSetHandler {
 
     if (await this.resolveIkonChoice(context, params)) return;
 
-    if (this.resolveForcedSingleChoice(context, params)) return;
+    if (await this.resolveForcedSingleChoice(context, params)) return;
 
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
@@ -313,9 +354,11 @@ export class ChoiceSetHandler {
       this.currentEngines,
       context.item.name,
       this.grantedFeatsByElement,
-      this.actorTag()
+      this.actorTag(),
+      itemLevelFromSource(params),
+      context.item.slug ?? undefined
     );
-    this.resolveFallbackChoice(context, params, matched, candidateSlugs);
+    await this.resolveFallbackChoice(context, params, matched, candidateSlugs);
   }
 
   /**
@@ -324,12 +367,12 @@ export class ChoiceSetHandler {
    * with an unresolved-choice record for the dialog. Extracted from
    * `handlePreCreate` to keep that method under the complexity budget.
    */
-  private resolveFallbackChoice(
+  private async resolveFallbackChoice(
     context: ChoiceSetContext,
     params: PreCreateParams,
     matched: Choice | null,
     candidateSlugs: string[]
-  ): void {
+  ): Promise<void> {
     // User overrides are strictly last-resort: consulted only when the
     // matchers fail, so they can never win over a successful automatic match.
     // Both outcomes are recorded (override-applied or blind guess) so the
@@ -338,9 +381,11 @@ export class ChoiceSetHandler {
     const selected = matched ?? override ?? context.choices[0];
     const guessed = context.choices[0];
     if (!selected || !guessed) return;
-    this.applySelectedChoice(context, params, selected, matched !== null || override !== null, candidateSlugs);
+    await this.applySelectedChoice(context, params, selected, matched !== null || override !== null, candidateSlugs);
     if (matched === null) {
-      this.unresolvedChoices.push(unresolvedChoiceRecord(context, guessed, override !== null ? "override" : "guess"));
+      this.unresolvedChoices.push(
+        unresolvedChoiceRecord(context, guessed, override !== null ? "override" : "guess", itemLevelFromSource(params))
+      );
     }
   }
 
@@ -360,12 +405,12 @@ export class ChoiceSetHandler {
    *
    * Returns true when it handled the ChoiceSet, false to defer to slug matching.
    */
-  private resolveForcedSingleChoice(context: ChoiceSetContext, params: PreCreateParams): boolean {
+  private async resolveForcedSingleChoice(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
     if (context.choices.length !== 1) return false;
     debugLog(
       `[${this.actorTag()}] [ChoiceSet] Single surviving option; selecting without fallback: ${this.describeChoice(context.choices[0]!)}`
     );
-    this.applySelectedChoice(context, params, context.choices[0]!, true, []);
+    await this.applySelectedChoice(context, params, context.choices[0]!, true, []);
     return true;
   }
 
@@ -416,7 +461,7 @@ export class ChoiceSetHandler {
     if (!resolver.assignsExistingWeapon(ikonSlug)) return false;
     const existing = context.choices.find((c) => c.value === ChoiceSetHandler.IKON_ORIGIN_EXISTING);
     if (!existing) return false;
-    this.applySelectedChoice(context, params, existing, true, []);
+    await this.applySelectedChoice(context, params, existing, true, []);
     return true;
   }
 
@@ -431,7 +476,7 @@ export class ChoiceSetHandler {
     if (weaponId === undefined) return false;
     const choice = context.choices.find((c) => c.value === weaponId);
     if (!choice) return false;
-    this.applySelectedChoice(context, params, choice, true, []);
+    await this.applySelectedChoice(context, params, choice, true, []);
     return true;
   }
 
@@ -536,14 +581,41 @@ export class ChoiceSetHandler {
     return new Set([context.actor.getRollOptions(), context.item.getRollOptions("parent")].flat());
   }
 
-  private applySelectedChoice(
+  /**
+   * Resolves ground-truth-derived picks ahead of predicate gating, via
+   * registered pre-predicate matchers. Predicate roll options assume
+   * interactive picking order that a headless import doesn't reproduce;
+   * a deterministic engine-backed pick must not depend on them. Returns
+   * true when a matcher handled the ChoiceSet.
+   */
+  private async tryPrePredicateMatch(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
+    const pick = await matchPrePredicate({
+      choices: context.choices,
+      engines: this.currentEngines,
+      itemName: context.item.name,
+      itemSlug: context.item.slug ?? undefined,
+      itemLevel: itemLevelFromSource(params),
+      flag: context.flag,
+      grantedFeatsByElement: this.grantedFeatsByElement,
+      actorTag: this.actorTag(),
+      inflateChoices: async () => {
+        const inflated = await context.inflateChoices(this.collectRollOptions(context), params.tempItems);
+        return inflated && inflated.length > 0 ? inflated : null;
+      },
+    });
+    if (!pick) return false;
+    await this.applySelectedChoice(context, params, pick, true, this.candidateSelectionSlugs());
+    return true;
+  }
+
+  private async applySelectedChoice(
     context: ChoiceSetContext,
     params: PreCreateParams,
     selected: Choice,
     matched: boolean,
     candidateSlugs: string[],
     note?: string
-  ): void {
+  ): Promise<void> {
     debugLog(
       `[${this.actorTag()}] ChoiceSet selection: ${matched ? "matched" : "fallback"} ${this.describeChoice(selected)}`
     );
@@ -585,6 +657,71 @@ export class ChoiceSetHandler {
     for (const rule of context.item.rules) {
       rule.ignored = false;
     }
+
+    // Mirror PF2e's `#setRollOption`: publish the selection so later
+    // ChoiceSets' predicates (kineticist elementTwo behind dual-gate,
+    // elementFork behind fork) evaluate against it instead of skipping.
+    await this.publishRollOption(context, params, selected);
+  }
+
+  /**
+   * Replicates PF2e ChoiceSet's `#setRollOption`. A rule declaring
+   * `rollOption` publishes `<rollOption>:<selection>` for plain values, or
+   * extends to `<rollOption>:<slug>` for item-UUID selections, onto the
+   * actor's live roll options. Parent-side `specialOptions` have no accessor
+   * here, so only the actor side is published — the side predicates test.
+   */
+  private async publishRollOption(context: ChoiceSetContext, params: PreCreateParams, selected: Choice): Promise<void> {
+    try {
+      const key = await this.rollOptionKey(context, params, selected);
+      if (!key) return;
+      // eslint-disable-next-line no-restricted-syntax -- context.actor is typed without an id; read structurally
+      const actorId = this.boundActorId ?? (context.actor as unknown as { id?: string })?.id ?? undefined;
+      if (actorId) this.writeActorRollOption(actorId, key);
+    } catch (error) {
+      debugLog(`[${this.actorTag()}] [ChoiceSet] Roll option publication failed: ${String(error)}`);
+    }
+  }
+
+  /**
+   * Builds the roll-option key for a selection (`<rule>:<value>`, extended to
+   * `<rule>:<slug>` for item-UUID selections like the granted gate items),
+   * mirroring the key native `#setRollOption` publishes.
+   */
+  private async rollOptionKey(
+    context: ChoiceSetContext,
+    params: PreCreateParams,
+    selected: Choice
+  ): Promise<string | null> {
+    const ruleSource = params.ruleSource as { rollOption?: unknown };
+    const declared = context.rollOption ?? (typeof ruleSource.rollOption === "string" ? ruleSource.rollOption : null);
+    if (!declared) return null;
+    const value = selected.value;
+    if (typeof value !== "string" && typeof value !== "number") return null;
+    if (typeof value === "string" && value.startsWith("Compendium.")) {
+      const slug = await this.grantedItemSlug(value);
+      if (!slug) return null;
+      const key = `${declared}:${slug}`;
+      ruleSource.rollOption = key;
+      return key;
+    }
+    return `${declared}:${String(value)}`;
+  }
+
+  /** Resolves a granted item UUID to its slug for roll-option extension. */
+  private async grantedItemSlug(uuid: string): Promise<string | null> {
+    // eslint-disable-next-line no-restricted-syntax -- fromUuid returns an untyped document; slug/name read structurally
+    const doc = (await fromUuid(uuid)) as unknown as GrantedItemDoc | null;
+    return doc ? documentSlug(doc) : null;
+  }
+
+  /** Writes a roll-option key onto the live actor, where later predicates read it. */
+  private writeActorRollOption(actorId: string, key: string): void {
+    const actor = game.actors.get(actorId) as { rollOptions?: { all?: Record<string, boolean> } } | undefined;
+    const all = actor?.rollOptions?.all;
+    if (!all) return;
+    all[key] = true;
+    debugLog(`[${this.actorTag()}] [ChoiceSet] Published roll option: ${key}`);
   }
 
   /**

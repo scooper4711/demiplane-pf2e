@@ -3,18 +3,26 @@ import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { resolveSpellSlots } from "./spell-slot-resolver.js";
 
+/**
+ * Resolves and writes an entry's slot maximums. Returns whether the feature
+ * has any usable ranked slot (rank >= 1, count > 0) — the signal the importer
+ * uses to flag a caster that ended up with spells but no way to cast them.
+ * Cantrips (rank 0) are at-will and never count as ranked slots. Returns false
+ * on any resolution failure or when no slot engine is found.
+ */
 export async function applySlotMaximums(
   actor: Actor,
   entryId: string,
   engines: DemiplaneEngineEntry[],
   parentSpellFeature: string,
   slotSlug: string,
-  summary: ImportSummary
-): Promise<void> {
+  summary: ImportSummary,
+  cacheEngineIds: string[] = []
+): Promise<boolean> {
   const engineId = findEngineIdForSlots(engines, slotSlug);
   if (!engineId) {
     debugLog(`[spell-slots] No engine found for slot resolution, skipping`);
-    return;
+    return false;
   }
 
   const label = slotSlug ? `curriculum (${slotSlug})` : "regular";
@@ -27,6 +35,8 @@ export async function applySlotMaximums(
       engines,
       parentSpellFeature,
       slotSlug,
+      cacheEngineIds,
+      summary,
     });
 
     debugLog(
@@ -35,10 +45,12 @@ export async function applySlotMaximums(
 
     const remaining = collectRemainingSlots(engines, parentSpellFeature);
     await writeSlotMaximums(actor, entryId, progression, remaining, parentSpellFeature, label, summary);
+    return Object.values(progression.slots).some((count) => count > 0);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     debugLog(`[spell-slots] Failed to resolve ${label} slots: ${message}`);
     summary.log.push(`! spell-slots: failed to resolve ${label} (${message})`);
+    return false;
   }
 }
 

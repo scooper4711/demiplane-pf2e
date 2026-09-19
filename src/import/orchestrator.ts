@@ -16,15 +16,16 @@
  * pipeline of `ImportPhase` objects (see ./phases.js) inside the try/finally.
  */
 
-import type { DemiplaneClient } from "@scooper4711/demiplane-api";
+import { normalizeBearerToken, type DemiplaneClient } from "@scooper4711/demiplane-api";
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "./types.js";
 import { MODULE_ID } from "./types.js";
 import { debugLog } from "./debug-log.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
 import { getChoiceOverrides } from "../sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
-import { DEMIPLANE_GRAPHQL_URL } from "../config.js";
-import { normalizeDemiplaneToken } from "../token.js";
+import { toUserFacingSyncError } from "../token.js";
+import { readConfiguredToken } from "../token-source.js";
+import { PF2E_ENGINE_SOURCE } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
 import { resolveGrantedFeatsBySlug } from "./stream-engines.js";
 import {
@@ -51,22 +52,14 @@ const CAMPAIGN_JOURNAL_TITLE = "Campaign";
  */
 const CAMPAIGN_NOTES_PATH = "system.details.biography.campaignNotes";
 
-/** Fetches the character's engine data blob and last-updated timestamp. */
-const CHARACTER_DATA_QUERY = `query($id: uuid!) {
-  demiplane_user_character(where: {uuid: {_eq: $id}, deleted_at: {_is_null: true}, enabled: {_eq: true}}) {
-    data
-    updated
-  }
-}`;
-
 export class ImportOrchestrator {
   private readonly client: DemiplaneClient | undefined;
 
   /**
-   * @param client - The Demiplane API client used for journal import. Optional
-   *   so tests (and any caller that doesn't need journal sync) can construct an
-   *   orchestrator without wiring a client; when absent, journal import is
-   *   skipped.
+   * @param client - The Demiplane API client used to fetch character data and
+   *   journals. Optional only so unit tests can construct an orchestrator with a
+   *   partial fake; in the module it is always wired (see module.ts). Without a
+   *   client the character read cannot run and import reports an error.
    */
   constructor(client?: DemiplaneClient) {
     this.client = client;
@@ -219,55 +212,57 @@ export class ImportOrchestrator {
     token: string | undefined,
     summary: ImportSummary
   ): Promise<{ engines: DemiplaneEngineEntry[]; updated: string | null; cacheEngineIds: string[] } | null> {
-    if (!token) {
+    if (!this.client) {
+      summary.errors.push("No Demiplane client configured");
+      return null;
+    }
+
+    // The token argument is an optional explicit override; when absent or empty
+    // we fall back to the live setting. That makes "import and push read the
+    // same source" structural, not just conventional — a caller that forgets to
+    // thread a fresh token still authenticates from the setting rather than
+    // reintroducing the import/push divergence this replaced. Normalize the
+    // override to decide emptiness so a scheme-only value falls through to the
+    // setting; setToken normalizes again (idempotent) for the actual credential.
+    const effectiveToken = normalizeBearerToken(token ?? "") || readConfiguredToken();
+    if (!effectiveToken) {
       summary.errors.push("No authentication token provided");
       return null;
     }
 
+    // Authenticate the shared client and read through it, so import uses the
+    // same credential and transport as push: one client, one token, one code
+    // path to Demiplane.
+    this.client.setToken(effectiveToken);
+
     try {
-      const response = await fetch(DEMIPLANE_GRAPHQL_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${normalizeDemiplaneToken(token)}`,
-        },
-        body: JSON.stringify({ query: CHARACTER_DATA_QUERY, variables: { id: characterId } }),
-      });
-
-      const json = (await response.json()) as {
-        data?: {
-          demiplane_user_character: Array<{
-            data: {
-              engines: DemiplaneEngineEntry[];
-              engineCacheIdsBySource?: Record<string, string[]>;
-            };
-            updated: string | null;
-          }>;
-        };
-        errors?: Array<{ message: string }>;
+      const character = await this.client.fetchCharacterData(characterId);
+      const cacheEngineIds = character.engineCacheIdsBySource?.[PF2E_ENGINE_SOURCE] ?? [];
+      return {
+        // The library types engines as CharacterEngine[]; the importer works in
+        // its own structurally-compatible DemiplaneEngineEntry[]. Narrow at this
+        // boundary, the single point where library data enters the importer.
+        // eslint-disable-next-line no-restricted-syntax -- cross-package structural type at the API boundary
+        engines: character.engines as unknown as DemiplaneEngineEntry[],
+        updated: character.updated ?? null,
+        cacheEngineIds,
       };
-
-      if (json.errors) {
-        summary.errors.push(`GraphQL: ${json.errors.map((e) => e.message).join("; ")}`);
-        return null;
-      }
-
-      const character = json.data?.demiplane_user_character?.[0];
-      if (!character?.data?.engines) {
-        summary.errors.push(`Character not found: ${characterId}`);
-        return null;
-      }
-
-      // The pathfinder2e-v2 source lists every engine the character can access —
-      // including indirectly granted feats that never appear in `engines` — so it
-      // is the lookup set for resolving `add-feat` grants to their definitions.
-      const cacheEngineIds = character.data.engineCacheIdsBySource?.["pathfinder2e-v2"] ?? [];
-
-      return { engines: character.data.engines, updated: character.updated, cacheEngineIds };
     } catch (error) {
-      summary.errors.push(`Fetch failed: ${error instanceof Error ? error.message : String(error)}`);
+      summary.errors.push(this.describeFetchError(error, characterId));
       return null;
     }
+  }
+
+  /**
+   * Turns a `fetchCharacterData` failure into an import-summary message. The
+   * client throws `Character not found: <id>` for an empty result and plain
+   * `Error`s for GraphQL/transport failures; token-related failures are
+   * translated to plain language, everything else is surfaced verbatim.
+   */
+  private describeFetchError(error: unknown, characterId: string): string {
+    const raw = error instanceof Error ? error.message : String(error);
+    if (raw.startsWith("Character not found")) return `Character not found: ${characterId}`;
+    return toUserFacingSyncError(error);
   }
 
   /**

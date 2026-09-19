@@ -219,6 +219,7 @@ describe("sync-flows", () => {
 
     it("runs a real flush through the manager when pushing", async () => {
       const client = {
+        setToken: vi.fn(),
         isAuthenticated: () => true,
         fetchCharacterData: vi.fn().mockResolvedValue({ engines: [], updated: "2026-01-01T00:00:00.000Z" }),
         fetchCharacterUpdated: vi.fn().mockResolvedValue("2026-01-01T00:00:00.000Z"),
@@ -228,6 +229,8 @@ describe("sync-flows", () => {
       const exportManager = new ExportManager(client);
       const importCharacter = vi.fn().mockResolvedValue(summary());
       await globalThis.game.settings.set(MODULE_ID, "syncWriteLevel", "full");
+      // The push auth gate reconciles the client from this setting.
+      await globalThis.game.settings.set(MODULE_ID, "demiplaneToken", "token-abc");
 
       const result = await exportLinkedCharacter(linkedActor(), {
         exportManager,
