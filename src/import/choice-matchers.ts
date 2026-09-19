@@ -230,8 +230,9 @@ function matchEidolon(choices: Choice[], engines: DemiplaneEngineEntry[]): Choic
  * "Evolution Feat" choice, or the `animal-rm` order engine for "Druidic
  * Order"). Such an engine is an explicit record of the player's decision for
  * this feature, so it wins over broad fallbacks. Exact label/value matches are
- * tried first; labels that merely start with the pick (e.g. "Animal Order"
- * for the `animal` pick) second.
+ * tried first; segment-boundary prefix matches second, in either direction
+ * ("Animal Order" for the `animal` pick, or "Flesh" for the
+ * `flesh-necromancer-rm` fascination pick).
  */
 function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
   if (!itemName) return null;
@@ -256,7 +257,10 @@ function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], it
       const labelSlug = toChoiceSlug(choice.label);
       for (const slug of pickSlugs) {
         if (val === slug || labelSlug === slug) return choice;
-        if (pass === "prefix" && labelSlug.startsWith(`${slug}-`)) return choice;
+        // Either direction at a segment boundary: the label may extend the
+        // pick ("Animal Order" for `animal`) or the pick may extend the label
+        // ("Flesh" for the `flesh-necromancer-rm` fascination pick).
+        if (pass === "prefix" && (labelSlug.startsWith(`${slug}-`) || slug.startsWith(`${labelSlug}-`))) return choice;
       }
     }
   }
@@ -519,7 +523,11 @@ function matchClassFeatures(choices: Choice[], engines: DemiplaneEngineEntry[]):
 
   for (const choice of choices) {
     const labelSlug = toChoiceSlug(choice.label);
-    if (classFeatureSlugs.some((slug) => labelSlug === slug || labelSlug.endsWith(`-${slug}`))) {
+    if (
+      classFeatureSlugs.some(
+        (slug) => labelSlug === slug || labelSlug.endsWith(`-${slug}`) || slug.startsWith(`${labelSlug}-`)
+      )
+    ) {
       return choice;
     }
   }

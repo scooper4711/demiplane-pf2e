@@ -183,6 +183,29 @@ export interface RawEngineLine {
   id?: string;
   name?: string;
   modifiers: EngineModifier[];
+  /**
+   * Sub-features the engine grants (e.g. a focus feature's cantrip feature),
+   * with the character level each arrives at. Present only when non-empty.
+   */
+  grantedFeatures?: GrantedSubFeature[];
+  /**
+   * For `tabula/spell/*` lines, the spell's own focus flag. Present only when
+   * the definition declares a slug.
+   */
+  spellFocus?: SpellDefinitionFocus;
+}
+
+/** A sub-feature granted by an engine definition. */
+export interface GrantedSubFeature {
+  slug: string;
+  level: number;
+}
+
+/** A spell definition's focus flag, read from its own `tabula/spell/*` line. */
+export interface SpellDefinitionFocus {
+  /** The Demiplane spell slug (e.g. `create-thrall-rm`). */
+  slug: string;
+  isFocus: boolean;
 }
 
 interface EngineNode {
@@ -242,10 +265,18 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
   return results;
 }
 
-function finalizeLine(id: string | undefined, name: string | undefined, modifiers: EngineModifier[]): RawEngineLine {
+function finalizeLine(
+  id: string | undefined,
+  name: string | undefined,
+  modifiers: EngineModifier[],
+  grantedFeatures?: GrantedSubFeature[],
+  spellFocus?: SpellDefinitionFocus
+): RawEngineLine {
   const result: RawEngineLine = { modifiers };
   if (id !== undefined) result.id = id;
   if (name !== undefined) result.name = name;
+  if (grantedFeatures !== undefined && grantedFeatures.length > 0) result.grantedFeatures = grantedFeatures;
+  if (spellFocus !== undefined) result.spellFocus = spellFocus;
   return result;
 }
 
@@ -271,9 +302,55 @@ function parseStringObjects(nodes: EngineNode[]): Array<Record<string, unknown>>
 }
 
 /**
+ * Reads an engine definition's `grantedFeatures` groups (arrays of
+ * `{slug, level}` entries) into a flat, de-duplicated list. Malformed groups
+ * and entries are skipped — this is data ingestion at a parse boundary.
+ */
+function extractGrantedSubFeatures(objects: Array<Record<string, unknown>>): GrantedSubFeature[] {
+  const seen = new Set<string>();
+  const features: GrantedSubFeature[] = [];
+  for (const obj of objects) {
+    const groups = obj.grantedFeatures;
+    if (!Array.isArray(groups)) continue;
+    for (const group of groups) {
+      if (!Array.isArray(group)) continue;
+      for (const entry of group) {
+        if (typeof entry !== "object" || entry === null) continue;
+        const { slug, level } = entry as { slug?: unknown; level?: unknown };
+        if (typeof slug !== "string" || slug === "" || typeof level !== "number") continue;
+        if (seen.has(slug)) continue;
+        seen.add(slug);
+        features.push({ slug, level });
+      }
+    }
+  }
+  return features;
+}
+
+/**
+ * Reads a spell definition's own focus flag. Demiplane marks focus spells on
+ * the spell itself (`isFocus`), which is the only signal separating a focus
+ * cantrip grant (the necromancer's Create Thrall) from a repertoire grant
+ * wearing the same shape — the cantrips don't even carry the "focus" trait.
+ */
+function extractSpellFocus(
+  engineName: string | undefined,
+  objects: Array<Record<string, unknown>>
+): SpellDefinitionFocus | undefined {
+  if (!engineName?.startsWith("tabula/spell/")) return undefined;
+  for (const obj of objects) {
+    const slug = obj.slug;
+    if (typeof slug !== "string" || slug === "") continue;
+    return { slug, isFocus: obj.isFocus === true };
+  }
+  return undefined;
+}
+
+/**
  * Parses a single NDJSON line from stream-engines. Returns the engine id, the
- * display name (from the first node carrying modifiers), and every engineModifier
- * found in its `StringObject` nodes. Malformed lines yield an empty modifier list.
+ * display name (from the first node carrying modifiers), every engineModifier
+ * found in its `StringObject` nodes, and the granted sub-features (when any).
+ * Malformed lines yield an empty modifier list.
  */
 export function parseEngineLine(line: string): RawEngineLine {
   try {
@@ -283,6 +360,8 @@ export function parseEngineLine(line: string): RawEngineLine {
       data?: { nodes?: Record<string, EngineNode> };
     };
     const objects = parseStringObjects(Object.values(parsed.data?.nodes ?? {}));
+    const grantedFeatures = extractGrantedSubFeatures(objects);
+    const spellFocus = extractSpellFocus(parsed.engineName, objects);
 
     for (const obj of objects) {
       const modifiers = extractModifiersFromObject((obj.engineModifiers as Array<Record<string, unknown>>) ?? []);
@@ -290,11 +369,17 @@ export function parseEngineLine(line: string): RawEngineLine {
         // Prefer the top-level engineName (e.g. "tabula/feat/foxfire.eng"), which
         // is stable and present on every line; fall back to the element display
         // name only when engineName is absent.
-        return finalizeLine(parsed.id, parsed.engineName ?? (obj.name as string | undefined), modifiers);
+        return finalizeLine(
+          parsed.id,
+          parsed.engineName ?? (obj.name as string | undefined),
+          modifiers,
+          grantedFeatures,
+          spellFocus
+        );
       }
     }
 
-    return finalizeLine(parsed.id, parsed.engineName, []);
+    return finalizeLine(parsed.id, parsed.engineName, [], grantedFeatures, spellFocus);
   } catch {
     return { modifiers: [] };
   }
@@ -335,13 +420,36 @@ export async function resolveFeatEngineIdsBySlug(cacheEngineIds: string[]): Prom
  * definitions (e.g. a summoner's `summoner-spellcasting-rm` slot source).
  */
 export async function resolveClassFeatureEngineIdsBySlug(cacheEngineIds: string[]): Promise<Map<string, string>> {
-  const bySlug = new Map<string, string>();
-  if (cacheEngineIds.length === 0) return bySlug;
+  if (cacheEngineIds.length === 0) return new Map();
+  return mapClassFeatureEngineIds(await fetchStreamEngineLines(cacheEngineIds));
+}
 
-  const lines = await fetchStreamEngineLines(cacheEngineIds);
+/**
+ * Maps class-feature slugs to engine UUIDs from already-fetched lines, so a
+ * caller holding the cache lines can resolve without refetching.
+ */
+export function mapClassFeatureEngineIds(lines: RawEngineLine[]): Map<string, string> {
+  return mapEngineIdsByName(lines, CLASS_FEATURE_ENGINE_NAME_RE);
+}
+
+/** Extracts the spell slug from a spell engine name, e.g. `tabula/spell/foxfire.eng` → `foxfire`. */
+const SPELL_ENGINE_NAME_RE = /^tabula\/spell\/(.+)\.eng$/;
+
+/**
+ * Maps Demiplane spell slugs to engine UUIDs from already-fetched lines, so a
+ * caller can fetch spell definitions (for their `isFocus` flags) with one
+ * batched request instead of another full-cache fetch.
+ */
+export function mapSpellEngineIds(lines: RawEngineLine[]): Map<string, string> {
+  return mapEngineIdsByName(lines, SPELL_ENGINE_NAME_RE);
+}
+
+/** Maps engine-name slugs captured by `pattern` to engine UUIDs. */
+function mapEngineIdsByName(lines: RawEngineLine[], pattern: RegExp): Map<string, string> {
+  const bySlug = new Map<string, string>();
   for (const line of lines) {
     if (!line.id || !line.name) continue;
-    const slug = CLASS_FEATURE_ENGINE_NAME_RE.exec(line.name)?.[1];
+    const slug = pattern.exec(line.name)?.[1];
     if (slug) bySlug.set(slug, line.id);
   }
   return bySlug;

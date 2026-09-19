@@ -97,6 +97,14 @@ describe("baseConfigForFeature", () => {
     );
   });
 
+  it("resolves the necromancer as a prepared occult Int caster", () => {
+    expect(baseConfigForFeature("necromancer-spellcasting-rm")).toEqual({
+      tradition: "occult",
+      preparedType: "prepared",
+      ability: "int",
+    });
+  });
+
   it("returns null for the summoner (dynamic, eidolon-based tradition)", () => {
     expect(baseConfigForFeature("summoner-spellcasting-rm")).toBeNull();
   });

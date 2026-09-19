@@ -23,8 +23,13 @@ function loreEngine(name, sourceRow) {
   };
 }
 
-function demiEngine(name, slug) {
-  return { id: `eng-${slug}`, name, type: "DemiplaneEngine", args: { slug } };
+function demiEngine(name, slug, sourceRow?) {
+  return {
+    id: `eng-${slug}`,
+    name,
+    type: "DemiplaneEngine",
+    args: sourceRow === undefined ? { slug } : { slug, sourceRow },
+  };
 }
 
 function featEngine(slug) {
@@ -164,6 +169,28 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices(exact, engines)).toBe(exact[0]);
     expect(findMatchInChoices(suffixed, engines)).toBe(suffixed[0]);
     expect(findMatchInChoices([{ label: "Abjuration", value: "zzz" }], engines)).toBeNull();
+  });
+
+  it("matches a fascination pick whose engine slug extends the label", () => {
+    // Grim Fascination offers Blood / Bone / Flesh / Spirit; the chosen Flesh
+    // arrives as `flesh-necromancer-rm` (sourceRow `grim-fascination-rm`).
+    // Neither the exact nor the label-extends-pick direction sees it — only
+    // the pick-extends-label direction does.
+    const choices = [
+      { label: "Blood", value: "blood" },
+      { label: "Bone", value: "bone" },
+      { label: "Flesh", value: "flesh" },
+      { label: "Spirit", value: "spirit" },
+    ];
+    const engines = [
+      demiEngine("tabula/class-feature/reaper-rm.eng", "reaper-rm", "fatal-method-rm"),
+      demiEngine("tabula/class-feature/flesh-necromancer-rm.eng", "flesh-necromancer-rm", "grim-fascination-rm"),
+    ];
+
+    // Scoped by owning feature (the feature-pick strategy).
+    expect(findMatchInChoices(choices, engines, "Grim Fascination")).toBe(choices[2]);
+    // Unscoped (the class-features strategy).
+    expect(findMatchInChoices(choices, engines)).toBe(choices[2]);
   });
 
   it("resolves an Exemplar ikon whose label carries a possessive apostrophe", () => {

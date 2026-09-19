@@ -7,14 +7,17 @@ import {
   fetchStreamEngineLines,
   fetchDomainEngineData,
   expandFeatGrantLines,
+  mapClassFeatureEngineIds,
+  mapSpellEngineIds,
   type AddSpellModifier,
   type EngineModifier,
   type DomainEngineData,
+  type RawEngineLine,
 } from "./stream-engines.js";
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 import { getCharacterLevel, applySlotMaximums } from "./spell-slots.js";
 import { deriveClassEntryName } from "./spell-importer.js";
-import { HEX_FOCUS_GROUP, APPARITION_SPELLCASTING } from "./spellcasting-features.js";
+import { HEX_FOCUS_GROUP, APPARITION_SPELLCASTING, RUNES_SPELLCASTING_FEATURE } from "./spellcasting-features.js";
 import { itemSystem } from "../pf2e-types.js";
 import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
 
@@ -79,6 +82,12 @@ export async function resolveFeatureGrantedSpells(
     fetchDomainEngineData(domainEngineIds),
   ]);
   modifiers.push(...(await fetchLinkSpellModifiers(engines, cacheEngineIds)));
+  const { modifiers: subFeatureModifiers, cacheLines } = await fetchSpellcastingSubFeatures(
+    engines,
+    characterLevel,
+    cacheEngineIds
+  );
+  modifiers.push(...subFeatureModifiers);
 
   const focusEntryName = findFocusEntryName(modifiers);
   const unlimitedSignatures = collectUnlimitedSignatures(modifiers);
@@ -87,7 +96,13 @@ export async function resolveFeatureGrantedSpells(
   // inherited-tradition grants as focus spells. See {@link isInheritedRepertoireGrant}.
   const hexFocusGroup = declaresHexFocusGroup(modifiers);
   const granted = dropUnsatisfiedStoreGrants(modifiers, engines);
-  const { innate, focus, known, hexes, apparition } = categorizeGrantedSpells(granted, characterLevel, hexFocusGroup);
+  const focusSlugs = await findDefinitionFocusSlugs(granted, cacheLines);
+  const { innate, focus, known, hexes, apparition } = categorizeGrantedSpells(
+    granted,
+    characterLevel,
+    hexFocusGroup,
+    focusSlugs
+  );
   const gatedFocus = await filterAccessibleSpells(focus, maxSpellRank);
   gatedFocus.push(...(await collectDomainFocusSpells(domainData, maxSpellRank)));
   // The apparition entry is spontaneous: every spell in it must be castable
@@ -166,6 +181,128 @@ async function fetchLinkSpellModifiers(
     modifiers.push(...collectSpellModifiers(line.modifiers));
   }
   return modifiers;
+}
+
+/**
+ * Fetches spell grants from the class's automatic spellcasting sub-features —
+ * definitions the character holds no engines for, so the feature-modifier
+ * fetch above never sees them.
+ *
+ * Most classes embed their automatic grants in the class engine definition
+ * (the bard's compositions) or gate them behind chosen features that do appear
+ * as engines (mysteries, bloodlines, patrons). The necromancer instead spreads
+ * them across separate sub-feature definitions: its spellcasting definition
+ * grants harm, its grave-spells focus feature grants Necrotic Bomb, and that
+ * feature in turn grants the grave-cantrips feature (Create Thrall, Thrall
+ * Charge). Nothing there is ever chosen, so none of it appears in the
+ * character's engines — without this chase those spells silently vanish and
+ * the focus entry falls back to a generic name.
+ *
+ * The chase is bounded and strictly additive: roots are the spellcasting
+ * features the character's own selected spells name, then each level's focus
+ * groups, then their granted sub-features gated on arrival level — three
+ * levels deep at most. Grants duplicating ones the character engines already
+ * provide collapse downstream (spells dedupe per entry when added).
+ */
+async function fetchSpellcastingSubFeatures(
+  engines: DemiplaneEngineEntry[],
+  characterLevel: number,
+  cacheEngineIds: string[]
+): Promise<{ modifiers: EngineModifier[]; cacheLines: RawEngineLine[] }> {
+  const empty = { modifiers: [], cacheLines: [] };
+  if (cacheEngineIds.length === 0) return empty;
+  const roots = collectSpellcastingFeatureSlugs(engines);
+  if (roots.length === 0) return empty;
+  // One full-cache fetch serves both the class-feature chase below and the
+  // spell-definition focus check (via the returned lines).
+  const cacheLines = await fetchStreamEngineLines(cacheEngineIds);
+  const bySlug = mapClassFeatureEngineIds(cacheLines);
+  const modifiers: EngineModifier[] = [];
+  const seen = new Set<string>(roots);
+  let current = await fetchLinesForSlugs(bySlug, roots);
+  for (let depth = 0; depth < 3 && current.length > 0; depth++) {
+    const next: string[] = [];
+    for (const line of current) {
+      modifiers.push(...collectSpellModifiers(line.modifiers));
+      for (const mod of line.modifiers) {
+        if (mod.type === "v2-add-spellcasting-feature" && typeof mod.focusSlug === "string" && mod.focusSlug !== "") {
+          next.push(mod.focusSlug);
+        }
+      }
+      for (const sub of line.grantedFeatures ?? []) {
+        if (sub.level <= characterLevel) next.push(sub.slug);
+      }
+    }
+    const fresh = [...new Set(next)].filter((slug) => !seen.has(slug));
+    if (fresh.length === 0) break;
+    for (const slug of fresh) seen.add(slug);
+    current = await fetchLinesForSlugs(bySlug, fresh);
+  }
+  return { modifiers, cacheLines };
+}
+
+/**
+ * Splits repertoire-shaped grants by each spell's own Demiplane definition.
+ * The grant shape alone cannot separate a true repertoire grant (the bard
+ * Maestro muse's Soothe: `isKnown` + concrete tradition + no focus group)
+ * from a focus cantrip grant wearing the same shape (the necromancer's
+ * `grave-cantrips-rm` granting Create Thrall / Thrall Charge that way — those
+ * cantrips don't even carry the "focus" trait, only the definition's
+ * `isFocus` flag marks them). Spells whose definitions cannot be resolved
+ * keep the previous behavior (repertoire) and surface as unmapped downstream
+ * when genuinely missing.
+ */
+async function findDefinitionFocusSlugs(
+  modifiers: EngineModifier[],
+  cacheLines: RawEngineLine[]
+): Promise<Set<string>> {
+  const candidates = [
+    ...new Set(
+      modifiers
+        .filter((mod): mod is AddSpellModifier => mod.type === "add-spell" && isRepertoireGrant(mod))
+        .map((mod) => mod.addSpell)
+    ),
+  ];
+  if (candidates.length === 0 || cacheLines.length === 0) return new Set();
+  const bySlug = mapSpellEngineIds(cacheLines);
+  const ids = candidates.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
+  if (ids.length === 0) return new Set();
+  const focused = new Set<string>();
+  for (const line of await fetchStreamEngineLines(ids)) {
+    if (line.spellFocus?.isFocus === true) focused.add(line.spellFocus.slug);
+  }
+  return focused;
+}
+
+/**
+ * Spellcasting features the character casts with, named by its own selected
+ * spell engines. Ritual, scroll/wand, and rune selections name no class
+ * feature and are excluded.
+ */
+function collectSpellcastingFeatureSlugs(engines: DemiplaneEngineEntry[]): string[] {
+  const slugs = new Set<string>();
+  for (const eng of engines) {
+    if (eng.type !== "DemiplaneEngine" || !(eng.name as string).startsWith("tabula/spell/")) continue;
+    const parent = eng.args?.parentSpellFeature as string | undefined;
+    if (
+      typeof parent !== "string" ||
+      parent === "" ||
+      parent === "ritual" ||
+      parent === "scroll" ||
+      parent === "wand" ||
+      parent === RUNES_SPELLCASTING_FEATURE
+    ) {
+      continue;
+    }
+    slugs.add(parent);
+  }
+  return [...slugs];
+}
+
+/** Fetches class-feature definitions for slugs, skipping ones the cache cannot resolve. */
+async function fetchLinesForSlugs(bySlug: Map<string, string>, slugs: string[]): Promise<RawEngineLine[]> {
+  const ids = slugs.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
+  return fetchStreamEngineLines(ids);
 }
 
 /**
@@ -382,24 +519,27 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
 }
 
 /**
- * A mystery-style repertoire grant: `isKnown` with an inherited tradition whose
- * `parentFeature` names the class's main spellcasting feature (e.g. an Ashes
- * mystery granting ignition / breathe fire with
- * `parentFeature: "oracle-spellcasting-rm"`). It belongs in the class
- * repertoire, not the focus entry — only the revelation grant (parented at the
- * focus group, e.g. `"revelation-spells-rm"`) is a focus spell.
+ * A repertoire grant parented at the class's main spellcasting feature (e.g.
+ * an Ashes mystery granting ignition / breathe fire with
+ * `parentFeature: "oracle-spellcasting-rm"`, or the necromancer spellcasting
+ * granting harm that way). It belongs in the class repertoire, not the focus
+ * entry — only the revelation/focus-group grant (parented at e.g.
+ * `"revelation-spells-rm"`) is a focus spell. Tradition is irrelevant here:
+ * the mystery grants inherit it while harm names it concretely.
  *
  * Parenting at the spellcasting feature is the distinguishing signal: focus
  * grants parent at a focus group (`composition-spells`, `revelation-spells-rm`,
- * `link-spells-rm`) or carry no parent at all, so the `-spellcasting` suffix
- * test never misfires on them. Apparition grants (`apparition-spellcasting-rm`)
- * also match the suffix but are tested earlier, so they still file as
- * apparition.
+ * `grave-spells-rm`, `link-spells-rm`) or carry no parent at all, so the
+ * `-spellcasting` suffix test never misfires on them. Apparition grants
+ * (`apparition-spellcasting-rm`) also match the suffix but are tested earlier,
+ * so they still file as apparition — except a store-restricted vessel spell,
+ * which the apparition bucket rejects and which must fall through to focus
+ * rather than sneak into the repertoire here.
  */
 function isSpellcastingFeatureRepertoireGrant(mod: AddSpellModifier): boolean {
   if (mod.isKnown !== true || mod.forcesFocus === true) return false;
-  const tradition = mod.tradition ?? "";
-  if (tradition !== "" && tradition !== INHERIT_TRADITION) return false;
+  const restriction = mod.storeRestriction;
+  if (restriction && typeof restriction === "object") return false;
   const parent = mod.parentFeature ?? "";
   if (parent === "") return false;
   const stripped = parent.endsWith("-rm") ? parent.slice(0, -3) : parent;
@@ -416,10 +556,12 @@ function isSpellcastingFeatureRepertoireGrant(mod: AddSpellModifier): boolean {
  * - **known** (a repertoire grant): added to the class's spell repertoire — a
  *   spontaneous caster's known spell (Maestro muse → Soothe, per
  *   {@link isRepertoireGrant}), a witch's prepared-list spell that accompanies
- *   a hex (per {@link isInheritedRepertoireGrant}), or a mystery grant parented
- *   at the class spellcasting feature (per
- *   {@link isSpellcastingFeatureRepertoireGrant}, e.g. an oracle's ignition /
- *   breathe fire).
+ *   a hex (per {@link isInheritedRepertoireGrant}), or a grant parented at the
+ *   class spellcasting feature (per {@link isSpellcastingFeatureRepertoireGrant},
+ *   e.g. an oracle's ignition / breathe fire or the necromancer's harm).
+ *   Repertoire-shaped grants whose spell itself is a focus spell (the
+ *   necromancer's grave cantrips, shaped exactly like Soothe) file
+ *   as focus instead — see {@link findDefinitionFocusSlugs}.
  * - **apparition** (an animist apparition grant): filed in the apparition
  *   spellcasting entry, never the class repertoire — except a vessel spell
  *   (gated on a satisfied primary-apparition restriction), which falls through
@@ -488,7 +630,8 @@ function isApparitionGrant(mod: AddSpellModifier): boolean {
 function categorizeGrantedSpells(
   modifiers: EngineModifier[],
   characterLevel: number,
-  hexFocusGroup: boolean
+  hexFocusGroup: boolean,
+  focusSlugs: Set<string>
 ): {
   innate: GrantedSpell[];
   focus: GrantedSpell[];
@@ -501,11 +644,17 @@ function categorizeGrantedSpells(
   const known: GrantedSpell[] = [];
   const hexes: GrantedSpell[] = [];
   const apparition: GrantedSpell[] = [];
+  /** Repertoire-shaped grants, split by spell-definition focus flag below. */
+  const ambiguous: AddSpellModifier[] = [];
 
   for (const mod of modifiers) {
     if (mod.type !== "add-spell") continue;
     if (mod.level > characterLevel) continue;
 
+    if (isRepertoireGrant(mod)) {
+      ambiguous.push(mod);
+      continue;
+    }
     const spell = buildGrantedSpell(mod, hexFocusGroup);
 
     if (spell.isInnate) innate.push(spell);
@@ -513,6 +662,17 @@ function categorizeGrantedSpells(
     else if (spell.isApparition) apparition.push(spell);
     else if (spell.isKnown) known.push(spell);
     else focus.push(spell);
+  }
+
+  for (const mod of ambiguous) {
+    const spell = buildGrantedSpell(mod, hexFocusGroup);
+    if (focusSlugs.has(mod.addSpell)) {
+      spell.isKnown = false;
+      spell.isFocus = true;
+      focus.push(spell);
+    } else {
+      known.push(spell);
+    }
   }
 
   return { innate, focus, known, hexes, apparition };

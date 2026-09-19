@@ -404,6 +404,172 @@ describe("feature-spell-resolver", () => {
     expect(result.focus.map((f) => f.slug)).toEqual(["ashen-wind-rm"]);
   });
 
+  describe("spellcasting sub-feature chase", () => {
+    /** A definition line carrying an engineName, modifiers, and granted sub-features. */
+    function definitionLine(id: string, engineName: string, payload: Record<string, unknown>): string {
+      return JSON.stringify({
+        id,
+        engineName,
+        data: { nodes: { n1: { name: "StringObject", data: { string: JSON.stringify(payload) } } } },
+      });
+    }
+
+    function spellEngine(slug: string, parentSpellFeature = "necromancer-spellcasting-rm"): DemiplaneEngineEntry {
+      return {
+        id: `spell-${slug}`,
+        name: `tabula/spell/${slug}.eng`,
+        type: "DemiplaneEngine",
+        args: { slug, parentSpellFeature, selectionRank: 0 },
+      } as DemiplaneEngineEntry;
+    }
+
+    const SPELLCASTING_DEF = definitionLine(
+      "def-spellcasting",
+      "tabula/class-feature/necromancer-spellcasting-rm.eng",
+      {
+        engineModifiers: [
+          {
+            type: "v2-add-spellcasting-feature",
+            slug: "necromancer-spellcasting-rm",
+            focusSlug: "grave-spells-rm",
+            focusName: "Grave Spells",
+            hasFocusGroup: true,
+          },
+          {
+            type: "add-spell",
+            level: 1,
+            isKnown: true,
+            addSpell: "harm-rm",
+            tradition: "occult",
+            parentFeature: "necromancer-spellcasting-rm",
+          },
+        ],
+      }
+    );
+    const FOCUS_DEF = definitionLine("def-focus", "tabula/class-feature/grave-spells-rm.eng", {
+      engineModifiers: [
+        { type: "add-focus-point", addFocus: 1 },
+        { type: "add-spell", level: 1, isKnown: true, addSpell: "necrotic-bomb-rm", tradition: "occult" },
+      ],
+      grantedFeatures: [[{ name: "Grave Cantrips", slug: "grave-cantrips-rm", level: 1 }]],
+    });
+    const CANTRIPS_DEF = definitionLine("def-cantrips", "tabula/class-feature/grave-cantrips-rm.eng", {
+      engineModifiers: [
+        { type: "add-spell", level: 1, isKnown: true, addSpell: "create-thrall-rm", tradition: "occult" },
+        { type: "add-spell", level: 1, isKnown: true, addSpell: "thrall-charge-rm", tradition: "occult" },
+      ],
+    });
+    const FLESH_GRANT = ADD_SPELL("dead-weight-rm", 1, {
+      isKnown: true,
+      tradition: "occult",
+      parentFeature: "grave-spells-rm",
+    });
+
+    /** Spell definitions carrying Demiplane's own `isFocus` flags. */
+    function spellDef(id: string, slug: string, isFocus: boolean): string {
+      return definitionLine(id, `tabula/spell/${slug}.eng`, { slug, isFocus });
+    }
+    const SPELL_DEFS = [
+      spellDef("spelldef-harm", "harm-rm", false),
+      spellDef("spelldef-create-thrall", "create-thrall-rm", true),
+      spellDef("spelldef-thrall-charge", "thrall-charge-rm", true),
+      spellDef("spelldef-necrotic-bomb", "necrotic-bomb-rm", true),
+      spellDef("spelldef-dead-weight", "dead-weight-rm", true),
+      spellDef("spelldef-soothe", "soothe-rm", false),
+    ];
+    const SPELL_DEFS_BY_ID = new Map(SPELL_DEFS.map((line) => [JSON.parse(line).id as string, line]));
+
+    function chaseFetch() {
+      return vi.fn().mockImplementation((_url: string, init: { body: string }) => {
+        const body = JSON.parse(init.body) as { engineIdsBySource: Record<string, string[]> };
+        const ids = body.engineIdsBySource["pathfinder2e-v2"] ?? [];
+        const lines: string[] = [];
+        if (ids.includes("feat-flesh"))
+          lines.push(ndjsonLine("feat-flesh", [FLESH_GRANT, { type: "add-focus-point", addFocus: 1 }]));
+        if (ids.includes("feat-maestro"))
+          lines.push(ndjsonLine("feat-maestro", [ADD_SPELL("soothe-rm", 1, { isKnown: true, tradition: "occult" })]));
+        // The cache-index call carries the cache ids; definition calls carry
+        // the resolved definition ids.
+        if (ids.includes("cache-1")) lines.push(SPELLCASTING_DEF, FOCUS_DEF, CANTRIPS_DEF, ...SPELL_DEFS);
+        if (ids.includes("def-spellcasting")) lines.push(SPELLCASTING_DEF);
+        if (ids.includes("def-focus")) lines.push(FOCUS_DEF);
+        if (ids.includes("def-cantrips")) lines.push(CANTRIPS_DEF);
+        for (const id of ids) {
+          const def = SPELL_DEFS_BY_ID.get(id);
+          if (def) lines.push(def);
+        }
+        return Promise.resolve({ ok: true, text: async () => lines.join("\n") });
+      });
+    }
+
+    function chaseCompendium(): Record<string, ReturnType<typeof createMockPack>> {
+      return {
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Harm", system: { slug: "harm", level: { value: 1 } } },
+          { _id: "s2", name: "Create Thrall", system: { slug: "create-thrall", level: { value: 0 } } },
+          { _id: "s3", name: "Thrall Charge", system: { slug: "thrall-charge", level: { value: 0 } } },
+          { _id: "s4", name: "Necrotic Bomb", system: { slug: "necrotic-bomb", level: { value: 1 } } },
+          { _id: "s5", name: "Dead Weight", system: { slug: "dead-weight", level: { value: 1 } } },
+          { _id: "s6", name: "Soothe", system: { slug: "soothe", level: { value: 1 } } },
+        ]),
+      };
+    }
+
+    function chaseEngines(): DemiplaneEngineEntry[] {
+      return [spellEngine("message-rm"), featureEngine("tabula/class-feature/flesh-necromancer-rm.eng", "feat-flesh")];
+    }
+
+    it("chases spellcasting → focus → granted sub-features for automatic grants", async () => {
+      installFoundryMocks(chaseCompendium());
+      vi.stubGlobal("fetch", chaseFetch());
+
+      const result = await resolveFeatureGrantedSpells(chaseEngines(), 1, 1, ["cache-1"]);
+
+      // Harm (spellcasting definition) joins the repertoire; every grave
+      // spell files as focus — including the thrall cantrips two levels down.
+      expect(result.known.map((k) => k.slug)).toEqual(["harm-rm"]);
+      expect(result.focus.map((f) => f.slug).sort()).toEqual([
+        "create-thrall-rm",
+        "dead-weight-rm",
+        "necrotic-bomb-rm",
+        "thrall-charge-rm",
+      ]);
+      expect(result.focusEntryName).toBe("Grave Spells");
+    });
+
+    it("degrades gracefully without cache ids (only character-engine grants)", async () => {
+      installFoundryMocks(chaseCompendium());
+      vi.stubGlobal("fetch", chaseFetch());
+
+      const result = await resolveFeatureGrantedSpells(chaseEngines(), 1, 1);
+
+      expect(result.known).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["dead-weight-rm"]);
+      expect(result.focusEntryName).toBeUndefined();
+    });
+
+    it("keeps a repertoire-shaped grant when its definition is not a focus spell", async () => {
+      // Same grant shape as the grave cantrips, but Soothe's definition is
+      // not a focus spell — the definition check must not sweep every such
+      // grant into focus.
+      installFoundryMocks(chaseCompendium());
+      vi.stubGlobal("fetch", chaseFetch());
+
+      const result = await resolveFeatureGrantedSpells(
+        [
+          spellEngine("message-rm", "bard-spellcasting-rm"),
+          featureEngine("tabula/class-feature/maestro-rm.eng", "feat-maestro"),
+        ],
+        5,
+        3,
+        ["cache-1"]
+      );
+
+      expect(result.known.map((k) => k.slug)).toEqual(["soothe-rm"]);
+      expect(result.focus).toHaveLength(0);
+    });
+  });
+
   it("drops spells above the character level", async () => {
     vi.stubGlobal(
       "fetch",

@@ -84,6 +84,34 @@ describe("parseEngineLine", () => {
     expect(parsed.name).toBe("tabula/spell/daze-rm.eng");
     expect(parsed.modifiers).toEqual([]);
   });
+
+  it("extracts granted sub-features with their arrival levels", () => {
+    const line = JSON.stringify({
+      id: "grave-1",
+      engineName: "tabula/class-feature/grave-spells-rm.eng",
+      data: {
+        nodes: {
+          "1": {
+            name: "StringObject",
+            data: {
+              string: JSON.stringify({
+                engineModifiers: [{ type: "add-focus-point" }],
+                grantedFeatures: [[{ name: "Grave Cantrips", slug: "grave-cantrips-rm", level: 1 }]],
+              }),
+            },
+          },
+        },
+      },
+    });
+    expect(parseEngineLine(line).grantedFeatures).toEqual([{ slug: "grave-cantrips-rm", level: 1 }]);
+  });
+
+  it("omits grantedFeatures when the definition grants none", () => {
+    const line = engineLine("her-1", "tabula/heritage/empty-sky-kitsune.eng", [
+      { type: "add-feat", addFeat: "kitsune-spell-familiarity" },
+    ]);
+    expect(parseEngineLine(line).grantedFeatures).toBeUndefined();
+  });
 });
 
 describe("parseEngineLine modifier types", () => {

@@ -40,6 +40,7 @@ export const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
   "psychic-spellcasting": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
   "magus-spellcasting-rm": { tradition: "arcane", preparedType: "prepared", ability: "int" },
   "animist-spellcasting-rm": { tradition: "divine", preparedType: "prepared", ability: "wis" },
+  "necromancer-spellcasting-rm": { tradition: "occult", preparedType: "prepared", ability: "int" },
 };
 
 // ─── Special feature slugs (routing, not repertoire) ─────────────────────────
