@@ -65,8 +65,10 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
   const computed = computeSlotProgression([...classEntries, ...featureEntries], options.characterLevel);
   if (computed.cantrips === 0) {
     // Spontaneous cantrips Demiplane models as repertoire capacity rather
-    // than fixed slots (bard, psychic) fall back to the rank-0 count.
-    computed.cantrips = computeRepertoireCantrips(allLines, options.characterLevel);
+    // than fixed slots (bard, psychic) fall back to the rank-0 count of the
+    // feature's own repertoire pool — never another feature's (a psychic
+    // repertoire must not size a wizard-archetype entry).
+    computed.cantrips = computeRepertoireCantrips(allLines, options.characterLevel, options.parentSpellFeature);
   }
   if (computed.cantrips === 0) {
     // No cantrip data anywhere (e.g. summoner): Demiplane itself counts the
@@ -108,13 +110,16 @@ function countKnownCantrips(engines: DemiplaneEngineEntry[], parentSpellFeature:
 }
 
 /**
- * Sums rank-0 repertoire counts at or below the character's level.
+ * Sums rank-0 repertoire counts at or below the character's level, scoped to
+ * the requested feature (mod slugs normalize `-rm`-insensitively like fixed
+ * entries; slugless mods keep the old include-everything behavior).
  */
-function computeRepertoireCantrips(lines: RawEngineLine[], characterLevel: number): number {
+function computeRepertoireCantrips(lines: RawEngineLine[], characterLevel: number, parentSpellFeature: string): number {
   let cantrips = 0;
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type !== "v2-add-repertoire-counts" || !mod.slots) continue;
+      if (!modMatchesFeature(mod.slug, parentSpellFeature)) continue;
       for (const slot of mod.slots as RepertoireCountEntry[]) {
         if ((slot.rank ?? -1) !== 0) continue;
         if ((slot.repertoireSlug ?? "") !== "") continue;
