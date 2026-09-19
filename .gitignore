@@ -13,3 +13,4 @@ tmp/
 .github/copilot-instructions.md
 .playwright-mcp/
 .kiro/
+playwright-report/
