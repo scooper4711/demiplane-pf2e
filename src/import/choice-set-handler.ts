@@ -5,7 +5,8 @@ import { toFoundrySlug, rawEquipmentSlug } from "./slug-utils.js";
 import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
-import { findMatchInChoices, matchKineticElement } from "./choice-matchers.js";
+import { findMatchInChoices } from "./choice-matchers.js";
+import { matchPrePredicate } from "./matcher-registry.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
 import { resolveUserOverride, unresolvedChoiceRecord, localizeChoiceLabel } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
@@ -323,7 +324,7 @@ export class ChoiceSetHandler {
     );
 
     const rollOptions = this.collectRollOptions(context);
-    if (await this.resolveKineticBypass(context, params)) return;
+    if (await this.tryPrePredicateMatch(context, params)) return;
 
     const predicate = context.resolveInjectedProperties(context.predicate);
     if (!predicate.test(rollOptions)) {
@@ -581,41 +582,30 @@ export class ChoiceSetHandler {
   }
 
   /**
-   * Resolves a kineticist gate-element ChoiceSet ahead of predicate gating
-   * (see {@link resolveKineticElement}). Returns true when it handled the
-   * ChoiceSet, false to defer to the normal predicate path.
+   * Resolves ground-truth-derived picks ahead of predicate gating, via
+   * registered pre-predicate matchers. Predicate roll options assume
+   * interactive picking order that a headless import doesn't reproduce;
+   * a deterministic engine-backed pick must not depend on them. Returns
+   * true when a matcher handled the ChoiceSet.
    */
-  private async resolveKineticBypass(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
-    if (context.flag !== "elementOne" && context.flag !== "elementTwo" && context.flag !== "elementFork") {
-      return false;
-    }
-    const pick = await this.resolveKineticElement(context, params);
+  private async tryPrePredicateMatch(context: ChoiceSetContext, params: PreCreateParams): Promise<boolean> {
+    const pick = await matchPrePredicate({
+      choices: context.choices,
+      engines: this.currentEngines,
+      itemName: context.item.name,
+      itemSlug: context.item.slug ?? undefined,
+      itemLevel: itemLevelFromSource(params),
+      flag: context.flag,
+      grantedFeatsByElement: this.grantedFeatsByElement,
+      actorTag: this.actorTag(),
+      inflateChoices: async () => {
+        const inflated = await context.inflateChoices(this.collectRollOptions(context), params.tempItems);
+        return inflated && inflated.length > 0 ? inflated : null;
+      },
+    });
     if (!pick) return false;
     await this.applySelectedChoice(context, params, pick, true, this.candidateSelectionSlugs());
     return true;
-  }
-
-  /**
-   * Resolves a kineticist gate-element ChoiceSet (elementOne/Two/Fork)
-   * directly from the taken elements, ahead of predicate gating. The
-   * predicates test roll options that only exist in interactive picking
-   * order (elementTwo behind dual-gate, elementFork behind fork), which a
-   * headless import never reproduces — but the picks themselves are fully
-   * determined by Demiplane engines, so gating on predicates would only ever
-   * drop correct answers silently. Returns null when nothing taken matches,
-   * deferring to the normal predicate path.
-   */
-  private async resolveKineticElement(context: ChoiceSetContext, params: PreCreateParams): Promise<Choice | null> {
-    const inflated = await context.inflateChoices(this.collectRollOptions(context), params.tempItems);
-    if (!inflated || inflated.length === 0) return null;
-    context.choices = inflated;
-    return matchKineticElement(
-      inflated,
-      this.currentEngines,
-      context.flag,
-      itemLevelFromSource(params),
-      context.item.slug ?? undefined
-    );
   }
 
   private async applySelectedChoice(

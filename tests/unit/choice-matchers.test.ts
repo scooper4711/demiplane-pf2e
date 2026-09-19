@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
-import { findMatchInChoices, matchKineticElement } from "../../src/import/choice-matchers.js";
+import { findMatchInChoices } from "../../src/import/choice-matchers.js";
+import { matchKineticElement } from "../../src/import/kineticist-matchers.js";
+import { registeredMatchers } from "../../src/import/matcher-registry.js";
+import { choiceConfigForEngines } from "../../src/import/class-choice-config.js";
 
 function skillEngine(slug) {
   return {
@@ -702,8 +705,12 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(matchKineticElement(choices, engines, "elementOne", 1, "kinetic-gate")).toBe(choices[0]);
-    expect(matchKineticElement(choices, engines, "elementTwo", 1, "kinetic-gate")).toBe(choices[1]);
+    expect(matchKineticElement({ choices, engines, flag: "elementOne", itemLevel: 1, itemSlug: "kinetic-gate" })).toBe(
+      choices[0]
+    );
+    expect(matchKineticElement({ choices, engines, flag: "elementTwo", itemLevel: 1, itemSlug: "kinetic-gate" })).toBe(
+      choices[1]
+    );
   });
 
   it("matches elementFork to the junction's element", () => {
@@ -727,7 +734,9 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(matchKineticElement(choices, engines, "elementFork", 5, "gates-threshold")).toBe(choices[0]);
+    expect(
+      matchKineticElement({ choices, engines, flag: "elementFork", itemLevel: 5, itemSlug: "gates-threshold" })
+    ).toBe(choices[0]);
   });
 
   it("leaves element choices without taken gates to the fallback", () => {
@@ -736,6 +745,43 @@ describe("choice-matchers", () => {
       { label: "Fire Gate", value: "Compendium.pf2e.classfeatures.Item.bbbb" },
     ];
 
-    expect(matchKineticElement(choices, [], "elementOne", 1, "kinetic-gate")).toBeNull();
+    expect(
+      matchKineticElement({ choices, engines: [], flag: "elementOne", itemLevel: 1, itemSlug: "kinetic-gate" })
+    ).toBeNull();
+  });
+
+  it("registers matchers in specificity order", () => {
+    // Dispatch order is load-bearing: precise engines must win over broad
+    // fallbacks. New matchers slot in by order, never by editing the loop.
+    expect(registeredMatchers().map((m) => m.name)).toEqual([
+      "feat-scoped-skill",
+      "skill-slugs",
+      "custom-selection-lore",
+      "deity",
+      "domain",
+      "eidolon",
+      "feature-pick",
+      "kinetic-element",
+      "threshold",
+      "muse",
+      "adopted-ancestry",
+      "weapon-innovation",
+      "item-engines",
+      "granted-feats",
+      "class-features",
+      "generic-features",
+      "all-slugs",
+      "feat-slugs",
+      "generic-choice",
+    ]);
+  });
+
+  it("looks up class choice configuration by class engine", () => {
+    expect(
+      choiceConfigForEngines([{ name: "tabula/class/kineticist.eng", type: "DemiplaneEngine", args: {} }])
+    ).toMatchObject({ classSlug: "kineticist" });
+    expect(
+      choiceConfigForEngines([{ name: "tabula/class/wizard-rm.eng", type: "DemiplaneEngine", args: {} }])
+    ).toBeNull();
   });
 });
