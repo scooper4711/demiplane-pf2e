@@ -565,4 +565,57 @@ describe("resolveSpellSlots with feature definitions", () => {
     });
     expect(result).toEqual({ cantrips: 2, slots: { 1: 1 } });
   });
+
+  it("lets player overrides win over archetype feat definitions", async () => {
+    // A pinned rank-1 override replaces the feat-derived count; other ranks
+    // still resolve from definitions.
+    const dedication = defLine("tabula/feat/wizard-dedication-rm.eng", "feat-ded", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [
+          { rank: 0, count: 2, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 1, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        if (body.includes("feat-ded")) return { ok: true, text: async () => dedication };
+        return { ok: true, text: async () => "" };
+      })
+    );
+    const engines = [
+      {
+        id: "feat-ded",
+        name: "tabula/feat/wizard-dedication-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "wizard-dedication-rm" },
+      },
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max",
+        name: "character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 5,
+      },
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max--overridden",
+        name: "character_spell-feature_wizard-spellcasting-archetype-rm_spell-slots_rank-1_max--overridden",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 1,
+      },
+    ];
+    const result = await resolveSpellSlots({
+      classEngineId: "class-1",
+      characterLevel: 4,
+      engines,
+      parentSpellFeature: "wizard-spellcasting-archetype-rm",
+      cacheEngineIds: ["cache-1"],
+    });
+    expect(result).toEqual({ cantrips: 2, slots: { 1: 5 } });
+  });
 });
