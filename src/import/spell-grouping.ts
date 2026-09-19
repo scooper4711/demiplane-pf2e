@@ -55,13 +55,17 @@ const EIDOLON_TRADITIONS: Record<string, string> = {
 
 /**
  * Resolves a spell group's config. Most features are static table entries;
- * the summoner's tradition comes from its eidolon, so it is derived from the
- * character's `tabula/eidolon/*` engine. An unknown or missing eidolon yields
- * null, routing the group to the unknown-source sync error rather than
- * guessing a tradition.
+ * the summoner's tradition comes from its eidolon, and archetype
+ * spellcasting (`wizard-spellcasting-archetype-rm`) follows its base class
+ * (`wizard-spellcasting-rm`) — an archetype casts exactly like the class.
+ * Anything else unknown yields null, routing the group to the unknown-source
+ * sync error rather than guessing.
  */
 function configForFeature(source: string, engines: DemiplaneEngineEntry[]): SpellcastingConfig | null {
-  if (source !== SUMMONER_SPELLCASTING) return CLASS_SPELLCASTING[source] ?? null;
+  if (source !== SUMMONER_SPELLCASTING) {
+    const base = source.replace(/-archetype(?=-rm$|$)/, "");
+    return CLASS_SPELLCASTING[base] ?? null;
+  }
   const eidolonSlug = engines.find(
     (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/eidolon/") && e.args?.slug
   )?.args?.slug as string | undefined;

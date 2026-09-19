@@ -422,6 +422,20 @@ describe("resolveSpellSlots with feature definitions", () => {
     expect(result).toEqual({ cantrips: 5, slots: { 1: 2 } });
   });
 
+  it("ignores other features' repertoire counts", async () => {
+    // A wizard-archetype entry must not inherit the psychic repertoire size.
+    const psychicRepertoire = defLine("tabula/class/psychic-rm.eng", "class-1", [
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "psychic-spellcasting",
+        slots: [{ rank: 0, count: 3, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(psychicRepertoire, "", "");
+    const result = await resolveSpellSlots({ ...options(), parentSpellFeature: "wizard-spellcasting-archetype-rm" });
+    expect(result).toEqual({ cantrips: 0, slots: {} });
+  });
+
   it("counts known cantrips with no fixed or repertoire data", async () => {
     // Summoner: Demiplane models cantrips nowhere, so the import mirrors the
     // sheet and counts the known rank-0 engines (prepared duplicates excluded).

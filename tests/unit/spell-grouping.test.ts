@@ -8,10 +8,22 @@ function spell(slug: string, args: Record<string, unknown>): DemiplaneEngineEntr
 
 describe("groupSpells", () => {
   it("routes class-spellcasting spells into a main group", () => {
-    const { main } = groupSpells([spell("frostbite-rm", { parentSpellFeature: "witch-spellcasting-rm" })]);
+    const { main } = groupSpells([spell("frostbite-rm", { parentSpellFeature: "wizard-spellcasting-rm" })]);
     expect(main).toHaveLength(1);
-    expect(main[0]!.source).toBe("witch-spellcasting-rm");
+    expect(main[0]!.source).toBe("wizard-spellcasting-rm");
     expect(main[0]!.spellbook).toHaveLength(1);
+  });
+
+  it("treats archetype spellcasting like its base class", () => {
+    // A wizard dedication casts exactly like the class: same tradition,
+    // preparation, and ability. Only the config is shared — the group keeps
+    // its archetype source for slots, export, and entry naming.
+    const { main } = groupSpells([
+      spell("electric-arc-rm", { parentSpellFeature: "wizard-spellcasting-archetype-rm" }),
+    ]);
+    expect(main).toHaveLength(1);
+    expect(main[0]!.source).toBe("wizard-spellcasting-archetype-rm");
+    expect(main[0]!.config).toEqual({ tradition: "arcane", preparedType: "prepared", ability: "int" });
   });
 
   it("does not route scroll- or wand-carried spells into a spell group", () => {
