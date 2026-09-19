@@ -113,7 +113,9 @@ describe("findSlotOverrides", () => {
     expect(result.get("cantrip-wizard-school-spellbook-slot")).toBe(2);
   });
 
-  it("ignores overrides without the --overridden flag", () => {
+  it("applies per-character maximums without the --overridden flag", () => {
+    // `_max` engines are authoritative per-character values whether or not
+    // the player pinned them; the flag merely marks a manual pin.
     const engines: DemiplaneEngineEntry[] = [
       {
         id: "custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_cantrip_max",
@@ -125,7 +127,7 @@ describe("findSlotOverrides", () => {
       // No companion --overridden flag
     ];
     const result = findSlotOverrides(engines, "wizard-spellcasting-rm", "");
-    expect(result.size).toBe(0);
+    expect(result.get("cantrip")).toBe(99);
   });
 
   it("ignores overrides for a different spell feature", () => {
@@ -515,5 +517,52 @@ describe("resolveSpellSlots with feature definitions", () => {
       parentSpellFeature: "apparition-spellcasting-rm",
     });
     expect(apparition).toEqual({ cantrips: 0, slots: { 1: 2 } });
+  });
+
+  it("sums archetype slots from taken-feat definitions with expansion", async () => {
+    // Wizard dedication grants cantrips; basic arcana (reached through the
+    // dedication's add-feat grant) grants rank 1 — all sharing the archetype
+    // feature slug, summed and gated by level.
+    const dedication = defLine("tabula/feat/wizard-dedication-rm.eng", "feat-ded", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [{ rank: 0, count: 2, levelPrereq: 1, slug: "" }],
+      },
+      { type: "add-feat", addFeat: "basic-arcana-rm" },
+    ]);
+    const index = defLine("tabula/feat/basic-arcana-rm.eng", "feat-basic", []);
+    const basic = defLine("tabula/feat/basic-arcana-rm.eng", "feat-basic", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-archetype-rm",
+        slots: [{ rank: 1, count: 1, levelPrereq: 1, slug: "" }],
+      },
+    ]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (_url: string, opts: { body?: string }) => {
+        const body = String(opts.body ?? "");
+        if (body.includes("cache-1")) return { ok: true, text: async () => index };
+        if (body.includes("feat-basic")) return { ok: true, text: async () => basic };
+        if (body.includes("feat-ded")) return { ok: true, text: async () => dedication };
+        return { ok: true, text: async () => "" };
+      })
+    );
+    const result = await resolveSpellSlots({
+      classEngineId: "class-1",
+      characterLevel: 4,
+      engines: [
+        {
+          id: "feat-ded",
+          name: "tabula/feat/wizard-dedication-rm.eng",
+          type: "DemiplaneEngine",
+          args: { slug: "wizard-dedication-rm" },
+        },
+      ],
+      parentSpellFeature: "wizard-spellcasting-archetype-rm",
+      cacheEngineIds: ["cache-1"],
+    });
+    expect(result).toEqual({ cantrips: 2, slots: { 1: 1 } });
   });
 });

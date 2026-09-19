@@ -100,13 +100,11 @@ test.describe("Psychic Import", () => {
   test("applies spontaneous slot maximums, all unused", () => {
     const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
     expect(repertoire).toBeDefined();
-    // NOTE: the class data suggests 2/2 and the table likely agrees, but the
-    // builder shows 1/1 and explicit player overrides pin it there while
-    // Demiplane finishes the psychic remaster — the import honors the
-    // overrides (same mechanism as the wizard's rank-2 override). Revisit if
-    // the remaster numbers land.
-    expect(repertoire!.slots.slot1).toMatchObject({ max: 1, value: 1 });
-    expect(repertoire!.slots.slot2).toMatchObject({ max: 1, value: 1 });
+    // Class progression (a previous 1/1 pin has been cleared on Demiplane).
+    // Nothing cast, so every slot is full and no placements exist
+    // (spontaneous casters spend slots, not prepared spells).
+    expect(repertoire!.slots.slot1).toMatchObject({ max: 2, value: 2 });
+    expect(repertoire!.slots.slot2).toMatchObject({ max: 2, value: 2 });
   });
 
   test("files the kitsune spells as innate", () => {
@@ -157,17 +155,15 @@ test.describe("Psychic Import", () => {
     ]);
   });
 
-  test("applies archetype slot overrides and prepared placements", () => {
+  test("applies archetype slots and prepared placements", () => {
     const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
     expect(spellbook).toBeDefined();
-    // NOTE: player-set overrides currently pin these above the sheet values
-    // (cantrips 3 vs 2, rank-1 two slots vs one) to prove override flow; they
-    // revert to the sheet values once verified.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 3, value: 3 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 2, value: 2 });
-    // NOTE: PF2e pads prepared slots to their maximum with empty entries —
-    // the "?" entries are padding (max 3/2, two/one prepared), not broken references.
-    expect(placed(spellbook!, "slot0")).toEqual(["?:ready", "frostbite:ready", "frosts-touch:ready"]);
-    expect(placed(spellbook!, "slot1")).toEqual(["?:ready", "camel-spit:ready"]);
+    // Cantrip maximum from the wizard-dedication definition; rank 1 from
+    // Basic Wizard Spellcasting reached through the dedication's add-feat
+    // grant. Both match the sheet with no overrides needed.
+    expect(spellbook!.slots.slot0).toMatchObject({ max: 2, value: 2 });
+    expect(spellbook!.slots.slot1).toMatchObject({ max: 1, value: 1 });
+    expect(placed(spellbook!, "slot0")).toEqual(["frostbite:ready", "frosts-touch:ready"]);
+    expect(placed(spellbook!, "slot1")).toEqual(["camel-spit:ready"]);
   });
 });

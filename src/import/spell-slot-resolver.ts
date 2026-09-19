@@ -3,6 +3,7 @@ import {
   fetchStreamEngineLines,
   parseEngineLines,
   resolveClassFeatureEngineIdsBySlug,
+  resolveFeatEngineIdsBySlug,
   type DemiplaneSlotEntry,
   type RawEngineLine,
   type RepertoireCountEntry,
@@ -52,17 +53,26 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
 
   const lines = await fetchStreamEngineLines([options.classEngineId]);
   const featureLines = await fetchFeatureSlotLines(options.parentSpellFeature, options.cacheEngineIds ?? []);
-  const allLines = [...lines, ...featureLines];
+  const featLines = await fetchArchetypeFeatSlotLines(
+    options.engines,
+    options.parentSpellFeature,
+    options.cacheEngineIds ?? []
+  );
+  const allLines = [...lines, ...featureLines, ...featLines];
   const unrestricted = collectUnrestrictedSlotSlugs(allLines);
   const classEntries = extractSlotEntries(lines, slotSlug, unrestricted, options.parentSpellFeature);
-  // The class definition wins ties; the feature definition only fills ranks
-  // the class leaves empty (e.g. magus rank-1 slots beside class cantrips).
+  // The class definition wins ties; feature and feat definitions only fill
+  // ranks the class leaves empty (e.g. magus rank-1 slots beside class
+  // cantrips, archetype slots beside an empty class block).
   const coveredRanks = new Set(classEntries.map((entry) => entry.rank));
-  const featureEntries = extractSlotEntries(featureLines, slotSlug, unrestricted, options.parentSpellFeature).filter(
-    (entry) => !coveredRanks.has(entry.rank)
-  );
+  const extraEntries = extractSlotEntries(
+    [...featureLines, ...featLines],
+    slotSlug,
+    unrestricted,
+    options.parentSpellFeature
+  ).filter((entry) => !coveredRanks.has(entry.rank));
 
-  const computed = computeSlotProgression([...classEntries, ...featureEntries], options.characterLevel);
+  const computed = computeSlotProgression([...classEntries, ...extraEntries], options.characterLevel);
   if (computed.cantrips === 0) {
     // Spontaneous cantrips Demiplane models as repertoire capacity rather
     // than fixed slots (bard, psychic) fall back to the rank-0 count of the
@@ -89,6 +99,40 @@ async function fetchFeatureSlotLines(parentSpellFeature: string, cacheEngineIds:
   const resolvedId = bySlug.get(parentSpellFeature);
   if (!resolvedId) return [];
   return fetchStreamEngineLines([resolvedId]);
+}
+
+/**
+ * Fetches the definitions of the character's taken feats for archetype slot
+ * sources. Archetype spellcasting (e.g. wizard dedication) carries no
+ * per-character slot engines; its slots come from `v2-add-spell-slots`
+ * modifiers on the archetype feats, all sharing the archetype's feature
+ * slug, summed across feats and gated by levelPrereq. Follows one `add-feat`
+ * expansion round (dedication → basic arcana) like the spell resolver.
+ */
+async function fetchArchetypeFeatSlotLines(
+  engines: DemiplaneEngineEntry[],
+  parentSpellFeature: string,
+  cacheEngineIds: string[]
+): Promise<RawEngineLine[]> {
+  if (!parentSpellFeature.includes("archetype")) return [];
+  const featIds = engines
+    .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/feat/") && typeof e.id === "string")
+    .map((e) => e.id as string);
+  if (featIds.length === 0) return [];
+
+  const lines = await fetchStreamEngineLines(featIds);
+  const granted: string[] = [];
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type === "add-feat" && !granted.includes(mod.addFeat)) granted.push(mod.addFeat);
+    }
+  }
+  if (granted.length > 0 && cacheEngineIds.length > 0) {
+    const bySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
+    const grantedIds = granted.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
+    if (grantedIds.length > 0) lines.push(...(await fetchStreamEngineLines(grantedIds)));
+  }
+  return lines;
 }
 
 /**
@@ -240,9 +284,11 @@ export function computeSlotProgression(entries: DemiplaneSlotEntry[], characterL
 }
 
 /**
- * Finds user-overridden slot maximums from character engine data.
- * Pattern: character_spell-feature_{feature}_spell-slots_{slotType}_max
- * with companion --overridden flag set to 1.
+ * Finds per-character slot maximums from character engine data. Pattern:
+ * `character_spell-feature_{feature}_spell-slots_{slotType}_max`. These are
+ * the authoritative per-character values whether or not the player pinned
+ * them (a `--overridden` companion marks a manual pin); with the companion
+ * absent they carry the class progression.
  */
 export function findSlotOverrides(
   engines: DemiplaneEngineEntry[],
@@ -262,8 +308,6 @@ export function findSlotOverrides(
     const slotType = engine.name.slice(prefix.length, -suffix.length);
     if (!matchesSlotSlug(slotType, slotSlug)) continue;
 
-    if (!isOverrideActive(engines, engine.name)) continue;
-
     overrides.set(slotType, engine.value as number);
   }
 
@@ -275,11 +319,6 @@ function matchesSlotSlug(slotType: string, slotSlug: string): boolean {
     return !slotType.includes(CURRICULUM_SLOT_MARKER);
   }
   return slotType.includes(slotSlug);
-}
-
-function isOverrideActive(engines: DemiplaneEngineEntry[], overrideName: string): boolean {
-  const flagName = `${overrideName}--overridden`;
-  return engines.some((e) => e.type === "CustomDemiplaneEngine" && e.name === flagName && e.value === 1);
 }
 
 function hasCompleteOverrides(overrides: Map<string, number>): boolean {

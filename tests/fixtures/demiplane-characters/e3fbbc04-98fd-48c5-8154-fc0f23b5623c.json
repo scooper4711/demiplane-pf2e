@@ -1,6 +1,6 @@
 {
   "characterId": "e3fbbc04-98fd-48c5-8154-fc0f23b5623c",
-  "dumpedAt": "2026-09-19T06:50:22.244Z",
+  "dumpedAt": "2026-09-19T07:35:33.571Z",
   "name": "FVTT Psychic",
   "level": 4,
   "viewPermission": 2,
@@ -137,7 +137,15 @@
       "f5b836fe-ec96-4665-b2b7-5ee3053a1a36",
       "ae706a6d-7994-41ee-bee2-284db8d274ac",
       "7b25c5f8-7f39-4eb1-813d-179bc46361bc",
-      "0a2970f2-b514-4e73-a5e3-a7b6b3e63474"
+      "0a2970f2-b514-4e73-a5e3-a7b6b3e63474",
+      "56099906-a3f7-420e-8b18-46981713b1a9",
+      "0706f102-c719-425a-a0d3-49ab5ef3a481",
+      "720dc7b5-9a81-47d2-bbb1-9a75e931edc8",
+      "610d6c6b-ccd4-42e3-a740-ea4dd98d8a9e",
+      "012291fa-d0ad-4332-9b5f-1081aa6fd229",
+      "fb10e53e-f569-4334-862a-3e057d1d906b",
+      "c6017abe-c93e-4ba1-912f-22c362b419e3",
+      "c63eb98e-2dc6-472c-bb79-e23e1f0a608a"
     ],
     "pathfinder2e-v2": [
       "eab9c683-8132-441e-96b3-545637c42079",
@@ -839,9 +847,9 @@
       "c75d91f9-4443-4183-8520-b6d158dcf9cf",
       "05481228-fe83-4c4b-b690-99bf927ee98f",
       "bdb6796a-ad6e-479c-9bce-0f81879d1c8f",
+      "4ea8e93e-55d0-4b85-91de-c4cec319ae3b",
       "e63516c9-d70e-4770-b613-a618b92619d2",
       "d6e9f7c2-cbb7-4f02-b3c9-aa19789f318c",
-      "4ea8e93e-55d0-4b85-91de-c4cec319ae3b",
       "d8dd4a81-b735-48a6-b250-9ae9c9825e60",
       "7a3d37c7-2467-424d-ba7a-adce463c59bb",
       "a2901026-fac1-4294-adeb-0cd0478debc2",
@@ -868,7 +876,21 @@
       "8328e6af-d111-4554-945e-ac92c54ec1ad",
       "5d415698-afed-4f48-b414-60d87aaff55b",
       "18f119a9-901a-42d5-8c36-c6d2d2fb6af0",
-      "19cb9c6f-38d2-458e-89d3-fdd04ac4cbb3"
+      "19cb9c6f-38d2-458e-89d3-fdd04ac4cbb3",
+      "a823ba17-31fc-44c0-92c1-6662114291fe",
+      "239f6702-a536-45c9-8df4-efc6b3b0729c",
+      "d479ebcc-9414-4b7c-a1e6-266d5c5643a0",
+      "7a0f3d07-acfa-4685-a882-d9ba49eea208",
+      "bf1e26de-36ca-4e27-9dd8-b95dc649bba1",
+      "ae1daecb-1983-42cd-a477-01f30693351f",
+      "faaf5fc6-d2c7-4d76-912c-21e620b66741",
+      "5371d521-bb51-481e-8007-3bdc4f52c2d3",
+      "e28d513a-6770-412a-8aee-0ec3ec938da0",
+      "31521c0c-66ad-46cf-b978-22c3a7916ac6",
+      "36fdb00f-f188-4fd2-b2e1-df2ba04a4bbb",
+      "df492221-35cb-41f9-928e-8c3cf896fbeb",
+      "8222b672-d37a-4250-8e00-f46cd41c9887",
+      "0a3a02e9-d059-49f4-8818-6dac6b392a7a"
     ]
   },
   "engines": [
@@ -1429,56 +1451,6 @@
       "saveType": "CharacterSheet",
       "storeType": "override",
       "demiplaneEngineId": "db5f446b-1540-417f-868a-9f51aae97c61"
-    },
-    {
-      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max--overridden",
-      "args": {
-        "id": null,
-        "parentEngine": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max"
-      },
-      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max--overridden",
-      "type": "CustomDemiplaneEngine",
-      "value": 1,
-      "saveType": "CharacterBuilder",
-      "storeType": "override",
-      "demiplaneEngineId": "4432fc88-1705-42a9-9123-91a3d3f59f83"
-    },
-    {
-      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max--overridden",
-      "args": {
-        "id": null,
-        "parentEngine": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max"
-      },
-      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max--overridden",
-      "type": "CustomDemiplaneEngine",
-      "value": 1,
-      "saveType": "CharacterBuilder",
-      "storeType": "override",
-      "demiplaneEngineId": "76aa6d67-2ab9-4f2c-9e9f-dd6aa2d9211d"
-    },
-    {
-      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max",
-      "args": {
-        "id": null
-      },
-      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max",
-      "type": "CustomDemiplaneEngine",
-      "value": 1,
-      "saveType": "CharacterSheet",
-      "storeType": "override",
-      "demiplaneEngineId": "3f3fa560-c0b0-4967-add0-58a94de19694"
-    },
-    {
-      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max",
-      "args": {
-        "id": null
-      },
-      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max",
-      "type": "CustomDemiplaneEngine",
-      "value": 1,
-      "saveType": "CharacterSheet",
-      "storeType": "override",
-      "demiplaneEngineId": "69e5ce6e-e7ca-4702-bca8-aba822364236"
     },
     {
       "id": "custom_preferences--enable-free-archetype",
