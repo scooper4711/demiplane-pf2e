@@ -145,8 +145,8 @@ function flagMissingSlots(actor: Actor, entryId: string, group: SpellGroup, summ
   const hasSlots = Object.values(slots).some((slot) => (slot?.max ?? 0) > 0);
   if (!hasSlots) {
     summary.errors.push(
-      `Class "${group.source}" has spells but no spell slots — Demiplane provides no slot progression for it. ` +
-        `Set the slot maximums on the character (builder slot overrides) and re-import.`
+      `Class "${group.source}" has spells but no spell slots in Demiplane's data. ` +
+        `If the sheet shows slots, set them as builder overrides — Demiplane only records values changed from the shown default — and re-import.`
     );
   }
 }

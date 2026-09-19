@@ -12,6 +12,14 @@ const CHARACTER_UUID = process.env.PSYCHIC_UUID ?? "";
 const DEMIPLANE_TOKEN = process.env.DEMIPLANE_TOKEN ?? "";
 const ACTOR_NAME = "Psychic Import Test";
 
+type SpellcastingEntry = ImportResult["spellcasting"][number];
+
+/** Order-proof placement comparison: sorted `spell:state` pairs per slot. */
+function placed(entry: SpellcastingEntry, slot: string): string[] {
+  const list = entry.slots[slot]?.prepared ?? [];
+  return list.map((p) => `${p.spell}:${p.expended ? "spent" : "ready"}`).sort();
+}
+
 test.describe("Psychic Import", () => {
   // Live Demiplane API required — skipped (not removed) without credentials,
   // matching the Magus suite. Values below snapshot the reference character
@@ -58,10 +66,11 @@ test.describe("Psychic Import", () => {
       "Foxfire",
       "Emotional Acceptance",
       "The Unbound Step",
-      "Wellspring Control",
-      "Efficient Explorer",
       "Godless Healing",
+      "Efficient Explorer",
       "Prescient Planner",
+      "Wizard Dedication",
+      "Basic Wizard Spellcasting",
     ]) {
       expect(names).toContain(feat);
     }
@@ -85,7 +94,7 @@ test.describe("Psychic Import", () => {
     const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
     expect(repertoire).toBeDefined();
     expect(repertoire!.name).toBe("Psychic Spells (Occult)");
-    expect(repertoire!.spells).toEqual(["animated-assault", "bee-mans-summons", "biting-words", "charm"]);
+    expect(repertoire!.spells).toEqual(["animated-assault", "bee-mans-summons", "biting-words", "bullhorn", "charm"]);
   });
 
   test("applies spontaneous slot maximums, all unused", () => {
@@ -130,5 +139,35 @@ test.describe("Psychic Import", () => {
     expect(result.summary.unmapped).toContainEqual({ slug: "telekinetic-hand-psychic-rm", kind: "spell" });
     expect(result.summary.unmapped).toContainEqual({ slug: "phase-bolt-psychic-rm", kind: "spell" });
     expect(result.summary.unmapped).toContainEqual({ slug: "warp-step-psychic-rm", kind: "spell" });
+  });
+
+  test("files the wizard-archetype spellbook in a prepared arcane entry", () => {
+    // The archetype casts exactly like its base class (prepared arcane), so
+    // no unknown-source error — but the entry keeps a distinct name.
+    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
+    expect(spellbook).toBeDefined();
+    expect(spellbook!.name).toBe("Arcane Spells");
+    expect(spellbook!.spells).toEqual([
+      "ancient-dust",
+      "camel-spit",
+      "carryall",
+      "figment",
+      "frostbite",
+      "frosts-touch",
+    ]);
+  });
+
+  test("applies archetype slot overrides and prepared placements", () => {
+    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
+    expect(spellbook).toBeDefined();
+    // NOTE: player-set overrides currently pin these above the sheet values
+    // (cantrips 3 vs 2, rank-1 two slots vs one) to prove override flow; they
+    // revert to the sheet values once verified.
+    expect(spellbook!.slots.slot0).toMatchObject({ max: 3, value: 3 });
+    expect(spellbook!.slots.slot1).toMatchObject({ max: 2, value: 2 });
+    // NOTE: PF2e pads prepared slots to their maximum with empty entries —
+    // the "?" entries are padding (max 3/2, two/one prepared), not broken references.
+    expect(placed(spellbook!, "slot0")).toEqual(["?:ready", "frostbite:ready", "frosts-touch:ready"]);
+    expect(placed(spellbook!, "slot1")).toEqual(["?:ready", "camel-spit:ready"]);
   });
 });

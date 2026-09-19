@@ -1,6 +1,6 @@
 {
   "characterId": "e3fbbc04-98fd-48c5-8154-fc0f23b5623c",
-  "dumpedAt": "2026-09-18T00:00:18.062Z",
+  "dumpedAt": "2026-09-19T06:50:22.244Z",
   "name": "FVTT Psychic",
   "level": 4,
   "viewPermission": 2,
@@ -45,6 +45,7 @@
       "b310f9a9-0c34-4243-a640-383f38ed11aa",
       "47a41222-20fd-40c8-9447-917e9615dc5f",
       "d94e538b-9984-4657-9eef-b28275dd4bb4",
+      "1fd4e7da-6f8c-490a-ace7-28f8d067515a",
       "ce668ba8-b74d-4f89-aa44-f61b1156071c",
       "d4477578-b3bb-49e2-ac51-7f0a80c9af34",
       "265a1363-a5db-414d-9ac4-e3951e7bd0c4",
@@ -52,14 +53,25 @@
       "71b86865-ddf4-4d2c-8b21-3b78c4805015",
       "26e48fad-e869-4b8c-9e0b-8e953b04a0e6",
       "653c2bec-4d9c-483c-9981-aa47fa1a7c9e",
-      "59bf2e95-f650-4e67-bfd3-77fcb6e6f401",
-      "54e229e0-5ba5-4b21-887d-9547f9ae7ed0",
-      "3a6bf3c7-0d4a-4550-83df-5b9997e43061",
       "7ce871ff-d249-4ad4-af43-1fb62bbc919f",
-      "9ff6fbac-2c5b-432e-a04d-7bba0e1cc264"
+      "9ff6fbac-2c5b-432e-a04d-7bba0e1cc264",
+      "59bf2e95-f650-4e67-bfd3-77fcb6e6f401",
+      "3a6bf3c7-0d4a-4550-83df-5b9997e43061",
+      "61300dda-a43f-4410-ab74-7c68917998dc",
+      "54e229e0-5ba5-4b21-887d-9547f9ae7ed0",
+      "fab39c0f-cc59-4b59-9623-1213833927e7",
+      "9f40c305-75ef-42bb-8a36-e06e9f46bfa2",
+      "3f22d8fa-9c2c-42c3-8787-33979bfae70a",
+      "5c50eb20-18c7-4f46-bc97-507ab0d225bb",
+      "5696712c-ffab-4ef2-ba81-04f5a8483326",
+      "4db1a771-219c-498b-a732-810a1d0e06bc",
+      "0e569793-d57c-4f3b-9099-92f03f095292",
+      "553d4761-3880-4f2d-b28a-4915fb35f458",
+      "6d3b5939-446b-41a3-9f35-66ef80605b3c",
+      "b491eeb0-ec52-4812-9a50-a1f41cef522b",
+      "ab318271-3be5-41ca-9043-817bfd9af354"
     ],
     "shared": [
-      "b0be4380-07f7-466b-b1a6-3c3556c56880",
       "8f682d03-d884-4ce8-bbe0-8a4a434158b8",
       "8963115d-818e-4121-94e9-3c6bb9fdd6d6",
       "3d1227b2-f11f-4a75-9ee7-998a04eb7cf3",
@@ -108,8 +120,24 @@
       "06c38468-c38a-44fb-8888-b882b7e32148",
       "5f0f6f53-81bc-486a-a6b4-3343275c3735",
       "5794171b-ca1f-4768-bfdd-7f6257d62ee4",
+      "4ca3523a-9382-4b12-9f1f-d75b68badb69",
       "bfc13a17-4c44-4f8b-801a-a0fba3ebdde3",
-      "4ca3523a-9382-4b12-9f1f-d75b68badb69"
+      "b0be4380-07f7-466b-b1a6-3c3556c56880",
+      "c622855e-a9f0-4fec-bd09-5ddc3603f6cc",
+      "0dc3b9c5-32be-4d24-9df1-6f2fd47572dd",
+      "1dc1c04a-90e0-49d0-92f0-041c15180fce",
+      "0e85050a-cde9-4b09-94be-f122bdd7f223",
+      "c12525c5-2de8-453a-bce2-c691d000c6b6",
+      "121ac2e1-5549-4485-8c19-39fe3e0ae766",
+      "f17cff8b-89cd-4199-8100-e543d152a83c",
+      "1b567324-ccde-4e68-a8b8-447930e89e34",
+      "eaddfe7f-dc9a-4ba4-8f3d-dbd1469cf4c1",
+      "dd5e40bb-ea01-41bc-a67b-a77c8eb829b6",
+      "5b1d0b34-a38a-4b3b-93d1-e6ff13cb937f",
+      "f5b836fe-ec96-4665-b2b7-5ee3053a1a36",
+      "ae706a6d-7994-41ee-bee2-284db8d274ac",
+      "7b25c5f8-7f39-4eb1-813d-179bc46361bc",
+      "0a2970f2-b514-4e73-a5e3-a7b6b3e63474"
     ],
     "pathfinder2e-v2": [
       "eab9c683-8132-441e-96b3-545637c42079",
@@ -334,7 +362,6 @@
       "89b280ff-9ab5-423f-99a2-2d9824542a3f",
       "8d9c159a-c61b-4f3a-974c-41ec9090b4c2",
       "f7db52c6-d27d-42b8-aec1-3c9a2ea3ba53",
-      "86d58a2d-bafe-4e10-80e2-4fd8ec5ff99c",
       "f23e05ca-33b3-4211-8c10-88e0b04d8eee",
       "417583bb-74e7-4b87-acfc-7f7178190f7f",
       "ca71b687-40c9-47cc-8413-eb8cb55772ad",
@@ -343,6 +370,10 @@
       "1e7a4583-97bd-4b41-b4f0-e0853e679a20",
       "aff74377-96f3-42d9-87c5-e9fef079918d",
       "d3247933-f99e-4e08-b270-6029626f7f16",
+      "fa09862f-a13b-4971-ae8a-f0df18892e15",
+      "a62a27da-6fa3-4d03-a70b-fec13a3e0c74",
+      "90f20c89-1154-4455-9990-19671691ce61",
+      "d126125b-c146-41e9-a218-7fe0c68733ed",
       "saved_view_permission",
       "af4ef617-033c-420e-ab3d-82d45e1e1827",
       "3427098d-4898-4f0e-bc3a-fa4bfc728caf",
@@ -352,13 +383,11 @@
       "4d712d36-dae2-4424-a3e7-1221a477d418",
       "017920fa-f868-40ef-a979-b45365b97345",
       "bafdc0cb-1b66-4e62-9a49-1b3572dc61ff",
-      "213d68fb-170d-4e45-9eb2-988e15f13717",
       "2368da00-d5a6-4584-96b6-15b0ea7c2e1c",
       "20ebe68a-5bad-44b9-a402-058dfbbc7d9c",
       "9a3136dd-fdd7-4663-b8e4-873b0f2434aa",
       "5fe9ef0b-2811-4bb6-8d29-246ed03ffd05",
       "4f98fde0-b672-4df2-b0eb-286cfc7279e0",
-      "03262cb5-20a3-4176-b250-45e91f112dde",
       "8ebfb7a6-b40f-48cc-b787-61a8d932ea61",
       "068b0efd-79ad-4b75-a2b0-b9dd89d66aa8",
       "a6b424ee-4164-4c9b-93f4-aed539f9756a",
@@ -366,15 +395,26 @@
       "b8106bef-5332-451e-971b-3f906bb38ef7",
       "4363a1ec-f5b5-4d48-b8f0-7f19600f48b9",
       "997ac808-94f0-480a-9850-1ab8edc38659",
+      "f56e4407-d87b-4c63-85bc-352390e13c78",
+      "8273831c-6b76-48b5-94f0-3ff60271fb27",
+      "a3adc30e-bc64-435c-8dfa-1a80713818cb",
+      "651ff38f-53ea-4064-abee-aca30ef5bc9b",
+      "2137ac22-2b1f-42a1-8255-bedeb1a670a8",
+      "ecda33fe-9f8b-42ca-8532-e5e53edaa2bc",
+      "f37f9286-8708-4f75-b40e-e9bce237de6c",
+      "720cce6a-73d9-4a8a-99c9-b24e9ef00612",
+      "aedf15ca-24ad-42d8-9903-a053d41f8901",
+      "51d2db5d-4c18-48c9-8588-0e0b4edb10cd",
       "450b3b98-d5b9-4764-8489-8fc7a00e3e6b",
       "8732b531-8baf-4479-a1d8-c96dec2684fd",
-      "b58ae64e-f191-4cd4-a719-8c0333276b78",
-      "d8dd4a81-b735-48a6-b250-9ae9c9825e60",
-      "4b395c73-8dab-408e-849d-dad7656ddfde",
       "a0b579e1-6089-4fc2-aa3e-67ee92e87e14",
-      "b3a28046-b0f0-4587-8b43-95b7da239c33",
-      "729c3455-1cc5-4d1f-b5f8-f5a26880bb7e",
-      "4044f7f2-aea1-4025-a4b0-9ba9c09c4a59",
+      "abeca876-5d31-4938-a37d-aace2ba6d66c",
+      "0969ea4a-0c2a-4378-a142-39e61bbb51dc",
+      "e01033e6-9a47-4b73-8f3f-53386907ad61",
+      "646e59b4-3361-4b4b-b933-f473b986191a",
+      "a3b1fe52-52a9-461d-a3a8-ddfb21b1a3a9",
+      "6b15611b-4d62-4b32-be4f-5e4323436cc0",
+      "9ebbdc3e-c043-4f25-abf9-edfe3e7a27a4",
       "314e246f-4e48-4d52-ba0a-16eec40a0bd5",
       "8f3d9f7c-757c-4117-a197-a16734a0b36d",
       "f6dae02d-89ac-4f7a-bc46-a8ba9a513c90",
@@ -591,7 +631,6 @@
       "bd29da0e-f578-433e-9d7f-3ad3b3820a67",
       "c3a3a1f3-5de7-4760-839d-2e855eb51dfc",
       "be0370bc-f817-4ef4-96f5-1725c8dea241",
-      "720cce6a-73d9-4a8a-99c9-b24e9ef00612",
       "a81be093-c369-4826-bf48-c543794ec3d6",
       "8f51c43c-8c89-4d49-81bb-69649b737ce5",
       "6ac9da43-30d0-4b56-afa1-a94e76e3d06a",
@@ -677,16 +716,25 @@
       "70534dfd-a8da-455b-8b27-d066e93955c0",
       "f8c3650a-2394-4dd3-9fb0-801b4e12da45",
       "10d3d69a-6e95-449e-aebc-d594a9df297d",
-      "717bf74d-e3f6-4e39-ab3a-077d8546dc91",
-      "5d1feb09-4ba0-4fa4-8316-331f81456bcb",
-      "11120778-b380-4055-9cad-86e33cd4d91b",
-      "ad5910cf-0807-4ded-8158-e34765d0ae73",
       "71a6b099-bebe-4a09-bcc6-0d507049fd59",
       "460f4ccf-946f-4d3b-8da5-c47e3dd832d8",
       "81779cd5-5f3a-4f41-bb6c-9cc6b4156f08",
       "ba0aa24d-ec76-497f-bb6a-63f0fb702421",
       "61369f7d-8c65-4140-a3db-f01fb7ee3353",
       "1e251601-6fa0-4ca4-8984-a9d9565c6a9f",
+      "d88abe0f-f925-446e-a8a1-dc33620f8f15",
+      "1126b518-dc74-4a5a-a1e0-84afa4061204",
+      "23e1b961-ea51-4c2b-b3cc-a032730a63ff",
+      "5594b65b-fe56-45e2-a477-e56131630e94",
+      "af128174-523a-407d-9dbe-70aa4298fc76",
+      "d3996b02-388c-4ee1-9399-66e0f230046e",
+      "9b516200-31e1-4ce9-b4dd-0059d7fe35f1",
+      "986a4681-7432-4e29-95fb-49e041523eb2",
+      "37c4b24c-8653-4b33-a6a5-5afeefe2f0b1",
+      "f33d5a67-8629-4f57-bfd1-0a2ab9edaa82",
+      "ef7ea8fe-7ad1-42ae-9553-a3b1fca65844",
+      "aa771669-0941-4d0d-9443-a9315984c516",
+      "2b50a3f4-4d49-40b5-9ac2-69ce19be45f9",
       "e55614e5-6daf-443f-bec2-462c59e8a9ca",
       "b008ce46-e7ad-42cc-a703-a930a2547a4f",
       "15a5cd18-937a-4b03-86dc-c7bf6b9229d7",
@@ -719,15 +767,13 @@
       "7541943a-ead5-4532-a8bf-2399f94a9095",
       "ad747d5c-9258-4911-a4f8-6f2412c089bc",
       "cd6266f2-d697-4baf-bb72-fa2be4f17e76",
-      "60b948db-b95f-4777-b5e1-4cb3d80588db",
-      "29e1db88-bfe2-416b-90a7-42afd905054f",
-      "6f04e562-1e5f-4116-8eac-b7cb757f8458",
-      "fa27b39f-7871-4650-9cc9-c61482ae1949",
-      "1c7c0981-5d18-479a-a136-79603ddaf326",
       "21d95ee1-b618-48fb-bd49-efaf35371b35",
       "afde9474-1942-42f2-95ac-b8c00e4e3bc7",
       "afb56dd3-e70c-45b2-9488-833e2ffec582",
       "3a087628-e691-426d-afbc-8d2cf386c096",
+      "717bf74d-e3f6-4e39-ab3a-077d8546dc91",
+      "07f7beb6-3957-492e-863e-d092e5403604",
+      "563ff425-ebfd-4bed-8f4c-800393318fae",
       "81dd3c66-ae33-4c45-9c12-70c4037536d2",
       "0d56c25f-7081-4488-ac1e-de1211475dd1",
       "ecab11ae-9bb8-4f20-ae4d-2e7b7ef7639b",
@@ -768,18 +814,61 @@
       "c55ffdd7-037b-4b95-9634-27d33eedc1f3",
       "6314ced9-4fe2-4d2a-b0b3-fa860fd7ec23",
       "0e6612ee-313b-4e95-8ea1-a885add3d261",
-      "c596f56b-defa-48a8-b671-18834c05b6a1",
-      "17714c64-f24e-457a-b254-e94859936f8d",
-      "ec27f99b-4bbf-4d86-ac60-5ec99c1b0b4c",
-      "7a3d37c7-2467-424d-ba7a-adce463c59bb",
-      "a2901026-fac1-4294-adeb-0cd0478debc2",
-      "15a5a708-f7b5-4158-9936-2e112c223188",
-      "90c08a7e-5d30-44d1-bd22-1a424ce00de3",
-      "4b481b8d-f2b4-4352-9fa5-057e9f659423",
-      "0723abe2-fe85-435e-b64b-e6eb647d39b5",
+      "eac952e6-12a4-49c5-aeb1-d94f3572be7c",
+      "9451c886-e7f9-4ac8-8eec-38880ff3632c",
+      "881c89d4-89c8-4390-8930-d4fdbe35df83",
+      "04259671-3cd8-4cc1-8136-3ec95ddb72eb",
+      "ec95450c-76b8-4ee9-8ad0-a16978d51afa",
+      "0f0b97e5-a311-4865-b708-3c4c305843c8",
+      "33c94184-fd86-4868-a756-8560fd6cbf1e",
+      "dd898830-eeab-4972-88cb-3c5f0fb847fe",
+      "e22a808a-cbf6-4aa7-a3b4-a3d490bca25e",
+      "ed641bb4-ee52-4d4a-bab2-1096aba0ce8b",
+      "7b8e03b4-60a6-4158-9514-2b9ec7735cb8",
       "947e5968-808c-482d-ac14-b46ae1efbd9b",
       "6e147963-1cc0-468c-9ab7-720742e1e9f1",
-      "e22a808a-cbf6-4aa7-a3b4-a3d490bca25e"
+      "51b18b1a-b17e-43ee-b286-2b8fa7737ebf",
+      "1dc5140c-9c4f-4eb9-a31a-d428addf3e25",
+      "ee109d8b-daf7-4f2a-8b80-587fe25d1f86",
+      "ec614709-6184-4116-adfa-5d0255950326",
+      "d9207aa3-d29a-4c8a-bc31-f1562bd033f5",
+      "280249cc-0370-4557-b8e5-cea95b5b679c",
+      "b3eaf787-ca18-4d8b-b74c-50cb68931d75",
+      "3f46168c-e522-42d0-9afa-c873edb9bd89",
+      "7d5d0eeb-04b1-4ba2-9034-ce378061eca4",
+      "c75d91f9-4443-4183-8520-b6d158dcf9cf",
+      "05481228-fe83-4c4b-b690-99bf927ee98f",
+      "bdb6796a-ad6e-479c-9bce-0f81879d1c8f",
+      "e63516c9-d70e-4770-b613-a618b92619d2",
+      "d6e9f7c2-cbb7-4f02-b3c9-aa19789f318c",
+      "4ea8e93e-55d0-4b85-91de-c4cec319ae3b",
+      "d8dd4a81-b735-48a6-b250-9ae9c9825e60",
+      "7a3d37c7-2467-424d-ba7a-adce463c59bb",
+      "a2901026-fac1-4294-adeb-0cd0478debc2",
+      "b58ae64e-f191-4cd4-a719-8c0333276b78",
+      "17714c64-f24e-457a-b254-e94859936f8d",
+      "c596f56b-defa-48a8-b671-18834c05b6a1",
+      "ec27f99b-4bbf-4d86-ac60-5ec99c1b0b4c",
+      "4b395c73-8dab-408e-849d-dad7656ddfde",
+      "15a5a708-f7b5-4158-9936-2e112c223188",
+      "4b481b8d-f2b4-4352-9fa5-057e9f659423",
+      "90c08a7e-5d30-44d1-bd22-1a424ce00de3",
+      "0723abe2-fe85-435e-b64b-e6eb647d39b5",
+      "b3a28046-b0f0-4587-8b43-95b7da239c33",
+      "729c3455-1cc5-4d1f-b5f8-f5a26880bb7e",
+      "4044f7f2-aea1-4025-a4b0-9ba9c09c4a59",
+      "f9a6dfa7-147d-4921-8d17-8bd6034bcf28",
+      "6e8ca752-d387-4714-93e9-ac168d31a56d",
+      "9f24e8e6-9056-487b-9796-f23791285e13",
+      "c8625e6f-c30b-464b-9a2e-594c72d17b89",
+      "aee9debf-5fdf-4c64-9993-5a168575a34a",
+      "e02d58d6-254a-4511-bf54-25e762478906",
+      "ed885ef3-af20-45c2-b4c7-512a10348175",
+      "9fb7f9e5-a2f6-4b68-82e3-ecec7dea1608",
+      "8328e6af-d111-4554-945e-ac92c54ec1ad",
+      "5d415698-afed-4f48-b414-60d87aaff55b",
+      "18f119a9-901a-42d5-8c36-c6d2d2fb6af0",
+      "19cb9c6f-38d2-458e-89d3-fdd04ac4cbb3"
     ]
   },
   "engines": [
@@ -966,25 +1055,10 @@
       },
       "name": "preferences--enable-class-archetype-selection",
       "type": "CustomDemiplaneEngine",
-      "value": 1,
+      "value": 0,
       "saveType": "CharacterSheet",
       "storeType": "override",
       "demiplaneEngineId": "a9d5abef-2b7c-44d7-b0fa-370aaea1bb34"
-    },
-    {
-      "id": "213d68fb-170d-4e45-9eb2-988e15f13717",
-      "args": {
-        "id": "8d9f417e-3436-4604-b1a6-87d7885c972f",
-        "name": "Wellspring Mage",
-        "slug": "wellspring-mage",
-        "sourceRow": "class-archetype",
-        "parentEngine": "4550dad2-c4f6-4bf2-892e-e9838aaa9869",
-        "builderSection": "class"
-      },
-      "name": "tabula/archetype/wellspring-mage.eng",
-      "type": "DemiplaneEngine",
-      "saveType": "CharacterSheet",
-      "demiplaneEngineId": "a61ad787-3311-488e-a891-b1692d50f914"
     },
     {
       "id": "2368da00-d5a6-4584-96b6-15b0ea7c2e1c",
@@ -1216,21 +1290,6 @@
       "demiplaneEngineId": "5a741fa0-9e21-4a86-8790-b95f52bd9987"
     },
     {
-      "id": "03262cb5-20a3-4176-b250-45e91f112dde",
-      "args": {
-        "id": "339fb374-3535-4cb3-a0cd-49de65541a70",
-        "name": "Wellspring Control",
-        "slug": "wellspring-control",
-        "sourceRow": "psychic-feat-level-4-rm",
-        "parentEngine": "4550dad2-c4f6-4bf2-892e-e9838aaa9869_8e7d23f1-e804-4b97-aaf5-2609f3273745_psychic-feat-level-4-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
-        "builderSection": "class"
-      },
-      "name": "tabula/feat/wellspring-control.eng",
-      "type": "DemiplaneEngine",
-      "saveType": "CharacterSheet",
-      "demiplaneEngineId": "6be62990-cbb0-4bec-baa6-2e66a7005cfc"
-    },
-    {
       "id": "8ebfb7a6-b40f-48cc-b787-61a8d932ea61",
       "args": {
         "id": "dd626163-31a7-4f01-b17c-3c6df0eaffc8",
@@ -1370,6 +1429,322 @@
       "saveType": "CharacterSheet",
       "storeType": "override",
       "demiplaneEngineId": "db5f446b-1540-417f-868a-9f51aae97c61"
+    },
+    {
+      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max--overridden",
+      "args": {
+        "id": null,
+        "parentEngine": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max"
+      },
+      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max--overridden",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "4432fc88-1705-42a9-9123-91a3d3f59f83"
+    },
+    {
+      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max--overridden",
+      "args": {
+        "id": null,
+        "parentEngine": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max"
+      },
+      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max--overridden",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "76aa6d67-2ab9-4f2c-9e9f-dd6aa2d9211d"
+    },
+    {
+      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max",
+      "args": {
+        "id": null
+      },
+      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-1_max",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "3f3fa560-c0b0-4967-add0-58a94de19694"
+    },
+    {
+      "id": "custom_character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max",
+      "args": {
+        "id": null
+      },
+      "name": "character_spell-feature_psychic-spellcasting-rm_spell-slots_rank-2_max",
+      "type": "CustomDemiplaneEngine",
+      "value": 1,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "69e5ce6e-e7ca-4702-bca8-aba822364236"
+    },
+    {
+      "id": "custom_preferences--enable-free-archetype",
+      "args": {
+        "id": null
+      },
+      "name": "preferences--enable-free-archetype",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterBuilder",
+      "storeType": "override",
+      "demiplaneEngineId": "c2d78aca-90b4-4569-89ce-263055f61d32"
+    },
+    {
+      "id": "custom_global--filter-show-feat-prereqs",
+      "args": {
+        "id": null
+      },
+      "name": "global--filter-show-feat-prereqs",
+      "type": "CustomDemiplaneEngine",
+      "value": 0,
+      "saveType": "CharacterSheet",
+      "storeType": "override",
+      "demiplaneEngineId": "31e3c9b6-063f-40be-bf8d-f699d00aa166"
+    },
+    {
+      "id": "f56e4407-d87b-4c63-85bc-352390e13c78",
+      "args": {
+        "id": "5a48f592-e875-495e-b020-6fe974e9e203",
+        "name": "Wizard Dedication",
+        "slug": "wizard-dedication-rm",
+        "sourceRow": "psychic-feat-level-2-rm",
+        "parentEngine": "4550dad2-c4f6-4bf2-892e-e9838aaa9869_8e7d23f1-e804-4b97-aaf5-2609f3273745_psychic-feat-level-2-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/wizard-dedication-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "7f52eab2-8b06-4aef-9684-3ce281a1543e"
+    },
+    {
+      "id": "8273831c-6b76-48b5-94f0-3ff60271fb27",
+      "args": {
+        "id": "5e245343-4294-4abe-a80c-d7f468a6b378",
+        "name": "School of Unified Magical Theory",
+        "slug": "school-of-unified-magical-theory-archetype-rm",
+        "sourceRow": "arcane-school-archetype-rm-feature-choice-row",
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e_arcane-school-archetype-rm-3d0ca53f-107d-422f-a509-e1f504202630",
+        "builderSection": "class"
+      },
+      "name": "tabula/class-feature/school-of-unified-magical-theory-archetype-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "9c03b2d0-a966-4829-aee9-c8bb35c031df"
+    },
+    {
+      "id": "a3adc30e-bc64-435c-8dfa-1a80713818cb",
+      "args": {
+        "id": "3de231c6-914f-4c3d-8bc2-9cb284b904e2",
+        "name": "Basic Wizard Spellcasting",
+        "slug": "basic-wizard-spellcasting-rm",
+        "sourceRow": "psychic-feat-level-4-rm",
+        "parentEngine": "4550dad2-c4f6-4bf2-892e-e9838aaa9869_8e7d23f1-e804-4b97-aaf5-2609f3273745_psychic-feat-level-4-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "builderSection": "class"
+      },
+      "name": "tabula/feat/basic-wizard-spellcasting-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1e7f412b-a7d2-41ca-bae3-3cc3fe466efc"
+    },
+    {
+      "id": "651ff38f-53ea-4064-abee-aca30ef5bc9b",
+      "args": {
+        "id": "2fd98a16-44c3-4189-baf3-e1c4a5338c0e",
+        "name": "Bullhorn",
+        "slug": "bullhorn-rm",
+        "sourceRow": "builder-spell-section--psychic-spellcasting-rm--0",
+        "parentEngine": "4550dad2-c4f6-4bf2-892e-e9838aaa9869_8e7d23f1-e804-4b97-aaf5-2609f3273745_psychic-spellcasting-rm-3306987c-cf82-4775-a97f-9ba1df667b74",
+        "selectionRank": 0,
+        "builderSection": "spells",
+        "parentSpellFeature": "psychic-spellcasting-rm"
+      },
+      "name": "tabula/spell/bullhorn-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "4dbbe585-0027-43f4-805b-1995738c7028"
+    },
+    {
+      "id": "2137ac22-2b1f-42a1-8255-bedeb1a670a8",
+      "args": {
+        "id": "8711fcaf-4616-49ef-b4ac-ded9f734ee1a",
+        "name": "Ancient Dust",
+        "slug": "ancient-dust",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--0",
+        "spellSlot": "cantrip",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/ancient-dust.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "b4c8c41b-10dc-4bc7-953b-0c5483db2b49"
+    },
+    {
+      "id": "ecda33fe-9f8b-42ca-8532-e5e53edaa2bc",
+      "args": {
+        "id": "3199ab15-988b-47c1-a04f-6b5a205837b7",
+        "name": "Frostbite",
+        "slug": "frostbite-rm",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--0",
+        "spellSlot": "cantrip",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/frostbite-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "ad75041c-adbf-4499-ac1e-0ddc44989b0d"
+    },
+    {
+      "id": "f37f9286-8708-4f75-b40e-e9bce237de6c",
+      "args": {
+        "id": "56cf4c8b-1cb7-4067-9391-03c4fa92a9cf",
+        "name": "Frost’s Touch",
+        "slug": "frosts-touch-rm",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--0",
+        "spellSlot": "cantrip",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/frosts-touch-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "b4a3a74a-6074-4c26-81f9-87c4718a2a3a"
+    },
+    {
+      "id": "720cce6a-73d9-4a8a-99c9-b24e9ef00612",
+      "args": {
+        "id": "48403429-121f-42da-a94c-50712d9d83c6",
+        "name": "Figment",
+        "slug": "figment-rm",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--0",
+        "spellSlot": "cantrip",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/figment-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "f618fba8-6bc9-4940-9c7d-9c6da3fae0ab"
+    },
+    {
+      "id": "aedf15ca-24ad-42d8-9903-a053d41f8901",
+      "args": {
+        "id": "ab5acfaf-39d2-4f40-9c34-9d53014a5d7a",
+        "name": "Camel Spit",
+        "slug": "camel-spit",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--1",
+        "spellSlot": "rank-1",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 1,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/camel-spit.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "d13d3ca2-b2a2-409b-8110-63d7a552f888"
+    },
+    {
+      "id": "51d2db5d-4c18-48c9-8588-0e0b4edb10cd",
+      "args": {
+        "id": "9bc6ea98-aa4d-40e1-97b0-8a0acaf2cfda",
+        "name": "Carryall",
+        "slug": "carryall-rm",
+        "sourceRow": "builder-spell-section--wizard-spellcasting-archetype-rm--1",
+        "spellSlot": "rank-1",
+        "addSpellData": {
+          "baseSpellbookSpell": true
+        },
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 1,
+        "builderSection": "spells",
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/carryall-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "6731a65e-2574-412c-bdc9-8649dba9c349"
+    },
+    {
+      "id": "f37f9286-8708-4f75-b40e-e9bce237de6c",
+      "args": {
+        "id": "7249dc54-d643-4315-909a-75a4a8dd7c77",
+        "name": "",
+        "slug": "frosts-touch-rm",
+        "isPrepare": true,
+        "sourceRow": "manual-sheet-drawer",
+        "spellSlot": "cantrip",
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/frosts-touch-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "658b2d85-7ffa-45ff-a46c-71e47f9bc480"
+    },
+    {
+      "id": "ecda33fe-9f8b-42ca-8532-e5e53edaa2bc",
+      "args": {
+        "id": "170e98f2-3421-49bf-a4c2-87ac44447bb9",
+        "name": "",
+        "slug": "frostbite-rm",
+        "isPrepare": true,
+        "sourceRow": "manual-sheet-drawer",
+        "spellSlot": "cantrip",
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 0,
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/frostbite-rm.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "bdeb13b6-897d-465f-8967-24607d632b76"
+    },
+    {
+      "id": "aedf15ca-24ad-42d8-9903-a053d41f8901",
+      "args": {
+        "id": "550d8504-e39d-4c90-ad77-527446871f44",
+        "name": "",
+        "slug": "camel-spit",
+        "isPrepare": true,
+        "sourceRow": "manual-sheet-drawer",
+        "spellSlot": "rank-1",
+        "parentEngine": "7f52eab2-8b06-4aef-9684-3ce281a1543e",
+        "selectionRank": 1,
+        "parentSpellFeature": "wizard-spellcasting-archetype-rm"
+      },
+      "name": "tabula/spell/camel-spit.eng",
+      "type": "DemiplaneEngine",
+      "saveType": "CharacterSheet",
+      "demiplaneEngineId": "1a495c0f-a0d1-4616-9dc5-5823bf5b8f61"
     }
   ]
 }
