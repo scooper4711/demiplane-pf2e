@@ -351,6 +351,59 @@ describe("feature-spell-resolver", () => {
     expect(result.focus[0].isFocus).toBe(true);
   });
 
+  it("routes an oracle mystery's repertoire grants to known and its revelation to focus", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        text: async () =>
+          [
+            ndjsonLine("class-1", [
+              {
+                type: "v2-add-spellcasting-feature",
+                slug: "oracle-spellcasting-rm",
+                focusSlug: "revelation-spells-rm",
+                focusName: "Revelation Spells",
+                hasFocusGroup: true,
+              },
+            ]),
+            // Ashes mystery: ignition / breathe fire parented at the main
+            // spellcasting feature (repertoire), ashen wind at the revelation
+            // focus group (focus).
+            ndjsonLine("feat-1", [
+              ADD_SPELL("ignition-rm", 1, {
+                isKnown: true,
+                tradition: "inherit",
+                parentFeature: "oracle-spellcasting-rm",
+              }),
+              ADD_SPELL("breathe-fire-rm", 1, {
+                isKnown: true,
+                tradition: "inherit",
+                parentFeature: "oracle-spellcasting-rm",
+              }),
+              ADD_SPELL("ashen-wind-rm", 1, {
+                isKnown: true,
+                tradition: "inherit",
+                parentFeature: "revelation-spells-rm",
+              }),
+            ]),
+          ].join("\n"),
+      })
+    );
+
+    const result = await resolveFeatureGrantedSpells(
+      [
+        featureEngine("tabula/class/oracle-rm.eng", "class-1"),
+        featureEngine("tabula/class-feature/ashes-rm.eng", "feat-1"),
+      ],
+      1,
+      1
+    );
+
+    expect(result.known.map((k) => k.slug).sort()).toEqual(["breathe-fire-rm", "ignition-rm"]);
+    expect(result.focus.map((f) => f.slug)).toEqual(["ashen-wind-rm"]);
+  });
+
   it("drops spells above the character level", async () => {
     vi.stubGlobal(
       "fetch",

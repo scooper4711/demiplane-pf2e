@@ -382,6 +382,31 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
 }
 
 /**
+ * A mystery-style repertoire grant: `isKnown` with an inherited tradition whose
+ * `parentFeature` names the class's main spellcasting feature (e.g. an Ashes
+ * mystery granting ignition / breathe fire with
+ * `parentFeature: "oracle-spellcasting-rm"`). It belongs in the class
+ * repertoire, not the focus entry — only the revelation grant (parented at the
+ * focus group, e.g. `"revelation-spells-rm"`) is a focus spell.
+ *
+ * Parenting at the spellcasting feature is the distinguishing signal: focus
+ * grants parent at a focus group (`composition-spells`, `revelation-spells-rm`,
+ * `link-spells-rm`) or carry no parent at all, so the `-spellcasting` suffix
+ * test never misfires on them. Apparition grants (`apparition-spellcasting-rm`)
+ * also match the suffix but are tested earlier, so they still file as
+ * apparition.
+ */
+function isSpellcastingFeatureRepertoireGrant(mod: AddSpellModifier): boolean {
+  if (mod.isKnown !== true || mod.forcesFocus === true) return false;
+  const tradition = mod.tradition ?? "";
+  if (tradition !== "" && tradition !== INHERIT_TRADITION) return false;
+  const parent = mod.parentFeature ?? "";
+  if (parent === "") return false;
+  const stripped = parent.endsWith("-rm") ? parent.slice(0, -3) : parent;
+  return stripped.endsWith("-spellcasting") || stripped === "spellcasting";
+}
+
+/**
  * Sorts feature-granted `add-spell` modifiers into five kinds:
  *
  * - **innate** (`isInnate: true`, and no forced focus): cast at will from an
@@ -390,8 +415,11 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
  *   dedicated "Hexes" entry (e.g. patron/lesson hexes, Cackle).
  * - **known** (a repertoire grant): added to the class's spell repertoire — a
  *   spontaneous caster's known spell (Maestro muse → Soothe, per
- *   {@link isRepertoireGrant}) or a witch's prepared-list spell that accompanies
- *   a hex (per {@link isInheritedRepertoireGrant}).
+ *   {@link isRepertoireGrant}), a witch's prepared-list spell that accompanies
+ *   a hex (per {@link isInheritedRepertoireGrant}), or a mystery grant parented
+ *   at the class spellcasting feature (per
+ *   {@link isSpellcastingFeatureRepertoireGrant}, e.g. an oracle's ignition /
+ *   breathe fire).
  * - **apparition** (an animist apparition grant): filed in the apparition
  *   spellcasting entry, never the class repertoire — except a vessel spell
  *   (gated on a satisfied primary-apparition restriction), which falls through
@@ -422,7 +450,12 @@ function grantKind(mod: AddSpellModifier, hexFocusGroup: boolean): GrantKind {
   if (mod.isInnate === true) return "innate";
   if (isHexGrant(mod, hexFocusGroup)) return "hex";
   if (isApparitionGrant(mod)) return "apparition";
-  if (isRepertoireGrant(mod) || isInheritedRepertoireGrant(mod, hexFocusGroup)) return "known";
+  if (
+    isRepertoireGrant(mod) ||
+    isInheritedRepertoireGrant(mod, hexFocusGroup) ||
+    isSpellcastingFeatureRepertoireGrant(mod)
+  )
+    return "known";
   return "focus";
 }
 
