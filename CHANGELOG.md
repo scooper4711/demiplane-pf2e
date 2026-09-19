@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0-rc.6] - 2026-09-19
+
+### Added
+
+- authoritative slot maximums; archetype slots from feat definitions
+- treat archetype spellcasting like its base class; assert kormir import
+- resolve kineticist gates and junctions; label choices with item and level
+- count known cantrips as last-resort slot source; assert summoner import
+- import animist spellcasting, apparition entry, vessel focus, remaster renames
+- resolve slots from feature definitions and repertoire cantrips
+- resolve summoner link spells from cached definitions, not hardcode
+- grant universal summoner link cantrips as focus
+- resolve eidolon and feature-pick choices; alarm on slotless and linkless imports
+- teach magus spellcasting, tagged slot pools, and focus rank gating
+- copy, dump, and restore scripts for demiplane fixture characters
+- file runescarred spell runes as innate spells
+- surface unknown spellcasting sources as sync errors, not silent skips
+- file school spells in their own entry; fix focus-pool precedence
+- resolve equipment, formulas and deities across all compendium packs
+- resolve compendium items across official and third-party packs
+
+### Fixed
+
+- import necromancer spells; add necromancer import test
+- route oracle mystery grants to repertoire; add oracle import test
+- scope repertoire cantrip fallback to its own feature
+- import witch hexes into a Hexes focus entry, not scattered spells
+- source Demiplane token from one place so push can't lose it
+- preserve non-ASCII characters when trimming imported language names
+
+### Changed
+
+- refine import issue template and ignore playwright-report
+- consolidate spellcasting-feature identity into a registry
+- lock override-wins for archetype slots
+- psychic wizard dedication, archetype entry, honest slot alarm
+- drop non-remaster kormir fixture
+- plugin registry for ChoiceSet matchers with kineticist config
+- SKIP_MUTATION_TESTS flag skips slow round-trip specs
+- snapshot summoner with cast 500 toads
+- lini choices resolve; curriculum junk language gone
+- refresh seoni snapshot
+- assert psychic amps and magus spellbook, conflux, placements
+- track fvtt valeros rename
+- assert seoni sorcerer repertoire, signatures, bloodline, granted spells
+- snapshot all fvtt fixture characters
+- assert witch full spellbook, placements, focus pool, known gaps
+- assert curriculum wizard spell placement, school slots, override rank
+- assert lini druid spell placement, order focus, known choice gaps
+- assert kyra cleric spell placement, font, domain focus, ritual
+- assert bard spell placement and focus pool on import
+- use Ko-fi badge button in Support section
+
+[1.0.0-rc.6]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v1.0.0-rc.6
+
 ## [1.0.0-rc.5] - 2026-09-14
 
 ### Added
