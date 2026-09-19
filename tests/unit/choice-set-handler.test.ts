@@ -342,6 +342,7 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
         key: "deity-cleric::choice",
         source: "guess",
         prompt: "Deity (Cleric)",
+        itemLabel: "Deity (Cleric)",
         options: [
           { value: "holy", label: "Holy" },
           { value: "none", label: "None" },
@@ -924,6 +925,7 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
           key: "test-feat::choice",
           source: "guess",
           prompt: "Test Feat",
+          itemLabel: "Test Feat",
           options: [
             { value: "acrobatics", label: "Acrobatics" },
             { value: "crafting", label: "Crafting" },
@@ -949,6 +951,7 @@ describe("ChoiceSetHandler preCreate monkey-patch", () => {
           key: "test-feat::choice",
           source: "override",
           prompt: "Test Feat",
+          itemLabel: "Test Feat",
           options: [
             { value: "acrobatics", label: "Acrobatics" },
             { value: "crafting", label: "Crafting" },
@@ -1318,6 +1321,100 @@ describe("ChoiceSetHandler with libWrapper active", () => {
     });
 
     expect(handler.drainFallbacks()).toHaveLength(0);
+  });
+});
+
+describe("ChoiceSetHandler roll option publication", () => {
+  function gameActorsMock() {
+    return (globalThis as unknown as { game: { actors: { get: { mockReturnValue: (v: unknown) => void } } } }).game
+      .actors.get;
+  }
+
+  function makeCtx(overrides: Record<string, unknown> = {}) {
+    const itemFlags: Record<string, unknown> = {};
+    return {
+      selection: null,
+      choices: [],
+      item: { flags: itemFlags, getRollOptions: () => [], rules: [{ ignored: true }], name: "Test Feat" },
+      actor: { getRollOptions: () => [] },
+      resolveInjectedProperties: () => ({ test: () => true }),
+      predicate: {},
+      inflateChoices: async () => overrides.inflateChoices ?? [],
+      flag: "choice",
+      rollOption: "foo",
+      prompt: undefined,
+      ...overrides,
+    };
+  }
+
+  function runSelection(rollOption: string | null, choices: Array<{ value: string; label: string }>) {
+    const builtin = installChoiceSetPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.beginImport("actor-1", "Test Actor");
+    handler.enable();
+    const ctx = makeCtx({ choices, inflateChoices: async () => choices, rollOption });
+    const proto = builtin.ChoiceSet.prototype as unknown as {
+      preCreate: (this: unknown, p: unknown) => Promise<void>;
+    };
+    return { handler, ctx, proto };
+  }
+
+  it("publishes rollOption:selection for plain values", async () => {
+    const { ctx, proto } = runSelection("test-rule", [
+      { value: "society", label: "Society" },
+      { value: "crafting", label: "Crafting" },
+    ]);
+    const all: Record<string, boolean> = {};
+    const getMock = gameActorsMock();
+    getMock.mockReturnValue({ rollOptions: { all } });
+    try {
+      await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Test Feat" } });
+
+      expect(ctx.selection).toBe("society");
+      expect(all["test-rule:society"]).toBe(true);
+    } finally {
+      getMock.mockReturnValue(undefined);
+    }
+  });
+
+  it("extends rollOption with the granted item slug for UUID values", async () => {
+    installFoundryMocks({
+      "pf2e.classfeatures": createMockPack([
+        { _id: "X11", name: "Air Gate", system: { slug: "air-gate" }, type: "feat" },
+      ]),
+    });
+    const { ctx, proto } = runSelection("kinetic-gate:first-element", [
+      { value: "Compendium.pf2e.classfeatures.Item.X11", label: "Air Gate" },
+    ]);
+    const all: Record<string, boolean> = {};
+    const getMock = gameActorsMock();
+    getMock.mockReturnValue({ rollOptions: { all } });
+    const ruleSource: Record<string, unknown> = {};
+    try {
+      await proto.preCreate.call(ctx, { ruleSource, itemSource: { name: "Kinetic Gate" } });
+
+      expect(all["kinetic-gate:first-element:air-gate"]).toBe(true);
+      expect(ruleSource.rollOption).toBe("kinetic-gate:first-element:air-gate");
+    } finally {
+      getMock.mockReturnValue(undefined);
+    }
+  });
+
+  it("skips publication without an actor", async () => {
+    const builtin = installChoiceSetPrototype();
+    const handler = new ChoiceSetHandler();
+    handler.setEngines([eng({ name: "core/selection/skill/increase/index.eng", args: { slug: "society-rm" } })]);
+    handler.enable();
+    const choices = [{ value: "society", label: "Society" }];
+    const ctx = makeCtx({ choices, inflateChoices: async () => choices, rollOption: "test-rule" });
+    const proto = builtin.ChoiceSet.prototype as unknown as {
+      preCreate: (this: unknown, p: unknown) => Promise<void>;
+    };
+    await proto.preCreate.call(ctx, { ruleSource: {}, itemSource: { name: "Test Feat" } });
+
+    // No actor, no crash, selection still applied.
+    expect(ctx.selection).toBe("society");
   });
 });
 

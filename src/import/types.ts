@@ -130,6 +130,12 @@ export interface UnresolvedChoice {
   source: "guess" | "override";
   /** Human label: the ChoiceSet prompt, or the granting item's name. */
   prompt: string;
+  /**
+   * Granting item and level ("Gate's Threshold (level 5)"), so the dialog
+   * identifies which choice needs input. Absent on records stored before this
+   * field existed — renderers must fall back to `prompt` alone.
+   */
+  itemLabel?: string;
   /** The options to offer, with serializable values for matching. */
   options: { value: string; label: string }[];
   /** What the blind `choices[0]` fallback applied or would apply, for display ("we guessed X"). */

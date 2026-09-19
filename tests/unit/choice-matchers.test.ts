@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
-import { findMatchInChoices } from "../../src/import/choice-matchers.js";
+import { findMatchInChoices, matchKineticElement } from "../../src/import/choice-matchers.js";
 
 function skillEngine(slug) {
   return {
@@ -585,5 +585,157 @@ describe("choice-matchers", () => {
     ];
 
     expect(findMatchInChoices(choices, engines, "Druidic Order")).toBe(choices[0]);
+  });
+
+  it("matches a gate threshold to the fork taken at its level", () => {
+    const choices = [
+      { label: "Expand the Portal", value: "expand" },
+      { label: "Fork the Path", value: "fork" },
+    ];
+    const engines = [
+      {
+        id: "fork-5",
+        name: "tabula/class-feature/fork-the-path-level-5.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "fork-the-path-level-5", sourceRow: "gates-threshold-level-5" },
+      },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Gate's Threshold", undefined, "", 5)).toBe(choices[1]);
+  });
+
+  it("matches a threshold by slug ordinal without an item level", () => {
+    const choices = [
+      { label: "Expand the Portal", value: "expand" },
+      { label: "Fork the Path", value: "fork" },
+    ];
+    const engines = [
+      {
+        id: "fork-9",
+        name: "tabula/class-feature/fork-the-path-level-9.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "fork-the-path-level-9", sourceRow: "gates-threshold-level-9" },
+      },
+    ];
+
+    expect(
+      findMatchInChoices(
+        choices,
+        engines,
+        "Second Gate's Threshold",
+        undefined,
+        "",
+        undefined,
+        "second-gates-threshold"
+      )
+    ).toBe(choices[1]);
+  });
+
+  it("links a threshold backward from the forked element", () => {
+    // No fork feat engine — only the element parented at it.
+    const choices = [
+      { label: "Expand the Portal", value: "expand" },
+      { label: "Fork the Path", value: "fork" },
+    ];
+    const engines = [
+      {
+        id: "el-17",
+        name: "tabula/class-feature/metal-kineticist.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "metal-kineticist", parentEngine: "fork-feat-17" },
+      },
+      {
+        id: "fork-feat-17",
+        name: "tabula/class-feature/fork-the-path-level-17.eng",
+        type: "CustomDemiplaneEngine",
+        args: { slug: "fork-the-path-level-17", sourceRow: "gates-threshold-level-17" },
+        demiplaneEngineId: "fork-feat-17",
+      },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Fourth Gate's Threshold", undefined, "", 17)).toBe(choices[1]);
+  });
+
+  it("leaves an unforked threshold to the noisy fallback", () => {
+    const choices = [
+      { label: "Expand the Portal", value: "expand" },
+      { label: "Fork the Path", value: "fork" },
+    ];
+
+    expect(findMatchInChoices(choices, [], "Gate's Threshold", undefined, "", 5)).toBeNull();
+  });
+
+  it("ignores non-threshold choices", () => {
+    const choices = [
+      { label: "Air Gate", value: "Compendium.pf2e.classfeatures.Item.aaaa" },
+      { label: "Fire Gate", value: "Compendium.pf2e.classfeatures.Item.bbbb" },
+    ];
+    const engines = [
+      {
+        id: "fork-5",
+        name: "tabula/class-feature/fork-the-path-level-5.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "fork-the-path-level-5", sourceRow: "gates-threshold-level-5" },
+      },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Kinetic Gate", undefined, "", 1)).toBeNull();
+  });
+
+  it("matches elementOne/elementTwo to the taken gates in order", () => {
+    const choices = [
+      { label: "Air Gate", value: "Compendium.pf2e.classfeatures.Item.aaaa" },
+      { label: "Fire Gate", value: "Compendium.pf2e.classfeatures.Item.bbbb" },
+    ];
+    const engines = [
+      {
+        id: "el-air",
+        name: "tabula/class-feature/air-kineticist.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "air-kineticist", sourceRow: "element-kineticist" },
+      },
+      {
+        id: "el-fire",
+        name: "tabula/class-feature/fire-kineticist.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "fire-kineticist", sourceRow: "element-kineticist" },
+      },
+    ];
+
+    expect(matchKineticElement(choices, engines, "elementOne", 1, "kinetic-gate")).toBe(choices[0]);
+    expect(matchKineticElement(choices, engines, "elementTwo", 1, "kinetic-gate")).toBe(choices[1]);
+  });
+
+  it("matches elementFork to the junction's element", () => {
+    const choices = [
+      { label: "Wood Gate", value: "Compendium.pf2e.classfeatures.Item.aaaa" },
+      { label: "Metal Gate", value: "Compendium.pf2e.classfeatures.Item.bbbb" },
+    ];
+    const engines = [
+      {
+        id: "el-wood",
+        name: "tabula/class-feature/wood-kineticist.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "wood-kineticist", parentEngine: "fork-feat-5" },
+      },
+      {
+        id: "fork-feat-5",
+        name: "tabula/class-feature/fork-the-path-level-5.eng",
+        type: "CustomDemiplaneEngine",
+        args: { slug: "fork-the-path-level-5", sourceRow: "gates-threshold-level-5" },
+        demiplaneEngineId: "fork-feat-5",
+      },
+    ];
+
+    expect(matchKineticElement(choices, engines, "elementFork", 5, "gates-threshold")).toBe(choices[0]);
+  });
+
+  it("leaves element choices without taken gates to the fallback", () => {
+    const choices = [
+      { label: "Air Gate", value: "Compendium.pf2e.classfeatures.Item.aaaa" },
+      { label: "Fire Gate", value: "Compendium.pf2e.classfeatures.Item.bbbb" },
+    ];
+
+    expect(matchKineticElement(choices, [], "elementOne", 1, "kinetic-gate")).toBeNull();
   });
 });

@@ -40,13 +40,18 @@ export function resolveUserOverride(context: ChoiceSetContext, overrides: Choice
 export function unresolvedChoiceRecord(
   context: ChoiceSetContext,
   guessed: Choice,
-  source: "guess" | "override"
+  source: "guess" | "override",
+  itemLevel?: number
 ): UnresolvedChoice {
   const prompt = typeof context.prompt === "string" && context.prompt.length > 0 ? context.prompt : context.item.name;
   return {
     key: choiceKeyFor(context.item.slug, context.item.name, context.flag),
     source,
     prompt,
+    itemLabel:
+      typeof itemLevel === "number" && Number.isInteger(itemLevel)
+        ? `${context.item.name} (level ${itemLevel})`
+        : context.item.name,
     options: context.choices.map((c) => ({ value: String(c.value), label: c.label })),
     guessedValue: String(guessed.value),
   };

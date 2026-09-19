@@ -20,7 +20,9 @@ export function findMatchInChoices(
   engines: DemiplaneEngineEntry[],
   itemName?: string,
   grantedFeatsByElement?: Map<string, Set<string>>,
-  actorTag?: string
+  actorTag?: string,
+  itemLevel?: number,
+  itemSlug?: string
 ): Choice | null {
   currentTag = actorTag ?? "";
   // Strategies run in order from most specific (an explicit selection engine) to
@@ -35,6 +37,7 @@ export function findMatchInChoices(
     () => matchDomain(choices, engines),
     () => matchEidolon(choices, engines),
     () => matchFeaturePick(choices, engines, itemName),
+    () => matchThreshold(choices, engines, itemLevel, itemSlug),
     () => matchMuse(choices, engines),
     () => matchAdoptedAncestry(choices, engines),
     () => matchWeaponInnovation(choices, engines, itemName),
@@ -210,6 +213,135 @@ function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], it
     }
   }
   return null;
+}
+
+/**
+ * Matches a kineticist gate-junction threshold ChoiceSet (Expand the Portal
+ * vs Fork the Path) against the fork feat taken at that junction's level.
+ * The junction level comes from the owning item (level first, slug ordinal
+ * second: Gate's Threshold is 5, Second 9, Third 13, Fourth 17). Fork evidence
+ * is either the fork feat engine itself (`fork-the-path-level-N`) or —
+ * linked backward — an element engine parented at that fork feat (e.g. metal
+ * parented at the level-17 fork). Anything else falls through to the noisy
+ * first-option fallback (Expand) rather than guessing silently.
+ */
+function matchThreshold(
+  choices: Choice[],
+  engines: DemiplaneEngineEntry[],
+  itemLevel?: number,
+  itemSlug?: string
+): Choice | null {
+  const values = new Set(choices.map((c) => (typeof c.value === "string" ? c.value : "")));
+  if (!values.has("expand") || !values.has("fork")) return null;
+
+  const level = itemLevel ?? junctionLevelFromSlug(itemSlug);
+  if (level === null) return null;
+
+  const forked =
+    engines.some((e) => e.type === "DemiplaneEngine" && e.args?.slug === `fork-the-path-level-${level}`) ||
+    forkElementAtLevel(engines, level) !== null;
+  if (!forked) return null;
+
+  tlog(`[ChoiceSet match] Threshold strategy - fork taken at level ${level}`);
+  return choices.find((c) => c.value === "fork") ?? null;
+}
+
+/** Gate-junction levels by threshold-item slug, in junction order. */
+const THRESHOLD_LEVELS: Record<string, number> = {
+  "gates-threshold": 5,
+  "second-gates-threshold": 9,
+  "third-gates-threshold": 13,
+  "fourth-gates-threshold": 17,
+};
+
+function junctionLevelFromSlug(itemSlug?: string): number | null {
+  if (!itemSlug) return null;
+  return THRESHOLD_LEVELS[toChoiceSlug(itemSlug)] ?? null;
+}
+
+/**
+ * Backward fork evidence: the element engine (e.g. metal) parented at the
+ * fork feat for a junction level, or null. Works even when the fork feat
+ * engine itself is absent from the data.
+ */
+function forkElementAtLevel(engines: DemiplaneEngineEntry[], level: number): DemiplaneEngineEntry | null {
+  const marker = `gates-threshold-level-${level}`;
+  const expectedSlug = `fork-the-path-level-${level}`;
+  const byDemiplaneId = new Map(
+    engines.filter((e) => typeof e.demiplaneEngineId === "string").map((e) => [e.demiplaneEngineId as string, e])
+  );
+  for (const element of engines) {
+    const slug = element.args?.slug;
+    if (typeof slug !== "string" || !slug.endsWith("-kineticist")) continue;
+    const parentId = element.args?.parentEngine;
+    if (typeof parentId !== "string") continue;
+    const parent = byDemiplaneId.get(parentId);
+    if (!parent) continue;
+    if (parent.args?.slug === expectedSlug) return element;
+    const sourceRow = parent.args?.sourceRow;
+    if (typeof sourceRow === "string" && sourceRow.includes(marker)) return element;
+  }
+  return null;
+}
+
+/**
+ * Matches a kineticist gate-element ChoiceSet (elementOne, elementTwo,
+ * elementFork: compendium gate UUIDs labeled "X Gate") against the taken
+ * elements. Junction forks resolve through the element parented at that
+ * junction's fork feat (wood at 5, water at 9, earth at 13, metal at 17);
+ * the level-1 pair resolves in taken order (first taken → elementOne).
+ * Exported so the handler can resolve these before predicate gating, whose
+ * roll options assume interactive picking order.
+ */
+export function matchKineticElement(
+  choices: Choice[],
+  engines: DemiplaneEngineEntry[],
+  flag?: string,
+  itemLevel?: number,
+  itemSlug?: string
+): Choice | null {
+  if (flag !== "elementOne" && flag !== "elementTwo" && flag !== "elementFork") return null;
+
+  if (flag === "elementFork") {
+    const level = itemLevel ?? junctionLevelFromSlug(itemSlug);
+    if (level === null) return null;
+    const element = forkElementAtLevel(engines, level);
+    const slug = element?.args?.slug;
+    if (typeof slug !== "string") return null;
+    return matchGateChoice(choices, toFoundrySlug(slug).replace(/-kineticist$/, ""), flag);
+  }
+  const taken = takenGateElements(engines);
+  const pick = taken[flag === "elementOne" ? 0 : 1];
+  if (!pick) return null;
+  return matchGateChoice(choices, pick, flag);
+}
+
+/** Matches a gate option label ("X Gate") against an element slug. */
+function matchGateChoice(choices: Choice[], elementSlug: string, flag: string): Choice | null {
+  tlog(`[ChoiceSet match] Kinetic element strategy - ${flag}: ${elementSlug}`);
+  for (const choice of choices) {
+    if (toChoiceSlug(choice.label.replace(/\s+gate$/i, "")) === elementSlug) return choice;
+  }
+  return null;
+}
+
+/**
+ * The level-1 taken elements in character order (e.g. air then fire for Dual
+ * Gate): `*-kineticist` engines chosen directly off the class, not off a fork
+ * feat. Junction elements carry fork rows instead and never appear here.
+ */
+function takenGateElements(engines: DemiplaneEngineEntry[]): string[] {
+  const taken: string[] = [];
+  for (const engine of engines) {
+    if (engine.type !== "DemiplaneEngine") continue;
+    const slug = engine.args?.slug;
+    if (typeof slug !== "string" || !slug.endsWith("-kineticist")) continue;
+    const sourceRow = engine.args?.sourceRow;
+    if (typeof sourceRow !== "string") continue;
+    if (!sourceRow.includes("element-kineticist") || sourceRow.includes("fork-the-path")) continue;
+    taken.push(toFoundrySlug(slug).replace(/-kineticist$/, ""));
+  }
+  return taken;
 }
 
 /** Matches a ChoiceSet option value of the form `system.skills.<skill>.rank`. */
