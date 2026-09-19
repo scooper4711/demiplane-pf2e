@@ -6,7 +6,7 @@ import { toFoundrySlug } from "./slug-utils.js";
 import {
   fetchStreamEngineLines,
   fetchDomainEngineData,
-  resolveFeatEngineIdsBySlug,
+  expandFeatGrantLines,
   type AddSpellModifier,
   type EngineModifier,
   type DomainEngineData,
@@ -14,6 +14,7 @@ import {
 import { resolveSpellFromCompendium } from "./compendium-resolver.js";
 import { getCharacterLevel, applySlotMaximums } from "./spell-slots.js";
 import { deriveClassEntryName } from "./spell-importer.js";
+import { HEX_FOCUS_GROUP, APPARITION_SPELLCASTING } from "./spellcasting-features.js";
 import { itemSystem } from "../pf2e-types.js";
 import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
 
@@ -194,9 +195,6 @@ function findFocusEntryName(modifiers: EngineModifier[]): string | undefined {
   return undefined;
 }
 
-/** The `focusSlug` the witch's spellcasting feature declares for its hexes. */
-const HEX_FOCUS_SLUG = "hex-spells";
-
 /**
  * Whether the class's declared focus group is the witch's hex group. The witch's
  * spellcasting feature declares `focusSlug: "hex-spells"`, distinguishing it from
@@ -206,7 +204,7 @@ const HEX_FOCUS_SLUG = "hex-spells";
  * Anthem) are composition focus spells. See {@link isInheritedRepertoireGrant}.
  */
 function declaresHexFocusGroup(modifiers: EngineModifier[]): boolean {
-  return modifiers.some((mod) => mod.type === "v2-add-spellcasting-feature" && mod.focusSlug === HEX_FOCUS_SLUG);
+  return modifiers.some((mod) => mod.type === "v2-add-spellcasting-feature" && mod.focusSlug === HEX_FOCUS_GROUP);
 }
 
 /**
@@ -254,17 +252,14 @@ function collectDomainEngineIds(engines: DemiplaneEngineEntry[]): string[] {
 
 async function fetchFeatureModifiers(engineIds: string[], cacheEngineIds: string[]): Promise<EngineModifier[]> {
   const lines = await fetchStreamEngineLines(engineIds);
-
   const modifiers: EngineModifier[] = [];
-  const grantedFeatSlugs: string[] = [];
-  for (const line of lines) {
-    modifiers.push(...collectSpellModifiers(line.modifiers));
-    for (const mod of line.modifiers) {
-      if (mod.type === "add-feat") grantedFeatSlugs.push(mod.addFeat);
-    }
-  }
+  for (const line of lines) modifiers.push(...collectSpellModifiers(line.modifiers));
 
-  modifiers.push(...(await fetchGrantedFeatSpellModifiers(grantedFeatSlugs, cacheEngineIds)));
+  // A granted feat can itself provide innate spellcasting (Empty Sky Kitsune →
+  // Kitsune Spell Familiarity → Daze / Forbidding Ward / Ghost Sound); expand
+  // one round and collect those definitions' spell modifiers too.
+  const grantedLines = await expandFeatGrantLines(lines, cacheEngineIds);
+  for (const line of grantedLines) modifiers.push(...collectSpellModifiers(line.modifiers));
 
   return modifiers;
 }
@@ -290,44 +285,6 @@ function collectSpellModifiers(lineModifiers: EngineModifier[]): EngineModifier[
   }
 
   return spellModifiers;
-}
-
-/**
- * Expands `add-feat` grants into the `add-spell` modifiers of the granted feats.
- *
- * Heritages and features can grant a feat that itself provides innate
- * spellcasting (e.g. Empty Sky Kitsune → Kitsune Spell Familiarity → Daze /
- * Forbidding Ward / Ghost Sound). That granted feat never appears in the
- * character's `engines` array, so its spells are only reachable by resolving the
- * feat slug to its engine definition and reading that definition's modifiers.
- */
-async function fetchGrantedFeatSpellModifiers(
-  grantedFeatSlugs: string[],
-  cacheEngineIds: string[]
-): Promise<EngineModifier[]> {
-  if (grantedFeatSlugs.length === 0 || cacheEngineIds.length === 0) return [];
-
-  const featEngineIdsBySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
-  const grantedFeatEngineIds = grantedFeatSlugs
-    .map((slug) => featEngineIdsBySlug.get(slug))
-    .filter((id): id is string => typeof id === "string");
-
-  if (grantedFeatEngineIds.length === 0) {
-    debugLog(`[feature-spells] no engine ids resolved for granted feats: ${grantedFeatSlugs.join(", ")}`);
-    return [];
-  }
-
-  const lines = await fetchStreamEngineLines(grantedFeatEngineIds);
-  const modifiers: EngineModifier[] = [];
-  for (const line of lines) {
-    modifiers.push(...collectSpellModifiers(line.modifiers));
-  }
-
-  debugLog(
-    `[feature-spells] expanded ${String(grantedFeatEngineIds.length)} granted feat(s) into ${String(modifiers.length)} spell grant(s)`
-  );
-
-  return modifiers;
 }
 
 // ─── Categorization ──────────────────────────────────────────────────────────
@@ -364,12 +321,6 @@ function isRepertoireGrant(mod: AddSpellModifier): boolean {
   const belongsToFocusGroup = (mod.parentFeature ?? "") !== "";
   return hasConcreteTradition && !belongsToFocusGroup;
 }
-
-/** The focus group Demiplane assigns a witch hex's `add-spell` grant. */
-const HEX_FOCUS_GROUP = "hex-spells";
-
-/** Demiplane's `parentSpellFeature` for animist apparition grants. */
-const APPARITION_SPELLCASTING = "apparition-spellcasting-rm";
 
 /**
  * Recognizes a witch hex among a feature's `add-spell` grants.

@@ -46,7 +46,9 @@ graph TD
         SlugUtils["slug-utils<br/>Slug Transformation"]
         SpellImp["spell-importer<br/>Spellcasting Entries"]
         SpellSlot["spell-slot-resolver<br/>Slot Progression"]
-        FeatSpell["feature-spell-resolver<br/>Focus/Innate Spells"]
+        SpellFeat["spellcasting-features<br/>Feature Registry + Slug Helpers"]
+        StreamEng["stream-engines<br/>NDJSON Fetch/Parse + Feat Expansion"]
+        FeatSpell["feature-spell-resolver<br/>Granted Focus/Innate/Hex/Apparition Spells"]
         EquipImp["equipment-importer<br/>Items + Containers + Carried Spells"]
         AttrImp["attribute-language-importer<br/>Boosts + Skills + Languages"]
         BioImp["biography-importer<br/>Bio Fields + Deity"]
@@ -93,17 +95,18 @@ graph TD
     IO --> ACTOR
 
     SpellImp --> SpellSlot
+    SpellImp --> SpellFeat
     SpellImp --> CompRes
-    SpellSlot --> SE
-    FeatSpell --> SE
+    SpellSlot --> SpellFeat
+    SpellSlot --> StreamEng
+    FeatSpell --> StreamEng
+    FeatSpell --> SpellFeat
     FeatSpell --> CompRes
-    ItemSpell --> SE
-    ItemSpell --> CompRes
+    StreamEng --> SE
     CompRes --> SlugUtils
     CompRes --> COMP
 
     IO --> FeatSpell
-    IO --> ItemSpell
     IO --> Phases
     Phases --> CSH
     Phases --> CompRes
@@ -298,19 +301,19 @@ classDiagram
     }
 
     class SpellSlotResolver {
-        +resolveSpellSlots(engineId, level, slotSlug): Promise~SpellSlotProgression~
+        +resolveSpellSlots(options: ResolveSpellSlotsOptions): Promise~SpellSlotProgression~
+        +slotTypeToRank(slotType: string): number|null
     }
 
     class FeatureSpellResolver {
-        +applyFeatureGrantedSpells(actor, engines, level): Promise~void~
+        +applyFeatureGrantedSpells(actor, engines, summary, cacheEngineIds): Promise~void~
     }
 
     ImportOrchestrator --> DemiplaneClient : fetches data
     ImportOrchestrator --> ChoiceSetHandler : auto-resolves choices
     ChoiceSetHandler --> ChoiceMatchers : delegates strategy matching
     ImportOrchestrator --> SpellSlotResolver : spell slots
-    ImportOrchestrator --> FeatureSpellResolver : focus/innate
-    ImportOrchestrator --> ItemSpellResolver : staff/wand
+    ImportOrchestrator --> FeatureSpellResolver : granted focus/innate/hex
 
     ExportManager --> ChangeBuffer : buffers changes
     ExportManager --> PushPayloadBuilder : builds payload
@@ -549,15 +552,17 @@ src/
 │   ├── choice-slug.ts             Shared label → slug normalization
 │   ├── debug-log.ts               Conditional debug logging
 │   │
-│   ├── spell-importer.ts          Class spellcasting orchestration (grouping → entries → placement)
-│   ├── spell-grouping.ts          Sorts spell engines into main/innate/font groups + class config
+│   ├── spell-importer.ts          Class spellcasting orchestration (grouping → entries → placement → hexes)
+│   ├── spell-grouping.ts          Sorts spell engines into main/innate/hexes/font/ritual groups; resolves group config
+│   ├── spellcasting-features.ts   Registry: class config table, special feature slugs, eidolon traditions, slug helpers
 │   ├── spellcasting-entry.ts      Entry creation + shared resolve-and-stamp spell-item helper
 │   ├── prepared-spells.ts         Prepared-slot placement + signature spell marking
 │   ├── divine-font.ts             Cleric Divine Font spellcasting entry
-│   ├── spell-slots.ts             Slot-maximum resolution + character level lookup
+│   ├── spell-slots.ts             Writes slot maximums; reports whether ranked slots exist; character level lookup
 │   ├── spell-engines.ts           Spell engine identification helpers
-│   ├── spell-slot-resolver.ts     Fetches slot progression from stream-engines
-│   ├── feature-spell-resolver.ts  Focus/innate spells from class features
+│   ├── spell-slot-resolver.ts     Computes slot/cantrip progression from stream-engines defs + per-character overrides
+│   ├── stream-engines.ts          NDJSON fetch/parse; modifier types; feat-grant expansion (shared by both resolvers)
+│   ├── feature-spell-resolver.ts  Granted focus/innate/hex/apparition/repertoire spells from features & feats
 │   │
 │   ├── equipment-importer.ts      Equipment + containers + carry state + carried spells
 │   ├── attribute-language-importer.ts  Boosts, skills, languages
@@ -585,16 +590,20 @@ graph TD
 
     PH --> |"4a. spells"| SI[spell-importer]
     SI --> |"group engines"| SG[spell-grouping]
+    SG --> |"feature config + slug helpers"| SCF[spellcasting-features]
     SI --> |"create entries + items"| SCE[spellcasting-entry]
     SI --> |"prepared + signature"| PS[prepared-spells]
     SI --> |"divine font"| DF[divine-font]
     SI --> |"slot maximums"| SL[spell-slots]
-    SL --> |"slot counts"| SSR[spell-slot-resolver]
+    SL --> |"slot progression"| SSR[spell-slot-resolver]
+    SSR --> |"slug helpers"| SCF
+    SSR --> |"fetch + expand feats"| STE[stream-engines]
     SCE --> CR
-    SSR --> |"POST"| SE[Stream-Engines API]
+    STE --> |"POST"| SE[Stream-Engines API]
 
     PH --> |"4b. feature spells"| FSR[feature-spell-resolver]
-    FSR --> |"POST"| SE
+    FSR --> |"fetch + expand feats"| STE
+    FSR --> |"feature slugs"| SCF
     FSR --> CR
 
     PH --> |"4c. equipment (+ carried spells)"| EI[equipment-importer]

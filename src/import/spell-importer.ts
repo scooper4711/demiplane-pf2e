@@ -111,7 +111,7 @@ async function importSpellGroup(
   const slugToId = await addSpells(actor, entryId, group.spellbook, summary);
   totalAdded += slugToId.size;
 
-  await applySlotMaximums(actor, entryId, engines, group.source, "", summary, cacheEngineIds);
+  const hasRankedSlots = await applySlotMaximums(actor, entryId, engines, group.source, "", summary, cacheEngineIds);
 
   if (preparedType === "prepared") {
     await placePreparedSpells(actor, entryId, group.prepared, slugToId, engines, summary);
@@ -121,7 +121,7 @@ async function importSpellGroup(
     await markSignatureSpells(actor, engines, slugToId, group.spellbook, summary);
   }
 
-  flagMissingSlots(actor, entryId, group, summary);
+  flagMissingSlots(hasRankedSlots, group, summary);
 
   // Curriculum entry (wizard only)
   if (group.curriculumSpellbook.length > 0) {
@@ -132,23 +132,28 @@ async function importSpellGroup(
 }
 
 /**
- * Flags a class entry that ended up with spells but no usable slots — the
- * class definition carries no slot progression (e.g. summoner) and no player
- * override fills the gap, so the spells are present but uncastable. Loud (a
- * sync error telling the GM to set slot overrides on Demiplane) rather than a
- * sheet that looks fine until cast time.
+ * Flags a class entry that has *ranked* (rank >= 1) spells but no ranked slots
+ * to cast them — the class definition carries no slot progression (e.g.
+ * summoner) and no player override fills the gap, so the spells are present but
+ * uncastable. Loud (a sync error telling the GM to set slot overrides on
+ * Demiplane) rather than a sheet that looks fine until cast time.
+ *
+ * A cantrip-only entry is never flagged: cantrips are at-will and need no
+ * ranked slot. `hasRankedSlots` comes straight from slot resolution, so this
+ * reads the computed result rather than round-tripping through the item.
  */
-function flagMissingSlots(actor: Actor, entryId: string, group: SpellGroup, summary: ImportSummary): void {
-  if (group.spellbook.length === 0 && group.prepared.length === 0) return;
-  const entry = actor.items.get(entryId) as { system?: { slots?: Record<string, { max?: number }> } } | undefined;
-  const slots = entry?.system?.slots ?? {};
-  const hasSlots = Object.values(slots).some((slot) => (slot?.max ?? 0) > 0);
-  if (!hasSlots) {
-    summary.errors.push(
-      `Class "${group.source}" has spells but no spell slots in Demiplane's data. ` +
-        `If the sheet shows slots, set them as builder overrides — Demiplane only records values changed from the shown default — and re-import.`
-    );
-  }
+function flagMissingSlots(hasRankedSlots: boolean, group: SpellGroup, summary: ImportSummary): void {
+  if (hasRankedSlots) return;
+  if (!hasRankedSpells(group)) return;
+  summary.errors.push(
+    `Class "${group.source}" has spells but no spell slots in Demiplane's data. ` +
+      `If the sheet shows slots, set them as builder overrides — Demiplane only records values changed from the shown default — and re-import.`
+  );
+}
+
+/** Whether a group holds any rank >= 1 spell (cantrips alone need no slots). */
+function hasRankedSpells(group: SpellGroup): boolean {
+  return [...group.spellbook, ...group.prepared].some((eng) => ((eng.args?.selectionRank as number) ?? 0) >= 1);
 }
 
 async function importCurriculumSpells(

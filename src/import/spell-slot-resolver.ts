@@ -1,13 +1,14 @@
-import type { DemiplaneEngineEntry } from "./types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import {
   fetchStreamEngineLines,
   parseEngineLines,
   resolveClassFeatureEngineIdsBySlug,
-  resolveFeatEngineIdsBySlug,
+  expandFeatGrantLines,
   type DemiplaneSlotEntry,
   type RawEngineLine,
   type RepertoireCountEntry,
 } from "./stream-engines.js";
+import { isArchetypeSpellcasting, featureSlugMatches } from "./spellcasting-features.js";
 
 export type { DemiplaneSlotEntry };
 
@@ -37,6 +38,12 @@ export interface ResolveSpellSlotsOptions {
    * the ranked slots its flat class definition lacks).
    */
   cacheEngineIds?: string[];
+  /**
+   * Optional import summary. When present, a note is logged if cantrip count
+   * had to fall back to the known-cantrip count (a data-mirroring last resort
+   * with no authoritative source), so a surprising value is traceable.
+   */
+  summary?: ImportSummary;
 }
 
 /**
@@ -46,10 +53,6 @@ export interface ResolveSpellSlotsOptions {
 export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Promise<SpellSlotProgression> {
   const slotSlug = options.slotSlug ?? "";
   const overrides = findSlotOverrides(options.engines, options.parentSpellFeature, slotSlug);
-
-  if (hasCompleteOverrides(overrides)) {
-    return buildProgressionFromOverrides(overrides);
-  }
 
   const lines = await fetchStreamEngineLines([options.classEngineId]);
   const featureLines = await fetchFeatureSlotLines(options.parentSpellFeature, options.cacheEngineIds ?? []);
@@ -82,8 +85,15 @@ export async function resolveSpellSlots(options: ResolveSpellSlotsOptions): Prom
   }
   if (computed.cantrips === 0) {
     // No cantrip data anywhere (e.g. summoner): Demiplane itself counts the
-    // known cantrips, so mirror that rather than demanding an override.
+    // known cantrips, so mirror that rather than demanding an override. This
+    // is a data-mirroring last resort with no authoritative source, so leave
+    // a breadcrumb — a mis-built character's known count becomes the max here.
     computed.cantrips = countKnownCantrips(options.engines, options.parentSpellFeature);
+    if (computed.cantrips > 0) {
+      options.summary?.log.push(
+        `! spell-slots (${options.parentSpellFeature}): cantrip max taken from ${String(computed.cantrips)} known cantrip(s) — no slot or repertoire data in Demiplane`
+      );
+    }
   }
   return mergeWithOverrides(computed, overrides);
 }
@@ -114,24 +124,16 @@ async function fetchArchetypeFeatSlotLines(
   parentSpellFeature: string,
   cacheEngineIds: string[]
 ): Promise<RawEngineLine[]> {
-  if (!parentSpellFeature.includes("archetype")) return [];
+  if (!isArchetypeSpellcasting(parentSpellFeature)) return [];
   const featIds = engines
     .filter((e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/feat/") && typeof e.id === "string")
     .map((e) => e.id as string);
   if (featIds.length === 0) return [];
 
   const lines = await fetchStreamEngineLines(featIds);
-  const granted: string[] = [];
-  for (const line of lines) {
-    for (const mod of line.modifiers) {
-      if (mod.type === "add-feat" && !granted.includes(mod.addFeat)) granted.push(mod.addFeat);
-    }
-  }
-  if (granted.length > 0 && cacheEngineIds.length > 0) {
-    const bySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
-    const grantedIds = granted.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
-    if (grantedIds.length > 0) lines.push(...(await fetchStreamEngineLines(grantedIds)));
-  }
+  // Dedication → basic-arcana style chains: expand one round so the granted
+  // spellcasting feat's ranked slots are seen alongside the taken feats.
+  lines.push(...(await expandFeatGrantLines(lines, cacheEngineIds)));
   return lines;
 }
 
@@ -144,7 +146,9 @@ function countKnownCantrips(engines: DemiplaneEngineEntry[], parentSpellFeature:
   const slugs = new Set<string>();
   for (const engine of engines) {
     if (!engine.name?.startsWith("tabula/spell/")) continue;
-    if (engine.args?.parentSpellFeature !== parentSpellFeature) continue;
+    // Match `-rm`-insensitively like the slot/repertoire paths so a bare-suffix
+    // feature (e.g. psychic) is scoped consistently across all cantrip sources.
+    if (!featureSlugMatches(engine.args?.parentSpellFeature as string | undefined, parentSpellFeature)) continue;
     if (engine.args?.isPrepare === true) continue;
     if ((engine.args?.selectionRank as number | undefined) !== 0) continue;
     const slug = engine.args?.slug as string | undefined;
@@ -163,7 +167,7 @@ function computeRepertoireCantrips(lines: RawEngineLine[], characterLevel: numbe
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type !== "v2-add-repertoire-counts" || !mod.slots) continue;
-      if (!modMatchesFeature(mod.slug, parentSpellFeature)) continue;
+      if (!featureSlugMatches(mod.slug, parentSpellFeature)) continue;
       for (const slot of mod.slots as RepertoireCountEntry[]) {
         if ((slot.rank ?? -1) !== 0) continue;
         if ((slot.repertoireSlug ?? "") !== "") continue;
@@ -208,28 +212,13 @@ function extractSlotEntries(
   for (const line of lines) {
     for (const mod of line.modifiers) {
       if (mod.type !== "v2-add-spell-slots" || !mod.slots) continue;
-      if (!modMatchesFeature(mod.slug, parentSpellFeature)) continue;
+      if (!featureSlugMatches(mod.slug, parentSpellFeature)) continue;
       const matching = mod.slots.filter((slot) => slotMatches(slot.slug ?? "", slotSlug, unrestrictedSlugs));
       allSlots.push(...matching);
     }
   }
 
   return allSlots;
-}
-
-/**
- * Whether a slot modifier belongs to the requested spellcasting feature.
- * Modifiers carry their feature slug (e.g. a class response mixes animist and
- * apparition slot blocks); without scoping, each entry would count the
- * other's slots. Modifiers without a slug predate the field and keep the old
- * include-everything behavior. Comparison is `-rm`-insensitive (Demiplane
- * mixes `magus-spellcasting` and `magus-spellcasting-rm`).
- */
-function modMatchesFeature(modSlug: string | undefined, parentSpellFeature: string): boolean {
-  if (parentSpellFeature === "") return true;
-  if (modSlug === undefined || modSlug === "") return true;
-  const norm = (s: string): string => (s.endsWith("-rm") ? s.slice(0, -3) : s);
-  return norm(modSlug) === norm(parentSpellFeature);
 }
 
 /**
@@ -321,43 +310,36 @@ function matchesSlotSlug(slotType: string, slotSlug: string): boolean {
   return slotType.includes(slotSlug);
 }
 
-function hasCompleteOverrides(overrides: Map<string, number>): boolean {
-  // Only use overrides exclusively if we have at least cantrip + one rank override.
-  // Otherwise we need stream-engines data to fill gaps.
-  return overrides.size >= 2 && overrides.has("cantrip");
+/**
+ * Maps a Demiplane slot-type token (the `{slotType}` in a
+ * `..._spell-slots_{slotType}_max` engine name) to a rank: 0 for a cantrip
+ * token, N for `rank-N`, or null when it names neither. Single source of the
+ * slot-type → rank rule shared by every override reader.
+ */
+export function slotTypeToRank(slotType: string): number | null {
+  if (slotType === "cantrip" || slotType.startsWith("cantrip")) return 0;
+  const rankMatch = /rank-(\d+)/.exec(slotType);
+  return rankMatch?.[1] ? Number(rankMatch[1]) : null;
 }
 
-function buildProgressionFromOverrides(overrides: Map<string, number>): SpellSlotProgression {
-  let cantrips = 0;
-  const slots: Record<number, number> = {};
-
-  for (const [slotType, count] of overrides) {
-    if (slotType === "cantrip" || slotType.startsWith("cantrip")) {
-      cantrips = count;
-    } else {
-      const rankMatch = /rank-(\d+)/.exec(slotType);
-      if (rankMatch?.[1]) {
-        slots[Number(rankMatch[1])] = count;
-      }
-    }
-  }
-
-  return { cantrips, slots };
-}
-
+/**
+ * Applies per-character slot maximums over the computed progression. Each
+ * override wins for its own rank (authoritative per-character value); ranks
+ * without an override keep the computed count. Always safe to call — an empty
+ * override map returns the computed progression unchanged — so there is no
+ * need to decide up front whether the overrides are "complete".
+ */
 function mergeWithOverrides(computed: SpellSlotProgression, overrides: Map<string, number>): SpellSlotProgression {
   if (overrides.size === 0) return computed;
 
   const result = { cantrips: computed.cantrips, slots: { ...computed.slots } };
 
   for (const [slotType, count] of overrides) {
-    if (slotType === "cantrip" || slotType.startsWith("cantrip")) {
+    const rank = slotTypeToRank(slotType);
+    if (rank === 0) {
       result.cantrips = count;
-    } else {
-      const rankMatch = /rank-(\d+)/.exec(slotType);
-      if (rankMatch?.[1]) {
-        result.slots[Number(rankMatch[1])] = count;
-      }
+    } else if (rank !== null) {
+      result.slots[rank] = count;
     }
   }
 

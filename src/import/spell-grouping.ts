@@ -1,29 +1,17 @@
 import type { DemiplaneEngineEntry } from "./types.js";
 import { findSpellEngines, isCurriculumSpell } from "./spell-engines.js";
 import { toFoundrySlug } from "./slug-utils.js";
+import {
+  CLASS_SPELLCASTING,
+  SUMMONER_SPELLCASTING,
+  RUNES_SPELLCASTING_FEATURE,
+  baseConfigForFeature,
+  eidolonTradition,
+  type SpellcastingConfig,
+} from "./spellcasting-features.js";
 
-export interface SpellcastingConfig {
-  tradition: string;
-  preparedType: "spontaneous" | "prepared";
-  ability: string;
-}
-
-export const CLASS_SPELLCASTING: Record<string, SpellcastingConfig> = {
-  "sorcerer-spellcasting-rm": { tradition: "arcane", preparedType: "spontaneous", ability: "cha" },
-  "wizard-spellcasting-rm": { tradition: "arcane", preparedType: "prepared", ability: "int" },
-  "bard-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
-  "cleric-spellcasting-rm": { tradition: "divine", preparedType: "prepared", ability: "wis" },
-  "druid-spellcasting-rm": { tradition: "primal", preparedType: "prepared", ability: "wis" },
-  "oracle-spellcasting-rm": { tradition: "divine", preparedType: "spontaneous", ability: "cha" },
-  "witch-spellcasting-rm": { tradition: "occult", preparedType: "prepared", ability: "int" },
-  "psychic-spellcasting-rm": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
-  // Demiplane tags psychic spells with the bare feature (no -rm suffix).
-  // Cha is the common key ability; an Int psychic would need a selection
-  // signal Demiplane doesn't export.
-  "psychic-spellcasting": { tradition: "occult", preparedType: "spontaneous", ability: "cha" },
-  "magus-spellcasting-rm": { tradition: "arcane", preparedType: "prepared", ability: "int" },
-  "animist-spellcasting-rm": { tradition: "divine", preparedType: "prepared", ability: "wis" },
-};
+export { CLASS_SPELLCASTING };
+export type { SpellcastingConfig };
 
 const FONT_SPELL_SLOT = "divine-font";
 
@@ -31,28 +19,7 @@ export function isDivineFontSpell(eng: DemiplaneEngineEntry): boolean {
   return (eng.args?.spellSlot as string | undefined) === FONT_SPELL_SLOT;
 }
 
-/** Demiplane's `parentSpellFeature` for summoner repertoire spells. */
-const SUMMONER_SPELLCASTING = "summoner-spellcasting-rm";
-
 /**
- * Spellcasting tradition by eidolon (foundry slug). Per the eidolon rules, the
- * summoner's tradition is the eidolon's own. Only beast is covered by a live
- * fixture — the rest follow the rulebook and want a glance if one shows up in
- * a fixture with a wrong-tradition entry.
- */
-const EIDOLON_TRADITIONS: Record<string, string> = {
-  angel: "divine",
-  beast: "primal",
-  construct: "arcane",
-  demon: "divine",
-  dragon: "arcane",
-  fey: "primal",
-  ghost: "occult",
-  plant: "primal",
-  psychopomp: "divine",
-  undead: "occult",
-};
-
 /**
  * Resolves a spell group's config. Most features are static table entries;
  * the summoner's tradition comes from its eidolon, and archetype
@@ -63,13 +30,12 @@ const EIDOLON_TRADITIONS: Record<string, string> = {
  */
 function configForFeature(source: string, engines: DemiplaneEngineEntry[]): SpellcastingConfig | null {
   if (source !== SUMMONER_SPELLCASTING) {
-    const base = source.replace(/-archetype(?=-rm$|$)/, "");
-    return CLASS_SPELLCASTING[base] ?? null;
+    return baseConfigForFeature(source);
   }
   const eidolonSlug = engines.find(
     (e) => e.type === "DemiplaneEngine" && e.name.startsWith("tabula/eidolon/") && e.args?.slug
   )?.args?.slug as string | undefined;
-  const tradition = eidolonSlug ? EIDOLON_TRADITIONS[toFoundrySlug(eidolonSlug)] : undefined;
+  const tradition = eidolonSlug ? eidolonTradition(toFoundrySlug(eidolonSlug)) : null;
   if (!tradition) return null;
   return { tradition, preparedType: "spontaneous", ability: "cha" };
 }
@@ -95,15 +61,6 @@ export interface GroupedSpells {
 
 /** The `parentSpellFeature` value Demiplane tags a known ritual with. */
 const RITUAL_FEATURE = "ritual";
-
-/**
- * The `parentSpellFeature` Demiplane gives the Runescarred dedication's Spell
- * Runes feat. The feat grants its chosen spell (e.g. Mystic Armor) as a
- * once-per-day innate spell — not a class spellbook — so file it with the
- * innate bucket rather than forming a (config-less) spell group that would
- * trip the unknown-source error.
- */
-const RUNES_SPELLCASTING_FEATURE = "spell-runes-spellcasting";
 
 /**
  * Marks a selected spell as a witch hex. The player picks hexes (e.g. Phase

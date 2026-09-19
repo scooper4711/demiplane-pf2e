@@ -347,6 +347,38 @@ export async function resolveClassFeatureEngineIdsBySlug(cacheEngineIds: string[
   return bySlug;
 }
 
+/**
+ * Expands one round of `add-feat` grants found in the given engine lines into
+ * the granted feats' own engine definitions.
+ *
+ * Some elements (heritages, class features, other feats) grant a feat that
+ * itself carries spell or slot modifiers — e.g. Empty Sky Kitsune → Kitsune
+ * Spell Familiarity → Daze, or Wizard Dedication → Basic Arcana → ranked
+ * slots. The granted feat never appears in the character's `engines` array, so
+ * it is only reachable by resolving each `add-feat` slug to its engine UUID
+ * (via the cache) and fetching that definition. Returns the fetched lines
+ * (empty when there are no grants or the cache can't resolve them). Only one
+ * round is followed, matching the depth Demiplane's own spellcasting archetype
+ * chains need.
+ */
+export async function expandFeatGrantLines(lines: RawEngineLine[], cacheEngineIds: string[]): Promise<RawEngineLine[]> {
+  const grantedSlugs: string[] = [];
+  for (const line of lines) {
+    for (const mod of line.modifiers) {
+      if (mod.type === "add-feat" && !grantedSlugs.includes(mod.addFeat)) grantedSlugs.push(mod.addFeat);
+    }
+  }
+  if (grantedSlugs.length === 0 || cacheEngineIds.length === 0) return [];
+
+  const bySlug = await resolveFeatEngineIdsBySlug(cacheEngineIds);
+  const grantedIds = grantedSlugs.map((slug) => bySlug.get(slug)).filter((id): id is string => typeof id === "string");
+  if (grantedIds.length === 0) {
+    debugLog(`[stream-engines] no engine ids resolved for granted feats: ${grantedSlugs.join(", ")}`);
+    return [];
+  }
+  return fetchStreamEngineLines(grantedIds);
+}
+
 /** Parses a full NDJSON stream-engines payload into per-line modifier records. */
 export function parseEngineLines(ndjsonText: string): RawEngineLine[] {
   return splitNdjson(ndjsonText).map(parseEngineLine);

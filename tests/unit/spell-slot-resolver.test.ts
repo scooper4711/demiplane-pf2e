@@ -5,7 +5,9 @@ import {
   findSlotOverrides,
   parseSlotEntriesFromNdjson,
   resolveSpellSlots,
+  slotTypeToRank,
 } from "../../src/import/spell-slot-resolver.js";
+import type { ImportSummary } from "../../src/import/types.js";
 import type { RawEngineLine } from "../../src/import/stream-engines.js";
 import type { DemiplaneEngineEntry } from "../../src/import/types.js";
 import type { DemiplaneSlotEntry } from "../../src/import/spell-slot-resolver.js";
@@ -148,6 +150,30 @@ describe("findSlotOverrides", () => {
     ];
     const result = findSlotOverrides(engines, "wizard-spellcasting-rm", "");
     expect(result.size).toBe(0);
+  });
+});
+
+describe("slotTypeToRank", () => {
+  it("maps a bare cantrip token to rank 0", () => {
+    expect(slotTypeToRank("cantrip")).toBe(0);
+  });
+
+  it("maps a prefixed cantrip token (curriculum) to rank 0", () => {
+    expect(slotTypeToRank("cantrip-wizard-school-spellbook-slot")).toBe(0);
+  });
+
+  it("maps rank-N tokens to N", () => {
+    expect(slotTypeToRank("rank-1")).toBe(1);
+    expect(slotTypeToRank("rank-10")).toBe(10);
+  });
+
+  it("extracts the rank from a decorated rank token", () => {
+    expect(slotTypeToRank("rank-2-wizard-school-spellbook-slot")).toBe(2);
+  });
+
+  it("returns null for a token naming neither", () => {
+    expect(slotTypeToRank("focus")).toBeNull();
+    expect(slotTypeToRank("")).toBeNull();
   });
 });
 
@@ -617,5 +643,117 @@ describe("resolveSpellSlots with feature definitions", () => {
       cacheEngineIds: ["cache-1"],
     });
     expect(result).toEqual({ cantrips: 2, slots: { 1: 5 } });
+  });
+
+  it("merges a lone ranked override without a cantrip override over computed data", async () => {
+    // Regression: the old hasCompleteOverrides short-circuit required cantrip +
+    // one rank before honoring overrides. A single ranked override (no cantrip
+    // one) must still win for its rank while cantrips resolve from the class def.
+    const classDef = defLine("tabula/class/wizard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-rm",
+        slots: [
+          { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 2, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    stubFetch(classDef, "", "");
+    const engines = [
+      {
+        id: "custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_rank-1_max",
+        name: "character_spell-feature_wizard-spellcasting-rm_spell-slots_rank-1_max",
+        type: "CustomDemiplaneEngine",
+        args: { id: null },
+        value: 4,
+      },
+    ];
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "wizard-spellcasting-rm",
+      engines,
+    });
+    // Cantrips from the class def (5), rank-1 from the override (4, not 2).
+    expect(result).toEqual({ cantrips: 5, slots: { 1: 4 } });
+  });
+
+  it("honors a complete override set (cantrip + rank) over computed data", async () => {
+    // The case the removed hasCompleteOverrides short-circuit used to handle:
+    // with both a cantrip and a rank override present, each still wins for its
+    // slot after compute-then-merge, independent of the class def's numbers.
+    const classDef = defLine("tabula/class/wizard-rm.eng", "class-1", [
+      {
+        type: "v2-add-spell-slots",
+        slug: "wizard-spellcasting-rm",
+        slots: [
+          { rank: 0, count: 5, levelPrereq: 1, slug: "" },
+          { rank: 1, count: 2, levelPrereq: 1, slug: "" },
+        ],
+      },
+    ]);
+    stubFetch(classDef, "", "");
+    const override = (slotType: string, value: number) => ({
+      id: `custom_character_spell-feature_wizard-spellcasting-rm_spell-slots_${slotType}_max`,
+      name: `character_spell-feature_wizard-spellcasting-rm_spell-slots_${slotType}_max`,
+      type: "CustomDemiplaneEngine" as const,
+      args: { id: null },
+      value,
+    });
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "wizard-spellcasting-rm",
+      engines: [override("cantrip", 8), override("rank-1", 3)],
+    });
+    expect(result).toEqual({ cantrips: 8, slots: { 1: 3 } });
+  });
+
+  it("logs a breadcrumb when cantrips fall back to the known count", async () => {
+    stubFetch("", "", "");
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
+    const engines = [
+      {
+        id: "c0",
+        name: "tabula/spell/guidance-rm.eng",
+        type: "DemiplaneEngine",
+        args: { slug: "guidance-rm", selectionRank: 0, parentSpellFeature: "summoner-spellcasting-rm" },
+      },
+    ];
+    const result = await resolveSpellSlots({ ...options(), engines, summary });
+    expect(result.cantrips).toBe(1);
+    expect(summary.log.some((l) => l.includes("cantrip max taken from") && l.includes("known"))).toBe(true);
+  });
+
+  it("does not log the known-cantrip breadcrumb when a real source exists", async () => {
+    const withRepertoire = defLine("tabula/class/bard-rm.eng", "class-1", [
+      {
+        type: "v2-add-repertoire-counts",
+        slug: "bard-spellcasting-rm",
+        slots: [{ rank: 0, count: 5, levelPrereq: 1, repertoireSlug: "" }],
+      },
+    ]);
+    stubFetch(withRepertoire, "", "");
+    const summary: ImportSummary = {
+      itemsImported: 0,
+      itemsSkipped: 0,
+      unmapped: [],
+      unresolvedChoices: [],
+      errors: [],
+      log: [],
+    };
+    const result = await resolveSpellSlots({
+      ...options(),
+      parentSpellFeature: "bard-spellcasting-rm",
+      summary,
+    });
+    expect(result.cantrips).toBe(5);
+    expect(summary.log.some((l) => l.includes("known"))).toBe(false);
   });
 });
