@@ -548,6 +548,67 @@ describe("feature-spell-resolver", () => {
       expect(result.focusEntryName).toBeUndefined();
     });
 
+    it("chases granted builder selections for their spell grants", async () => {
+      // The vindicator archetype maps the hunter's-edge row to vindication;
+      // the vindication definition grants Vindicator's Mark (a focus spell).
+      // Neither definition appears in the character's engines.
+      const vindicationDef = definitionLine("def-vindication", "tabula/class-feature/vindication-rm.eng", {
+        engineModifiers: [
+          {
+            type: "add-spell",
+            level: 1,
+            saveDC: ["spell"],
+            isKnown: false,
+            addSpell: "vindicators-mark-rm",
+            tradition: "inherit",
+            spellLevel: 1,
+            spellAttack: "spellcasting-modifier",
+          },
+        ],
+      });
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Vindicator's Mark", system: { slug: "vindicators-mark", level: { value: 1 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((_url: string, init: { body: string }) => {
+          const body = JSON.parse(init.body) as { engineIdsBySource: Record<string, string[]> };
+          const ids = body.engineIdsBySource["pathfinder2e-v2"] ?? [];
+          const lines: string[] = [];
+          // Cache-index call: the archetype definition carrying the row grant,
+          // plus the selection definition itself (as the real cache holds it).
+          if (ids.includes("cache-1")) {
+            lines.push(
+              definitionLine("def-vindicator", "tabula/archetype/vindicator.eng", {
+                engineModifiers: [
+                  {
+                    type: "grant-builder-selection",
+                    grantRowType: "other-class-feature",
+                    grantRowSlug: "hunters-edge-rm",
+                    selectionSlug: "vindication-rm",
+                    selectionType: "class-feature",
+                  },
+                ],
+              }),
+              vindicationDef
+            );
+          }
+          // Chased selection definition: the focus grant.
+          if (ids.includes("def-vindication")) lines.push(vindicationDef);
+          return Promise.resolve({ ok: true, text: async () => lines.join("\n") });
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells([featureEngine("tabula/class/ranger-rm.eng", "class-1")], 1, 1, [
+        "cache-1",
+      ]);
+
+      expect(result.known).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["vindicators-mark-rm"]);
+    });
+
     it("keeps a repertoire-shaped grant when its definition is not a focus spell", async () => {
       // Same grant shape as the grave cantrips, but Soothe's definition is
       // not a focus spell — the definition check must not sweep every such

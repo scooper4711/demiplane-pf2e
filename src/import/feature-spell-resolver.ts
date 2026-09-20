@@ -9,6 +9,7 @@ import {
   expandFeatGrantLines,
   mapClassFeatureEngineIds,
   mapSpellEngineIds,
+  resolveGrantBuilderSelections,
   type AddSpellModifier,
   type EngineModifier,
   type DomainEngineData,
@@ -82,10 +83,14 @@ export async function resolveFeatureGrantedSpells(
     fetchDomainEngineData(domainEngineIds),
   ]);
   modifiers.push(...(await fetchLinkSpellModifiers(engines, cacheEngineIds)));
+  // Granted builder selections (e.g. an archetype's vindication edge) name
+  // feature definitions worth chasing for their own spell grants.
+  const builderSelections = await resolveGrantBuilderSelections(cacheEngineIds);
   const { modifiers: subFeatureModifiers, cacheLines } = await fetchSpellcastingSubFeatures(
     engines,
     characterLevel,
-    cacheEngineIds
+    cacheEngineIds,
+    [...builderSelections.values()]
   );
   modifiers.push(...subFeatureModifiers);
 
@@ -199,19 +204,22 @@ async function fetchLinkSpellModifiers(
  * the focus entry falls back to a generic name.
  *
  * The chase is bounded and strictly additive: roots are the spellcasting
- * features the character's own selected spells name, then each level's focus
- * groups, then their granted sub-features gated on arrival level — three
- * levels deep at most. Grants duplicating ones the character engines already
- * provide collapse downstream (spells dedupe per entry when added).
+ * features the character's own selected spells name plus the granted
+ * builder-selection features (e.g. an archetype's vindication edge), then
+ * each level's focus groups, then their granted sub-features gated on arrival
+ * level — three levels deep at most. Grants duplicating ones the character
+ * engines already provide collapse downstream (spells dedupe per entry when
+ * added).
  */
 async function fetchSpellcastingSubFeatures(
   engines: DemiplaneEngineEntry[],
   characterLevel: number,
-  cacheEngineIds: string[]
+  cacheEngineIds: string[],
+  selectionSlugs: string[] = []
 ): Promise<{ modifiers: EngineModifier[]; cacheLines: RawEngineLine[] }> {
   const empty = { modifiers: [], cacheLines: [] };
   if (cacheEngineIds.length === 0) return empty;
-  const roots = collectSpellcastingFeatureSlugs(engines);
+  const roots = [...collectSpellcastingFeatureSlugs(engines), ...selectionSlugs];
   if (roots.length === 0) return empty;
   // One full-cache fetch serves both the class-feature chase below and the
   // spell-definition focus check (via the returned lines).
@@ -224,14 +232,7 @@ async function fetchSpellcastingSubFeatures(
     const next: string[] = [];
     for (const line of current) {
       modifiers.push(...collectSpellModifiers(line.modifiers));
-      for (const mod of line.modifiers) {
-        if (mod.type === "v2-add-spellcasting-feature" && typeof mod.focusSlug === "string" && mod.focusSlug !== "") {
-          next.push(mod.focusSlug);
-        }
-      }
-      for (const sub of line.grantedFeatures ?? []) {
-        if (sub.level <= characterLevel) next.push(sub.slug);
-      }
+      next.push(...chasedSlugsIn(line, characterLevel));
     }
     const fresh = [...new Set(next)].filter((slug) => !seen.has(slug));
     if (fresh.length === 0) break;
@@ -239,6 +240,23 @@ async function fetchSpellcastingSubFeatures(
     current = await fetchLinesForSlugs(bySlug, fresh);
   }
   return { modifiers, cacheLines };
+}
+
+/**
+ * The next chase level named by one fetched definition: its focus group plus
+ * its granted sub-features gated on arrival level.
+ */
+function chasedSlugsIn(line: RawEngineLine, characterLevel: number): string[] {
+  const next: string[] = [];
+  for (const mod of line.modifiers) {
+    if (mod.type === "v2-add-spellcasting-feature" && typeof mod.focusSlug === "string" && mod.focusSlug !== "") {
+      next.push(mod.focusSlug);
+    }
+  }
+  for (const sub of line.grantedFeatures ?? []) {
+    if (sub.level <= characterLevel) next.push(sub.slug);
+  }
+  return next;
 }
 
 /**
