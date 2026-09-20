@@ -1439,6 +1439,20 @@ describe("applyCraftingFormulas", () => {
     // A formula engine must never become an inventory item.
     expect(actor.createEmbeddedDocuments).not.toHaveBeenCalled();
   });
+
+  it("resolves a base-slug formula to the lesser variant when the compendium has no base item", async () => {
+    installFoundryMocks({
+      "pf2e.equipment-srd": createMockPack([
+        { _id: "af1", name: "Acid Flask (Lesser)", system: { slug: "acid-flask-lesser" }, type: "equipment" },
+      ]),
+    });
+    const actor = createMockActor();
+    // Bombs and tools only exist as leveled variants; a formula-book
+    // "acid flask" is the level-1 form the character knows how to craft.
+    await applyCraftingFormulas(actor as never, [formulaEngine("acid-flask-rm", "Acid Flask")], makeSummary());
+
+    expect(writtenFormulas(actor)).toEqual([{ uuid: "Compendium.pf2e.equipment-srd.Item.af1" }]);
+  });
 });
 
 describe("third-party equipment sources", () => {

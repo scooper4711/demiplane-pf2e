@@ -67,5 +67,10 @@ export function findBySlug(equipIndex: PackIndex, slug: string): { _id: string }
   if (fallbackSlug !== slug) {
     return equipIndex.find((e) => e.system?.slug === fallbackSlug);
   }
-  return undefined;
+
+  // Demiplane names some items by their base (a formula-book "acid flask",
+  // never a specific tier) while the compendium only carries leveled
+  // variants (acid-flask-lesser and up). Fall back to the lesser variant —
+  // the level-1 form a starting character actually knows how to craft.
+  return equipIndex.find((e) => e.system?.slug === `${slug}-lesser`);
 }
