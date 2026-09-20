@@ -16,7 +16,9 @@ impulses, finishers) rather than spellcasting entries. Imported entries start
 at trained proficiency; rank progression rides the imported class item's own
 rules. The module never writes class DC (system-owned). No fixture exercises flexible preparation (the
 `flexible` checkbox reads false on every entry); the specs pin that, so the
-day one does will light up.
+day one does will light up. (Flexible preparation belonged to the pre-remaster
+Flexible Spellcaster archetype and went away with the remaster, so false
+everywhere is the expected steady state, not a gap.)
 
 ## Main entries
 
