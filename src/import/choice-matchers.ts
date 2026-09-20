@@ -612,8 +612,9 @@ function matchGenericChoice(choices: Choice[], engines: DemiplaneEngineEntry[], 
   const matchScoped = (scopedEngines: DemiplaneEngineEntry[], label: (keywords: string[]) => string): Choice | null => {
     if (scopedEngines.length === 0) return null;
     const keywords = genericChoiceKeywords(scopedEngines);
+    const slugs = scopedEngines.map((e) => toFoundrySlug(e.args?.slug as string));
     tlog(label(keywords));
-    return matchByKeyword(choices, keywords);
+    return matchByKeyword(choices, keywords, slugs);
   };
 
   return (
@@ -639,13 +640,19 @@ function genericChoiceKeywords(engines: DemiplaneEngineEntry[]): string[] {
   });
 }
 
-function matchByKeyword(choices: Choice[], keywords: string[]): Choice | null {
+function matchByKeyword(choices: Choice[], keywords: string[], engineSlugs: string[] = []): Choice | null {
   for (const choice of choices) {
     const val = typeof choice.value === "string" ? choice.value.toLowerCase() : "";
     const label = choice.label.toLowerCase();
+    const labelSlug = toChoiceSlug(choice.label);
     for (const keyword of keywords) {
       if (keyword && (val.includes(keyword) || label === keyword)) return choice;
     }
+    // The trailing keyword can be shared ("suit" for Power vs Subterfuge
+    // Suit), while the full engine slug names the pick outright
+    // ("…-power-suit"). Match the slugified label as a slug suffix so the
+    // player's actual pick wins instead of the first option.
+    if (labelSlug && engineSlugs.some((slug) => slug === labelSlug || slug.endsWith(`-${labelSlug}`))) return choice;
   }
   return null;
 }

@@ -300,6 +300,22 @@ describe("choice-matchers", () => {
     expect(findMatchInChoices([{ label: "will", value: "zzz" }], engines)?.label).toBe("will");
   });
 
+  it("matches a generic-choice pick by full engine-slug suffix", () => {
+    // Armor innovation statistics: the trailing keyword ("suit") is shared by
+    // both options, but the engine slug names the pick outright
+    // ("…-power-suit"). The label-as-suffix direction selects it instead of
+    // defaulting to the first option.
+    const engines = [
+      demiEngine("tabula/generic-choice/armor-innovation-statistics.eng", "armor-innovation-statistics-power-suit-rm"),
+    ];
+    const choices = [
+      { label: "Power Suit", value: "Compendium.pf2e.equipment-srd.Item.N42lmp3Ft6EsSvzg" },
+      { label: "Subterfuge Suit", value: "Compendium.pf2e.equipment-srd.Item.56CTZheeNhNPpLo1" },
+    ];
+
+    expect(findMatchInChoices(choices, engines, "Armor Innovation")).toBe(choices[0]);
+  });
+
   it("skips empty generic-choice keywords", () => {
     const engines = [demiEngine("tabula/generic-choice/trailing.eng", "trailing-")];
 
