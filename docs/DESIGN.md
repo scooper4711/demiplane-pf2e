@@ -219,7 +219,7 @@ The wrap is only live during a user-initiated import, so a hard dependency is di
 
 **Decision:** Spell import is split into two independent resolvers, each handling a different spell source:
 
-1. **`spell-importer`** — Class spellcasting the player selected (prepared, spontaneous, spellbook, plus player-selected hexes).
+1. **`spell-importer`** — Class spellcasting the player selected (prepared, spontaneous, spellbook, plus player-selected focus spells: hexes, devotion spells, qi spells).
 2. **`feature-spell-resolver`** — Focus, innate, hex, apparition, and repertoire spells _granted_ by class features / patrons / lessons / heritage / feats.
 
 **Rationale:** Each spell source has fundamentally different data shapes, resolution logic, and output requirements:

@@ -63,34 +63,48 @@ describe("groupSpells", () => {
     expect(rituals).toHaveLength(1);
   });
 
-  it("routes a selected hex into the hexes bucket, not innate", () => {
+  it("routes a selected hex into the focus selections, not innate", () => {
     // A player picks a hex (e.g. Phase Familiar) through a hex-spells-rm builder
     // row, so its select-spell engine's sourceRow carries that marker. It is a
     // focus spell bound for the Hexes entry, not an innate spell.
-    const { hexes, innate } = groupSpells([
+    const { focus, innate } = groupSpells([
       spell("phase-familiar-rm", {
         sourceType: "select-spell",
         sourceRow: "…_hex-spells-rm-…_select-spell-hex-spells-rm-…",
       }),
     ]);
 
-    expect(hexes).toHaveLength(1);
-    expect(hexes[0]!.args?.slug).toBeUndefined();
-    expect(hexes[0]!.name).toBe("tabula/spell/phase-familiar-rm.eng");
+    expect(focus).toHaveLength(1);
+    expect(focus[0]!.marker).toBe("hex-spells-rm");
+    expect(focus[0]!.engines).toHaveLength(1);
+    expect(focus[0]!.engines[0]!.name).toBe("tabula/spell/phase-familiar-rm.eng");
+    expect(innate).toHaveLength(0);
+  });
+
+  it("routes devotion and qi selections into their own focus selections", () => {
+    const { focus, innate } = groupSpells([
+      spell("shields-of-the-spirit-rm", { sourceType: "select-spell", sourceRow: "devotion-spells-rm" }),
+      spell("qi-rush-rm", {
+        sourceType: "select-spell",
+        sourceRow: "…_select-spell-qi-spells-rm-…",
+      }),
+    ]);
+
+    expect(focus.map((s) => s.marker).sort()).toEqual(["devotion-spells-rm", "qi-spells-rm"]);
     expect(innate).toHaveLength(0);
   });
 
   it("keeps a non-hex selected spell (dedication cantrip) in the innate bucket", () => {
     // Runescarred's Root Reading is a select-spell whose sourceRow does not name
     // the hex group, so it stays innate rather than becoming a hex.
-    const { hexes, innate } = groupSpells([
+    const { focus, innate } = groupSpells([
       spell("root-reading", {
         sourceType: "select-spell",
         sourceRow: "…_select-spell-runescarred-dedication-…",
       }),
     ]);
 
-    expect(hexes).toHaveLength(0);
+    expect(focus).toHaveLength(0);
     expect(innate).toHaveLength(1);
     expect(innate[0]!.name).toBe("tabula/spell/root-reading.eng");
   });

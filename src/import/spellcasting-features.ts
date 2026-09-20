@@ -79,6 +79,27 @@ export const APPARITION_SPELLCASTING = "apparition-spellcasting-rm";
 export const HEX_FOCUS_GROUP = "hex-spells";
 
 /**
+ * Player-selected focus spells, keyed by the sourceRow marker Demiplane tags
+ * the pick with. The witch's hexes borrow tradition/ability from the class at
+ * import time; martial selections belong to no class spellcasting, so they
+ * carry fixed values: devotion spells are divine/Cha, qi spells occult/Wis.
+ */
+export interface FocusSelectionConfig {
+  /** Spellcasting-entry label, e.g. "Devotion Spells". */
+  entryName: string;
+  /** Fixed tradition; absent borrows the class config (witch hexes). */
+  tradition?: string;
+  /** Fixed ability; absent borrows the class config (witch hexes). */
+  ability?: string;
+}
+
+export const FOCUS_SELECTIONS: Record<string, FocusSelectionConfig> = {
+  "hex-spells-rm": { entryName: "Hexes" },
+  "devotion-spells-rm": { entryName: "Devotion Spells", tradition: "divine", ability: "cha" },
+  "qi-spells-rm": { entryName: "Qi Spells", tradition: "occult", ability: "wis" },
+};
+
+/**
  * `parentSpellFeature` for the Runescarred dedication's Spell Runes feat. The
  * feat grants its chosen spell as a once-per-day innate spell, not a class
  * spellbook, so it is filed with the innate bucket.

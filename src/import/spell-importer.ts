@@ -1,6 +1,8 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { groupSpells } from "./spell-grouping.js";
 import type { SpellGroup } from "./spell-grouping.js";
+import type { FocusSelection } from "./spell-grouping.js";
+import { FOCUS_SELECTIONS } from "./spellcasting-features.js";
 import { createEntry, addSpells, capitalize, resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 import { placePreparedSpells, markSignatureSpells } from "./prepared-spells.js";
 import { importFontSpells } from "./divine-font.js";
@@ -14,8 +16,8 @@ export async function applySpells(
   summary: ImportSummary,
   cacheEngineIds: string[] = []
 ): Promise<void> {
-  const { main, innate, hexes, font, rituals } = groupSpells(engines);
-  if (main.length === 0 && innate.length === 0 && hexes.length === 0 && font.length === 0 && rituals.length === 0)
+  const { main, innate, focus, font, rituals } = groupSpells(engines);
+  if (main.length === 0 && innate.length === 0 && focus.length === 0 && font.length === 0 && rituals.length === 0)
     return;
 
   let totalAdded = 0;
@@ -28,8 +30,8 @@ export async function applySpells(
     totalAdded += await importInnateSpells(actor, innate, main, engines, summary);
   }
 
-  if (hexes.length > 0) {
-    totalAdded += await importHexSpells(actor, hexes, main, summary);
+  for (const selection of focus) {
+    totalAdded += await importFocusSelection(actor, selection, main, summary);
   }
 
   if (font.length > 0) {
@@ -209,32 +211,32 @@ async function importInnateSpells(
   return slugToId.size;
 }
 
-/** The label PF2e uses for a witch's focus-spell (hex) spellcasting entry. */
-const HEX_ENTRY_NAME = "Hexes";
-
 /**
- * Imports player-selected hexes (e.g. Phase Familiar) into a focus "Hexes"
- * entry. Hexes are focus spells cast with the witch's tradition and ability, so
- * the entry borrows both from the class config; PF2e derives the focus-pool size
- * from the number of spells here. Feature-granted hexes (patron/lesson hexes,
- * Cackle) join this same entry later via {@link applyFeatureGrantedSpells},
- * which reuses the "Hexes" entry rather than creating a second one.
+ * Imports one group of player-selected focus spells (a witch's hexes, a
+ * champion's devotion spells, a monk's qi spells) into its focus entry. PF2e
+ * derives the focus-pool size from the number of spells here. Feature-granted
+ * focus spells join the same entry later via {@link applyFeatureGrantedSpells}
+ * whenever the entry name matches (e.g. the witch's "Hexes").
+ *
+ * Entry identity comes from FOCUS_SELECTIONS: the witch's hexes borrow the
+ * class tradition and ability, while martial selections carry fixed values.
  */
-async function importHexSpells(
+async function importFocusSelection(
   actor: Actor,
-  hexes: DemiplaneEngineEntry[],
+  selection: FocusSelection,
   main: SpellGroup[],
   summary: ImportSummary
 ): Promise<number> {
+  const config = FOCUS_SELECTIONS[selection.marker];
   const classConfig = main[0]?.config;
   const entryId = await createEntry(
     actor,
-    HEX_ENTRY_NAME,
-    classConfig?.tradition ?? "occult",
+    config?.entryName ?? selection.marker,
+    config?.tradition ?? classConfig?.tradition ?? "occult",
     "focus",
-    classConfig?.ability ?? "int"
+    config?.ability ?? classConfig?.ability ?? "int"
   );
-  const slugToId = await addSpells(actor, entryId, hexes, summary);
+  const slugToId = await addSpells(actor, entryId, selection.engines, summary);
   return slugToId.size;
 }
 

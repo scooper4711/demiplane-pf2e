@@ -5,6 +5,7 @@ import {
   CLASS_SPELLCASTING,
   SUMMONER_SPELLCASTING,
   RUNES_SPELLCASTING_FEATURE,
+  FOCUS_SELECTIONS,
   baseConfigForFeature,
   eidolonTradition,
   type SpellcastingConfig,
@@ -52,27 +53,38 @@ export interface SpellGroup {
 export interface GroupedSpells {
   main: SpellGroup[];
   innate: DemiplaneEngineEntry[];
-  /** Witch hexes the player selected (e.g. Phase Familiar) — focus spells. */
-  hexes: DemiplaneEngineEntry[];
+  /** Player-selected focus spells (witch hexes, devotion spells, qi spells), grouped by entry. */
+  focus: FocusSelection[];
   font: DemiplaneEngineEntry[];
   /** Rituals — spells with no spellcasting entry; PF2e gathers them ephemerally. */
   rituals: DemiplaneEngineEntry[];
+}
+
+/** One focus entry's player-selected spells (e.g. every pick for "Hexes"). */
+export interface FocusSelection {
+  /** SourceRow marker identifying the entry (a FOCUS_SELECTIONS key). */
+  marker: string;
+  engines: DemiplaneEngineEntry[];
 }
 
 /** The `parentSpellFeature` value Demiplane tags a known ritual with. */
 const RITUAL_FEATURE = "ritual";
 
 /**
- * Marks a selected spell as a witch hex. The player picks hexes (e.g. Phase
- * Familiar, the level-1 hex choice) through a `hex-spells-rm` builder row, so
- * the chosen spell engine's `sourceRow` carries that fragment. Such a pick is a
- * focus spell bound for the "Hexes" entry, not an innate spell.
+ * Marks a selected spell as a player-picked focus spell. The player picks
+ * these through a focus-group builder row (a witch's hexes, a champion's
+ * devotion spells, a monk's qi spells), so the chosen spell engine's
+ * `sourceRow` carries that group — e.g. `hex-spells-rm`, `devotion-spells-rm`,
+ * `qi-spells-rm`. Such a pick is a focus spell bound for its focus entry, not
+ * an innate spell.
  */
-const HEX_SELECTION_MARKER = "hex-spells-rm";
-
-function isSelectedHexSpell(eng: DemiplaneEngineEntry): boolean {
+function focusSelectionMarker(eng: DemiplaneEngineEntry): string | null {
   const sourceRow = eng.args?.sourceRow as string | undefined;
-  return typeof sourceRow === "string" && sourceRow.includes(HEX_SELECTION_MARKER);
+  if (typeof sourceRow !== "string") return null;
+  for (const marker of Object.keys(FOCUS_SELECTIONS)) {
+    if (sourceRow.includes(marker)) return marker;
+  }
+  return null;
 }
 
 /**
@@ -92,7 +104,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   const spellEngines = findSpellEngines(engines);
   const mainGroups = new Map<string, SpellGroup>();
   const innateSpells: DemiplaneEngineEntry[] = [];
-  const hexSpells: DemiplaneEngineEntry[] = [];
+  const focusSelections = new Map<string, DemiplaneEngineEntry[]>();
   const schoolSpells: DemiplaneEngineEntry[] = [];
   const fontSpells: DemiplaneEngineEntry[] = [];
   const rituals: DemiplaneEngineEntry[] = [];
@@ -103,21 +115,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
       continue;
     }
 
-    const sourceType = eng.args?.sourceType as string | undefined;
-    if (sourceType === "select-spell") {
-      if (isSelectedHexSpell(eng)) {
-        hexSpells.push(eng);
-        continue;
-      }
-      // School spells join the class group below; anything else selected
-      // (e.g. a dedication cantrip) stays innate.
-      if (isSchoolSpell(eng)) {
-        schoolSpells.push(eng);
-        continue;
-      }
-      innateSpells.push(eng);
-      continue;
-    }
+    if (routeSelectSpell(eng, focusSelections, schoolSpells, innateSpells)) continue;
 
     const parentFeature = eng.args?.parentSpellFeature as string | undefined;
 
@@ -153,7 +151,41 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     innateSpells.push(...schoolSpells);
   }
 
-  return { main: [...mainGroups.values()], innate: innateSpells, hexes: hexSpells, font: fontSpells, rituals };
+  return {
+    main: [...mainGroups.values()],
+    innate: innateSpells,
+    focus: [...focusSelections].map(([marker, engines]) => ({ marker, engines })),
+    font: fontSpells,
+    rituals,
+  };
+}
+
+/**
+ * Routes one player-selected spell (`sourceType: "select-spell"`): focus
+ * selections (hexes, devotion spells, qi spells) join their focus group,
+ * school spells join the class spellbook below, and anything else selected
+ * (e.g. a dedication cantrip) stays innate. Returns true when handled.
+ */
+function routeSelectSpell(
+  eng: DemiplaneEngineEntry,
+  focusSelections: Map<string, DemiplaneEngineEntry[]>,
+  schoolSpells: DemiplaneEngineEntry[],
+  innateSpells: DemiplaneEngineEntry[]
+): boolean {
+  if ((eng.args?.sourceType as string | undefined) !== "select-spell") return false;
+  const marker = focusSelectionMarker(eng);
+  if (marker) {
+    const group = focusSelections.get(marker) ?? [];
+    group.push(eng);
+    focusSelections.set(marker, group);
+    return true;
+  }
+  if (isSchoolSpell(eng)) {
+    schoolSpells.push(eng);
+    return true;
+  }
+  innateSpells.push(eng);
+  return true;
 }
 
 function getOrCreateGroup(
