@@ -27,7 +27,7 @@ import { toUserFacingSyncError } from "../token.js";
 import { readConfiguredToken } from "../token-source.js";
 import { PF2E_ENGINE_SOURCE } from "../config.js";
 import { computeEngineSig } from "../engine-sig.js";
-import { resolveGrantedFeatsBySlug } from "./stream-engines.js";
+import { resolveGrantedFeatsBySlug, resolveGrantBuilderSelections } from "./stream-engines.js";
 import {
   buildSelectionData,
   categorizeEngines,
@@ -172,6 +172,7 @@ export class ImportOrchestrator {
     handler.setEngines(engines);
     handler.setChoiceOverrides(getChoiceOverrides(actor));
     handler.setGrantedFeats(await resolveGrantedFeatsBySlug(cacheEngineIds));
+    handler.setGrantBuilderSelections(await resolveGrantBuilderSelections(cacheEngineIds));
   }
 
   private buildPipeline(): ImportPhase[] {

@@ -156,6 +156,19 @@ export interface AddSpellcastingFeatureModifier {
 }
 
 /**
+ * Grants a builder selection outright (e.g. an archetype mapping a class
+ * feature row to its replacement: hunter's-edge-rm → vindication-rm). Unlike
+ * `add-feat`, the grant names a feature for a builder row rather than a feat.
+ */
+export interface GrantBuilderSelectionModifier {
+  type: "grant-builder-selection";
+  grantRowType?: string;
+  grantRowSlug?: string;
+  selectionSlug?: string;
+  selectionType?: string;
+}
+
+/**
  * Grants a focus point. Its presence in an engine marks that engine's spells as
  * focus spells: a feature that adds both an `add-spell` and an `add-focus-point`
  * (e.g. a wizard curriculum's Force Bolt) grants a focus-pool spell, not a
@@ -176,6 +189,7 @@ export type EngineModifier =
   | AddSignatureSpellsModifier
   | SpellSlotTypeModifier
   | AddSpellcastingFeatureModifier
+  | GrantBuilderSelectionModifier
   | AddFocusPointModifier;
 
 /** One NDJSON response line: the engine id, its display name, and parsed modifiers. */
@@ -255,14 +269,31 @@ function extractModifiersFromObject(modifiers: Array<Record<string, unknown>>): 
         // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
         results.push(mod as unknown as AddSpellcastingFeatureModifier);
         break;
-      case "add-focus-point":
-        results.push({ type: "add-focus-point" });
+      default: {
+        const simple = extractSimpleModifier(mod);
+        if (simple) results.push(simple);
         break;
-      default:
-        break;
+      }
     }
   }
   return results;
+}
+
+/**
+ * Parses the flag-like modifiers (no payload beyond the discriminant) at the
+ * same parse boundary as {@link extractModifiersFromObject}. Split out to
+ * keep that switch under the complexity budget.
+ */
+function extractSimpleModifier(mod: Record<string, unknown>): EngineModifier | null {
+  switch (mod.type) {
+    case "grant-builder-selection":
+      // eslint-disable-next-line no-restricted-syntax -- discriminated-union narrowing at parse boundary
+      return typeof mod.selectionSlug === "string" ? (mod as unknown as GrantBuilderSelectionModifier) : null;
+    case "add-focus-point":
+      return { type: "add-focus-point" };
+    default:
+      return null;
+  }
 }
 
 function finalizeLine(
@@ -559,6 +590,40 @@ export async function resolveGrantedFeatsBySlug(cacheEngineIds: string[]): Promi
     if (entry) bySlug.set(toFoundrySlug(entry.slug), new Set(entry.feats.map(toFoundrySlug)));
   }
   return bySlug;
+}
+
+/**
+ * Builds a map from a builder row to the feature Demiplane granted for it
+ * (e.g. an archetype mapping `hunters-edge` to `vindication-rm`).
+ *
+ * Fetches the character's cached engine definitions and collects every
+ * `grant-builder-selection` carrying both a row and a selection. The importer
+ * consults this when a ChoiceSet offers one option per row value (the hunter's
+ * edge choice offering Flurry/Outwit/Precision/Vindicator), so the pick
+ * matches Demiplane's grant instead of defaulting to the first option.
+ * Entries without a row (e.g. a flat dedication grant) name no ChoiceSet and
+ * are skipped.
+ *
+ * Keys are foundry slugs (what ChoiceSets are looked up by); values stay in
+ * Demiplane form (what definition lookups address) — compare with
+ * {@link toFoundrySlug} at use sites that match text.
+ */
+export async function resolveGrantBuilderSelections(cacheEngineIds: string[]): Promise<Map<string, string>> {
+  const byRow = new Map<string, string>();
+  if (cacheEngineIds.length === 0) return byRow;
+
+  const text = await postStreamEngines(cacheEngineIds, "grant-builder-selection");
+  if (!text) return byRow;
+
+  for (const line of parseEngineLines(text)) {
+    for (const mod of line.modifiers) {
+      if (mod.type !== "grant-builder-selection") continue;
+      if (typeof mod.grantRowSlug !== "string" || mod.grantRowSlug === "") continue;
+      if (typeof mod.selectionSlug !== "string" || mod.selectionSlug === "") continue;
+      byRow.set(toFoundrySlug(mod.grantRowSlug), mod.selectionSlug);
+    }
+  }
+  return byRow;
 }
 
 /** Domain spell slugs carried by a `tabula/domain/*` engine definition. */

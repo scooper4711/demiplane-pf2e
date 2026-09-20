@@ -13,6 +13,12 @@ export interface MatcherContext {
   itemLevel?: number | undefined;
   flag?: string | undefined;
   grantedFeatsByElement?: Map<string, Set<string>> | undefined;
+  /**
+   * Builder-row grants (`row slug -> selection slug`, e.g. the hunter's edge
+   * row granted vindication by an archetype). Consulted by the
+   * granted-builder-selection matcher.
+   */
+  grantBuilderSelections?: Map<string, string> | undefined;
   actorTag?: string | undefined;
   /**
    * Inflates the ChoiceSet's options (labels, not filters). Only the

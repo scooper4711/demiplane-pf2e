@@ -5,6 +5,7 @@ import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
 import { registerChoiceMatcher, registeredMatchers, type MatcherContext } from "./matcher-registry.js";
 import "./kineticist-matchers.js";
+import "./grant-builder-matchers.js";
 
 let currentTag = "";
 function tlog(msg: string): void {
@@ -18,9 +19,10 @@ function contextOf(
   grantedFeatsByElement?: Map<string, Set<string>>,
   actorTag?: string,
   itemLevel?: number,
-  itemSlug?: string
+  itemSlug?: string,
+  grantBuilderSelections?: Map<string, string>
 ): MatcherContext {
-  return { choices, engines, itemName, grantedFeatsByElement, actorTag, itemLevel, itemSlug };
+  return { choices, engines, itemName, grantedFeatsByElement, actorTag, itemLevel, itemSlug, grantBuilderSelections };
 }
 
 /**
@@ -37,10 +39,20 @@ export function findMatchInChoices(
   grantedFeatsByElement?: Map<string, Set<string>>,
   actorTag?: string,
   itemLevel?: number,
-  itemSlug?: string
+  itemSlug?: string,
+  grantBuilderSelections?: Map<string, string>
 ): Choice | null {
   currentTag = actorTag ?? "";
-  const ctx = contextOf(choices, engines, itemName, grantedFeatsByElement, actorTag, itemLevel, itemSlug);
+  const ctx = contextOf(
+    choices,
+    engines,
+    itemName,
+    grantedFeatsByElement,
+    actorTag,
+    itemLevel,
+    itemSlug,
+    grantBuilderSelections
+  );
 
   for (const matcher of registeredMatchers()) {
     const match = matcher.match(ctx);

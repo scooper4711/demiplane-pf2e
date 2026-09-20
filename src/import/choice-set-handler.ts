@@ -117,6 +117,12 @@ export class ChoiceSetHandler {
    * choice. Empty until {@link setGrantedFeats} is called.
    */
   private grantedFeatsByElement: Map<string, Set<string>> = new Map();
+  /**
+   * Builder-row grants (`row slug -> selection slug`), loaded per import
+   * alongside {@link grantedFeatsByElement}. Consulted only by the
+   * granted-builder-selection matcher.
+   */
+  private grantBuilderSelections: Map<string, string> = new Map();
   /** Fallbacks accumulated during the current import; drained by the orchestrator. */
   private fallbacks: ChoiceSetFallback[] = [];
   /**
@@ -170,6 +176,15 @@ export class ChoiceSetHandler {
    */
   setGrantedFeats(grantedFeatsByElement: Map<string, Set<string>>): void {
     this.grantedFeatsByElement = grantedFeatsByElement;
+  }
+
+  /**
+   * Provides the builder-row grant map for this import (see
+   * {@link grantBuilderSelections}), consulted only when automatic matching
+   * reaches the granted-builder-selection matcher.
+   */
+  setGrantBuilderSelections(grantBuilderSelections: Map<string, string>): void {
+    this.grantBuilderSelections = grantBuilderSelections;
   }
 
   /** Returns and clears the fallbacks recorded since the last {@link setEngines}. */
@@ -344,6 +359,15 @@ export class ChoiceSetHandler {
 
     if (await this.resolveForcedSingleChoice(context, params)) return;
 
+    await this.matchDispatchedChoice(context, params);
+  }
+
+  /**
+   * Runs the normal slug-strategy dispatch on inflated choices and applies the
+   * fallback path. Extracted from {@link handlePreCreate} to keep that method
+   * under the line budget.
+   */
+  private async matchDispatchedChoice(context: ChoiceSetContext, params: PreCreateParams): Promise<void> {
     const candidateSlugs = this.candidateSelectionSlugs();
     debugLog(
       `[${this.actorTag()}] ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
@@ -356,7 +380,8 @@ export class ChoiceSetHandler {
       this.grantedFeatsByElement,
       this.actorTag(),
       itemLevelFromSource(params),
-      context.item.slug ?? undefined
+      context.item.slug ?? undefined,
+      this.grantBuilderSelections
     );
     await this.resolveFallbackChoice(context, params, matched, candidateSlugs);
   }
@@ -597,6 +622,7 @@ export class ChoiceSetHandler {
       itemLevel: itemLevelFromSource(params),
       flag: context.flag,
       grantedFeatsByElement: this.grantedFeatsByElement,
+      grantBuilderSelections: this.grantBuilderSelections,
       actorTag: this.actorTag(),
       inflateChoices: async () => {
         const inflated = await context.inflateChoices(this.collectRollOptions(context), params.tempItems);

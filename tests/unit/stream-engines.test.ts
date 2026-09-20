@@ -4,6 +4,7 @@ import {
   parseEngineLine,
   parseGrantedFeatsLine,
   resolveFeatEngineIdsBySlug,
+  resolveGrantBuilderSelections,
   resolveGrantedFeatsBySlug,
 } from "../../src/import/stream-engines.js";
 
@@ -202,6 +203,58 @@ describe("parseGrantedFeatsLine", () => {
 
   it("returns null for malformed lines", () => {
     expect(parseGrantedFeatsLine("{not json")).toBeNull();
+  });
+});
+
+describe("resolveGrantBuilderSelections", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function archetypeLine(): string {
+    return JSON.stringify({
+      id: "arch-1",
+      engineName: "tabula/archetype/vindicator.eng",
+      data: {
+        nodes: {
+          "1": {
+            name: "StringObject",
+            data: {
+              string: JSON.stringify({
+                engineModifiers: [
+                  {
+                    type: "grant-builder-selection",
+                    grantRowType: "other-class-feature",
+                    grantRowSlug: "hunters-edge-rm",
+                    selectionSlug: "vindication-rm",
+                    selectionType: "class-feature",
+                  },
+                  {
+                    type: "grant-builder-selection",
+                    grantRowType: "level-2-dedication",
+                    selectionSlug: "vindicator-dedication-rm",
+                    selectionType: "feat",
+                  },
+                ],
+              }),
+            },
+          },
+        },
+      },
+    });
+  }
+
+  it("maps builder rows to their granted selections, skipping row-less grants", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, text: async () => archetypeLine() }));
+
+    // The dedication grant names no ChoiceSet row, so only the hunter's-edge
+    // mapping survives. Keys are foundry slugs (ChoiceSet lookup form);
+    // values stay Demiplane (definition lookup form).
+    expect(await resolveGrantBuilderSelections(["cache-1"])).toEqual(new Map([["hunters-edge", "vindication-rm"]]));
+  });
+
+  it("returns an empty map when given no ids", async () => {
+    expect(await resolveGrantBuilderSelections([])).toEqual(new Map());
   });
 });
 

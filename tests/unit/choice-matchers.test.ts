@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { installFoundryMocks } from "./foundry-mocks.js";
+import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
 import { findMatchInChoices } from "../../src/import/choice-matchers.js";
 import { matchKineticElement } from "../../src/import/kineticist-matchers.js";
-import { registeredMatchers } from "../../src/import/matcher-registry.js";
+import { registeredMatchers, matchPrePredicate } from "../../src/import/matcher-registry.js";
 import { choiceConfigForEngines } from "../../src/import/class-choice-config.js";
 
 function skillEngine(slug) {
@@ -340,6 +340,102 @@ describe("choice-matchers", () => {
         "Canny Acumen"
       )
     ).toBeNull();
+  });
+
+  describe("granted-builder-selection", () => {
+    const FLURRY = { label: "Flurry", value: "Compendium.pf2e.classfeatures.Item.aaaa" };
+    const VINDICATOR = { label: "Vindicator", value: "Compendium.pf2e.classfeatures.Item.bbbb" };
+    const grantMap = new Map([["hunters-edge", "vindication-rm"]]);
+
+    function packs() {
+      return {
+        "pf2e.classfeatures": createMockPack([
+          {
+            _id: "aaaa",
+            name: "Flurry",
+            system: { slug: "flurry", description: { value: "<p>Make two quick strikes.</p>" } },
+          },
+          // No grant rules here: like the real Vindicator option, the link to
+          // vindication lives only in the description text.
+          {
+            _id: "bbbb",
+            name: "Vindicator",
+            system: {
+              slug: "vindicator",
+              description: { value: "<p>You must choose the vindication edge for your hunter's edge.</p>" },
+            },
+          },
+        ]),
+      };
+    }
+
+    it("picks the option granting the selection's feature", async () => {
+      installFoundryMocks(packs());
+      const ctx = {
+        choices: [],
+        engines: [],
+        itemName: "Hunter's Edge",
+        itemSlug: "hunters-edge",
+        grantBuilderSelections: grantMap,
+        inflateChoices: async () => [FLURRY, VINDICATOR],
+      };
+      expect(await matchPrePredicate(ctx)).toBe(VINDICATOR);
+    });
+
+    it("returns null without a map entry for the item", async () => {
+      installFoundryMocks(packs());
+      const ctx = {
+        choices: [],
+        engines: [],
+        itemName: "Hunter's Edge",
+        itemSlug: "hunters-edge",
+        grantBuilderSelections: new Map(),
+        inflateChoices: async () => [FLURRY, VINDICATOR],
+      };
+      expect(await matchPrePredicate(ctx)).toBeNull();
+    });
+
+    it("returns null when no option grants the selection", async () => {
+      installFoundryMocks(packs());
+      const ctx = {
+        choices: [],
+        engines: [],
+        itemName: "Hunter's Edge",
+        itemSlug: "hunters-edge",
+        grantBuilderSelections: grantMap,
+        inflateChoices: async () => [FLURRY],
+      };
+      expect(await matchPrePredicate(ctx)).toBeNull();
+    });
+
+    it("picks the option whose granted item carries the selection", async () => {
+      // Structural link rather than prose: the option grants an item whose
+      // slug contains every selection segment.
+      installFoundryMocks({
+        "pf2e.classfeatures": createMockPack([
+          {
+            _id: "bbbb",
+            name: "Vindicator",
+            system: {
+              slug: "vindicator",
+              rules: [{ key: "GrantItem", uuid: "Compendium.pf2e.feat-effects.Item.vx" }],
+            },
+          },
+        ]),
+        "pf2e.feat-effects": createMockPack([
+          { _id: "vx", name: "Effect: Vindication Edge", system: { slug: "effect-vindication-edge" } },
+        ]),
+      });
+      const ctx = {
+        choices: [],
+        engines: [],
+        itemName: "Hunter's Edge",
+        itemSlug: "hunters-edge",
+        grantBuilderSelections: grantMap,
+        inflateChoices: async () => [{ label: "Vindicator", value: "Compendium.pf2e.classfeatures.Item.bbbb" }],
+      };
+      expect(await matchPrePredicate(ctx)).not.toBeNull();
+    });
   });
 
   // Deity and domain arrive as CustomDemiplaneEngine overrides, which the
@@ -811,6 +907,7 @@ describe("choice-matchers", () => {
       "weapon-innovation",
       "item-engines",
       "granted-feats",
+      "granted-builder-selection",
       "class-features",
       "generic-features",
       "all-slugs",
