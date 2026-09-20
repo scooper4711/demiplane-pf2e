@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { applyEquipment, applyCurrency } from "../../src/import/equipment-importer.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment } from "../../src/import/equipment-importer.js";
 import { applyCraftingFormulas } from "../../src/import/crafting-formulas.js";
 import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
 import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/slug-mapping.js";
@@ -1256,6 +1256,33 @@ describe("applyEquipment", () => {
       );
       const item = actor.createEmbeddedDocuments.mock.calls[0][1][0] as Record<string, unknown>;
       expect((item.system as Record<string, unknown>).size).toBe("med");
+    });
+
+    it("resizes already-created items once the ancestry item sets the actor size", async () => {
+      // Equipment imports before the ancestry item, so a Jotunborn's gear is
+      // still Medium when the ancestry lands — the post-ancestry pass fixes it.
+      const actor = createMockActor({
+        items: [
+          { id: "i1", type: "consumable", name: "Acid Flask", system: { slug: "acid-flask", size: "med" } },
+          { id: "i2", type: "treasure", name: "Gold Pieces", system: { slug: "gold-pieces", size: "med" } },
+          { id: "i3", type: "consumable", name: "Big Flask", system: { slug: "big-flask", size: "lg" } },
+        ],
+      });
+      setActorSize(actor, "lg");
+
+      expect(await resizeActorEquipment(actor as never)).toBe(1);
+      const updates = actor.updateEmbeddedDocuments.mock.calls[0][1] as Array<Record<string, unknown>>;
+      expect(updates).toEqual([{ _id: "i1", "system.size": "lg", "system.price.sizeSensitive": false }]);
+    });
+
+    it("is a no-op on a Medium actor", async () => {
+      const actor = createMockActor({
+        items: [{ id: "i1", type: "consumable", name: "Acid Flask", system: { slug: "acid-flask", size: "med" } }],
+      });
+      setActorSize(actor, "med");
+
+      expect(await resizeActorEquipment(actor as never)).toBe(0);
+      expect(actor.updateEmbeddedDocuments).not.toHaveBeenCalled();
     });
   });
 });

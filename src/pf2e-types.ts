@@ -150,6 +150,11 @@ export interface Pf2eItemSystem {
   prepared?: ValueOf<string>;
   /** Spellcasting entries: the magic tradition ("occult", "arcane", …). */
   tradition?: ValueOf<string>;
+  /** Physical items: the bearer's size, resized on import for Tiny/Large actors. */
+  size?: string;
+  /** Physical items: traits (e.g. "magical") and price data. */
+  traits?: { value?: unknown };
+  price?: Record<string, unknown>;
 }
 
 /**

@@ -24,7 +24,7 @@ import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSl
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";
-import { applyEquipment, applyCurrency } from "./equipment-importer.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment } from "./equipment-importer.js";
 import { applyCraftingFormulas } from "./crafting-formulas.js";
 import { applySpells } from "./spell-importer.js";
 import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
@@ -146,8 +146,10 @@ export class LoreItemsPhase implements ImportPhase {
  * back to granting a new weapon.
  *
  * Equipment creation depends only on the Demiplane engines, the compendium, and
- * the actor's size, none of which require the ABC items, so moving it earlier is
- * safe. Currency, crafting formulas, and other post-processing stay late.
+ * the actor's size. The size isn't final until the ancestry item lands in the
+ * next phase, so items get a second resize pass there (resizeActorEquipment);
+ * nothing else here requires the ABC items, so moving it earlier is safe.
+ * Currency, crafting formulas, and other post-processing stay late.
  */
 export class EquipmentPhase implements ImportPhase {
   async run(actor: Actor, ctx: ImportContext): Promise<void> {
@@ -164,6 +166,10 @@ export class SequentialItemsPhase implements ImportPhase {
         await this.addItemToActor(actor, eng, category, ctx);
       }
     }
+    // The ancestry item is what makes a Jotunborn Large, and equipment was
+    // created before it existed — resize now that the actor's size is real.
+    const resized = await resizeActorEquipment(actor);
+    if (resized > 0) ctx.summary.log.push(`~ equipment resized to actor size: ${resized}`);
   }
 
   private async addItemToActor(

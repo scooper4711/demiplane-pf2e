@@ -17,7 +17,7 @@ import { loadEquipmentSources, findEquipmentEntry, type EquipmentSource } from "
 import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
 import { shouldSkipZeroQuantityItems } from "../write-level.js";
 import { getPackIndex } from "./pack-index.js";
-import { actorNaturalSize, toPlainData, type Pf2eSize } from "../pf2e-types.js";
+import { actorNaturalSize, documentSystem, toPlainData, type Pf2eItemSystem, type Pf2eSize } from "../pf2e-types.js";
 import { createContainersFirst } from "./container-placement.js";
 
 /** A fixed spell a scroll/wand carries, taken from its `add-special-item-spell` modifier. */
@@ -348,6 +348,41 @@ export async function applyEquipment(
 }
 
 /**
+ * Re-applies the actor's size to already-created items. Equipment is created
+ * before the ancestry item (which is what makes a Jotunborn Large), so the
+ * create-time resize in applyEquipment sees a Medium actor and no-ops; by the
+ * time the ancestry lands, the items are stuck Medium and the sheet flags
+ * them. Only items whose size actually differs are touched, so re-imports and
+ * already-correct actors are no-ops.
+ *
+ * @returns the number of items resized.
+ */
+export async function resizeActorEquipment(actor: Actor): Promise<number> {
+  const actorSize = actorNaturalSize(actor);
+  const itemSize: Pf2eSize = actorSize === "sm" ? "med" : actorSize;
+  if (itemSize === "med") return 0;
+
+  const updates: Array<Record<string, unknown> & { _id: string }> = [];
+  for (const item of actor.items) {
+    const typed = item as { id: string; type: string };
+    if (typed.type === TREASURE_ITEM_TYPE) continue;
+    const system = documentSystem(item);
+    if (!system || system.size === undefined || system.size === itemSize) continue;
+    const update: Record<string, unknown> & { _id: string } = {
+      _id: typed.id,
+      "system.size": itemSize,
+    };
+    if (isLargerThanMedium(itemSize) && !isMagicalItem(system)) {
+      update["system.price.sizeSensitive"] = false;
+    }
+    updates.push(update);
+  }
+  if (updates.length === 0) return 0;
+  await actor.updateEmbeddedDocuments("Item", updates);
+  return updates.length;
+}
+
+/**
  * Resizes every built item to the actor's size before creation. Foundry only
  * does this on the sheet drop handler; the direct createEmbeddedDocuments this
  * importer uses bypasses it, so gear on a Tiny/Large actor would otherwise be
@@ -394,7 +429,7 @@ function isLargerThanMedium(size: Pf2eSize): boolean {
 }
 
 /** Whether an item's source data carries the `magical` trait (or a magical tradition). */
-function isMagicalItem(system: Record<string, unknown>): boolean {
+function isMagicalItem(system: Pf2eItemSystem | Record<string, unknown>): boolean {
   const traits = (system.traits as { value?: unknown } | undefined)?.value;
   if (!Array.isArray(traits)) return false;
   const MAGICAL_TRAITS = new Set(["magical", "arcane", "divine", "occult", "primal"]);
