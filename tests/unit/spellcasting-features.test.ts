@@ -109,6 +109,16 @@ describe("baseConfigForFeature", () => {
     expect(baseConfigForFeature("summoner-spellcasting-rm")).toBeNull();
   });
 
+  it("resolves a legacy bare feature slug (pre-remaster, no -rm)", () => {
+    // Legacy characters send `sorcerer-spellcasting` where remaster ones send
+    // `sorcerer-spellcasting-rm` — same spontaneous arcane Cha casting.
+    expect(baseConfigForFeature("sorcerer-spellcasting")).toEqual(CLASS_SPELLCASTING["sorcerer-spellcasting-rm"]);
+  });
+
+  it("resolves a suffixless archetype slug through its base class", () => {
+    expect(baseConfigForFeature("wizard-spellcasting-archetype")).toEqual(CLASS_SPELLCASTING["wizard-spellcasting-rm"]);
+  });
+
   it("returns null for an unknown feature", () => {
     expect(baseConfigForFeature("mystery-spellcasting-rm")).toBeNull();
   });

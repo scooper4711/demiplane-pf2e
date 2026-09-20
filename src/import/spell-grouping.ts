@@ -170,7 +170,7 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
   // class spellbook — but only when exactly one class group exists. With zero
   // or several (multiclass ambiguity), keep the previous behavior (innate)
   // rather than guessing or duplicating across entries.
-  const classGroups = [...mainGroups.values()].filter((group) => group.source in CLASS_SPELLCASTING);
+  const classGroups = [...mainGroups.values()].filter((group) => baseConfigForFeature(group.source) !== null);
   if (classGroups.length === 1) {
     for (const eng of schoolSpells) addToGroup(classGroups[0]!, eng);
   } else {

@@ -157,5 +157,13 @@ export function featureSlugMatches(modSlug: string | undefined, parentSpellFeatu
  * (e.g. the summoner), which callers handle specially.
  */
 export function baseConfigForFeature(source: string): SpellcastingConfig | null {
-  return CLASS_SPELLCASTING[baseSpellcastingSlug(source)] ?? null;
+  // Legacy (pre-remaster) characters send bare feature slugs
+  // (`sorcerer-spellcasting`) while the table keys carry `-rm`, and vice
+  // versa for psychic — so compare with both suffixes stripped. Archetype
+  // features reduce to their base class the same way.
+  const want = stripRemasterSuffix(baseSpellcastingSlug(source));
+  for (const [key, config] of Object.entries(CLASS_SPELLCASTING)) {
+    if (stripRemasterSuffix(baseSpellcastingSlug(key)) === want) return config;
+  }
+  return null;
 }

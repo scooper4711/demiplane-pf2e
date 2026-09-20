@@ -26,6 +26,14 @@ describe("groupSpells", () => {
     expect(main[0]!.config).toEqual({ tradition: "arcane", preparedType: "prepared", ability: "int" });
   });
 
+  it("configures a legacy bare feature slug like its -rm class (no unknown-source error)", () => {
+    // Pre-remaster characters send `sorcerer-spellcasting` where remaster ones
+    // send `sorcerer-spellcasting-rm` — same entry, not an unknown source.
+    const { main } = groupSpells([spell("light-rm", { parentSpellFeature: "sorcerer-spellcasting" })]);
+    expect(main).toHaveLength(1);
+    expect(main[0]!.config).toEqual({ tradition: "arcane", preparedType: "spontaneous", ability: "cha" });
+  });
+
   it("does not route scroll- or wand-carried spells into a spell group", () => {
     // These spells belong to a scroll/wand consumable and are attached to the
     // item by the equipment importer, not to a class spellbook.
