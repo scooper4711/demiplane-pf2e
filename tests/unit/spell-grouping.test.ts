@@ -75,7 +75,7 @@ describe("groupSpells", () => {
     ]);
 
     expect(focus).toHaveLength(1);
-    expect(focus[0]!.marker).toBe("hex-spells-rm");
+    expect(focus[0]).toMatchObject({ entryName: "Hexes" });
     expect(focus[0]!.engines).toHaveLength(1);
     expect(focus[0]!.engines[0]!.name).toBe("tabula/spell/phase-familiar-rm.eng");
     expect(innate).toHaveLength(0);
@@ -90,8 +90,28 @@ describe("groupSpells", () => {
       }),
     ]);
 
-    expect(focus.map((s) => s.marker).sort()).toEqual(["devotion-spells-rm", "qi-spells-rm"]);
+    expect(focus.map((s) => s.entryName).sort()).toEqual(["Devotion Spells", "Qi Spells"]);
     expect(innate).toHaveLength(0);
+  });
+
+  it("routes a warden selection into a primal Warden Spells entry, divine for a vindicator", () => {
+    const warden = () =>
+      spell("distracting-decoy", {
+        sourceType: "select-spell",
+        sourceRow: "…_select-spell-select-warden-spell-…",
+      });
+    const vindicator = {
+      id: "arch",
+      name: "tabula/archetype/vindicator.eng",
+      type: "DemiplaneEngine",
+      args: { slug: "vindicator" },
+    } as DemiplaneEngineEntry;
+
+    const plain = groupSpells([warden()]);
+    expect(plain.focus[0]).toMatchObject({ entryName: "Warden Spells", tradition: "primal", ability: "wis" });
+
+    const vindicated = groupSpells([warden(), vindicator]);
+    expect(vindicated.focus[0]).toMatchObject({ entryName: "Warden Spells", tradition: "divine", ability: "wis" });
   });
 
   it("keeps a non-hex selected spell (dedication cantrip) in the innate bucket", () => {

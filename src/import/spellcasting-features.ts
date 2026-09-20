@@ -82,7 +82,8 @@ export const HEX_FOCUS_GROUP = "hex-spells";
  * Player-selected focus spells, keyed by the sourceRow marker Demiplane tags
  * the pick with. The witch's hexes borrow tradition/ability from the class at
  * import time; martial selections belong to no class spellcasting, so they
- * carry fixed values: devotion spells are divine/Cha, qi spells occult/Wis.
+ * carry fixed values: devotion spells are divine/Cha, qi spells occult/Wis,
+ * warden spells primal/Wis.
  */
 export interface FocusSelectionConfig {
   /** Spellcasting-entry label, e.g. "Devotion Spells". */
@@ -97,7 +98,11 @@ export const FOCUS_SELECTIONS: Record<string, FocusSelectionConfig> = {
   "hex-spells-rm": { entryName: "Hexes" },
   "devotion-spells-rm": { entryName: "Devotion Spells", tradition: "divine", ability: "cha" },
   "qi-spells-rm": { entryName: "Qi Spells", tradition: "occult", ability: "wis" },
+  "select-warden-spell": { entryName: "Warden Spells", tradition: "primal", ability: "wis" },
 };
+
+/** The vindicator archetype engine: its rangers cast divine warden spells. */
+export const VINDICATOR_ARCHETYPE = "tabula/archetype/vindicator.eng";
 
 /**
  * `parentSpellFeature` for the Runescarred dedication's Spell Runes feat. The

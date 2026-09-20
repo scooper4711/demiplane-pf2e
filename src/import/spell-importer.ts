@@ -2,7 +2,6 @@ import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { groupSpells } from "./spell-grouping.js";
 import type { SpellGroup } from "./spell-grouping.js";
 import type { FocusSelection } from "./spell-grouping.js";
-import { FOCUS_SELECTIONS } from "./spellcasting-features.js";
 import { createEntry, addSpells, capitalize, resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 import { placePreparedSpells, markSignatureSpells } from "./prepared-spells.js";
 import { importFontSpells } from "./divine-font.js";
@@ -31,7 +30,7 @@ export async function applySpells(
   }
 
   for (const selection of focus) {
-    totalAdded += await importFocusSelection(actor, selection, main, summary);
+    totalAdded += await importFocusSelection(actor, selection, summary);
   }
 
   if (font.length > 0) {
@@ -213,29 +212,14 @@ async function importInnateSpells(
 
 /**
  * Imports one group of player-selected focus spells (a witch's hexes, a
- * champion's devotion spells, a monk's qi spells) into its focus entry. PF2e
- * derives the focus-pool size from the number of spells here. Feature-granted
- * focus spells join the same entry later via {@link applyFeatureGrantedSpells}
- * whenever the entry name matches (e.g. the witch's "Hexes").
- *
- * Entry identity comes from FOCUS_SELECTIONS: the witch's hexes borrow the
- * class tradition and ability, while martial selections carry fixed values.
+ * champion's devotion spells, a monk's qi spells, a ranger's warden spells)
+ * into its focus entry. PF2e derives the focus-pool size from the number of
+ * spells here. Feature-granted focus spells join the same entry later via
+ * {@link applyFeatureGrantedSpells} whenever the entry name matches (e.g. the
+ * witch's "Hexes").
  */
-async function importFocusSelection(
-  actor: Actor,
-  selection: FocusSelection,
-  main: SpellGroup[],
-  summary: ImportSummary
-): Promise<number> {
-  const config = FOCUS_SELECTIONS[selection.marker];
-  const classConfig = main[0]?.config;
-  const entryId = await createEntry(
-    actor,
-    config?.entryName ?? selection.marker,
-    config?.tradition ?? classConfig?.tradition ?? "occult",
-    "focus",
-    config?.ability ?? classConfig?.ability ?? "int"
-  );
+async function importFocusSelection(actor: Actor, selection: FocusSelection, summary: ImportSummary): Promise<number> {
+  const entryId = await createEntry(actor, selection.entryName, selection.tradition, "focus", selection.ability);
   const slugToId = await addSpells(actor, entryId, selection.engines, summary);
   return slugToId.size;
 }

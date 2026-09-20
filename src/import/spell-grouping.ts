@@ -6,6 +6,7 @@ import {
   SUMMONER_SPELLCASTING,
   RUNES_SPELLCASTING_FEATURE,
   FOCUS_SELECTIONS,
+  VINDICATOR_ARCHETYPE,
   baseConfigForFeature,
   eidolonTradition,
   type SpellcastingConfig,
@@ -60,11 +61,36 @@ export interface GroupedSpells {
   rituals: DemiplaneEngineEntry[];
 }
 
-/** One focus entry's player-selected spells (e.g. every pick for "Hexes"). */
+/** One focus entry's player-selected spells, with its entry identity resolved. */
 export interface FocusSelection {
-  /** SourceRow marker identifying the entry (a FOCUS_SELECTIONS key). */
-  marker: string;
+  entryName: string;
+  tradition: string;
+  ability: string;
   engines: DemiplaneEngineEntry[];
+}
+
+/**
+ * Resolves one focus entry's identity. Fixed table values win; the witch's
+ * hexes borrow the class config instead. A vindicator-edge ranger's warden
+ * spells are divine rather than the usual primal.
+ */
+function resolveFocusSelection(
+  marker: string,
+  group: DemiplaneEngineEntry[],
+  engines: DemiplaneEngineEntry[],
+  classConfig: SpellcastingConfig | null | undefined
+): FocusSelection {
+  const config = FOCUS_SELECTIONS[marker];
+  let tradition = config?.tradition ?? classConfig?.tradition ?? "occult";
+  if (marker === "select-warden-spell" && engines.some((e) => e.name === VINDICATOR_ARCHETYPE)) {
+    tradition = "divine";
+  }
+  return {
+    entryName: config?.entryName ?? marker,
+    tradition,
+    ability: config?.ability ?? classConfig?.ability ?? "int",
+    engines: group,
+  };
 }
 
 /** The `parentSpellFeature` value Demiplane tags a known ritual with. */
@@ -151,10 +177,13 @@ export function groupSpells(engines: DemiplaneEngineEntry[]): GroupedSpells {
     innateSpells.push(...schoolSpells);
   }
 
+  const main = [...mainGroups.values()];
   return {
-    main: [...mainGroups.values()],
+    main,
     innate: innateSpells,
-    focus: [...focusSelections].map(([marker, engines]) => ({ marker, engines })),
+    focus: [...focusSelections].map(([marker, group]) =>
+      resolveFocusSelection(marker, group, engines, main[0]?.config)
+    ),
     font: fontSpells,
     rituals,
   };
