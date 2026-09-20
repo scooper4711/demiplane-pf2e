@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "fs";
 import { resolve } from "path";
 
@@ -591,15 +591,24 @@ export interface ImportResult {
   /**
    * Spellcasting entries and the slugs of the spells filed under each, keyed by
    * entry name. Lets spell-focused specs (e.g. the witch's hexes) assert both
-   * the entry (name / prepared type / tradition) and its contents. `slots`
-   * covers slot maximums, current values, and prepared placements (spell slug
-   * plus expended state) per `slotN` key, so specs can assert slot counts and
-   * which spell sits in which slot.
+   * the entry (name / prepared type / tradition / ability / proficiency) and
+   * its contents. `slots` covers slot maximums, current values, and prepared
+   * placements (spell slug plus expended state) per `slotN` key, so specs can
+   * assert slot counts and which spell sits in which slot.
+   *
+   * Ability is "" when the importer leaves it unset (feature-granted focus
+   * entries); proficiency is the raw rank (1 = trained — the importer never
+   * writes higher, progression rides the class item).
    */
   spellcasting: Array<{
     name: string;
     prepared: string;
     tradition: string;
+    ability: string;
+    proficiency: number;
+    flexible: boolean;
+    /** "spell-attack" normally; "class-dc" when the entry's proficiency slug points at class DC. */
+    dcMechanic: "spell-attack" | "class-dc";
     spells: string[];
     slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
   }>;
@@ -700,8 +709,10 @@ export async function createAndImportCharacter(
               id: string;
               name: string;
               system: {
-                prepared?: { value?: string };
+                prepared?: { value?: string; flexible?: boolean };
                 tradition?: { value?: string };
+                ability?: { value?: string };
+                proficiency?: { value?: number; slug?: string };
                 slots?: Record<
                   string,
                   { max?: number; value?: number; prepared?: Array<{ id?: string; expended?: boolean }> }
@@ -711,6 +722,15 @@ export async function createAndImportCharacter(
               name: entry.name,
               prepared: entry.system.prepared?.value ?? "",
               tradition: entry.system.tradition?.value ?? "",
+              ability: entry.system.ability?.value ?? "",
+              proficiency: entry.system.proficiency?.value ?? 0,
+              flexible: entry.system.prepared?.flexible ?? false,
+              // Entries whose proficiency slug points at class DC roll those;
+              // everything else rolls spell attacks and spell DCs. Runs inline
+              // because page.evaluate cannot see module scope.
+              dcMechanic: /class-?dc/i.test(entry.system.proficiency?.slug ?? "")
+                ? ("class-dc" as const)
+                : ("spell-attack" as const),
               spells: actor.items
                 .filter(
                   (i: { type: string; system: { location?: { value?: string } } }) =>
@@ -804,4 +824,49 @@ export async function createAndImportCharacter(
     { actorName, characterId, token, moduleId: MODULE_ID },
     { timeout: 120_000 }
   );
+}
+
+/**
+ * The expected shape of one spellcasting entry: identity (name, prepared
+ * type, tradition, key ability, proficiency rank) plus contents (spell slugs
+ * and, optionally, slot maximums/remaining counts).
+ *
+ * Ability is "" where the importer leaves it unset (feature-granted focus
+ * entries); proficiency is the raw rank (1 = trained — the importer never
+ * writes higher, progression rides the class item).
+ */
+export interface ExpectedSpellcastingEntry {
+  name: string;
+  prepared: string;
+  tradition: string;
+  ability: string;
+  proficiency: number;
+  flexible: boolean;
+  dcMechanic: "spell-attack" | "class-dc";
+  spells: string[];
+  slots?: Record<string, { max: number; value: number }>;
+}
+
+/**
+ * Asserts every expected spellcasting entry by name: type, tradition, key
+ * ability, proficiency rank, flexible flag, DC mechanic, contents, and (when
+ * given) slot maximums and remaining counts. Replaces the per-spec find/assert
+ * blocks so entry identity is validated uniformly — including ability and
+ * proficiency, which drive every spell attack and DC from the entry.
+ */
+export function expectSpellcastingEntries(result: ImportResult, expected: ExpectedSpellcastingEntry[]): void {
+  for (const want of expected) {
+    const entry = result.spellcasting.find((e) => e.name === want.name);
+    expect(entry, `spellcasting entry "${want.name}"`).toBeDefined();
+    expect(entry!.prepared).toBe(want.prepared);
+    expect(entry!.tradition).toBe(want.tradition);
+    expect(entry!.ability).toBe(want.ability);
+    expect(entry!.proficiency).toBe(want.proficiency);
+    expect(entry!.flexible).toBe(want.flexible);
+    expect(entry!.dcMechanic).toBe(want.dcMechanic);
+    expect(entry!.spells).toEqual(want.spells);
+    for (const [slot, range] of Object.entries(want.slots ?? {})) {
+      expect(entry!.slots[slot]).toMatchObject(range);
+    }
+  }
 }
