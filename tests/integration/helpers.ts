@@ -582,6 +582,7 @@ export interface ImportResult {
     handsHeld: number;
     containerId: string | null;
     invested: boolean | null;
+    size: string;
     runes: { potency: number; striking: number; property: string[] };
   }>;
   currency: { pp: number; gp: number; sp: number; cp: number };
@@ -624,6 +625,12 @@ export interface ImportResult {
    * signature marking survived the import.
    */
   signatureSpells: string[];
+  /**
+   * Names of known crafting formulas (`system.crafting.formulas`), resolved
+   * from their item UUIDs. Lets specs assert a formula book (e.g. an
+   * alchemist's) arrived as formulas rather than inventory items.
+   */
+  formulas: string[];
 }
 
 export async function createAndImportCharacter(
@@ -776,6 +783,19 @@ export async function createAndImportCharacter(
           )
           .map((i: { system: { slug?: string } }) => i.system.slug ?? "")
           .sort(),
+        formulas: (
+          await Promise.all(
+            ((actor.system.crafting?.formulas ?? []) as Array<{ uuid?: string }>).map(async (f) => {
+              try {
+                // @ts-expect-error Foundry global
+                const item = await fromUuid(f.uuid ?? "");
+                return item?.name ?? "";
+              } catch {
+                return "";
+              }
+            })
+          )
+        ).sort(),
         equipment: actor.items
           .filter((i: { type: string }) =>
             ["weapon", "armor", "shield", "equipment", "consumable", "backpack", "ammo"].includes(i.type)
@@ -786,6 +806,7 @@ export async function createAndImportCharacter(
               type: string;
               system: {
                 quantity: number;
+                size: string;
                 equipped: {
                   carryType: string;
                   handsHeld: number;
@@ -802,6 +823,7 @@ export async function createAndImportCharacter(
               handsHeld: i.system.equipped.handsHeld,
               containerId: i.system.containerId,
               invested: i.system.equipped.invested ?? null,
+              size: i.system.size ?? "",
               runes: {
                 potency: i.system.runes?.potency ?? 0,
                 striking: i.system.runes?.striking ?? 0,
