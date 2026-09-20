@@ -50,6 +50,10 @@ const engines =
 // Write-only on the target: persist the source payload under the target id.
 // The full meta passthrough (avatar/permissions) mirrors
 // scripts/reset-test-characters.mjs — omitting it makes the mutation fail.
+// The overview blob stays the target's own: the source blob names the source
+// character, so copying it would mistitle the target — while omitting the
+// field nulls the subtitle, so the target's existing blob rides along.
+const targetBefore = await client.fetchCharacterData(targetId).catch(() => null);
 const result = await client.updateCharacter({
   id: targetId,
   data: { engines, engineCacheIdsBySource: source.engineCacheIdsBySource ?? {} },
@@ -58,6 +62,7 @@ const result = await client.updateCharacter({
   avatarUrl: source.avatarUrl,
   viewPermission: source.viewPermission,
   editPermission: source.editPermission,
+  formatedData: targetBefore?.formatedData,
 });
 if (!result.success) {
   console.error(`copy failed: ${result.message}`);

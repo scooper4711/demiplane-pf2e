@@ -60,6 +60,9 @@ const result = await client.updateCharacter({
   avatarUrl: dump.avatarUrl,
   viewPermission: dump.viewPermission,
   editPermission: dump.editPermission,
+  // Builder-maintained overview blob ("Lvl X Class" subtitle) — present in
+  // dumps taken after this field was added; older dumps restore without it.
+  formatedData: dump.formatedData,
 });
 if (!result.success) {
   console.error(`restore failed: ${result.message}`);

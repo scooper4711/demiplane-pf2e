@@ -295,6 +295,30 @@ describe("ExportManager", () => {
       expect(second.success).toBe(true);
     });
 
+    it("passes the overview display blob through the push untouched", async () => {
+      // The builder-maintained formated_data renders the overview subtitle.
+      // Nothing pushed feeds it, so it must ride along unchanged — omitting it
+      // nulls the subtitle on Demiplane.
+      const formatedData = { format: { name: "Kyra", class: "Cleric", level: 5, avatar: "x" }, version: 2 };
+      const client = createMockClient({
+        fetchCharacterData: vi.fn().mockResolvedValue({
+          engines: [],
+          engineCacheIdsBySource: {},
+          name: "Kyra",
+          level: 5,
+          formatedData,
+        }),
+      });
+      const manager = new ExportManager(client as never);
+      const actor = createFlagTrackingActor("char-123", "2026-08-27T00:00:00.000Z");
+
+      manager.queueChange(actor as never, "character_hit-points_temp", 9);
+      const result = await manager.flush(actor as never);
+
+      expect(result.success).toBe(true);
+      expect(client.updateCharacter.mock.calls[0][0].formatedData).toBe(formatedData);
+    });
+
     it("creates a missing override engine when pushing a field that has no existing engine", async () => {
       const client = createMockClient();
       const manager = new ExportManager(client as never);

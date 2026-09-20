@@ -82,6 +82,9 @@ for (const { env, fallback, languages } of LANGUAGE_SETUP) {
     avatarUrl: data.avatarUrl,
     viewPermission: data.viewPermission,
     editPermission: data.editPermission,
+    // Pass the builder-maintained overview blob through — omitting it nulls
+    // the "Lvl X Class" subtitle on Demiplane.
+    formatedData: data.formatedData,
   });
   console.log(`  -> update success=${result.success} ${result.message ?? ""}`);
 

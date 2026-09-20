@@ -55,6 +55,9 @@ const dump = {
   avatarUrl: data.avatarUrl,
   viewPermission: data.viewPermission,
   editPermission: data.editPermission,
+  // Builder-maintained overview blob ("Lvl X Class" subtitle) — restores must
+  // pass it back or the subtitle is nulled.
+  formatedData: data.formatedData,
   engineCacheIdsBySource: data.engineCacheIdsBySource ?? {},
   engines: data.engines,
 };

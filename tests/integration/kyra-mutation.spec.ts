@@ -413,6 +413,10 @@ test.describe("Kyra Mutation Round-Trip", () => {
           avatarUrl: saved.avatarUrl,
           viewPermission: saved.viewPermission,
           editPermission: saved.editPermission,
+          // The overview display blob is builder-maintained, not engine data —
+          // omitting it nulls the "Lvl X Class" subtitle on Demiplane (the
+          // client coerces a missing blob to null).
+          formatedData: saved.formatedData,
         });
         // updateCharacter reports rate limiting as success:false instead of
         // throwing — convert it so the retry helper waits it out.
@@ -441,6 +445,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
       const sig = (engines: Array<{ name?: string; value?: unknown }>) =>
         Object.fromEntries(engines.map((e) => [e.name, JSON.stringify(e.value)]));
       expect(sig(after.engines)).toEqual(sig(saved.engines));
+      // The restore must not wipe the builder-maintained overview blob.
+      expect(after.formatedData).toEqual(saved.formatedData);
       if (savedCampaign) {
         const afterJournals = await withApiRetry("verify journal", () => client.fetchCharacterJournals(CHARACTER_UUID));
         // The importer reads `description` (the server mirrors content into
