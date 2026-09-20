@@ -48,6 +48,29 @@ export async function setFreeArchetype(page: Page, enabled: boolean): Promise<vo
 }
 
 /**
+ * Toggles the PF2e "Gradual Attribute Boosts" variant rule via the world
+ * setting API, mirroring {@link setFreeArchetype}.
+ */
+export async function setGradualBoosts(page: Page, enabled: boolean): Promise<void> {
+  await page.evaluate((value: boolean) => {
+    // @ts-expect-error Foundry global
+    return game.settings.set("pf2e", "gradualBoostsVariant", value);
+  }, enabled);
+}
+
+/**
+ * Sets the PF2e "Mythic Rules" variant (`"disabled"`, `"enabled"`, or
+ * `"variant-tiers"`) via the world setting API, mirroring
+ * {@link setFreeArchetype}.
+ */
+export async function setMythicRules(page: Page, value: string): Promise<void> {
+  await page.evaluate((mode: string) => {
+    // @ts-expect-error Foundry global
+    return game.settings.set("pf2e", "mythic", mode);
+  }, value);
+}
+
+/**
  * Dismisses tour popups only: exits the active tour through Foundry's own
  * API (`foundry.nue.Tour.activeTour.exit()` — exactly what the Escape key
  * invokes), then the tooltip X (`<a data-action="exit">`, which has no
