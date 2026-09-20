@@ -158,6 +158,9 @@ test.describe("Kyra Soft Delete", () => {
           avatarUrl: saved.avatarUrl,
           viewPermission: saved.viewPermission,
           editPermission: saved.editPermission,
+          // Builder-maintained overview blob ("Lvl X Class" subtitle) —
+          // omitting it nulls it on Demiplane.
+          formatedData: saved.formatedData,
         });
         if (!res.success && /rate.?limit|too many requests|\b429\b/i.test(res.message ?? "")) {
           throw Object.assign(new Error(res.message ?? "rate limited"), { statusCode: 429 });
@@ -167,6 +170,8 @@ test.describe("Kyra Soft Delete", () => {
       expect(restore.success, restore.message ?? "restore write failed").toBe(true);
       const after = await withApiRetry("verify engines", () => client.fetchCharacterData(CHARACTER_UUID));
       expect(sig(after.engines)).toEqual(sig(saved.engines));
+      // The restore must not wipe the builder-maintained overview blob.
+      expect(after.formatedData).toEqual(saved.formatedData);
       if (savedCampaign) {
         const text = savedCampaign.description || savedCampaign.content;
         await withApiRetry("restore journal", () =>
@@ -286,6 +291,9 @@ test.describe("Kyra Soft Delete", () => {
           avatarUrl: saved.avatarUrl,
           viewPermission: saved.viewPermission,
           editPermission: saved.editPermission,
+          // Builder-maintained overview blob ("Lvl X Class" subtitle) —
+          // omitting it nulls it on Demiplane.
+          formatedData: saved.formatedData,
         });
         if (!res.success && /rate.?limit|too many requests|\b429\b/i.test(res.message ?? "")) {
           throw Object.assign(new Error(res.message ?? "rate limited"), { statusCode: 429 });
@@ -295,6 +303,8 @@ test.describe("Kyra Soft Delete", () => {
       expect(restore.success, restore.message ?? "restore write failed").toBe(true);
       const after = await withApiRetry("verify engines", () => client.fetchCharacterData(CHARACTER_UUID));
       expect(sig(after.engines)).toEqual(sig(saved.engines));
+      // The restore must not wipe the builder-maintained overview blob.
+      expect(after.formatedData).toEqual(saved.formatedData);
       if (page) {
         await deleteActorsForCharacter(page, CHARACTER_UUID, ACTOR_NAME).catch(() => {});
         await page.close().catch(() => {});
