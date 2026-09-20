@@ -542,8 +542,15 @@ function isInheritedRepertoireGrant(mod: AddSpellModifier, hexFocusGroup: boolea
  * `parentFeature: "oracle-spellcasting-rm"`, or the necromancer spellcasting
  * granting harm that way). It belongs in the class repertoire, not the focus
  * entry — only the revelation/focus-group grant (parented at e.g.
- * `"revelation-spells-rm"`) is a focus spell. Tradition is irrelevant here:
- * the mystery grants inherit it while harm names it concretely.
+ * `"revelation-spells-rm"`) is a focus spell.
+ *
+ * Two shapes qualify: an inherited (or absent) tradition, which is always the
+ * class's own (mystery grants) — or a concrete tradition paired with
+ * focus-spell casting machinery (a save DC source and/or spell-attack source,
+ * as on harm). The machinery marks a complete, slot-castable spell. A
+ * concrete-tradition grant WITHOUT machinery parented at the spellcasting
+ * feature (the psychic's amps) is not independently castable and stays a
+ * focus-pool spell, falling through below.
  *
  * Parenting at the spellcasting feature is the distinguishing signal: focus
  * grants parent at a focus group (`composition-spells`, `revelation-spells-rm`,
@@ -558,10 +565,28 @@ function isSpellcastingFeatureRepertoireGrant(mod: AddSpellModifier): boolean {
   if (mod.isKnown !== true || mod.forcesFocus === true) return false;
   const restriction = mod.storeRestriction;
   if (restriction && typeof restriction === "object") return false;
-  const parent = mod.parentFeature ?? "";
-  if (parent === "") return false;
-  const stripped = parent.endsWith("-rm") ? parent.slice(0, -3) : parent;
+  if (!isSpellcastingParent(mod.parentFeature)) return false;
+  const tradition = mod.tradition ?? "";
+  if (tradition === "" || tradition === INHERIT_TRADITION) return true;
+  return hasCastingMachinery(mod);
+}
+
+/** Whether a parent feature names a class spellcasting feature. */
+function isSpellcastingParent(parentFeature: string | undefined): boolean {
+  if (!parentFeature) return false;
+  const stripped = parentFeature.endsWith("-rm") ? parentFeature.slice(0, -3) : parentFeature;
   return stripped.endsWith("-spellcasting") || stripped === "spellcasting";
+}
+
+/**
+ * Whether a grant carries focus-spell casting machinery: a save DC source
+ * and/or a spell-attack source. On a spellcasting-parented grant it marks a
+ * complete, slot-castable spell (harm) as opposed to a rider (psychic amps).
+ */
+function hasCastingMachinery(mod: AddSpellModifier): boolean {
+  const hasSaveDc = Array.isArray(mod.saveDC) && mod.saveDC.length > 0;
+  const hasSpellAttack = (mod.spellAttack ?? "") !== "";
+  return hasSaveDc || hasSpellAttack;
 }
 
 /**

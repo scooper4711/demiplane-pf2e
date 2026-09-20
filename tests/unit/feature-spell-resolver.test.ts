@@ -442,6 +442,11 @@ describe("feature-spell-resolver", () => {
             addSpell: "harm-rm",
             tradition: "occult",
             parentFeature: "necromancer-spellcasting-rm",
+            // The save-DC / spell-attack machinery marks harm slot-castable
+            // (repertoire) — unlike the psychic's machinery-less amps, which
+            // stay focus despite the same parenting.
+            saveDC: ["spell"],
+            spellAttack: "spellcasting-modifier",
           },
         ],
       }
@@ -607,6 +612,44 @@ describe("feature-spell-resolver", () => {
 
       expect(result.known).toHaveLength(0);
       expect(result.focus.map((f) => f.slug)).toEqual(["vindicators-mark-rm"]);
+    });
+
+    it("keeps machinery-less spellcasting-parent grants in focus (psychic amps)", async () => {
+      // Amps share the necromancer-harm grant shape (isKnown, concrete
+      // tradition, parented at the main spellcasting feature) but carry no
+      // save-DC / spell-attack machinery — they are not independently
+      // castable, so they stay focus-pool spells while harm joins the
+      // repertoire.
+      installFoundryMocks({
+        "pf2e.spells-srd": createMockPack([
+          { _id: "s1", name: "Distortion Lens", system: { slug: "distortion-lens", level: { value: 0 } } },
+        ]),
+      });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          text: async () =>
+            [
+              ndjsonLine("feat-1", [
+                ADD_SPELL("distortion-lens-rm", 1, {
+                  isKnown: true,
+                  tradition: "occult",
+                  parentFeature: "psychic-spellcasting-rm",
+                }),
+              ]),
+            ].join("\n"),
+        })
+      );
+
+      const result = await resolveFeatureGrantedSpells(
+        [featureEngine("tabula/class-feature/unbound-step-rm.eng", "feat-1")],
+        4,
+        1
+      );
+
+      expect(result.known).toHaveLength(0);
+      expect(result.focus.map((f) => f.slug)).toEqual(["distortion-lens-rm"]);
     });
 
     it("keeps a repertoire-shaped grant when its definition is not a focus spell", async () => {
