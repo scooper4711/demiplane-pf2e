@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -92,42 +93,74 @@ test.describe("Wizard Curriculum Import", () => {
 
   test("files the full spellbook in a prepared arcane entry", () => {
     // The main entry holds every known spell, including the school spells
-    // (which additionally get their own curriculum entry below).
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Wizard Spells (Arcane)");
-    expect(spellbook!.spells).toEqual([
-      "acidic-burst",
-      "air-bubble",
-      "animate-rope",
-      "befuddle",
-      "bone-shield",
-      "caustic-blast",
-      "command",
-      "daze",
-      "deep-breath",
-      "detect-metal",
-      "dispel-magic",
-      "electric-arc",
-      "enthrall",
-      "figment",
-      "frostbite",
-      "gale-blast",
-      "glass-shield",
-      "infectious-enthusiasm",
-      "message",
-      "runic-body",
+    // (which additionally get their own curriculum entry below). Level-1
+    // wizard: five cantrips, two rank-1 slots. The rank-2 maximum (1) is a
+    // player override on Demiplane holding the heightened acidic burst.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Wizard Spells (Arcane)",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "acidic-burst",
+          "air-bubble",
+          "animate-rope",
+          "befuddle",
+          "bone-shield",
+          "caustic-blast",
+          "command",
+          "daze",
+          "deep-breath",
+          "detect-metal",
+          "dispel-magic",
+          "electric-arc",
+          "enthrall",
+          "figment",
+          "frostbite",
+          "gale-blast",
+          "glass-shield",
+          "infectious-enthusiasm",
+          "message",
+          "runic-body",
+        ],
+        slots: {
+          slot0: { max: 5, value: 5 },
+          slot1: { max: 2, value: 2 },
+          slot2: { max: 1, value: 1 },
+        },
+      },
+      {
+        // One school cantrip (message), two rank-1 (command known, runic body
+        // prepared), plus the known-but-uncastable dispel magic and enthrall.
+        // A level-1 wizard has school slots for cantrips and rank 1 only; the
+        // rank-2/3 school spells are known, not placed.
+        name: "Ars Grammatica Curriculum Spells",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["command", "dispel-magic", "enthrall", "message", "runic-body"],
+        slots: { slot0: { max: 1, value: 1 }, slot1: { max: 1, value: 1 } },
+      },
+      {
+        // Protective Wards has no spell engine on Demiplane's side — it
+        // resolves from the ars-grammatica school definition.
+        name: "School Spells",
+        prepared: "focus",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["protective-wards"],
+      },
     ]);
-  });
-
-  test("applies main-entry slot maximums and remaining counts", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    // Level-1 wizard: five cantrips, two rank-1 slots. The rank-2 maximum (1)
-    // is a player override on Demiplane holding the heightened acidic burst.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 2, value: 2 });
-    expect(spellbook!.slots.slot2).toMatchObject({ max: 1, value: 1 });
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -147,34 +180,16 @@ test.describe("Wizard Curriculum Import", () => {
     expect(placed(spellbook!, "slot2")).toEqual(["acidic-burst:ready"]);
   });
 
-  test("files school spells in their own curriculum entry", () => {
-    // One school cantrip (message), two rank-1 (command known, runic body
-    // prepared), plus the known-but-uncastable dispel magic and enthrall.
+  test("places school spells with spent states in the school entry", () => {
     const school = result.spellcasting.find((e) => e.name === "Ars Grammatica Curriculum Spells");
     expect(school).toBeDefined();
-    expect(school!.prepared).toBe("prepared");
-    expect(school!.tradition).toBe("arcane");
-    expect(school!.spells).toEqual(["command", "dispel-magic", "enthrall", "message", "runic-body"]);
-  });
-
-  test("gives the school entry one slot per castable rank with school placements", () => {
-    const school = result.spellcasting.find((e) => e.name === "Ars Grammatica Curriculum Spells");
-    expect(school).toBeDefined();
-    // A level-1 wizard has school slots for cantrips and rank 1 only; the
-    // rank-2/3 school spells are known, not placed.
-    expect(school!.slots.slot0).toMatchObject({ max: 1, value: 1 });
-    expect(school!.slots.slot1).toMatchObject({ max: 1, value: 1 });
+    // Each school slot holds a school spell; the spent rank-2 force barrage
+    // carries its expended state.
     expect(placed(school!, "slot0")).toEqual(["message:ready"]);
     expect(placed(school!, "slot1")).toEqual(["runic-body:ready"]);
   });
 
-  test("files the school focus spell in a focus entry and imports the focus pool", () => {
-    // Protective Wards has no spell engine on Demiplane's side — it resolves
-    // from the ars-grammatica school definition.
-    const focusEntry = result.spellcasting.find((e) => e.spells.includes("protective-wards"));
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.prepared).toBe("focus");
-    expect(focusEntry!.tradition).toBe("arcane");
+  test("imports the focus pool", () => {
     expect(result.focus.value).toBe(1);
     expect(result.focus.max).toBe(1);
   });

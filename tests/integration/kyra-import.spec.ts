@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -47,8 +48,10 @@ test.describe("Kyra Import", () => {
   });
 
   test("reports only the known sanctification gap", () => {
-    // NOTE: Demiplane doesn't export cleric sanctification (holy/unholy), so
-    // the Deity ChoiceSet falls back to the first option. Sarenrae sanctifies
+    // NOTE: Kyra exports no sanctification choice (holy/unholy) — a legacy
+    // remnant of her migrated iconic build; modern builder characters record
+    // an explicit `deity-sanctification-*` pick (see the ranger). The Deity
+    // ChoiceSet therefore falls back to the first option. Sarenrae sanctifies
     // holy, so the guess is right — but it still surfaces for the GM to
     // confirm. Everything else imports cleanly.
     expect(result.summary.itemsSkipped).toBe(0);
@@ -103,35 +106,67 @@ test.describe("Kyra Import", () => {
   test("files the full spellbook in a prepared divine entry", () => {
     // The main entry holds every known spell: five cantrips plus the ranked
     // prepared spells. Font heals live in the font entry below; scroll, wand,
-    // and ritual spells never appear here.
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "divine");
-    expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Cleric Spells (Divine)");
-    expect(spellbook!.spells).toEqual([
-      "bless",
-      "cleanse-affliction",
-      "daze",
-      "dispel-magic",
-      "divine-lance",
-      "guidance",
-      "heroism",
-      "holy-light",
-      "light",
-      "sanctuary",
-      "spirit-link",
-      "spiritual-armament",
-      "stabilize",
+    // and ritual spells never appear here. Base cleric progression at level
+    // 5; nothing cast, so all slots full.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Cleric Spells (Divine)",
+        prepared: "prepared",
+        tradition: "divine",
+        ability: "wis",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "bless",
+          "cleanse-affliction",
+          "daze",
+          "dispel-magic",
+          "divine-lance",
+          "guidance",
+          "heroism",
+          "holy-light",
+          "light",
+          "sanctuary",
+          "spirit-link",
+          "spiritual-armament",
+          "stabilize",
+        ],
+        slots: {
+          slot0: { max: 5, value: 5 },
+          slot1: { max: 3, value: 3 },
+          slot2: { max: 3, value: 3 },
+          slot3: { max: 2, value: 2 },
+        },
+      },
+      {
+        // Healing Font grants four heal slots, cast at heightened rank; they
+        // live in their own spontaneous entry, never in the prepared
+        // spellbook.
+        name: "Divine Font (Healing)",
+        prepared: "spontaneous",
+        tradition: "divine",
+        ability: "wis",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["heal"],
+        slots: { slot1: { max: 4, value: 4 } },
+      },
+      {
+        // Fire Ray has no spell engine on Demiplane's side — it resolves from
+        // the Fire domain definition, which declares the Domain Spells focus
+        // entry — and the domain grants the focus point.
+        name: "Domain Spells",
+        prepared: "focus",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["fire-ray"],
+      },
     ]);
-  });
-
-  test("applies main-entry slot maximums and remaining counts", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "divine");
-    expect(spellbook).toBeDefined();
-    // Base cleric progression at level 5; nothing cast, so all slots full.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 3, value: 3 });
-    expect(spellbook!.slots.slot2).toMatchObject({ max: 3, value: 3 });
-    expect(spellbook!.slots.slot3).toMatchObject({ max: 2, value: 2 });
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -155,25 +190,13 @@ test.describe("Kyra Import", () => {
     expect(placed(spellbook!, "slot3")).toEqual(["heroism:ready", "holy-light:ready"]);
   });
 
-  test("files the four font heals in a Divine Font entry", () => {
-    // Healing Font grants four heal slots, cast at heightened rank; they live
-    // in their own spontaneous entry, never in the prepared spellbook.
+  test("places font heals with spent states in the font entry", () => {
     const font = result.spellcasting.find((e) => e.name === "Divine Font (Healing)");
     expect(font).toBeDefined();
-    expect(font!.prepared).toBe("spontaneous");
-    expect(font!.tradition).toBe("divine");
-    expect(font!.spells).toEqual(["heal"]);
-    expect(font!.slots.slot1).toMatchObject({ max: 4, value: 4 });
     expect(placed(font!, "slot1")).toEqual(["heal:ready", "heal:ready", "heal:ready", "heal:ready"]);
   });
 
-  test("files the domain spell in a focus entry and imports the focus pool", () => {
-    // Fire Ray has no spell engine on Demiplane's side — it resolves from the
-    // Fire domain definition — and the domain grants the focus point.
-    const focusEntry = result.spellcasting.find((e) => e.spells.includes("fire-ray"));
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.prepared).toBe("focus");
-    expect(focusEntry!.tradition).toBe("divine");
+  test("imports the focus pool", () => {
     expect(result.focus.value).toBe(1);
     expect(result.focus.max).toBe(1);
   });

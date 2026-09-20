@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   setFreeArchetype,
   stopCoverage,
   type ImportResult,
@@ -109,47 +110,82 @@ test.describe("Witch Import", () => {
 
   test("files the full spellbook in a prepared occult entry", () => {
     // Timber (adapted cantrip) lives in innate instead; everything else known
-    // is filed here.
-    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(witchEntry).toBeDefined();
-    expect(witchEntry!.name).toBe("Witch Spells (Occult)");
-    expect(witchEntry!.spells).toEqual([
-      "bane",
-      "befuddle",
-      "bless",
-      "cutting-insult",
-      "enfeeble",
-      "force-barrage",
-      "friendfetch",
-      "grim-tendrils",
-      "haunting-hymn",
-      "inside-ropes",
-      "loose-times-arrow",
-      "message",
-      "murder-of-crows",
-      "needle-darts",
-      "phantom-pain",
-      "phase-bolt",
-      "prestidigitation",
-      "rouse-skeletons",
-      "sigil",
-      "spirit-sense",
-      "sure-strike",
-      "telekinetic-hand",
-      "telekinetic-projectile",
-      "time-jump",
-      "warp-step",
+    // is filed here. Base witch progression at level 5; nothing cast, so all
+    // slots full.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Witch Spells (Occult)",
+        prepared: "prepared",
+        tradition: "occult",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "bane",
+          "befuddle",
+          "bless",
+          "cutting-insult",
+          "enfeeble",
+          "force-barrage",
+          "friendfetch",
+          "grim-tendrils",
+          "haunting-hymn",
+          "inside-ropes",
+          "loose-times-arrow",
+          "message",
+          "murder-of-crows",
+          "needle-darts",
+          "phantom-pain",
+          "phase-bolt",
+          "prestidigitation",
+          "rouse-skeletons",
+          "sigil",
+          "spirit-sense",
+          "sure-strike",
+          "telekinetic-hand",
+          "telekinetic-projectile",
+          "time-jump",
+          "warp-step",
+        ],
+        slots: {
+          slot0: { max: 5, value: 5 },
+          slot1: { max: 3, value: 3 },
+          slot2: { max: 3, value: 3 },
+          slot3: { max: 2, value: 2 },
+        },
+      },
+      {
+        // The witch's own occult prepared entry holds its spellbook plus the
+        // patron/lesson familiar spells (Sure Strike, Phantom Pain) — never
+        // the Hexes entry below.
+        name: "Hexes",
+        prepared: "focus",
+        tradition: "occult",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["cackle", "needle-of-vengeance", "nudge-fate", "phase-familiar"],
+      },
+      {
+        // Root Reading (runescarred dedication) and Timber (adapted cantrip)
+        // are select-spells without a school marker, and Mystic Armor comes
+        // from the Spell Runes feat (once per day as an innate spell) — all
+        // three land in innate. NOTE: the entry reads tradition occult (the
+        // class fallback) even though Timber is the witch's adapted cantrip —
+        // innate entries carry one tradition and the importer names/traditions
+        // from the class.
+        name: "Runescarred Dedication (Innate)",
+        prepared: "innate",
+        tradition: "occult",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["mystic-armor", "root-reading", "timber"],
+      },
     ]);
-  });
-
-  test("applies main-entry slot maximums and remaining counts", () => {
-    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(witchEntry).toBeDefined();
-    // Base witch progression at level 5; nothing cast, so all slots full.
-    expect(witchEntry!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(witchEntry!.slots.slot1).toMatchObject({ max: 3, value: 3 });
-    expect(witchEntry!.slots.slot2).toMatchObject({ max: 3, value: 3 });
-    expect(witchEntry!.slots.slot3).toMatchObject({ max: 2, value: 2 });
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -176,48 +212,21 @@ test.describe("Witch Import", () => {
     expect(placed(witchEntry!, "slot3")).toEqual(["rouse-skeletons:ready", "time-jump:ready"]);
   });
 
-  test("collects exactly the four hexes into a focus Hexes entry", () => {
+  test("keeps hexes and familiar spells on their own sides", () => {
+    // Covered in full by the entry assertions above; this pins the
+    // historically leaky boundary explicitly (hexes must never absorb the
+    // patron/lesson familiar spells, nor vice versa).
     const hexes = result.spellcasting.find((e) => e.name === "Hexes");
+    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
     expect(hexes).toBeDefined();
-    expect(hexes!.prepared).toBe("focus");
-    expect(hexes!.tradition).toBe("occult");
-    expect(hexes!.spells).toEqual(EXPECTED_HEXES);
-  });
-
-  test("does not leak the patron/lesson familiar spells into the Hexes entry", () => {
-    const hexes = result.spellcasting.find((e) => e.name === "Hexes");
-    for (const leaked of GRANTED_WITCH_SPELLS) {
-      expect(hexes!.spells).not.toContain(leaked);
-    }
-  });
-
-  test("files the granted familiar spells in the prepared witch spell list", () => {
-    // The witch's own occult prepared entry holds its spellbook plus the
-    // patron/lesson familiar spells (Sure Strike, Phantom Pain).
-    const witchEntry = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(witchEntry).toBeDefined();
+    expect(spellbook).toBeDefined();
     for (const granted of GRANTED_WITCH_SPELLS) {
-      expect(witchEntry!.spells).toContain(granted);
+      expect(hexes!.spells).not.toContain(granted);
+      expect(spellbook!.spells).toContain(granted);
     }
-  });
-
-  test("files Root Reading, Timber, and Mystic Armor as innate spells", () => {
-    // Root Reading (runescarred dedication) and Timber (adapted cantrip) are
-    // select-spells without a school marker, and Mystic Armor comes from the
-    // Spell Runes feat (once per day as an innate spell) — all three land in
-    // innate, and the entry takes its name from the first one's feat.
-    // NOTE: the entry reads tradition arcane (runescarred) even though Timber
-    // is the witch's occult adapted cantrip — innate entries carry one
-    // tradition and the importer names/traditions from the first spell.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries).toHaveLength(1);
-    expect(innateEntries[0]!.name).toBe("Runescarred Dedication (Innate)");
-    expect(innateEntries[0]!.spells).toEqual(["mystic-armor", "root-reading", "timber"]);
-    // Dedication spells, never hexes.
-    const hexes = result.spellcasting.find((e) => e.name === "Hexes");
-    expect(hexes!.spells).not.toContain("root-reading");
-    expect(hexes!.spells).not.toContain("timber");
-    expect(hexes!.spells).not.toContain("mystic-armor");
+    for (const hex of EXPECTED_HEXES) {
+      expect(spellbook!.spells).not.toContain(hex);
+    }
   });
 
   test("imports the three-point focus pool", () => {

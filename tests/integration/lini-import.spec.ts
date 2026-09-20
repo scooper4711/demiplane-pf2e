@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -96,27 +97,33 @@ test.describe("Lini Import", () => {
 
   test("files the full spellbook in a prepared primal entry", () => {
     // Five cantrips plus the two rank-1 prepared spells; no font, scroll,
-    // wand, or ritual spells on a level-1 druid.
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "primal");
-    expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Druid Spells (Primal)");
-    expect(spellbook!.spells).toEqual([
-      "detect-magic",
-      "electric-arc",
-      "heal",
-      "ignition",
-      "runic-body",
-      "stabilize",
-      "tangle-vine",
+    // wand, or ritual spells on a level-1 druid. Level-1 druid: five
+    // cantrips, two rank-1 slots; nothing cast.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Druid Spells (Primal)",
+        prepared: "prepared",
+        tradition: "primal",
+        ability: "wis",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["detect-magic", "electric-arc", "heal", "ignition", "runic-body", "stabilize", "tangle-vine"],
+        slots: { slot0: { max: 5, value: 5 }, slot1: { max: 2, value: 2 } },
+      },
+      {
+        // Heal Animal resolves from the Animal order definition (no spell
+        // engine), and the order grants the single focus point.
+        name: "Order Spells",
+        prepared: "focus",
+        tradition: "primal",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["heal-animal"],
+      },
     ]);
-  });
-
-  test("applies main-entry slot maximums and remaining counts", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "primal");
-    expect(spellbook).toBeDefined();
-    // Level-1 druid: five cantrips, two rank-1 slots; nothing cast.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 2, value: 2 });
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -133,13 +140,7 @@ test.describe("Lini Import", () => {
     expect(placed(spellbook!, "slot1")).toEqual(["heal:ready", "runic-body:ready"]);
   });
 
-  test("files the order spell in a focus entry and imports the focus pool", () => {
-    // Heal Animal resolves from the Animal order definition (no spell engine),
-    // and the order grants the single focus point.
-    const focusEntry = result.spellcasting.find((e) => e.spells.includes("heal-animal"));
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.prepared).toBe("focus");
-    expect(focusEntry!.tradition).toBe("primal");
+  test("imports the focus pool", () => {
     expect(result.focus.value).toBe(1);
     expect(result.focus.max).toBe(1);
   });

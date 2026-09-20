@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -92,56 +93,102 @@ test.describe("Ezren Import", () => {
     // The main entry holds every known spell, including school spells (which
     // additionally get their own school entry below). The adapted-cantrip
     // Stabilize is selected, not spellbook, so it lives in innate instead.
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Wizard Spells (Arcane)");
-    expect(spellbook!.spells).toEqual([
-      "acid-grip",
-      "brine-dragon-bile",
-      "charm",
-      "detect-magic",
-      "echo-jump",
-      "electric-arc",
-      "fireball",
-      "force-barrage",
-      "glass-shield",
-      "gouging-claw",
-      "grease",
-      "haste",
-      "illusory-object",
-      "infectious-enthusiasm",
-      "interposing-earth",
-      "laughing-fit",
-      "light",
-      "message",
-      "mist",
-      "mystic-armor",
-      "puff-of-poison",
-      "resist-energy",
-      "runic-weapon",
-      "shield",
-      "splinter-volley",
-      "summon-animal",
-      "summon-undead",
-      "tangle-vine",
-      "telekinetic-projectile",
-      "warping-pull",
+    // Base wizard progression at level 5 (school slots live separately
+    // below); remaining counts imported from Demiplane session state.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Wizard Spells (Arcane)",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "acid-grip",
+          "brine-dragon-bile",
+          "charm",
+          "detect-magic",
+          "echo-jump",
+          "electric-arc",
+          "fireball",
+          "force-barrage",
+          "glass-shield",
+          "gouging-claw",
+          "grease",
+          "haste",
+          "illusory-object",
+          "infectious-enthusiasm",
+          "interposing-earth",
+          "laughing-fit",
+          "light",
+          "message",
+          "mist",
+          "mystic-armor",
+          "puff-of-poison",
+          "resist-energy",
+          "runic-weapon",
+          "shield",
+          "splinter-volley",
+          "summon-animal",
+          "summon-undead",
+          "tangle-vine",
+          "telekinetic-projectile",
+          "warping-pull",
+        ],
+        slots: {
+          slot1: { max: 3, value: 3 },
+          // NOTE: Demiplane's own rank-2 remaining value (3) disagrees with
+          // its is-cast flags (3 of 4 spent); the import applies the value
+          // faithfully.
+          slot2: { max: 3, value: 3 },
+          slot3: { max: 2, value: 2 },
+        },
+      },
+      {
+        // The battle-magic school spellbook holds only school spells (which
+        // also appear in the main spellbook above). One school slot per rank
+        // with school placements (see below).
+        name: "Battle Magic Curriculum Spells",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["fireball", "force-barrage", "mist", "mystic-armor", "shield", "telekinetic-projectile"],
+        slots: {
+          slot1: { max: 1, value: 1 },
+          slot2: { max: 1, value: 1 },
+          slot3: { max: 1, value: 1 },
+        },
+      },
+      {
+        // Force Bolt shares its engine with an add-focus-point: a focus-pool
+        // spell by definition, despite carrying saveDC machinery (hex signal)
+        // and a concrete tradition (repertoire signal).
+        name: "School Spells",
+        prepared: "focus",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["force-bolt"],
+      },
+      {
+        // Stabilize comes from the Adapted Cantrip feat (a select-spell
+        // without a school marker), consistent with dedication cantrips.
+        name: "Adapted Cantrip (Innate)",
+        prepared: "innate",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["stabilize"],
+      },
     ]);
-  });
-
-  test("applies main-entry slot maximums and remaining counts", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    // Base wizard progression at level 5 (school slots live separately below).
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 3 });
-    expect(spellbook!.slots.slot2).toMatchObject({ max: 3 });
-    expect(spellbook!.slots.slot3).toMatchObject({ max: 2 });
-    // Remaining counts imported from Demiplane session state.
-    expect(spellbook!.slots.slot1?.value).toBe(3);
-    // NOTE: Demiplane's own rank-2 remaining value (3) disagrees with its
-    // is-cast flags (3 of 4 spent); the import applies the value faithfully.
-    expect(spellbook!.slots.slot2?.value).toBe(3);
-    expect(spellbook!.slots.slot3?.value).toBe(2);
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -156,29 +203,9 @@ test.describe("Ezren Import", () => {
     expect(placed(spellbook!, "slot3")).toEqual(["haste:ready", "summon-undead:ready"]);
   });
 
-  test("files school spells in their own curriculum entry", () => {
-    // The battle-magic school spellbook holds only school spells (which also
-    // appear in the main spellbook above).
+  test("places school spells with spent states in the school entry", () => {
     const school = result.spellcasting.find((e) => e.name === "Battle Magic Curriculum Spells");
     expect(school).toBeDefined();
-    expect(school!.prepared).toBe("prepared");
-    expect(school!.tradition).toBe("arcane");
-    expect(school!.spells).toEqual([
-      "fireball",
-      "force-barrage",
-      "mist",
-      "mystic-armor",
-      "shield",
-      "telekinetic-projectile",
-    ]);
-  });
-
-  test("gives the school entry one slot per rank with school placements", () => {
-    const school = result.spellcasting.find((e) => e.name === "Battle Magic Curriculum Spells");
-    expect(school).toBeDefined();
-    expect(school!.slots.slot1).toMatchObject({ max: 1 });
-    expect(school!.slots.slot2).toMatchObject({ max: 1 });
-    expect(school!.slots.slot3).toMatchObject({ max: 1 });
     // Each school slot holds a school spell; the spent rank-2 force barrage
     // carries its expended state.
     expect(placed(school!, "slot1")).toEqual(["force-barrage:ready"]);
@@ -187,20 +214,9 @@ test.describe("Ezren Import", () => {
   });
 
   test("files the school focus spell in a focus entry, never Hexes", () => {
-    // Force Bolt shares its engine with an add-focus-point: a focus-pool spell
-    // by definition, despite carrying saveDC machinery (hex signal) and a
-    // concrete tradition (repertoire signal).
-    const focusEntry = result.spellcasting.find((e) => e.spells.includes("force-bolt"));
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.prepared).toBe("focus");
+    // Covered in full by the entry assertions above; this pins the
+    // never-a-hex routing explicitly.
     expect(result.spellcasting.find((e) => e.name === "Hexes")).toBeUndefined();
-  });
-
-  test("files the adapted cantrip as innate", () => {
-    // Stabilize comes from the Adapted Cantrip feat (a select-spell without a
-    // school marker), consistent with dedication cantrips like Root Reading.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries.flatMap((e) => e.spells)).toEqual(["stabilize"]);
   });
 
   test("imports the focus pool state", () => {

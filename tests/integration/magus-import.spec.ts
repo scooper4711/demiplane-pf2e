@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -80,35 +81,68 @@ test.describe("Magus Import", () => {
   });
 
   test("files the full spellbook in a prepared arcane entry", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Magus Spells (Arcane)");
-    expect(spellbook!.spells).toEqual([
-      "500-toads",
-      "acidic-burst",
-      "admonishing-ray",
-      "agitate",
-      "air-bubble",
-      "ancient-dust",
-      "approximate",
-      "artistic-recollection",
-      "bramble-bush",
-      "bullhorn",
-      "caustic-blast",
-      "create-earthen-facsimile",
-      "daze",
-    ]);
-  });
-
-  test("applies slot maximums and prepared placements", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
     // Level-1 magus: five cantrips plus a single rank-1 slot. The rank-1
     // maximum resolves from the magus's own tagged slot entries (see
     // spell-slot-resolver) — without them the 500 Toads placement would be
     // lost, as the class definition carries no empty-slug ranked entries.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 1, value: 1 });
+    expectSpellcastingEntries(result, [
+      {
+        name: "Magus Spells (Arcane)",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "500-toads",
+          "acidic-burst",
+          "admonishing-ray",
+          "agitate",
+          "air-bubble",
+          "ancient-dust",
+          "approximate",
+          "artistic-recollection",
+          "bramble-bush",
+          "bullhorn",
+          "caustic-blast",
+          "create-earthen-facsimile",
+          "daze",
+        ],
+        slots: { slot0: { max: 5, value: 5 }, slot1: { max: 1, value: 1 } },
+      },
+      {
+        // Eat Fire comes from the mage-automaton heritage (a select-spell
+        // without a school marker), consistent with dedication cantrips.
+        name: "Mage Automaton (Innate)",
+        prepared: "innate",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["eat-fire"],
+      },
+      {
+        // Shooting Star has no spell engine — it resolves from the conflux
+        // definition, which declares the Conflux Spells focus entry. Its
+        // rank-2 rider (Water Breathing) is gated out: a level-1 magus has no
+        // rank-2 slots (see feature-spell-resolver rank gating).
+        name: "Conflux Spells",
+        prepared: "focus",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["shooting-star"],
+      },
+    ]);
+  });
+
+  test("applies prepared placements", () => {
+    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
+    expect(spellbook).toBeDefined();
     expect(placed(spellbook!, "slot0")).toEqual([
       "ancient-dust:ready",
       "approximate:ready",
@@ -119,22 +153,7 @@ test.describe("Magus Import", () => {
     expect(placed(spellbook!, "slot1")).toEqual(["500-toads:ready"]);
   });
 
-  test("files the heritage spell as innate", () => {
-    // Eat Fire comes from the mage-automaton heritage (a select-spell without
-    // a school marker), consistent with dedication cantrips like Root Reading.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries).toHaveLength(1);
-    expect(innateEntries[0]!.spells).toEqual(["eat-fire"]);
-  });
-
-  test("files the conflux spell in a focus entry and imports the focus pool", () => {
-    // Shooting Star has no spell engine — it resolves from the conflux
-    // definition. Its rank-2 rider (Water Breathing) is gated out: a level-1
-    // magus has no rank-2 slots (see feature-spell-resolver rank gating).
-    const focusEntry = result.spellcasting.find((e) => e.prepared === "focus");
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.tradition).toBe("arcane");
-    expect(focusEntry!.spells).toEqual(["shooting-star"]);
+  test("imports the focus pool", () => {
     expect(result.focus.value).toBe(1);
     expect(result.focus.max).toBe(1);
   });

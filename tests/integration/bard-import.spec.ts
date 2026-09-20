@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -58,33 +59,50 @@ test.describe("Bard Import", () => {
     // Demiplane "Bard spellcasting" plus the rank-1 spontaneous spells (Alarm,
     // Soothe, Animate Rope) all join one repertoire, including the Maestro
     // muse's granted Soothe.
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
-    expect(repertoire).toBeDefined();
-    expect(repertoire!.name).toBe("Bard Spells (Occult)");
-    expect(repertoire!.spells).toEqual([
-      "alarm",
-      "animate-rope",
-      "bullhorn",
-      "detect-metal",
-      "forbidding-ward",
-      "haunting-hymn",
-      "infectious-enthusiasm",
-      "soothe",
+    expectSpellcastingEntries(result, [
+      {
+        name: "Bard Spells (Occult)",
+        prepared: "spontaneous",
+        tradition: "occult",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "alarm",
+          "animate-rope",
+          "bullhorn",
+          "detect-metal",
+          "forbidding-ward",
+          "haunting-hymn",
+          "infectious-enthusiasm",
+          "soothe",
+        ],
+      },
+      {
+        // Counter Performance and Lingering Composition are focus spells;
+        // Courageous Anthem is a cantrip but belongs to the composition group.
+        name: "Composition Spells",
+        prepared: "focus",
+        tradition: "occult",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["counter-performance", "courageous-anthem", "lingering-composition"],
+      },
+      {
+        // The Seer Elf grant names the arcane tradition outright.
+        name: "Innate Spells",
+        prepared: "innate",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["detect-magic"],
+      },
     ]);
-  });
-
-  test("collects the compositions into a focus Composition Spells entry", () => {
-    // Counter Performance and Lingering Composition are focus spells;
-    // Courageous Anthem is a cantrip but belongs to the composition group.
-    const compositions = result.spellcasting.find((e) => e.name === "Composition Spells");
-    expect(compositions).toBeDefined();
-    expect(compositions!.prepared).toBe("focus");
-    expect(compositions!.spells).toEqual(["counter-performance", "courageous-anthem", "lingering-composition"]);
-  });
-
-  test("files the Seer Elf spell as innate", () => {
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries.flatMap((e) => e.spells)).toEqual(["detect-magic"]);
   });
 
   test("imports the focus pool state", () => {

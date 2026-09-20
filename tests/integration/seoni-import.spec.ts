@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -86,40 +87,85 @@ test.describe("Seoni Import", () => {
     // NOTE: detect magic, force barrage, dispel magic, and haste have no spell
     // engines — they resolve from the bloodline/feat definitions as granted
     // known spells (the sheet shows no trash can for them), joining the
-    // repertoire like any chosen spell.
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "arcane");
-    expect(repertoire).toBeDefined();
-    expect(repertoire!.name).toBe("Sorcerer Spells (Arcane)");
-    expect(repertoire!.spells).toEqual([
-      "animated-assault",
-      "blazing-bolt",
-      "caustic-blast",
-      "detect-magic",
-      "dispel-magic",
-      "dizzying-colors",
-      "electric-arc",
-      "fireball",
-      "force-barrage",
-      "frostbite",
-      "haste",
-      "heat-metal",
-      "live-wire",
-      "ooze-form",
-      "shield",
-      "sleep",
-      "thunderstrike",
+    // repertoire like any chosen spell. Level-5 sorcerer progression; nothing
+    // cast, so every slot is full and no placements exist (spontaneous
+    // casters spend slots, not prepared spells).
+    expectSpellcastingEntries(result, [
+      {
+        name: "Sorcerer Spells (Arcane)",
+        prepared: "spontaneous",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "animated-assault",
+          "blazing-bolt",
+          "caustic-blast",
+          "detect-magic",
+          "dispel-magic",
+          "dizzying-colors",
+          "electric-arc",
+          "fireball",
+          "force-barrage",
+          "frostbite",
+          "haste",
+          "heat-metal",
+          "live-wire",
+          "ooze-form",
+          "shield",
+          "sleep",
+          "thunderstrike",
+        ],
+        slots: {
+          slot0: { max: 5, value: 5 },
+          slot1: { max: 4, value: 4 },
+          slot2: { max: 4, value: 4 },
+          slot3: { max: 3, value: 3 },
+        },
+      },
+      {
+        // Ancestral Memories has no spell engine — it resolves from the
+        // imperial bloodline definition, which declares the Bloodline Spells
+        // focus entry — and the bloodline grants the focus point.
+        name: "Bloodline Spells",
+        prepared: "focus",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["ancestral-memories"],
+      },
+      {
+        // Forbidding Ward (Adapted Cantrip) and Heal (Adaptive Adept, divine)
+        // are select-spells without a school marker: innate, sharing the entry
+        // named for the first one's feat.
+        name: "Adapted Cantrip (Innate)",
+        prepared: "innate",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["forbidding-ward", "heal"],
+      },
+      {
+        // NOTE: detect magic is granted twice over — once as a known
+        // repertoire spell, once as innate — so it appears in both the main
+        // entry above and its own feature-granted innate entry. Both are
+        // faithful to the grant definitions; the repertoire copy is castable.
+        name: "Innate Spells",
+        prepared: "innate",
+        tradition: "arcane",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["detect-magic"],
+      },
     ]);
-  });
-
-  test("applies spontaneous slot maximums, all unused", () => {
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "arcane");
-    expect(repertoire).toBeDefined();
-    // Level-5 sorcerer progression; nothing cast, so every slot is full and no
-    // placements exist (spontaneous casters spend slots, not prepared spells).
-    expect(repertoire!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(repertoire!.slots.slot1).toMatchObject({ max: 4, value: 4 });
-    expect(repertoire!.slots.slot2).toMatchObject({ max: 4, value: 4 });
-    expect(repertoire!.slots.slot3).toMatchObject({ max: 3, value: 3 });
   });
 
   test("marks thunderstrike and blazing bolt as signature spells", () => {
@@ -129,36 +175,9 @@ test.describe("Seoni Import", () => {
     expect(result.signatureSpells).toEqual(["blazing-bolt", "thunderstrike"]);
   });
 
-  test("files the bloodline spell in a focus entry and imports the focus pool", () => {
-    // Ancestral Memories has no spell engine — it resolves from the imperial
-    // bloodline definition — and the bloodline grants the focus point.
-    const focusEntry = result.spellcasting.find((e) => e.spells.includes("ancestral-memories"));
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.prepared).toBe("focus");
-    expect(focusEntry!.tradition).toBe("arcane");
+  test("imports the focus pool", () => {
     expect(result.focus.value).toBe(1);
     expect(result.focus.max).toBe(1);
-  });
-
-  test("files the adapted spells as innate", () => {
-    // Forbidding Ward (Adapted Cantrip) and Heal (Adaptive Adept, divine) are
-    // select-spells without a school marker: innate, sharing the entry named
-    // for the first one's feat.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    const adapted = innateEntries.find((e) => e.name === "Adapted Cantrip (Innate)");
-    expect(adapted).toBeDefined();
-    expect(adapted!.spells).toEqual(["forbidding-ward", "heal"]);
-  });
-
-  test("files the granted detect magic as innate without duplicating the repertoire", () => {
-    // NOTE: detect magic is granted twice over — once as a known repertoire
-    // spell, once as innate — so it appears in both the main entry above and
-    // its own feature-granted innate entry. Both are faithful to the grant
-    // definitions; the repertoire copy is the castable one.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    const granted = innateEntries.find((e) => e.spells.includes("detect-magic"));
-    expect(granted).toBeDefined();
-    expect(granted!.name).toBe("Innate Spells");
   });
 
   test("imports staves and wand as items with no phantom spells", () => {

@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -90,40 +91,68 @@ test.describe("Psychic Import", () => {
 
   test("files the repertoire in a spontaneous occult entry", () => {
     // Only the ranked repertoire resolves; the psi cantrips are unmapped
-    // (module gap, asserted below) and the amps live in focus.
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
-    expect(repertoire).toBeDefined();
-    expect(repertoire!.name).toBe("Psychic Spells (Occult)");
-    expect(repertoire!.spells).toEqual(["animated-assault", "bee-mans-summons", "biting-words", "bullhorn", "charm"]);
+    // (module gap, asserted below). Level-4 progression; nothing cast, so
+    // every slot is full and no placements exist (spontaneous casters spend
+    // slots, not prepared spells).
+    expectSpellcastingEntries(result, [
+      {
+        name: "Psychic Spells (Occult)",
+        prepared: "spontaneous",
+        tradition: "occult",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["animated-assault", "bee-mans-summons", "biting-words", "bullhorn", "charm"],
+        slots: { slot1: { max: 2, value: 2 }, slot2: { max: 2, value: 2 } },
+      },
+      {
+        // NOTE: the unremastered kitsune definition grants Ghost Sound; the
+        // remaster renamed it Figment, so the mapping editor renames this item
+        // to Figment on a mapped world. The raw import carries the granted
+        // name. The divine tradition comes straight from the feat grant.
+        name: "Innate Spells",
+        prepared: "innate",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["daze", "forbidding-ward", "ghost-sound"],
+      },
+      {
+        // Distortion Lens, Enlarge, and Thoughtful Gift have no spell engines
+        // — they resolve from the unbound-step definition as focus amps — and
+        // the class grants both focus points, currently available.
+        name: "School Spells",
+        prepared: "focus",
+        tradition: "occult",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["distortion-lens", "enlarge", "thoughtful-gift"],
+      },
+      {
+        // The archetype casts exactly like its base class (prepared arcane),
+        // so no unknown-source error — but the entry keeps a distinct name.
+        // Cantrip maximum from the wizard-dedication definition; rank 1 from
+        // Basic Wizard Spellcasting. Both match the sheet with no overrides.
+        name: "Arcane Spells",
+        prepared: "prepared",
+        tradition: "arcane",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["ancient-dust", "camel-spit", "carryall", "figment", "frostbite", "frosts-touch"],
+        slots: { slot0: { max: 2, value: 2 }, slot1: { max: 1, value: 1 } },
+      },
+    ]);
   });
 
-  test("applies spontaneous slot maximums, all unused", () => {
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "occult");
-    expect(repertoire).toBeDefined();
-    // Class progression (a previous 1/1 pin has been cleared on Demiplane).
-    // Nothing cast, so every slot is full and no placements exist
-    // (spontaneous casters spend slots, not prepared spells).
-    expect(repertoire!.slots.slot1).toMatchObject({ max: 2, value: 2 });
-    expect(repertoire!.slots.slot2).toMatchObject({ max: 2, value: 2 });
-  });
-
-  test("files the kitsune spells as innate", () => {
-    // NOTE: the unremastered kitsune definition grants Ghost Sound; the
-    // remaster renamed it Figment, so the mapping editor renames this item to
-    // Figment on a mapped world. The raw import carries the granted name.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries).toHaveLength(1);
-    expect(innateEntries[0]!.spells).toEqual(["daze", "forbidding-ward", "ghost-sound"]);
-  });
-
-  test("files the amps in a focus entry and imports the focus pool", () => {
-    // Distortion Lens, Enlarge, and Thoughtful Gift have no spell engines —
-    // they resolve from the unbound-step definition as focus amps — and the
-    // class grants both focus points, currently available.
-    const focusEntry = result.spellcasting.find((e) => e.prepared === "focus");
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.tradition).toBe("occult");
-    expect(focusEntry!.spells).toEqual(["distortion-lens", "enlarge", "thoughtful-gift"]);
+  test("imports the focus pool", () => {
+    // The class grants both focus points, currently available.
     expect(result.focus.value).toBe(2);
     expect(result.focus.max).toBe(2);
   });
@@ -139,30 +168,9 @@ test.describe("Psychic Import", () => {
     expect(result.summary.unmapped).toContainEqual({ slug: "warp-step-psychic-rm", kind: "spell" });
   });
 
-  test("files the wizard-archetype spellbook in a prepared arcane entry", () => {
-    // The archetype casts exactly like its base class (prepared arcane), so
-    // no unknown-source error — but the entry keeps a distinct name.
+  test("applies archetype prepared placements", () => {
     const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
     expect(spellbook).toBeDefined();
-    expect(spellbook!.name).toBe("Arcane Spells");
-    expect(spellbook!.spells).toEqual([
-      "ancient-dust",
-      "camel-spit",
-      "carryall",
-      "figment",
-      "frostbite",
-      "frosts-touch",
-    ]);
-  });
-
-  test("applies archetype slots and prepared placements", () => {
-    const spellbook = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "arcane");
-    expect(spellbook).toBeDefined();
-    // Cantrip maximum from the wizard-dedication definition; rank 1 from
-    // Basic Wizard Spellcasting reached through the dedication's add-feat
-    // grant. Both match the sheet with no overrides needed.
-    expect(spellbook!.slots.slot0).toMatchObject({ max: 2, value: 2 });
-    expect(spellbook!.slots.slot1).toMatchObject({ max: 1, value: 1 });
     expect(placed(spellbook!, "slot0")).toEqual(["frostbite:ready", "frosts-touch:ready"]);
     expect(placed(spellbook!, "slot1")).toEqual(["camel-spit:ready"]);
   });

@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -71,6 +72,12 @@ test.describe("Summoner Import", () => {
     }
   });
 
+  test("imports the focus pool and no standalone spells", () => {
+    expect(result.focus.value).toBe(1);
+    expect(result.focus.max).toBe(1);
+    expect(result.standaloneSpells).toEqual([]);
+  });
+
   test("imports circus lore and languages", () => {
     expect(result.loreSkills).toEqual(["Circus Lore"]);
     expect(result.languages).toEqual(["common", "fey"]);
@@ -85,49 +92,54 @@ test.describe("Summoner Import", () => {
   });
 
   test("files the repertoire in a spontaneous primal entry", () => {
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "primal");
-    expect(repertoire).toBeDefined();
-    expect(repertoire!.name).toBe("Summoner Spells (Primal)");
-    expect(repertoire!.spells).toEqual([
-      "500-toads",
-      "approximate",
-      "caustic-blast",
-      "create-earthen-facsimile",
-      "deep-breath",
-      "detect-magic",
-    ]);
-  });
-
-  test("applies slot maximums with the cast rank-1 slot spent", () => {
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "primal");
-    expect(repertoire).toBeDefined();
     // NOTE: Demiplane models summoner cantrips nowhere, so the import mirrors
     // the sheet and counts the five known cantrips. The single rank-1 slot
     // resolves from the summoner-spellcasting feature definition; its zero
     // remaining count is the cast 500 Toads (session state).
-    expect(repertoire!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(repertoire!.slots.slot1).toMatchObject({ max: 1, value: 0 });
-  });
-
-  test("files the heritage spell as innate", () => {
-    // Bramble Bush comes from the awakened-animal heritage (a select-spell
-    // without a school marker), consistent with dedication cantrips.
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries).toHaveLength(1);
-    expect(innateEntries[0]!.spells).toEqual(["bramble-bush"]);
-  });
-
-  test("files the link cantrips in a focus entry and imports the focus pool", () => {
-    // Boost Eidolon and Evolution Surge have no engines — they resolve from
-    // the cached link-spells definition — and the class grants the focus
-    // point.
-    const focusEntry = result.spellcasting.find((e) => e.prepared === "focus");
-    expect(focusEntry).toBeDefined();
-    expect(focusEntry!.name).toBe("Link Spells");
-    expect(focusEntry!.tradition).toBe("primal");
-    expect(focusEntry!.spells).toEqual(["boost-eidolon", "evolution-surge"]);
-    expect(result.focus.value).toBe(1);
-    expect(result.focus.max).toBe(1);
-    expect(result.standaloneSpells).toEqual([]);
+    expectSpellcastingEntries(result, [
+      {
+        name: "Summoner Spells (Primal)",
+        prepared: "spontaneous",
+        tradition: "primal",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "500-toads",
+          "approximate",
+          "caustic-blast",
+          "create-earthen-facsimile",
+          "deep-breath",
+          "detect-magic",
+        ],
+        slots: { slot0: { max: 5, value: 5 }, slot1: { max: 1, value: 0 } },
+      },
+      {
+        // Bramble Bush comes from the awakened-animal heritage (a select-spell
+        // without a school marker), consistent with dedication cantrips.
+        name: "Awakened Magic (Innate)",
+        prepared: "innate",
+        tradition: "primal",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["bramble-bush"],
+      },
+      {
+        // Boost Eidolon and Evolution Surge have no engines — they resolve
+        // from the cached link-spells definition — and the class grants the
+        // focus point.
+        name: "Link Spells",
+        prepared: "focus",
+        tradition: "primal",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["boost-eidolon", "evolution-surge"],
+      },
+    ]);
   });
 });
