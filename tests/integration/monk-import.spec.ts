@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
 } from "./helpers.js";
 
@@ -78,11 +79,18 @@ test.describe("Monk Import", () => {
   test("files the chosen qi spell in a focus Qi Spells entry", () => {
     // Qi Rush is picked through the qi-spells builder row — a focus spell,
     // not an innate spell.
-    const qi = result.spellcasting.find((e) => e.name === "Qi Spells");
-    expect(qi).toBeDefined();
-    expect(qi!.prepared).toBe("focus");
-    expect(qi!.tradition).toBe("occult");
-    expect(qi!.spells).toEqual(["qi-rush"]);
+    expectSpellcastingEntries(result, [
+      {
+        name: "Qi Spells",
+        prepared: "focus",
+        tradition: "occult",
+        ability: "wis",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["qi-rush"],
+      },
+    ]);
   });
 
   test("files no innate spells", () => {

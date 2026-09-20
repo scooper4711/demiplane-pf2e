@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
 } from "./helpers.js";
 
@@ -69,26 +70,33 @@ test.describe("Ranger Import", () => {
   test("files the warden spell in a divine focus Warden Spells entry", () => {
     // Distracting Decoy is picked through the warden-spell builder row — a
     // focus spell, not an innate spell. Warden spells are normally primal,
-    // but this vindication-edge ranger's are divine.
-    const warden = result.spellcasting.find((e) => e.name === "Warden Spells");
-    expect(warden).toBeDefined();
-    expect(warden!.prepared).toBe("focus");
-    expect(warden!.tradition).toBe("divine");
-    expect(warden!.spells).toEqual(["distracting-decoy"]);
-  });
-
-  test("files the vindication focus spell alongside the warden spell", () => {
-    // Vindicator's Mark arrives through the vindication edge definition (the
-    // hunter's-edge grant), not the character's engines. It is its own focus
-    // spell rather than a warden spell, so it files in a generic focus entry
-    // sharing the warden entry's divine tradition.
-    const focusEntries = result.spellcasting.filter((e) => e.prepared === "focus");
-    const names = focusEntries.map((e) => e.name).sort();
-    expect(names).toEqual(["Focus Spells", "Warden Spells"]);
-    const mark = focusEntries.find((e) => e.spells.includes("vindicators-mark"));
-    expect(mark).toBeDefined();
-    expect(mark!.tradition).toBe("divine");
-    expect(mark!.spells).toEqual(["vindicators-mark"]);
+    // but this vindication-edge ranger's are divine. Vindicator's Mark
+    // arrives through the vindication edge definition (the hunter's-edge
+    // grant), not the character's engines: its own focus spell rather than a
+    // warden spell, filing in a generic focus entry sharing the divine
+    // tradition.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Warden Spells",
+        prepared: "focus",
+        tradition: "divine",
+        ability: "wis",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["distracting-decoy"],
+      },
+      {
+        name: "Focus Spells",
+        prepared: "focus",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["vindicators-mark"],
+      },
+    ]);
   });
 
   test("files no innate spells", () => {

@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   setFreeArchetype,
   setGradualBoosts,
   setMythicRules,
@@ -93,8 +94,20 @@ test.describe("Exemplar Import", () => {
   });
 
   test("files the kitsune spells as innate", () => {
-    const innateEntries = result.spellcasting.filter((e) => e.prepared === "innate");
-    expect(innateEntries.flatMap((e) => e.spells)).toEqual(["daze", "forbidding-ward", "ghost-sound"]);
+    // Same unremastered Empty Sky chain as the psychic's (Ghost Sound, not
+    // Figment): divine grants resolved through the granted feat.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Innate Spells",
+        prepared: "innate",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["daze", "forbidding-ward", "ghost-sound"],
+      },
+    ]);
   });
 
   test("flags the unmapped lightning swap feat", () => {

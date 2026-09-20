@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
   type ImportResult,
 } from "./helpers.js";
@@ -69,33 +70,50 @@ test.describe("Necromancer Import", () => {
     // The eight chosen cantrips plus the five rank-1 spells. Harm has no
     // spell engine — it resolves from the necromancer-spellcasting definition
     // as a granted known spell — joining the book like any chosen spell.
-    const dirge = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(dirge).toBeDefined();
-    expect(dirge!.name).toBe("Necromancer Spells (Occult)");
-    expect(dirge!.spells).toEqual([
-      "concordant-choir",
-      "connective-current",
-      "cradle-aloft",
-      "curse-of-recoil",
-      "harm",
-      "haunting-hymn",
-      "illuminate",
-      "infectious-enthusiasm",
-      "inside-ropes",
-      "invoke-true-name",
-      "join-pasts",
-      "message",
-      "needle-darts",
-    ]);
-  });
-
-  test("applies main-entry slot maximums, all unused", () => {
-    const dirge = result.spellcasting.find((e) => e.prepared === "prepared" && e.tradition === "occult");
-    expect(dirge).toBeDefined();
     // Level-1 necromancer progression: five cantrips, one rank-1 slot.
     // Nothing cast, so every slot is full.
-    expect(dirge!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(dirge!.slots.slot1).toMatchObject({ max: 1, value: 1 });
+    expectSpellcastingEntries(result, [
+      {
+        name: "Necromancer Spells (Occult)",
+        prepared: "prepared",
+        tradition: "occult",
+        ability: "int",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "concordant-choir",
+          "connective-current",
+          "cradle-aloft",
+          "curse-of-recoil",
+          "harm",
+          "haunting-hymn",
+          "illuminate",
+          "infectious-enthusiasm",
+          "inside-ropes",
+          "invoke-true-name",
+          "join-pasts",
+          "message",
+          "needle-darts",
+        ],
+        slots: { slot0: { max: 5, value: 5 }, slot1: { max: 1, value: 1 } },
+      },
+      {
+        // Create Thrall and Thrall Charge (grave-cantrips grants shaped like
+        // repertoire grants, split by their definitions' focus flags),
+        // Necrotic Bomb (shares its engine with the grave focus point), and
+        // Dead Weight (parented at the grave focus group by the Flesh
+        // fascination) — never the repertoire grants above.
+        name: "Grave Spells",
+        prepared: "focus",
+        tradition: "occult",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["create-thrall", "dead-weight", "necrotic-bomb", "thrall-charge"],
+      },
+    ]);
   });
 
   test("places prepared spells with spent states in the main entry", () => {
@@ -114,19 +132,9 @@ test.describe("Necromancer Import", () => {
     expect(placed(dirge!, "slot1")).toEqual(["concordant-choir:ready"]);
   });
 
-  test("collects the grave spells into a focus Grave Spells entry", () => {
-    // Create Thrall and Thrall Charge (grave-cantrips grants shaped like
-    // repertoire grants, split by their definitions' focus flags), Necrotic
-    // Bomb (shares its engine with the grave focus point), and Dead Weight
-    // (parented at the grave focus group by the Flesh fascination).
-    const grave = result.spellcasting.find((e) => e.name === "Grave Spells");
-    expect(grave).toBeDefined();
-    expect(grave!.prepared).toBe("focus");
-    expect(grave!.tradition).toBe("occult");
-    expect(grave!.spells).toEqual(["create-thrall", "dead-weight", "necrotic-bomb", "thrall-charge"]);
-  });
-
   test("does not leak the granted harm into the focus entry", () => {
+    // Covered in full by the entry assertions above; this pins the
+    // regression explicitly (breathe-fire style misfiling).
     const grave = result.spellcasting.find((e) => e.name === "Grave Spells");
     expect(grave).toBeDefined();
     expect(grave!.spells).not.toContain("harm");

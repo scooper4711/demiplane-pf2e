@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
 } from "./helpers.js";
 
@@ -59,11 +60,18 @@ test.describe("Champion Import", () => {
   test("files the chosen devotion spell in a focus Devotion Spells entry", () => {
     // Shields of the Spirit is picked through the devotion-spells builder
     // row — a focus spell, not an innate spell.
-    const devotion = result.spellcasting.find((e) => e.name === "Devotion Spells");
-    expect(devotion).toBeDefined();
-    expect(devotion!.prepared).toBe("focus");
-    expect(devotion!.tradition).toBe("divine");
-    expect(devotion!.spells).toEqual(["shields-of-the-spirit"]);
+    expectSpellcastingEntries(result, [
+      {
+        name: "Devotion Spells",
+        prepared: "focus",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["shields-of-the-spirit"],
+      },
+    ]);
   });
 
   test("files no innate spells", () => {

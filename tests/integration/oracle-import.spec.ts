@@ -4,6 +4,7 @@ import {
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
+  expectSpellcastingEntries,
   stopCoverage,
 } from "./helpers.js";
 
@@ -54,40 +55,44 @@ test.describe("Oracle Import", () => {
   test("files the repertoire in a spontaneous divine entry", () => {
     // Player-chosen cantrips (rank 0) and rank-1 spells plus the Ashes
     // mystery grants (ignition cantrip, breathe fire rank 1) all join one
-    // spontaneous divine repertoire.
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "divine");
-    expect(repertoire).toBeDefined();
-    expect(repertoire!.name).toBe("Oracle Spells (Divine)");
-    expect(repertoire!.spells).toEqual([
-      "breathe-fire",
-      "defended-by-spirits",
-      "detect-poison",
-      "guidance",
-      "haunting-hymn",
-      "ignition",
-      "illuminate",
-      "inside-ropes",
-      "invoke-true-name",
+    // spontaneous divine repertoire. Level-1 oracle progression (5 cantrips,
+    // 3 rank-1); nothing cast, so every slot is full.
+    expectSpellcastingEntries(result, [
+      {
+        name: "Oracle Spells (Divine)",
+        prepared: "spontaneous",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: [
+          "breathe-fire",
+          "defended-by-spirits",
+          "detect-poison",
+          "guidance",
+          "haunting-hymn",
+          "ignition",
+          "illuminate",
+          "inside-ropes",
+          "invoke-true-name",
+        ],
+        slots: { slot0: { max: 5, value: 5 }, slot1: { max: 3, value: 3 } },
+      },
+      {
+        // Ashen Wind is the Ashes initial revelation spell — the only focus
+        // spell from that feature. The mystery's repertoire grants (ignition,
+        // breathe fire) belong in the spontaneous entry above, never here.
+        name: "Revelation Spells",
+        prepared: "focus",
+        tradition: "divine",
+        ability: "cha",
+        proficiency: 1,
+        flexible: false,
+        dcMechanic: "spell-attack",
+        spells: ["ashen-wind"],
+      },
     ]);
-  });
-
-  test("applies spontaneous slot maximums, all unused", () => {
-    const repertoire = result.spellcasting.find((e) => e.prepared === "spontaneous" && e.tradition === "divine");
-    expect(repertoire).toBeDefined();
-    // Level-1 oracle progression (5 cantrips, 3 rank-1); nothing cast.
-    expect(repertoire!.slots.slot0).toMatchObject({ max: 5, value: 5 });
-    expect(repertoire!.slots.slot1).toMatchObject({ max: 3, value: 3 });
-  });
-
-  test("files only the revelation spell in a focus Revelation Spells entry", () => {
-    // Ashen Wind is the Ashes initial revelation spell — the only focus spell
-    // from that feature. The mystery's repertoire grants (ignition,
-    // breathe fire) belong in the spontaneous entry above, never here.
-    const revelations = result.spellcasting.find((e) => e.name === "Revelation Spells");
-    expect(revelations).toBeDefined();
-    expect(revelations!.prepared).toBe("focus");
-    expect(revelations!.tradition).toBe("divine");
-    expect(revelations!.spells).toEqual(["ashen-wind"]);
   });
 
   test("does not leak repertoire spells into the focus entry", () => {
