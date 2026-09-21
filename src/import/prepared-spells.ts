@@ -54,7 +54,12 @@ function buildSlotEngineIdMap(preparedEngines: DemiplaneEngineEntry[]): Record<s
     if (!eng.args?.slug) continue;
     const rank = (eng.args?.selectionRank as number) ?? 0;
     const key = `slot${String(rank)}`;
-    (byRank[key] ??= []).push(typeof eng.demiplaneEngineId === "string" ? eng.demiplaneEngineId : "");
+    let ids = byRank[key];
+    if (ids === undefined) {
+      ids = [];
+      byRank[key] = ids;
+    }
+    ids.push(typeof eng.demiplaneEngineId === "string" ? eng.demiplaneEngineId : "");
   }
   return byRank;
 }
