@@ -12,19 +12,6 @@ function tlog(msg: string): void {
   debugLog(currentTag ? `[${currentTag}] ${msg}` : msg);
 }
 
-function contextOf(
-  choices: Choice[],
-  engines: DemiplaneEngineEntry[],
-  itemName?: string,
-  grantedFeatsByElement?: Map<string, Set<string>>,
-  actorTag?: string,
-  itemLevel?: number,
-  itemSlug?: string,
-  grantBuilderSelections?: Map<string, string>
-): MatcherContext {
-  return { choices, engines, itemName, grantedFeatsByElement, actorTag, itemLevel, itemSlug, grantBuilderSelections };
-}
-
 /**
  * Resolves a ChoiceSet's available options against the character's Demiplane
  * engines, returning the matching choice or null. Registered matchers run in
@@ -32,27 +19,8 @@ function contextOf(
  * fallback. New classes add a matcher file that self-registers (see
  * kineticist-matchers.ts) without touching this loop.
  */
-export function findMatchInChoices(
-  choices: Choice[],
-  engines: DemiplaneEngineEntry[],
-  itemName?: string,
-  grantedFeatsByElement?: Map<string, Set<string>>,
-  actorTag?: string,
-  itemLevel?: number,
-  itemSlug?: string,
-  grantBuilderSelections?: Map<string, string>
-): Choice | null {
-  currentTag = actorTag ?? "";
-  const ctx = contextOf(
-    choices,
-    engines,
-    itemName,
-    grantedFeatsByElement,
-    actorTag,
-    itemLevel,
-    itemSlug,
-    grantBuilderSelections
-  );
+export function findMatchInChoices(ctx: MatcherContext): Choice | null {
+  currentTag = ctx.actorTag ?? "";
 
   for (const matcher of registeredMatchers()) {
     const match = matcher.match(ctx);

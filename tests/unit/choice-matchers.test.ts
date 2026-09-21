@@ -52,12 +52,12 @@ describe("choice-matchers", () => {
       { label: "Crafting", value: "crafting" },
     ];
 
-    expect(findMatchInChoices(choices, [skillEngine("crafting")])).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: [skillEngine("crafting")] })).toBe(choices[1]);
   });
 
   it("returns null when no strategy matches anything", () => {
-    expect(findMatchInChoices([{ label: "X", value: "y" }], [])).toBeNull();
-    expect(findMatchInChoices([{ label: "X", value: 42 }], [skillEngine("arcana")])).toBeNull();
+    expect(findMatchInChoices({ choices: [{ label: "X", value: "y" }], engines: [] })).toBeNull();
+    expect(findMatchInChoices({ choices: [{ label: "X", value: 42 }], engines: [skillEngine("arcana")] })).toBeNull();
   });
 
   // A skill-increase engine scoped to a specific feat: sourceRow includes
@@ -83,7 +83,7 @@ describe("choice-matchers", () => {
       skillEngine("thievery"), // trained elsewhere; must not win
     ];
 
-    expect(findMatchInChoices(choices, engines, "Rogue Dedication")).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Rogue Dedication" })).toBe(choices[0]);
   });
 
   it("resolves a Captivator proficiency-suffixed choice via the feat-scoped selection", () => {
@@ -97,7 +97,9 @@ describe("choice-matchers", () => {
     const engines = [featSkillEngine("captivator-dedication", "diplomacy")];
 
     // First option whose skill is diplomacy (the trained variant).
-    expect(findMatchInChoices(choices, engines, "Captivator Dedication")).toBe(choices[2]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Captivator Dedication" })).toBe(
+      choices[2]
+    );
   });
 
   it("falls through when the feat-scoped skill is not among the options", () => {
@@ -109,56 +111,56 @@ describe("choice-matchers", () => {
     ];
     const engines = [featSkillEngine("captivator-dedication", "stealth")];
 
-    expect(findMatchInChoices(choices, engines, "Captivator Dedication")).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Captivator Dedication" })).toBeNull();
   });
 
   it("matches custom-selection lore scoped to the originating feat", () => {
     const choices = [{ label: "Forest Lore", value: "forest-lore" }];
     const engines = [loreEngine("Forest Lore", "assurance-rm-grant")];
 
-    expect(findMatchInChoices(choices, engines, "Assurance")).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Assurance" })).toBe(choices[0]);
   });
 
   it("matches lore by label slug when the value differs", () => {
     const choices = [{ label: "Forest Lore", value: "something-else" }];
     const engines = [loreEngine("Forest Lore", "assurance-grant")];
 
-    expect(findMatchInChoices(choices, engines, "Assurance")).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Assurance" })).toBe(choices[0]);
   });
 
   it("matches lore without scoping when no item name is given", () => {
     const choices = [{ label: "Forest Lore", value: "forest-lore" }];
     const engines = [loreEngine("Forest Lore")];
 
-    expect(findMatchInChoices(choices, engines)).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBe(choices[0]);
   });
 
   it("ignores lore engines scoped to a different feat", () => {
     const choices = [{ label: "Forest Lore", value: "forest-lore" }];
     const engines = [loreEngine("Forest Lore", "other-thing")];
 
-    expect(findMatchInChoices(choices, engines, "Assurance")).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Assurance" })).toBeNull();
   });
 
   it("ignores non-string choice values when matching lore", () => {
     const choices = [{ label: "X", value: 42 }];
     const engines = [loreEngine("Forest Lore")];
 
-    expect(findMatchInChoices(choices, engines)).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBeNull();
   });
 
   it("matches any Demiplane engine slug", () => {
     const choices = [{ label: "Power Attack", value: "power-attack" }];
     const engines = [demiEngine("tabula/feat/x.eng", "power-attack-rm")];
 
-    expect(findMatchInChoices(choices, engines)).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBe(choices[0]);
   });
 
   it("ignores non-string values when matching engine slugs", () => {
     const choices = [{ label: "X", value: null }];
     const engines = [demiEngine("tabula/feat/x.eng", "power-attack")];
 
-    expect(findMatchInChoices(choices, engines)).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBeNull();
   });
 
   it("matches class features by exact and suffix label slugs", () => {
@@ -166,9 +168,9 @@ describe("choice-matchers", () => {
     const suffixed = [{ label: "School of Evocation", value: "zzz" }];
     const engines = [demiEngine("tabula/class-feature/school-evocation.eng", "evocation")];
 
-    expect(findMatchInChoices(exact, engines)).toBe(exact[0]);
-    expect(findMatchInChoices(suffixed, engines)).toBe(suffixed[0]);
-    expect(findMatchInChoices([{ label: "Abjuration", value: "zzz" }], engines)).toBeNull();
+    expect(findMatchInChoices({ choices: exact, engines: engines })).toBe(exact[0]);
+    expect(findMatchInChoices({ choices: suffixed, engines: engines })).toBe(suffixed[0]);
+    expect(findMatchInChoices({ choices: [{ label: "Abjuration", value: "zzz" }], engines: engines })).toBeNull();
   });
 
   it("matches a fascination pick whose engine slug extends the label", () => {
@@ -188,9 +190,9 @@ describe("choice-matchers", () => {
     ];
 
     // Scoped by owning feature (the feature-pick strategy).
-    expect(findMatchInChoices(choices, engines, "Grim Fascination")).toBe(choices[2]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Grim Fascination" })).toBe(choices[2]);
     // Unscoped (the class-features strategy).
-    expect(findMatchInChoices(choices, engines)).toBe(choices[2]);
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBe(choices[2]);
   });
 
   it("resolves an Exemplar ikon whose label carries a possessive apostrophe", () => {
@@ -203,16 +205,20 @@ describe("choice-matchers", () => {
     ];
     const engines = [demiEngine("tabula/class-feature/barrows-edge-rm.eng", "barrows-edge-rm")];
 
-    expect(findMatchInChoices(choices, engines)).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBe(choices[1]);
   });
 
   it("matches generic features by substring, skipping compendium and empty values", () => {
     const engines = [demiEngine("tabula/generic-feature/darkvision.eng", "darkvision-low-light")];
 
-    expect(findMatchInChoices([{ label: "Low-Light Vision", value: "low-light" }], engines)?.value).toBe("low-light");
-    expect(findMatchInChoices([{ label: "X", value: "" }], engines)).toBeNull();
-    expect(findMatchInChoices([{ label: "X", value: "Compendium.pf2e.feats-srd.Item.y" }], engines)).toBeNull();
-    expect(findMatchInChoices([{ label: "X", value: "unrelated" }], engines)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: [{ label: "Low-Light Vision", value: "low-light" }], engines: engines })?.value
+    ).toBe("low-light");
+    expect(findMatchInChoices({ choices: [{ label: "X", value: "" }], engines: engines })).toBeNull();
+    expect(
+      findMatchInChoices({ choices: [{ label: "X", value: "Compendium.pf2e.feats-srd.Item.y" }], engines: engines })
+    ).toBeNull();
+    expect(findMatchInChoices({ choices: [{ label: "X", value: "unrelated" }], engines: engines })).toBeNull();
   });
 
   it("prefers the chosen weapon group over a coincidental owned-item slug", async () => {
@@ -229,19 +235,24 @@ describe("choice-matchers", () => {
       demiEngine("tabula/generic-feature/weapon-master-polearm.eng", "weapon-master-polearm"),
     ];
 
-    expect(findMatchInChoices(choices, engines)).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: engines })).toBe(choices[1]);
   });
 
   it("matches feat slugs against compendium choice labels", () => {
     const engines = [featEngine("power-attack")];
 
     const exact = [{ label: "Power Attack", value: "Compendium.pf2e.feats-srd.Item.pa" }];
-    expect(findMatchInChoices(exact, engines)).toBe(exact[0]);
+    expect(findMatchInChoices({ choices: exact, engines: engines })).toBe(exact[0]);
 
     const partial = [{ label: "Greater Power Attack", value: "Compendium.pf2e.feats-srd.Item.gpa" }];
-    expect(findMatchInChoices(partial, engines)).toBe(partial[0]);
+    expect(findMatchInChoices({ choices: partial, engines: engines })).toBe(partial[0]);
 
-    expect(findMatchInChoices([{ label: "Toughness", value: "Compendium.pf2e.feats-srd.Item.t" }], engines)).toBeNull();
+    expect(
+      findMatchInChoices({
+        choices: [{ label: "Toughness", value: "Compendium.pf2e.feats-srd.Item.t" }],
+        engines: engines,
+      })
+    ).toBeNull();
   });
 
   it("matches a class-suffixed feat slug against the unsuffixed label", () => {
@@ -256,9 +267,9 @@ describe("choice-matchers", () => {
       },
     ];
     const choices = [{ label: "Widen Spell", value: "Compendium.pf2e.feats-srd.Item.ws" }];
-    expect(findMatchInChoices(choices, engines, "School of Unified Magical Theory")?.value).toBe(
-      "Compendium.pf2e.feats-srd.Item.ws"
-    );
+    expect(
+      findMatchInChoices({ choices: choices, engines: engines, itemName: "School of Unified Magical Theory" })?.value
+    ).toBe("Compendium.pf2e.feats-srd.Item.ws");
   });
 
   it("scopes feat matching to the owning feature when several selections exist", () => {
@@ -283,21 +294,27 @@ describe("choice-matchers", () => {
       { label: "Widen Spell", value: "Compendium.pf2e.feats-srd.Item.ws" },
     ];
 
-    expect(findMatchInChoices(choices, engines, "School of Unified Magical Theory")?.label).toBe("Widen Spell");
-    expect(findMatchInChoices(choices, engines, "Experimental Spellshaping")?.label).toBe("Reach Spell");
+    expect(
+      findMatchInChoices({ choices: choices, engines: engines, itemName: "School of Unified Magical Theory" })?.label
+    ).toBe("Widen Spell");
+    expect(
+      findMatchInChoices({ choices: choices, engines: engines, itemName: "Experimental Spellshaping" })?.label
+    ).toBe("Reach Spell");
   });
 
   it("skips feat matching for non-compendium values", () => {
     const engines = [featEngine("power-attack")];
 
-    expect(findMatchInChoices([{ label: "Power Attack", value: "unrelated" }], engines)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: [{ label: "Power Attack", value: "unrelated" }], engines: engines })
+    ).toBeNull();
   });
 
   it("matches generic-choice keywords by value and label", () => {
     const engines = [demiEngine("tabula/generic-choice/canny-acumen.eng", "canny-acumen-save-option-will")];
 
-    expect(findMatchInChoices([{ label: "Will", value: "will" }], engines)?.value).toBe("will");
-    expect(findMatchInChoices([{ label: "will", value: "zzz" }], engines)?.label).toBe("will");
+    expect(findMatchInChoices({ choices: [{ label: "Will", value: "will" }], engines: engines })?.value).toBe("will");
+    expect(findMatchInChoices({ choices: [{ label: "will", value: "zzz" }], engines: engines })?.label).toBe("will");
   });
 
   it("matches a generic-choice pick by full engine-slug suffix", () => {
@@ -313,32 +330,32 @@ describe("choice-matchers", () => {
       { label: "Subterfuge Suit", value: "Compendium.pf2e.equipment-srd.Item.56CTZheeNhNPpLo1" },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Armor Innovation")).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Armor Innovation" })).toBe(choices[0]);
   });
 
   it("skips empty generic-choice keywords", () => {
     const engines = [demiEngine("tabula/generic-choice/trailing.eng", "trailing-")];
 
-    expect(findMatchInChoices([{ label: "Will", value: "will" }], engines)).toBeNull();
+    expect(findMatchInChoices({ choices: [{ label: "Will", value: "will" }], engines: engines })).toBeNull();
   });
 
   it("runs the item-scoped generic-choice pass only when the broad pass misses", () => {
     // Scoped filter matches nothing: early null without keyword logging.
     expect(
-      findMatchInChoices(
-        [{ label: "X", value: "zzz" }],
-        [demiEngine("tabula/generic-choice/other.eng", "unrelated-thing")],
-        "Canny Acumen"
-      )
+      findMatchInChoices({
+        choices: [{ label: "X", value: "zzz" }],
+        engines: [demiEngine("tabula/generic-choice/other.eng", "unrelated-thing")],
+        itemName: "Canny Acumen",
+      })
     ).toBeNull();
 
     // Scoped filter matches engines but keywords still miss.
     expect(
-      findMatchInChoices(
-        [{ label: "X", value: "zzz" }],
-        [demiEngine("tabula/generic-choice/canny.eng", "canny-acumen-foo")],
-        "Canny Acumen"
-      )
+      findMatchInChoices({
+        choices: [{ label: "X", value: "zzz" }],
+        engines: [demiEngine("tabula/generic-choice/canny.eng", "canny-acumen-foo")],
+        itemName: "Canny Acumen",
+      })
     ).toBeNull();
   });
 
@@ -454,13 +471,13 @@ describe("choice-matchers", () => {
       { label: "Sarenrae", value: "Compendium.pf2e.deities.Item.sarenrae" },
     ];
 
-    expect(findMatchInChoices(choices, [deityEngine("sarenrae-rm")])).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: [deityEngine("sarenrae-rm")] })).toBe(choices[1]);
   });
 
   it("does not match a deity when the character's deity isn't among the options", () => {
     const choices = [{ label: "Abadar", value: "Compendium.pf2e.deities.Item.abadar" }];
 
-    expect(findMatchInChoices(choices, [deityEngine("sarenrae-rm")])).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: [deityEngine("sarenrae-rm")] })).toBeNull();
   });
 
   it("matches a domain choice by value (fire-rm -> fire)", () => {
@@ -469,13 +486,13 @@ describe("choice-matchers", () => {
       { label: "Fire", value: "fire" },
     ];
 
-    expect(findMatchInChoices(choices, [domainEngine("fire-rm")])).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: [domainEngine("fire-rm")] })).toBe(choices[1]);
   });
 
   it("matches a domain choice by slugified label when the value differs", () => {
     const choices = [{ label: "Fire", value: "some-uuid" }];
 
-    expect(findMatchInChoices(choices, [domainEngine("fire-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: [domainEngine("fire-rm")] })).toBe(choices[0]);
   });
 
   // Muse and adopted-ancestry selections arrive as CustomDemiplaneEngine
@@ -505,13 +522,13 @@ describe("choice-matchers", () => {
       { label: "Polymath", value: "polymath" },
     ];
 
-    expect(findMatchInChoices(choices, [museEngine("enigma-archetype-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: [museEngine("enigma-archetype-rm")] })).toBe(choices[0]);
   });
 
   it("does not match a muse the character didn't take", () => {
     const choices = [{ label: "Maestro", value: "maestro" }];
 
-    expect(findMatchInChoices(choices, [museEngine("enigma-archetype-rm")])).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: [museEngine("enigma-archetype-rm")] })).toBeNull();
   });
 
   it("matches the Adopted Ancestry choice (human-rm -> human)", () => {
@@ -520,7 +537,7 @@ describe("choice-matchers", () => {
       { label: "Human", value: "human" },
     ];
 
-    expect(findMatchInChoices(choices, [adoptedAncestryEngine("human-rm")])).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: [adoptedAncestryEngine("human-rm")] })).toBe(choices[1]);
   });
 
   // An ancestry weapon choice (Clan Dagger vs Clan Pistol): the chosen weapon is
@@ -553,19 +570,19 @@ describe("choice-matchers", () => {
       { label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" },
     ];
 
-    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: [grantedItemEngine("clan-dagger-rm")] })).toBe(choices[0]);
   });
 
   it("matches an item choice by slug value when the ChoiceSet is slug-valued", () => {
     const choices = [{ label: "Clan Dagger", value: "clan-dagger" }];
 
-    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: [grantedItemEngine("clan-dagger-rm")] })).toBe(choices[0]);
   });
 
   it("does not match an item choice the character doesn't own", () => {
     const choices = [{ label: "Clan Pistol", value: "Compendium.pf2e.equipment-srd.Item.cp" }];
 
-    expect(findMatchInChoices(choices, [grantedItemEngine("clan-dagger-rm")])).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: [grantedItemEngine("clan-dagger-rm")] })).toBeNull();
   });
 
   it("ignores a manually-added item when resolving an element's grant choice", () => {
@@ -576,7 +593,7 @@ describe("choice-matchers", () => {
 
     // The character bought a Clan Dagger by hand, but the ancestry didn't grant
     // one — the grant ChoiceSet must not be resolved off manual inventory.
-    expect(findMatchInChoices(choices, [manualItemEngine("clan-dagger-rm")])).toBeNull();
+    expect(findMatchInChoices({ choices: choices, engines: [manualItemEngine("clan-dagger-rm")] })).toBeNull();
   });
 
   // The Inventor's Weapon Innovation ChoiceSet offers every weapon; the base
@@ -591,7 +608,7 @@ describe("choice-matchers", () => {
     const choices = weaponInnovationChoices();
     const engines = [manualItemEngine("gnome-hooked-hammer-rm"), manualItemEngine("breastplate-rm")];
 
-    expect(findMatchInChoices(choices, engines, "Weapon Innovation")).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Weapon Innovation" })).toBe(choices[1]);
   });
 
   it("resolves Weapon Innovation by slug value when the ChoiceSet is slug-valued", () => {
@@ -600,9 +617,13 @@ describe("choice-matchers", () => {
       { label: "Gnome Hooked Hammer", value: "gnome-hooked-hammer" },
     ];
 
-    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Weapon Innovation")).toBe(
-      choices[1]
-    );
+    expect(
+      findMatchInChoices({
+        choices: choices,
+        engines: [manualItemEngine("gnome-hooked-hammer-rm")],
+        itemName: "Weapon Innovation",
+      })
+    ).toBe(choices[1]);
   });
 
   it("does not apply the Weapon Innovation strategy to other ChoiceSets", () => {
@@ -610,11 +631,19 @@ describe("choice-matchers", () => {
     // fallback must not fire here (it would defeat the isGrantedByElement guard).
     const choices = weaponInnovationChoices();
 
-    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Some Other Choice")).toBeNull();
+    expect(
+      findMatchInChoices({
+        choices: choices,
+        engines: [manualItemEngine("gnome-hooked-hammer-rm")],
+        itemName: "Some Other Choice",
+      })
+    ).toBeNull();
   });
 
   it("returns null for Weapon Innovation when the character owns no items", () => {
-    expect(findMatchInChoices(weaponInnovationChoices(), [], "Weapon Innovation")).toBeNull();
+    expect(
+      findMatchInChoices({ choices: weaponInnovationChoices(), engines: [], itemName: "Weapon Innovation" })
+    ).toBeNull();
   });
 
   it("returns null for Weapon Innovation when no owned item is among the options", () => {
@@ -625,7 +654,13 @@ describe("choice-matchers", () => {
       { label: "Longsword", value: 42 },
     ];
 
-    expect(findMatchInChoices(choices, [manualItemEngine("gnome-hooked-hammer-rm")], "Weapon Innovation")).toBeNull();
+    expect(
+      findMatchInChoices({
+        choices: choices,
+        engines: [manualItemEngine("gnome-hooked-hammer-rm")],
+        itemName: "Weapon Innovation",
+      })
+    ).toBeNull();
   });
 
   // A background (Total Power) that grants a fixed feat Foundry models as a
@@ -642,7 +677,9 @@ describe("choice-matchers", () => {
     ];
     const map = grantedFeats("total-power", ["bone-spikes", "intimidating-glare"]);
 
-    expect(findMatchInChoices(choices, [], "Total Power", map)).toBe(choices[1]);
+    expect(
+      findMatchInChoices({ choices: choices, engines: [], itemName: "Total Power", grantedFeatsByElement: map })
+    ).toBe(choices[1]);
   });
 
   it("matches a granted feat by slug value when the ChoiceSet is slug-valued", () => {
@@ -652,7 +689,9 @@ describe("choice-matchers", () => {
     ];
     const map = grantedFeats("total-power", ["bone-spikes"]);
 
-    expect(findMatchInChoices(choices, [], "Total Power", map)).toBe(choices[1]);
+    expect(
+      findMatchInChoices({ choices: choices, engines: [], itemName: "Total Power", grantedFeatsByElement: map })
+    ).toBe(choices[1]);
   });
 
   it("ignores granted feats when the ChoiceSet item is a different element", () => {
@@ -662,7 +701,9 @@ describe("choice-matchers", () => {
     ];
     const map = grantedFeats("some-other-background", ["bone-spikes"]);
 
-    expect(findMatchInChoices(choices, [], "Total Power", map)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: choices, engines: [], itemName: "Total Power", grantedFeatsByElement: map })
+    ).toBeNull();
   });
 
   it("does not resolve when neither option is a granted feat", () => {
@@ -672,7 +713,9 @@ describe("choice-matchers", () => {
     ];
     const map = grantedFeats("total-power", ["bone-spikes"]);
 
-    expect(findMatchInChoices(choices, [], "Total Power", map)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: choices, engines: [], itemName: "Total Power", grantedFeatsByElement: map })
+    ).toBeNull();
   });
 
   it("matches the eidolon ChoiceSet against the tabula eidolon engine", () => {
@@ -690,7 +733,7 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Eidolon")).toBe(choices[1]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Eidolon" })).toBe(choices[1]);
   });
 
   it("matches a feature's ChoiceSet against the engine picked for it", () => {
@@ -708,7 +751,9 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(evoChoices, evoEngines, "Evolution Feat")).toBe(evoChoices[1]);
+    expect(findMatchInChoices({ choices: evoChoices, engines: evoEngines, itemName: "Evolution Feat" })).toBe(
+      evoChoices[1]
+    );
   });
 
   it("matches an order ChoiceSet by label prefix", () => {
@@ -726,7 +771,7 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Druidic Order")).toBe(choices[0]);
+    expect(findMatchInChoices({ choices: choices, engines: engines, itemName: "Druidic Order" })).toBe(choices[0]);
   });
 
   it("matches a gate threshold to the fork taken at its level", () => {
@@ -743,7 +788,15 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Gate's Threshold", undefined, "", 5)).toBe(choices[1]);
+    expect(
+      findMatchInChoices({
+        choices: choices,
+        engines: engines,
+        itemName: "Gate's Threshold",
+        actorTag: "",
+        itemLevel: 5,
+      })
+    ).toBe(choices[1]);
   });
 
   it("matches a threshold by slug ordinal without an item level", () => {
@@ -761,15 +814,13 @@ describe("choice-matchers", () => {
     ];
 
     expect(
-      findMatchInChoices(
-        choices,
-        engines,
-        "Second Gate's Threshold",
-        undefined,
-        "",
-        undefined,
-        "second-gates-threshold"
-      )
+      findMatchInChoices({
+        choices: choices,
+        engines: engines,
+        itemName: "Second Gate's Threshold",
+        actorTag: "",
+        itemSlug: "second-gates-threshold",
+      })
     ).toBe(choices[1]);
   });
 
@@ -795,7 +846,15 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Fourth Gate's Threshold", undefined, "", 17)).toBe(choices[1]);
+    expect(
+      findMatchInChoices({
+        choices: choices,
+        engines: engines,
+        itemName: "Fourth Gate's Threshold",
+        actorTag: "",
+        itemLevel: 17,
+      })
+    ).toBe(choices[1]);
   });
 
   it("leaves an unforked threshold to the noisy fallback", () => {
@@ -804,7 +863,9 @@ describe("choice-matchers", () => {
       { label: "Fork the Path", value: "fork" },
     ];
 
-    expect(findMatchInChoices(choices, [], "Gate's Threshold", undefined, "", 5)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: choices, engines: [], itemName: "Gate's Threshold", actorTag: "", itemLevel: 5 })
+    ).toBeNull();
   });
 
   it("ignores non-threshold choices", () => {
@@ -821,7 +882,9 @@ describe("choice-matchers", () => {
       },
     ];
 
-    expect(findMatchInChoices(choices, engines, "Kinetic Gate", undefined, "", 1)).toBeNull();
+    expect(
+      findMatchInChoices({ choices: choices, engines: engines, itemName: "Kinetic Gate", actorTag: "", itemLevel: 1 })
+    ).toBeNull();
   });
 
   it("matches elementOne/elementTwo to the taken gates in order", () => {
