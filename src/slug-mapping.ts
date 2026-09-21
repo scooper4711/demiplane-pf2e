@@ -195,19 +195,7 @@ export async function importMappings(
     if (!forKind) continue;
 
     for (const [slug, mapping] of Object.entries(forKind)) {
-      if (!options.overwrite && getMapping(kind, slug)) {
-        result.skippedExisting++;
-        continue;
-      }
-      if (!(await isMappingResolvable(mapping))) {
-        result.skippedMissing++;
-        if (result.missingSamples.length < MISSING_SAMPLE_LIMIT) {
-          result.missingSamples.push(`${slug} → ${mapping.name}`);
-        }
-        continue;
-      }
-      await setMapping(kind, slug, mapping);
-      result.imported++;
+      await importMappingEntry(kind, slug, mapping, options, result);
     }
   }
 
@@ -219,3 +207,30 @@ export async function importMappings(
 
 /** How many skipped-missing entries to name in the import summary before "…and N more". */
 const MISSING_SAMPLE_LIMIT = 10;
+
+/**
+ * Merges one exported mapping: skips entries whose target is missing here or
+ * (without overwrite) already mapped locally, so importing never writes a
+ * broken mapping or silently replaces a deliberate local choice.
+ */
+async function importMappingEntry(
+  kind: SlugKind,
+  slug: string,
+  mapping: SlugMapping,
+  options: { overwrite: boolean },
+  result: MappingsImportResult
+): Promise<void> {
+  if (!options.overwrite && getMapping(kind, slug)) {
+    result.skippedExisting++;
+    return;
+  }
+  if (!(await isMappingResolvable(mapping))) {
+    result.skippedMissing++;
+    if (result.missingSamples.length < MISSING_SAMPLE_LIMIT) {
+      result.missingSamples.push(`${slug} → ${mapping.name}`);
+    }
+    return;
+  }
+  await setMapping(kind, slug, mapping);
+  result.imported++;
+}
