@@ -102,8 +102,8 @@ export class ChoiceSetHandler {
   private static originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private static patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private static usingLibWrapper = false;
-  private static activeByActorId = new Map<string, ChoiceSetHandler>();
-  private static activeHandlers = new Set<ChoiceSetHandler>();
+  private static readonly activeByActorId = new Map<string, ChoiceSetHandler>();
+  private static readonly activeHandlers = new Set<ChoiceSetHandler>();
   private static patchRefCount = 0;
 
   private importMode = false;
