@@ -188,7 +188,6 @@ test.describe("Kyra Soft Delete", () => {
   });
 
   test("full sync hard-deletes at quantity 0 and does not skip on re-import", async ({ browser }) => {
-    test.skip(!DEMIPLANE_TOKEN || !CHARACTER_UUID, "DEMIPLANE_TOKEN and KYRA_UUID env vars required");
     test.setTimeout(600_000);
 
     const client = new DemiplaneClient();
