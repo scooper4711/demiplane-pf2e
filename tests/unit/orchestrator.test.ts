@@ -173,38 +173,32 @@ describe("ImportOrchestrator", () => {
     expect(actor.setFlag).toHaveBeenCalledWith("demiplane-pf2e", "lastImportTimestamp", expect.any(Number));
   });
 
-  it("surfaces a non-token GraphQL error verbatim", async () => {
+  it.each([
+    {
+      name: "surfaces a non-token GraphQL error verbatim",
+      rejection: 'GraphQL errors: field "foo" not found',
+      expected: "GraphQL",
+    },
+    {
+      name: "translates a token-rejection failure into plain language",
+      rejection: "GraphQL errors: unauthorized",
+      expected: "Demiplane rejected the token",
+    },
+    {
+      // The client throws `Character not found: <id>` for an empty result set.
+      name: "handles missing character",
+      rejection: "Character not found: test-uuid",
+      expected: "Character not found",
+    },
+  ])("$name", async ({ rejection, expected }) => {
     const client = createMockClient({
-      fetchCharacterData: vi.fn().mockRejectedValue(new Error('GraphQL errors: field "foo" not found')),
+      fetchCharacterData: vi.fn().mockRejectedValue(new Error(rejection)),
     });
     const orchestrator = new ImportOrchestrator(client as never);
     const actor = createMockActor();
     const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
 
-    expect(summary.errors[0]).toContain("GraphQL");
-  });
-
-  it("translates a token-rejection failure into plain language", async () => {
-    const client = createMockClient({
-      fetchCharacterData: vi.fn().mockRejectedValue(new Error("GraphQL errors: unauthorized")),
-    });
-    const orchestrator = new ImportOrchestrator(client as never);
-    const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "bad-token" });
-
-    expect(summary.errors[0]).toContain("Demiplane rejected the token");
-  });
-
-  it("handles missing character", async () => {
-    // The client throws `Character not found: <id>` for an empty result set.
-    const client = createMockClient({
-      fetchCharacterData: vi.fn().mockRejectedValue(new Error("Character not found: test-uuid")),
-    });
-    const orchestrator = new ImportOrchestrator(client as never);
-    const actor = createMockActor();
-    const summary = await orchestrator.importCharacter(actor as never, "test-uuid", { token: "token" });
-
-    expect(summary.errors[0]).toContain("Character not found");
+    expect(summary.errors[0]).toContain(expected);
   });
 
   it("stores the server updated timestamp when present", async () => {
