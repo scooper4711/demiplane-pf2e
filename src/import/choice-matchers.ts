@@ -1,5 +1,11 @@
 import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug, generateSlugCandidates, rawEquipmentSlug, isGrantedByElement } from "./slug-utils.js";
+import {
+  toFoundrySlug,
+  generateSlugCandidates,
+  rawEquipmentSlug,
+  isGrantedByElement,
+  stripTrailingWord,
+} from "./slug-utils.js";
 import { debugLog } from "./debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
@@ -197,7 +203,7 @@ function matchEidolon(choices: Choice[], engines: DemiplaneEngineEntry[]): Choic
   tlog(`[ChoiceSet match] Eidolon strategy - eidolon slugs: [${eidolonSlugs.join(", ")}]`);
 
   for (const choice of choices) {
-    const labelSlug = toChoiceSlug(choice.label.replace(/\s+eidolon$/i, ""));
+    const labelSlug = toChoiceSlug(stripTrailingWord(choice.label, "eidolon"));
     if (eidolonSlugs.includes(labelSlug)) return choice;
   }
   return null;

@@ -8,9 +8,14 @@
  * updates. Anything unparseable falls back to previous behavior (unmapped).
  */
 
+import { slugifyFreeText, stripHtmlTags } from "./slug-utils.js";
+
 const JOURNALS_PACK = "pf2e.journals";
 const REMASTER_JOURNAL = "Remaster Changes";
 const LANGUAGES_PAGE = "Rules and Languages";
+
+/** Marker inside a rename sentence ("Abyssal is now Chthonian."). */
+const RENAME_MARKER = " is now ";
 
 /** Old language slug → new language slug, once loaded. */
 let cachedLanguageRenames: Map<string, string> | null = null;
@@ -29,21 +34,22 @@ export function parseLanguageRenames(pageText: string): Map<string, string> {
   const renames = new Map<string, string>();
   const languagesAt = pageText.indexOf("Languages");
   if (languagesAt < 0) return renames;
-  const section = pageText.slice(languagesAt);
-  for (const match of section.matchAll(/([A-Za-z][\w\s'-]*?)\s+is now\s+([\w\s'-]+)\./g)) {
-    const oldSlug = slugifyLanguage(match[1] ?? "");
-    const newSlug = slugifyLanguage(match[2] ?? "");
+  // Only period-terminated sentences count, matching the old "X is now Y."
+  // pattern. Plain indexOf scans keep this linear; the lazy-quantifier
+  // matchAll this replaces can backtrack super-linearly on long pages.
+  let rest = pageText.slice(languagesAt);
+  for (;;) {
+    const dot = rest.indexOf(".");
+    if (dot < 0) break;
+    const sentence = rest.slice(0, dot);
+    rest = rest.slice(dot + 1);
+    const at = sentence.indexOf(RENAME_MARKER);
+    if (at < 0) continue;
+    const oldSlug = slugifyFreeText(sentence.slice(0, at));
+    const newSlug = slugifyFreeText(sentence.slice(at + RENAME_MARKER.length));
     if (oldSlug !== "" && newSlug !== "") renames.set(oldSlug, newSlug);
   }
   return renames;
-}
-
-function slugifyLanguage(name: string): string {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 }
 
 /**
@@ -74,5 +80,5 @@ async function loadLanguageRenames(): Promise<Map<string, string>> {
   };
   const page = (journal.pages ?? []).find((p) => p.name === LANGUAGES_PAGE);
   const html = page?.text?.content ?? "";
-  return parseLanguageRenames(html.replace(/<[^>]+>/g, "\n"));
+  return parseLanguageRenames(stripHtmlTags(html));
 }

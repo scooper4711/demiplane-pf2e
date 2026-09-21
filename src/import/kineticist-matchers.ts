@@ -1,7 +1,7 @@
 import type { DemiplaneEngineEntry } from "./types.js";
 import type { Choice } from "./choice-set-types.js";
 import { toChoiceSlug } from "./choice-slug.js";
-import { toFoundrySlug } from "./slug-utils.js";
+import { toFoundrySlug, stripTrailingWord } from "./slug-utils.js";
 import { debugLog } from "./debug-log.js";
 import { registerChoiceMatcher, type MatcherContext } from "./matcher-registry.js";
 import { registerClassChoices } from "./class-choice-config.js";
@@ -35,8 +35,8 @@ export const KINETICIST_CHOICES = {
   elementSuffix: "-kineticist",
   /** Source-row marker for directly-taken (level-1, non-fork) elements. */
   directElementRowMarker: "element-kineticist",
-  /** Label suffix stripped when matching gate options ("Wood Gate" → wood). */
-  gateLabelSuffix: /\s+gate$/i,
+  /** Trailing word stripped when matching gate options ("Wood Gate" → wood). */
+  gateLabelWord: "gate",
 } as const;
 
 registerClassChoices({
@@ -144,7 +144,7 @@ function matchGateChoice(
 ): Choice | null {
   tlog(actorTag, `[ChoiceSet match] Kinetic element strategy - ${flag}: ${elementSlug}`);
   for (const choice of choices) {
-    if (toChoiceSlug(choice.label.replace(KINETICIST_CHOICES.gateLabelSuffix, "")) === elementSlug) return choice;
+    if (toChoiceSlug(stripTrailingWord(choice.label, KINETICIST_CHOICES.gateLabelWord)) === elementSlug) return choice;
   }
   return null;
 }

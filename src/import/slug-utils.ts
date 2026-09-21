@@ -278,3 +278,72 @@ export function genericConsumableSlug(itemType: "scroll" | "wand", rank: number)
   const ordinal = rankOrdinal(rank);
   return itemType === "scroll" ? `scroll-of-${ordinal}-rank-spell` : `magic-wand-${ordinal}-rank-spell`;
 }
+
+/**
+ * Strips a trailing word from a label, case-insensitively ("Wood Gate" →
+ * "Wood"). Only strips at a whitespace boundary, so a label that is just
+ * the word is left alone. String scans keep this linear; the `/\s+word$/i`
+ * regexes this replaces can backtrack super-linearly on long labels.
+ */
+export function stripTrailingWord(label: string, word: string): string {
+  const trimmed = label.trimEnd();
+  if (trimmed.length <= word.length) return label;
+  if (!trimmed.toLowerCase().endsWith(word.toLowerCase())) return label;
+  const cut = trimmed.slice(0, -word.length);
+  if (cut === "" || !/\s/.test(cut[cut.length - 1] ?? "")) return label;
+  return cut.trimEnd();
+}
+
+/** Single alphanumeric character (Unicode-aware), for linear trim scans. */
+function isAlphanumericChar(ch: string): boolean {
+  return /\p{L}|\p{N}/u.test(ch);
+}
+
+/**
+ * Trims leading/trailing characters that are not Unicode letters or numbers.
+ * Demiplane free text can carry trailing punctuation ("Akitonian.") that
+ * would otherwise miss the compendium slug by one character, while non-ASCII
+ * names (umlauts, accents) survive instead of being stripped.
+ */
+export function trimNonAlphanumeric(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && !isAlphanumericChar(value[start] ?? "")) start++;
+  while (end > start && !isAlphanumericChar(value[end - 1] ?? "")) end--;
+  return value.slice(start, end);
+}
+
+/**
+ * Normalizes Demiplane free text to a compendium slug (" Akitonian. " →
+ * "akitonian"). Shared by language matching and remaster-rename parsing so
+ * the pipeline stays identical everywhere.
+ */
+export function slugifyFreeText(value: string): string {
+  return trimNonAlphanumeric(value.trim().toLowerCase().replace(/\s+/g, "-"));
+}
+
+/**
+ * Replaces HTML tags with newlines, without regex. The `/<[^>]+>/g` pattern
+ * this replaces backtracks on malformed markup; a one-pass scan is linear.
+ */
+export function stripHtmlTags(html: string): string {
+  let out = "";
+  let inTag = false;
+  for (let i = 0; i < html.length; i++) {
+    const ch = html[i];
+    if (!inTag && ch === "<" && isTagStart(html[i + 1] ?? "")) {
+      inTag = true;
+      out += "\n";
+    } else if (inTag && ch === ">") {
+      inTag = false;
+    } else if (!inTag) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+/** First character of a real tag open (`<p>`, `</p>`, `<!--`, `<?`). */
+function isTagStart(ch: string): boolean {
+  return ch === "/" || ch === "!" || ch === "?" || (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z");
+}
