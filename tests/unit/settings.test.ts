@@ -298,7 +298,7 @@ describe("settings", () => {
       const cb = settingsCallback();
       expect(cb).toBeTypeOf("function");
 
-      const hintEl = { textContent: "initial", setAttribute: vi.fn() } as unknown as HTMLElement;
+      const hintEl = { textContent: "initial", dataset: {} as Record<string, string> } as unknown as HTMLElement;
       const hintQuery = vi.fn((sel: string) =>
         String(sel).includes("hint") || String(sel).includes("notes") ? hintEl : null
       );
@@ -321,7 +321,7 @@ describe("settings", () => {
 
       // Immediately reflects the pending selection, not just the saved value.
       expect(hintEl.textContent).toContain("Biography and appearance");
-      expect(hintEl.setAttribute).toHaveBeenCalledWith("data-write-level", "story");
+      expect(hintEl.dataset.writeLevel).toBe("story");
 
       // Simulate the GM picking another value — hint updates live via the
       // change listener, without pressing Save.
@@ -332,7 +332,7 @@ describe("settings", () => {
       (writeSelect as { value: string }).value = "full";
       changeHandler!();
       expect(hintEl.textContent).toContain("actually removes it from Demiplane");
-      expect(hintEl.setAttribute).toHaveBeenCalledWith("data-write-level", "full");
+      expect(hintEl.dataset.writeLevel).toBe("full");
     });
   });
 });

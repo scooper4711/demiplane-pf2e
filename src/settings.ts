@@ -161,7 +161,7 @@ function enhanceWriteLevelHint(html: SettingsHtml): void {
       hint.textContent = desc;
     }
     // Small affordance for tests / styling: exposes which level is displayed.
-    hint.setAttribute("data-write-level", val);
+    hint.dataset.writeLevel = val;
   };
 
   // Avoid double-binding if Foundry re-renders the same DOM node.
