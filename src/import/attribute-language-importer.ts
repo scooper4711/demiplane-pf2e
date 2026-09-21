@@ -1,6 +1,7 @@
 import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
 import { characterSystem, pf2eLanguages } from "../pf2e-types.js";
 import { PROFICIENCY_LEGENDARY } from "./pf2e-ranks.js";
+import { slugifyFreeText } from "./slug-utils.js";
 import { resolveRemasterLanguage } from "./remaster-renames.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
@@ -231,17 +232,7 @@ export async function applyLanguages(
 
   const rawLanguages = (langEngine.value as string)
     .split(/[,\n\r;]+/)
-    .map((l) =>
-      l
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, "-")
-        // Demiplane free text can carry trailing punctuation ("Akitonian.")
-        // that would otherwise miss the compendium slug by one character.
-        // Use Unicode letter/number classes so non-ASCII language names
-        // (e.g. umlauts, accents) survive trimming instead of being stripped.
-        .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
-    )
+    .map((l) => slugifyFreeText(l))
     .filter(Boolean);
 
   const validLanguages = Object.keys(pf2eLanguages());

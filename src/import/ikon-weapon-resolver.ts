@@ -114,9 +114,14 @@ export class IkonWeaponResolver {
     if (toAssign.length === 0) return new Map();
 
     const assignments = resolveIkonWeapons(toAssign, equippedWeaponId !== undefined ? { equippedWeaponId } : {});
-    debugLog(`[ikon] assignments: ${[...assignments].map(([k, v]) => `${k}->${v ?? "none"}`).join(", ")}`);
+    debugLog(`[ikon] assignments: ${[...assignments].map(describeAssignment).join(", ")}`);
     return assignments;
   }
+}
+
+/** One ikon assignment for the debug log (`ikon-id->weapon-id`, or `->none`). */
+function describeAssignment([ikonId, weaponId]: [string, string | null]): string {
+  return `${ikonId}->${weaponId ?? "none"}`;
 }
 
 /** Whether an item is a weapon ikon: it carries an `existingIkon` ChoiceSet rule. */

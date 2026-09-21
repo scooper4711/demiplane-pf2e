@@ -102,8 +102,8 @@ export class ChoiceSetHandler {
   private static originalPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private static patchedPreCreate: ((...args: unknown[]) => Promise<void>) | null = null;
   private static usingLibWrapper = false;
-  private static activeByActorId = new Map<string, ChoiceSetHandler>();
-  private static activeHandlers = new Set<ChoiceSetHandler>();
+  private static readonly activeByActorId = new Map<string, ChoiceSetHandler>();
+  private static readonly activeHandlers = new Set<ChoiceSetHandler>();
   private static patchRefCount = 0;
 
   private importMode = false;
@@ -373,16 +373,16 @@ export class ChoiceSetHandler {
       `[${this.actorTag()}] ChoiceSet presented choices: ${this.describeChoices(context.choices)}; looking for: [${candidateSlugs.join(", ")}]`
     );
 
-    const matched = findMatchInChoices(
-      context.choices,
-      this.currentEngines,
-      context.item.name,
-      this.grantedFeatsByElement,
-      this.actorTag(),
-      itemLevelFromSource(params),
-      context.item.slug ?? undefined,
-      this.grantBuilderSelections
-    );
+    const matched = findMatchInChoices({
+      choices: context.choices,
+      engines: this.currentEngines,
+      itemName: context.item.name,
+      grantedFeatsByElement: this.grantedFeatsByElement,
+      actorTag: this.actorTag(),
+      itemLevel: itemLevelFromSource(params),
+      itemSlug: context.item.slug ?? undefined,
+      grantBuilderSelections: this.grantBuilderSelections,
+    });
     await this.resolveFallbackChoice(context, params, matched, candidateSlugs);
   }
 

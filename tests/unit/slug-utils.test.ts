@@ -10,6 +10,10 @@ import {
   rawEquipmentSlug,
   rankOrdinal,
   genericConsumableSlug,
+  stripTrailingWord,
+  trimNonAlphanumeric,
+  slugifyFreeText,
+  stripHtmlTags,
 } from "../../src/import/slug-utils.js";
 
 describe("toFoundrySlug", () => {
@@ -356,5 +360,44 @@ describe("genericConsumableSlug", () => {
   it("round-trips with normalizeEquipmentSlug for the generic Demiplane slugs", () => {
     expect(genericConsumableSlug("scroll", 2)).toBe(normalizeEquipmentSlug("magic-scroll-2nd-rank-rm"));
     expect(genericConsumableSlug("wand", 1)).toBe(normalizeEquipmentSlug("magic-wand-1st-rank-rm"));
+  });
+});
+
+describe("stripTrailingWord", () => {
+  it("strips a trailing word case-insensitively at a whitespace boundary", () => {
+    expect(stripTrailingWord("Wood Gate", "gate")).toBe("Wood");
+    expect(stripTrailingWord("Beast Eidolon", "eidolon")).toBe("Beast");
+    expect(stripTrailingWord("BEAST EIDOLON", "eidolon")).toBe("BEAST");
+  });
+
+  it("leaves the label alone without a boundary or match", () => {
+    expect(stripTrailingWord("Gate", "gate")).toBe("Gate");
+    expect(stripTrailingWord("Longsword", "gate")).toBe("Longsword");
+    expect(stripTrailingWord("Gateway", "gate")).toBe("Gateway");
+  });
+});
+
+describe("trimNonAlphanumeric", () => {
+  it("trims punctuation while keeping non-ASCII letters", () => {
+    expect(trimNonAlphanumeric("Akitonian.")).toBe("Akitonian");
+    expect(trimNonAlphanumeric("..Sakvroth!!")).toBe("Sakvroth");
+    expect(trimNonAlphanumeric("Jotunborn")).toBe("Jotunborn");
+  });
+});
+
+describe("slugifyFreeText", () => {
+  it("lowercases, dashes whitespace, and trims punctuation", () => {
+    expect(slugifyFreeText(" Akitonian. ")).toBe("akitonian");
+    expect(slugifyFreeText("First World")).toBe("first-world");
+  });
+});
+
+describe("stripHtmlTags", () => {
+  it("replaces tags with newlines and keeps text", () => {
+    expect(stripHtmlTags("<p>Abyssal is now Chthonian.</p>")).toBe("\nAbyssal is now Chthonian.\n");
+  });
+
+  it("leaves non-tag angle brackets alone", () => {
+    expect(stripHtmlTags("a < b")).toBe("a < b");
   });
 });
