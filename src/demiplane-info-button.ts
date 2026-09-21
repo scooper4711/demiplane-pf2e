@@ -169,11 +169,12 @@ function buildDialogButtons(
 function buildPushButton(actor: Actor, exportCharacter: ExportCharacterFn): DialogV2Button {
   const writingOn = isWritingEnabled();
   const syncing = isSyncActive(actor);
-  const tooltip = !writingOn
-    ? "Set a “Write to Demiplane” level in the module settings to push to Demiplane."
-    : syncing
-      ? "An import or push is already in progress for this character."
-      : "";
+  let tooltip = "";
+  if (!writingOn) {
+    tooltip = "Set a “Write to Demiplane” level in the module settings to push to Demiplane.";
+  } else if (syncing) {
+    tooltip = "An import or push is already in progress for this character.";
+  }
   return {
     action: "push",
     label: "Push to Demiplane",
