@@ -5,6 +5,370 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-09-21
+
+### Added
+
+- chase granted builder selections for their spell grants
+- route warden selections to a primal Warden Spells focus entry
+- authoritative slot maximums; archetype slots from feat definitions
+- treat archetype spellcasting like its base class; assert kormir import
+- resolve kineticist gates and junctions; label choices with item and level
+- count known cantrips as last-resort slot source; assert summoner import
+- import animist spellcasting, apparition entry, vessel focus, remaster renames
+- resolve slots from feature definitions and repertoire cantrips
+- resolve summoner link spells from cached definitions, not hardcode
+- grant universal summoner link cantrips as focus
+- resolve eidolon and feature-pick choices; alarm on slotless and linkless imports
+- teach magus spellcasting, tagged slot pools, and focus rank gating
+- copy, dump, and restore scripts for demiplane fixture characters
+- file runescarred spell runes as innate spells
+- surface unknown spellcasting sources as sync errors, not silent skips
+- file school spells in their own entry; fix focus-pool precedence
+- resolve equipment, formulas and deities across all compendium packs
+- resolve compendium items across official and third-party packs
+- friendlier bearer-token handling for non-technical users
+- rework write permissions to capability-gated read-only/story/session/full
+- notify other eligible writers when a character syncs
+- import current shield hit points
+- include actor identity in ChoiceSet debug output
+- grey out import actions while that actor is syncing
+- unify sanctification into user choice overrides
+- user-specified ChoiceSet resolution as last resort
+- user-specified ChoiceSet resolution as last resort
+- auto-resolve Exemplar weapon-ikon 'existing weapon' choices
+- sync focus points and spontaneous spell slots
+- consistent start/complete toasts for every import
+- sync moving items in and out of containers
+- sync cast/expended prepared spell slots with Demiplane
+- import rituals into the Rituals section
+- import crafting formulas to the formulas section
+- export/import slug mappings across worlds
+- skip delete dialog for soft-delete; wrap dialog text
+- resolve feat-granting ChoiceSets from the granting element's grant list
+- resolve ancestry item ChoiceSets from present item engines
+- soft-delete option and honor Demiplane quantity of zero
+- tiered write-to-Demiplane setting with delete confirmation
+- add a search bar to the Demiplane Mapping screen
+- record resolved item mappings and surface unresolved carried spells
+- attach spells to wands and scrolls, and size items to the actor
+- import resilient armor runes
+- hide Feat Slot column for non-feats; match muse and adopted-ancestry choices
+- show feat-slot provenance for unmapped feats
+- let players set cleric/champion sanctification from the sync panel
+- bidirectional variant checks + Free Archetype; correct labels
+- flag variant-rule mismatches as sync issues
+- two-way sync for item investment
+- flag unresolved ChoiceSets as sync issues
+- show pre-release warning only on beta and dev builds
+- Bound the Demiplane dialog's issue lists in a scroll region
+- Show blue/red Demiplane logo as the sync indicator
+- Use libWrapper for ChoiceSet patch when available
+- Record all slug resolutions and rework the mapping editor
+- Show the sidebar Demiplane icon only to GMs and owners
+- Open the Demiplane dialog from the sidebar icon
+- Show Demiplane icon on linked actors in sidebar
+- Add dump_character_journals MCP tool
+- Sync biography Campaign Notes with Demiplane journal
+- two-way sync for organized play ID
+- export biography fields from Foundry to Demiplane
+- add semicolon as list separator for languages, edicts, and anathema
+- add Demiplane MCP server and CLI utility
+- added a mapping editor for demiplane slugs
+- add GM slug mapping screen
+- resolve GM-defined slug mappings ahead of the compendium
+- hide Demiplane titlebar button + red dot from non-GM/non-owners
+- permission-gate UI, opt-in pre-release warning, single-writer push election
+- propagate item deletions from Foundry to Demiplane
+- implement optimistic locking on push with server-updated check and auto re-import
+- add red sync-issue indicator to linked actor sheets
+- Sync hand slots and armor in-slot state to Demiplane
+- Sync item quantity and equipped state to Demiplane
+- Push session state changes to Demiplane via updateCharacterV2
+- Add Demiplane info button to actor sheet header
+- Add item spellcasting entries for staves and wands
+- Add post-delete logging to show remaining items on actor
+- Add feature-granted spell resolution from stream-engines
+- Add curriculum entry, prepared placement, and signature spells
+- Wire spell slot resolver into spell importer with logging
+- Add spell slot resolver for stream-engines and user overrides
+- Migrate dialogs to Foundry v14 DialogV2 API and improve type safety
+- Migrate to Foundry v14 DialogV2 API and update type definitions
+- Delegate class features to PF2e GrantItem rules
+- Switch to GM-configured token auth with validation and debug logging
+- Add pre-release warning dialog on module initialization
+
+### Fixed
+
+- resolve legacy bare spellcasting slugs to their class config
+- resize equipment after the ancestry item sets actor size
+- resolve base-slug formulas to their lesser variant
+- route machinery-less spellcasting-parent grants to focus
+- match archetype grant-builder selections to ChoiceSet options
+- match generic-choice picks by engine-slug suffix
+- preserve overview blob in soft-delete restores
+- preserve overview blob on direct character writes
+- import necromancer spells; add necromancer import test
+- route oracle mystery grants to repertoire; add oracle import test
+- scope repertoire cantrip fallback to its own feature
+- import witch hexes into a Hexes focus entry, not scattered spells
+- source Demiplane token from one place so push can't lose it
+- preserve non-ASCII characters when trimming imported language names
+- only merge granted known spells into imported repertoire entries
+- serialize overlapping auto-pushes per character to prevent false-conflict re-imports
+- correct moduleId reference in setWriteLevel polling
+- ui-interactions flake from sync grace window and menu pointer-events
+- prefer the chosen feature over a coincidental owned-item slug in ChoiceSets
+- only rename the prototype token when it holds the import placeholder
+- import shield reinforcing runes
+- prefix ChoiceSet match logs with actor identity
+- make ChoiceSet resolution thread-safe for concurrent imports
+- replace fixed dialog waits with render flush and toHaveCount
+- locale-aware ikon tie-break sort and parameterized unit tests
+- soft-delete spec for prompt-less soft deletes
+- scope a multi-take feat's generic choice to its own instance
+- keep both copies of a feat taken more than once
+- build ikon resolver from the engine list, not tempItems
+- read ikon existingIkon predicate from _source, not prepared rules
+- guard null rollOption in the ikon origin ChoiceSet check
+- match ChoiceSet options whose label has a possessive apostrophe
+- resolve the Inventor Weapon Innovation choice to the owned weapon
+- import background lore subjects named via a _lore_name override
+- import the class key attribute for choice classes
+- import Master rank for skills trained outside a selection engine
+- resolve feat skill-training choices with non-slug option values
+- don't block module init on the pre-release warning dialog
+- import skill proficiency ranks by counting selection engines
+- route focus-point spells to a focus entry regardless of tradition
+- route known/focus granted spells correctly and name class entries
+- route known granted spells to the repertoire, not focus
+- import a renamed container's custom name
+- identify containers by engine id so multiple containers work
+- clear stale container link on full re-sync push
+- recover from push conflicts based on write level
+- keep a curriculum spell that lives in two spellcasting entries
+- keep Demiplane dialog usable with a long manual-items list
+- don't duplicate element-granted items on import
+- hold sync guard past import to prevent Demiplane data loss
+- keep legitimately-owned duplicate inventory items on import
+- link-api keeps the API tree releasable and works on npm 11
+- preserve formated_data (overview subtitle) on push
+- don't treat ancestry-selection engines as the character's ancestry
+- validate the token as entered, not the saved setting
+- resolve base-grade property runes and armor potency runes on import
+- source the Foundry deity from the class-selected deity engine first
+- capture all ChoiceSet fallbacks as sync issues and resolve cleric deity/domain/sanctification choices
+- run --clean restarts a live server instead of reusing it
+- correct the settings path in variant-mismatch messages
+- scope and suffix-strip ChoiceSet feat matching
+- resolve weapon property runes generally, with validation
+- affix weapon runes to the weapon instead of importing them separately
+- check sync-active before the auto-sync note in change hooks
+- place free-archetype feats in the archetype slots
+- place mythic feats in the mythic slots
+- route ancestry boosts to free slots and support alternate boosts
+- use Demiplane level group for gradual boost buckets
+- apply level 5/10/15 attribute boosts
+- resolve innate spells from add-feat grants
+- include templates and assets in release archive
+- grant background lore when the engine has no slug
+- resolve SonarQube warnings in module test and spell entry
+- resolve @scooper4711/demiplane-api from node_modules under vitest 4
+- use console.log for debug output to avoid stack traces
+- Live-update the mapping editor when another client changes a mapping
+- Prevent two actors linking the same Demiplane character
+- Open compendium pack window for browserless mapping kinds
+- resolve SonarCloud issues across sources and tests
+- import scrolls and wands with the spells they carry
+- stop importing from pushing deletions back to Demiplane
+- import domain focus spells, leave focus pool to the system
+- pause pushing across all clients during an in-flight import or push
+- re-baseline conflict state from server after push to stop false re-imports
+- reflect pushed field changes and ignore benign Demiplane updated bumps
+- refresh lastUpdated after push to prevent false-conflict re-import
+- import lore before feat grants and de-duplicate native-granted feats
+- import commander class feats and args-slug-less equipment
+- import cleric prepared spells and Divine Font from Demiplane
+- stop bumping lastUpdated on Foundry pushes
+- import bolts and sync quantity for single items
+- Detect currency changes via treasure items instead of system.currency
+- Delete items with empty module flag namespace on re-import
+- Resolve ChoiceSet selections for generic-feature and generic-choice engines
+- Name focus spell entry after source feature
+- Prevent duplicate Assurance feat from GrantItem double-resolution
+- Curriculum slot resolution, innate entry naming, hide slotless levels
+- Set spell slot value to max on import (full slots available)
+- Explain saving before token validation
+- Update module ID and paths in setup script for consistency
+
+### Changed
+
+- flexible preparation went away with the remaster
+- alchemist import spec with formula book and tiered consumables
+- spellcasting entry validation checklist
+- validate entries via helper in older specs
+- validate entries via helper in newer specs
+- assert spellcasting entry identity via expectSpellcastingEntries
+- ranger import spec
+- inventor import spec
+- runesmith import spec
+- guardian import spec
+- rogue import spec
+- commander import spec
+- exemplar import spec with variant toggles
+- thaumaturge import spec
+- monk import spec
+- champion import spec
+- route player-picked focus spells via focus-selection table
+- Update CHANGELOG for v1.0.0-rc.6
+- refine import issue template and ignore playwright-report
+- consolidate spellcasting-feature identity into a registry
+- lock override-wins for archetype slots
+- psychic wizard dedication, archetype entry, honest slot alarm
+- drop non-remaster kormir fixture
+- plugin registry for ChoiceSet matchers with kineticist config
+- SKIP_MUTATION_TESTS flag skips slow round-trip specs
+- snapshot summoner with cast 500 toads
+- lini choices resolve; curriculum junk language gone
+- refresh seoni snapshot
+- assert psychic amps and magus spellbook, conflux, placements
+- track fvtt valeros rename
+- assert seoni sorcerer repertoire, signatures, bloodline, granted spells
+- snapshot all fvtt fixture characters
+- assert witch full spellbook, placements, focus pool, known gaps
+- assert curriculum wizard spell placement, school slots, override rank
+- assert lini druid spell placement, order focus, known choice gaps
+- assert kyra cleric spell placement, font, domain focus, ritual
+- assert bard spell placement and focus pool on import
+- use Ko-fi badge button in Support section
+- Update CHANGELOG for v1.0.0-rc.5
+- Update CHANGELOG for v1.0.0-rc.4
+- Update CHANGELOG for v1.0.0-rc.3
+- Update CHANGELOG for v1.0.0-rc.2
+- replace hard sleeps with polling (S2925)
+- updated roadmap to reflect recent feature add
+- Update CHANGELOG for v1.0.0-rc.1
+- Update CHANGELOG for v1.0.0-beta.5
+- Update CHANGELOG for v1.0.0-beta.4
+- add statement on AI use to README
+- add per-character choice resolution to the roadmap
+- Update CHANGELOG for v1.0.0-beta.3
+- put all spell-slot sync on the quantity tier
+- cover rituals, formulas, spell usage, containers, portable mappings
+- Update CHANGELOG for v1.0.0-beta.2
+- ensure commit messages match standard
+- Update CHANGELOG for v0.2.0-beta.14
+- write-level mutation matrix (tiers, gates, soft-delete)
+- drop per-item charges spellcasting entries; rely on PF2e Activations
+- add UI-interaction integration coverage for module surfaces
+- Update CHANGELOG for v0.2.0-beta.13
+- use published demiplane-api 1.1.0
+- record mutation-testing findings (deity, sync tokens, subtitle)
+- link/unlink scripts for local demiplane-api development
+- Kyra mutation round-trip proving push/pull fidelity
+- cover describeFeatSlot feat-slot labels
+- bump the dev-minor-patch group with 3 updates
+- thank the beta testers
+- Update CHANGELOG for v0.2.0-beta.12
+- unify Foundry lifecycle under scripts/foundry.sh and harden seeding
+- Update CHANGELOG for v0.2.0-beta.11
+- deleted playwright bookeeping noise
+- add E2E coverage tooling dependencies
+- stabilize and extend the Playwright integration suite
+- Update CHANGELOG for v0.2.0-beta.10
+- minor wording fix
+- Update CHANGELOG for v0.2.0-beta.9
+- clarify GM value, linking, and roadmap; refresh .env.example
+- elminate lint error
+- normalize package-lock optional dependency metadata
+- cover mapping app, matchers, and remaining sub-60 files
+- bump the dev-minor-patch group across 1 directory with 2 updates
+- cover import phases to lift branch coverage over 80%
+- decompose module entrypoint into testable units
+- make coverage non-blocking temporarily under vitest 4
+- guard against local demiplane-api references in pre-commit
+- bump the dev-major group with 6 updates
+- lock TypeScript to 6.x in Dependabot
+- bump qs from 6.15.3 to 6.16.0
+- added license
+- updated readme to reflect current state
+- Update CHANGELOG for v0.2.0-beta.8
+- removed movie file in favor of attachment
+- working on video demo
+- Remove dead code and extract PF2e magic-number constants
+- Lint-guard `as unknown as` and `as never` casts
+- Centralize residual type casts behind access seams
+- migrate from fvtt-types to @dfreds/foundry-types
+- removed kiro documents
+- address Sonarqube findings to improve maintanability
+- Resolve mapping icons from the pack index instead of full documents
+- Open the mapping editor instantly with a loading state
+- Update ARCHITECTURE and DESIGN for spell/choice-set refactor
+- Split spell-importer and choice-set-handler god objects
+- Update CHANGELOG for v0.2.0-beta.7
+- Drop the word "slug" from user-facing text
+- Document GM-only Demiplane item mapping
+- Cover the Actors sidebar Demiplane icon
+- Match Demiplane Mapping screen to PF2e inventory
+- Enforce 80% coverage on push
+- fold slug mapping decisions into DESIGN.md
+- store unmapped slugs as structured records
+- Update CHANGELOG for v0.2.0-beta.6
+- attempt 3 to get video in readme
+- validate mermaid diagrams as part of pre-commit hook
+- drop unnecessary 'as never' on getIndex({ fields }) calls
+- lock in ImportOrchestrator thin-driver lastImportTimestamp stamp
+- document conflict-resolution heuristic in DESIGN.md
+- narrow module api to intent-level methods
+- reconcile ARCHITECTURE/DESIGN/CONTRIBUTING with current code
+- route diagnostic console.warn through debugLog
+- reflect ImportPhase pipeline in ARCHITECTURE.md
+- decompose orchestrator into ordered ImportPhase pipeline
+- reflect ChangeBuffer/PushPayloadBuilder/ConflictResolver export collaborators
+- extract ConflictResolver from ExportManager
+- extract PushPayloadBuilder from ExportManager
+- extract ChangeBuffer from ExportManager
+- centralize magic strings into src/config.ts
+- harvest attribute/skill validation tables
+- extract shared stream-engines fetch + spell compendium resolver
+- address P0 correctness findings (idempotent patch, per-character suspend, shared delete)
+- remove dead code and lift all-src coverage above 80%
+- remove dead code and lift all-src coverage above 80%
+- raise import-module coverage above 80%
+- tweaking video link to make embedded video work
+- fixed badges (typo)
+- add badges
+- fix mermaid syntax error
+- Update CHANGELOG for v0.2.0-beta.5
+- updated to latest versions of libraries
+- clarify character-import template with expected actor export
+- bump @scooper4711/demiplane-api to 0.3.0
+- Update CHANGELOG for v0.2.0-beta.4
+- Split push payload builder into focused helpers
+- Split long import functions and drop max-lines/complexity overrides
+- Remove dry run feature entirely
+- Gate detail logging behind debug setting; add per-op pull/push logs
+- Remove focus points sync due to Demiplane tracking bug
+- updates docs to reflect more user-friendly way to get auth token
+- removed dead code for conflict resolution
+- Updated architecture and design docs based on latest changes
+- Add GitHub issue templates for bug reports, imports, and features
+- Update CHANGELOG for v0.2.0-beta.3
+- Update demiplane-api to published npm package v0.2.0
+- Update CHANGELOG for v0.2.0-beta.2
+- Add cross-VTT selling point to README
+- Add tests for curriculum separation, prepared placement, and signature spells
+- Add spell slot progression and spell import specs
+- Add Demiplane API steering document
+- Upgrade fvtt-types to v14 and update related dependencies
+- Update CHANGELOG for v0.2.0-beta.1
+- Add Foundry VTT development scripts to package.json
+- Rewrite README with user-focused language and clearer structure
+- Update minimum Foundry VTT compatibility to v14
+- corrected the sonar-project-properties so reports are sent to the right place
+
+[1.0.0]: https://github.com/scooper4711/demiplane-pf2e/releases/tag/v1.0.0
+
 ## [1.0.0-rc.6] - 2026-09-19
 
 ### Added
