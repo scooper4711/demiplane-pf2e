@@ -165,18 +165,31 @@ function countKnownCantrips(engines: DemiplaneEngineEntry[], parentSpellFeature:
 function computeRepertoireCantrips(lines: RawEngineLine[], characterLevel: number, parentSpellFeature: string): number {
   let cantrips = 0;
   for (const line of lines) {
-    for (const mod of line.modifiers) {
-      if (mod.type !== "v2-add-repertoire-counts" || !mod.slots) continue;
-      if (!featureSlugMatches(mod.slug, parentSpellFeature)) continue;
-      for (const slot of mod.slots as RepertoireCountEntry[]) {
-        if ((slot.rank ?? -1) !== 0) continue;
-        if ((slot.repertoireSlug ?? "") !== "") continue;
-        if ((slot.levelPrereq ?? Number.MAX_SAFE_INTEGER) > characterLevel) continue;
-        cantrips += slot.count ?? 0;
-      }
-    }
+    cantrips += countLineCantrips(line, characterLevel, parentSpellFeature);
   }
   return cantrips;
+}
+
+/** Rank-0 repertoire counts on one definition line, scoped to the feature. */
+function countLineCantrips(line: RawEngineLine, characterLevel: number, parentSpellFeature: string): number {
+  let count = 0;
+  for (const mod of line.modifiers) {
+    if (mod.type !== "v2-add-repertoire-counts" || !mod.slots) continue;
+    if (!featureSlugMatches(mod.slug, parentSpellFeature)) continue;
+    for (const slot of mod.slots as RepertoireCountEntry[]) {
+      if (isCountedCantrip(slot, characterLevel)) count += slot.count ?? 0;
+    }
+  }
+  return count;
+}
+
+/** A rank-0, feature-wide count slot the character's level unlocks. */
+function isCountedCantrip(slot: RepertoireCountEntry, characterLevel: number): boolean {
+  return (
+    (slot.rank ?? -1) === 0 &&
+    (slot.repertoireSlug ?? "") === "" &&
+    (slot.levelPrereq ?? Number.MAX_SAFE_INTEGER) <= characterLevel
+  );
 }
 
 /**

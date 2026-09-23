@@ -341,21 +341,33 @@ function extractGrantedSubFeatures(objects: Array<Record<string, unknown>>): Gra
   const seen = new Set<string>();
   const features: GrantedSubFeature[] = [];
   for (const obj of objects) {
-    const groups = obj.grantedFeatures;
-    if (!Array.isArray(groups)) continue;
-    for (const group of groups) {
-      if (!Array.isArray(group)) continue;
-      for (const entry of group) {
-        if (typeof entry !== "object" || entry === null) continue;
-        const { slug, level } = entry as { slug?: unknown; level?: unknown };
-        if (typeof slug !== "string" || slug === "" || typeof level !== "number") continue;
-        if (seen.has(slug)) continue;
-        seen.add(slug);
-        features.push({ slug, level });
-      }
+    if (!Array.isArray(obj.grantedFeatures)) continue;
+    features.push(...extractGroupFeatures(obj.grantedFeatures, seen));
+  }
+  return features;
+}
+
+/** Flattens one `grantedFeatures` group array, skipping malformed groups. */
+function extractGroupFeatures(groups: unknown[], seen: Set<string>): GrantedSubFeature[] {
+  const features: GrantedSubFeature[] = [];
+  for (const group of groups) {
+    if (!Array.isArray(group)) continue;
+    for (const entry of group) {
+      const feature = asGrantedSubFeature(entry, seen);
+      if (feature) features.push(feature);
     }
   }
   return features;
+}
+
+/** Validates one `{slug, level}` entry, deduped by slug. Null when malformed. */
+function asGrantedSubFeature(entry: unknown, seen: Set<string>): GrantedSubFeature | null {
+  if (typeof entry !== "object" || entry === null) return null;
+  const { slug, level } = entry as { slug?: unknown; level?: unknown };
+  if (typeof slug !== "string" || slug === "" || typeof level !== "number") return null;
+  if (seen.has(slug)) return null;
+  seen.add(slug);
+  return { slug, level };
 }
 
 /**

@@ -222,8 +222,19 @@ function matchEidolon(choices: Choice[], engines: DemiplaneEngineEntry[]): Choic
  */
 function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], itemName?: string): Choice | null {
   if (!itemName) return null;
-  const marker = `${toChoiceSlug(itemName)}-rm`;
+  const pickSlugs = collectFeaturePickSlugs(engines, `${toChoiceSlug(itemName)}-rm`, itemName);
+  if (pickSlugs.length === 0) return null;
 
+  for (const pass of ["exact", "prefix"] as const) {
+    for (const choice of choices) {
+      if (choiceMatchesAnyPick(choice, pickSlugs, pass)) return choice;
+    }
+  }
+  return null;
+}
+
+/** Slugs of engines picked for this very feature (sourceRow names its marker). */
+function collectFeaturePickSlugs(engines: DemiplaneEngineEntry[], marker: string, itemName: string): string[] {
   const picks = engines.filter(
     (e) =>
       e.type === "DemiplaneEngine" &&
@@ -232,25 +243,25 @@ function matchFeaturePick(choices: Choice[], engines: DemiplaneEngineEntry[], it
         .split("_")
         .includes(marker)
   );
-  if (picks.length === 0) return null;
-
   const pickSlugs = [...new Set(picks.map((e) => toFoundrySlug(e.args!.slug as string)))];
   tlog(`[ChoiceSet match] Feature-pick strategy for "${itemName}": [${pickSlugs.join(", ")}]`);
+  return pickSlugs;
+}
 
-  for (const pass of ["exact", "prefix"] as const) {
-    for (const choice of choices) {
-      const val = typeof choice.value === "string" ? choice.value : "";
-      const labelSlug = toChoiceSlug(choice.label);
-      for (const slug of pickSlugs) {
-        if (val === slug || labelSlug === slug) return choice;
-        // Either direction at a segment boundary: the label may extend the
-        // pick ("Animal Order" for `animal`) or the pick may extend the label
-        // ("Flesh" for the `flesh-necromancer-rm` fascination pick).
-        if (pass === "prefix" && (labelSlug.startsWith(`${slug}-`) || slug.startsWith(`${labelSlug}-`))) return choice;
-      }
-    }
-  }
-  return null;
+/**
+ * Exact label/value matches, then segment-boundary prefix matches in either
+ * direction ("Animal Order" for the `animal` pick, or "Flesh" for the
+ * `flesh-necromancer-rm` fascination pick).
+ */
+function choiceMatchesAnyPick(choice: Choice, pickSlugs: string[], pass: "exact" | "prefix"): boolean {
+  const val = typeof choice.value === "string" ? choice.value : "";
+  const labelSlug = toChoiceSlug(choice.label);
+  return pickSlugs.some(
+    (slug) =>
+      val === slug ||
+      labelSlug === slug ||
+      (pass === "prefix" && (labelSlug.startsWith(`${slug}-`) || slug.startsWith(`${labelSlug}-`)))
+  );
 }
 
 /** Matches a ChoiceSet option value of the form `system.skills.<skill>.rank`. */

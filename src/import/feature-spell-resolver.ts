@@ -675,18 +675,15 @@ function categorizeGrantedSpells(
   characterLevel: number,
   hexFocusGroup: boolean,
   focusSlugs: Set<string>
-): {
-  innate: GrantedSpell[];
-  focus: GrantedSpell[];
-  known: GrantedSpell[];
-  hexes: GrantedSpell[];
-  apparition: GrantedSpell[];
-} {
-  const innate: GrantedSpell[] = [];
-  const focus: GrantedSpell[] = [];
-  const known: GrantedSpell[] = [];
-  const hexes: GrantedSpell[] = [];
-  const apparition: GrantedSpell[] = [];
+): FeatureGrantedSpells {
+  const buckets: FeatureGrantedSpells = {
+    innate: [],
+    focus: [],
+    known: [],
+    hexes: [],
+    apparition: [],
+    unlimitedSignatures: [],
+  };
   /** Repertoire-shaped grants, split by spell-definition focus flag below. */
   const ambiguous: AddSpellModifier[] = [];
 
@@ -698,13 +695,7 @@ function categorizeGrantedSpells(
       ambiguous.push(mod);
       continue;
     }
-    const spell = buildGrantedSpell(mod, hexFocusGroup);
-
-    if (spell.isInnate) innate.push(spell);
-    else if (spell.isHex) hexes.push(spell);
-    else if (spell.isApparition) apparition.push(spell);
-    else if (spell.isKnown) known.push(spell);
-    else focus.push(spell);
+    pushGrantedSpell(buckets, buildGrantedSpell(mod, hexFocusGroup));
   }
 
   for (const mod of ambiguous) {
@@ -712,13 +703,22 @@ function categorizeGrantedSpells(
     if (focusSlugs.has(mod.addSpell)) {
       spell.isKnown = false;
       spell.isFocus = true;
-      focus.push(spell);
+      buckets.focus.push(spell);
     } else {
-      known.push(spell);
+      buckets.known.push(spell);
     }
   }
 
-  return { innate, focus, known, hexes, apparition };
+  return buckets;
+}
+
+/** Routes a granted spell to its bucket by flag priority (innate first). */
+function pushGrantedSpell(buckets: FeatureGrantedSpells, spell: GrantedSpell): void {
+  if (spell.isInnate) buckets.innate.push(spell);
+  else if (spell.isHex) buckets.hexes.push(spell);
+  else if (spell.isApparition) buckets.apparition.push(spell);
+  else if (spell.isKnown) buckets.known.push(spell);
+  else buckets.focus.push(spell);
 }
 
 /**
