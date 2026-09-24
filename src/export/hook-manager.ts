@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Hook reactions plus their manual-push re-queue helpers are cohesive; per-capability gating is inherently branchy and splitting would scatter one concern */
-import { MODULE_ID, INVENTORY_ITEM_TYPES } from "./import/types.js";
-import { debugLog } from "./import/debug-log.js";
+import { MODULE_ID, INVENTORY_ITEM_TYPES } from "../core/types.js";
+import { debugLog } from "../core/debug-log.js";
 import type { ExportManager } from "./export-manager.js";
-import type { EquippedState } from "./export/change-buffer.js";
-import { isSyncActive } from "./sync-pause.js";
+import type { EquippedState } from "./change-buffer.js";
+import { isSyncActive } from "../sync/sync-pause.js";
 import {
   canWriteBiography,
   canWriteLanguages,
@@ -20,10 +20,10 @@ import {
   canSoftDeleteInventory,
   canDeleteInventory,
   isWritingEnabled,
-} from "./write-level.js";
-import { DEMIPLANE_ICON_SRC } from "./config.js";
-import { characterSystem, itemSystem, localizeLanguage } from "./pf2e-types.js";
-import { queueSpellcastingEntryChanges, queueSpellSlotResync } from "./export/spellcasting-entry-sync.js";
+} from "../sync/write-level.js";
+import { DEMIPLANE_ICON_SRC } from "../core/config.js";
+import { characterSystem, itemSystem, localizeLanguage } from "../core/pf2e-types.js";
+import { queueSpellcastingEntryChanges, queueSpellSlotResync } from "./spellcasting-entry-sync.js";
 
 /**
  * Field mapping from Foundry actor data paths to Demiplane store names.

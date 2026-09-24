@@ -1,4 +1,4 @@
-import { DEMIPLANE_SHEET_BASE } from "./config.js";
+import { DEMIPLANE_SHEET_BASE } from "../core/config.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

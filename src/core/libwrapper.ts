@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID } from "./types.js";
 
 /**
  * Thin adapter over the community libWrapper module.

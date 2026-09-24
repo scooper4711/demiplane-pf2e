@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { findVariantMismatches, type FoundryVariantSettings } from "../../src/import/variant-check.js";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 
 function pref(name: string, value: number): DemiplaneEngineEntry {
   return { id: name, name, type: "CustomDemiplaneEngine", value, args: {} } as DemiplaneEngineEntry;

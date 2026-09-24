@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
-import { exportAction, importAction } from "../../src/mapping-share.js";
-import { getAllMappings, registerSlugMappingSettings, setMapping } from "../../src/slug-mapping.js";
+import { exportAction, importAction } from "../../src/mapping/mapping-share.js";
+import { getAllMappings, registerSlugMappingSettings, setMapping } from "../../src/mapping/slug-mapping.js";
 
 const HP = "Compendium.pf2e.equipment-srd.Item.hp1";
 const MISSING = "Compendium.pf2e.equipment-srd.Item.gone";

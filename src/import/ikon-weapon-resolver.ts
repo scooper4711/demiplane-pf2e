@@ -1,5 +1,5 @@
-import { pf2ePredicate } from "../pf2e-types.js";
-import { debugLog } from "./debug-log.js";
+import { pf2ePredicate } from "../core/pf2e-types.js";
+import { debugLog } from "../core/debug-log.js";
 import { resolveIkonWeapons, type IkonToAssign } from "./ikon-weapon-matcher.js";
 
 /**

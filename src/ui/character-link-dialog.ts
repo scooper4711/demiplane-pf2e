@@ -1,9 +1,9 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID } from "../core/types.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { parseCharacterLinkInput } from "./character-link-input.js";
-import { DEMIPLANE_SHEET_BASE } from "./config.js";
-import { toUserFacingSyncError } from "./token.js";
-import { findActorLinkedTo } from "./actor-link.js";
+import { DEMIPLANE_SHEET_BASE } from "../core/config.js";
+import { toUserFacingSyncError } from "../core/token.js";
+import { findActorLinkedTo } from "../sync/actor-link.js";
 
 /**
  * Renders and manages the per-actor dialog for linking a Demiplane character.

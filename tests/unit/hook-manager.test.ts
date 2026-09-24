@@ -62,7 +62,7 @@ import {
   queueAllItemChanges,
   queueAllDetailChanges,
   queueCombatResourceChanges,
-} from "../../src/hook-manager.js";
+} from "../../src/export/hook-manager.js";
 
 const MODULE_ID = "demiplane-pf2e";
 let autoSyncEnabled = true;

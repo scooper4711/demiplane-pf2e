@@ -5,7 +5,7 @@ import {
   isSyncActive,
   isRemoteSyncActive,
   clearSyncPause,
-} from "../../src/sync-pause.js";
+} from "../../src/sync/sync-pause.js";
 
 function makeActor(characterId: string | null, flags: Record<string, unknown> = {}) {
   const store: Record<string, unknown> = { ...flags };

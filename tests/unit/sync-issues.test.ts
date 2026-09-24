@@ -17,7 +17,7 @@ import {
   addImportIssues,
   addExportIssue,
   ISSUES_CHANGED_EVENT,
-} from "../../src/sync-issues.js";
+} from "../../src/sync/sync-issues.js";
 
 function createFlagActor() {
   const flags: Record<string, Record<string, unknown>> = {};

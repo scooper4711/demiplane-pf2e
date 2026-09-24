@@ -1,12 +1,12 @@
-import type { DemiplaneEngineEntry } from "./types.js";
+import type { DemiplaneEngineEntry } from "../core/types.js";
 import {
   toFoundrySlug,
   generateSlugCandidates,
   rawEquipmentSlug,
   isGrantedByElement,
   stripTrailingWord,
-} from "./slug-utils.js";
-import { debugLog } from "./debug-log.js";
+} from "../core/slug-utils.js";
+import { debugLog } from "../core/debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import type { Choice } from "./choice-set-types.js";
 import { registerChoiceMatcher, registeredMatchers, type MatcherContext } from "./matcher-registry.js";

@@ -1,8 +1,8 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { isFormulaEngine, normalizeEquipmentSlug, rawEquipmentSlug } from "./slug-utils.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
+import { isFormulaEngine, normalizeEquipmentSlug, rawEquipmentSlug } from "../core/slug-utils.js";
 import { findBySlug, loadEquipmentSources, type EquipmentSource } from "./equipment-sources.js";
-import { resolveMappedItem, recordResolvedMapping, getMapping } from "../slug-mapping.js";
-import { debugLog } from "./debug-log.js";
+import { resolveMappedItem, recordResolvedMapping, getMapping } from "../mapping/slug-mapping.js";
+import { debugLog } from "../core/debug-log.js";
 
 /**
  * Importing PF2e crafting formulas. A known formula arrives from Demiplane as a

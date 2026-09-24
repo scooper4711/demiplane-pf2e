@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeEngineSig } from "../../src/engine-sig.js";
+import { computeEngineSig } from "../../src/core/engine-sig.js";
 
 describe("computeEngineSig", () => {
   it("includes each engine's name and value", () => {

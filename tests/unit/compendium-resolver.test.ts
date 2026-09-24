@@ -5,8 +5,8 @@ import {
   resolveSlugToUuid,
   resolveSpellFromCompendium,
 } from "../../src/import/compendium-resolver.js";
-import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
-import { registerSlugMappingSettings, setMapping, getMapping } from "../../src/slug-mapping.js";
+import { clearPackDiscoveryCache } from "../../src/mapping/pack-discovery.js";
+import { registerSlugMappingSettings, setMapping, getMapping } from "../../src/mapping/slug-mapping.js";
 
 // Pack discovery caches per item-type set; packs change between tests.
 beforeEach(() => {

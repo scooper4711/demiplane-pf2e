@@ -1,6 +1,6 @@
-import { MODULE_ID } from "./import/types.js";
-import type { SlugKind } from "./import/types.js";
-import { debugLog } from "./import/debug-log.js";
+import { MODULE_ID } from "../core/types.js";
+import type { SlugKind } from "../core/types.js";
+import { debugLog } from "../core/debug-log.js";
 
 /** A GM-chosen target for a Demiplane slug that doesn't resolve on its own. */
 export interface SlugMapping {

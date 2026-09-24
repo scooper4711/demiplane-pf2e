@@ -1,4 +1,4 @@
-import { MODULE_ID } from "../import/types.js";
+import { MODULE_ID } from "../core/types.js";
 
 const DEBOUNCE_MS = 2000;
 const RATE_LIMIT_WINDOW_MS = 60_000;

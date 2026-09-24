@@ -1,7 +1,7 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { MODULE_ID } from "./types.js";
-import { toFoundrySlug } from "./slug-utils.js";
-import { debugLog } from "./debug-log.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
+import { MODULE_ID } from "../core/types.js";
+import { toFoundrySlug } from "../core/slug-utils.js";
+import { debugLog } from "../core/debug-log.js";
 import { resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 
 const SIGNATURE_SUFFIX = "-spell-is-signature";

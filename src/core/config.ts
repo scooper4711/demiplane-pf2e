@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID } from "./types.js";
 
 /** Base URL for a Demiplane character sheet (append `/<characterId>`). */
 export const DEMIPLANE_SHEET_BASE = "https://app.demiplane.com/nexus/pathfinder2e/character-sheet";

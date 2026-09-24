@@ -7,8 +7,8 @@
  * ordering and arguments of the original sequential implementation.
  */
 
-import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
-import { stampImported, INVENTORY_ITEM_TYPES } from "./types.js";
+import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "../core/types.js";
+import { stampImported, INVENTORY_ITEM_TYPES } from "../core/types.js";
 import {
   characterSystem,
   itemSystem,
@@ -16,11 +16,11 @@ import {
   itemSourceId,
   compendiumSource,
   toPlainData,
-} from "../pf2e-types.js";
+} from "../core/pf2e-types.js";
 import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
-import { IMPORT_PLACEHOLDER_NAME } from "../config.js";
-import { debugLog } from "./debug-log.js";
-import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "./slug-utils.js";
+import { IMPORT_PLACEHOLDER_NAME } from "../core/config.js";
+import { debugLog } from "../core/debug-log.js";
+import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "../core/slug-utils.js";
 import { resolveCompendiumItem } from "./compendium-resolver.js";
 import { ChoiceSetHandler } from "./choice-set-handler.js";
 import { applyBiography } from "./biography-importer.js";

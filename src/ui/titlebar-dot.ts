@@ -1,5 +1,5 @@
-import { MODULE_ID } from "./import/types.js";
-import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "./sync-issues.js";
+import { MODULE_ID } from "../core/types.js";
+import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "../sync/sync-issues.js";
 
 export const SYNC_ISSUES_CLASS = "has-sync-errors";
 

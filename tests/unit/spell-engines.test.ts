@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 import { findSpellEngines, isCurriculumSpell } from "../../src/import/spell-engines.js";
 
 function engine(overrides: Partial<DemiplaneEngineEntry>): DemiplaneEngineEntry {

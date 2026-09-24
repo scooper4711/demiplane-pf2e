@@ -1,13 +1,13 @@
-import { MODULE_ID } from "./import/types.js";
-import { debugLog } from "./import/debug-log.js";
-import { addExportIssue } from "./sync-issues.js";
+import { MODULE_ID } from "../core/types.js";
+import { debugLog } from "../core/debug-log.js";
+import { addExportIssue } from "../sync/sync-issues.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
-import { computeEngineSig } from "./engine-sig";
-import { isRemoteSyncActive } from "./sync-pause.js";
-import { isWritingEnabled } from "./write-level.js";
-import { toUserFacingSyncError } from "./token.js";
-import { syncClientToken } from "./token-source.js";
-import { isClientElectedWriter } from "./sync-election.js";
+import { computeEngineSig } from "../core/engine-sig.js";
+import { isRemoteSyncActive } from "../sync/sync-pause.js";
+import { isWritingEnabled } from "../sync/write-level.js";
+import { toUserFacingSyncError } from "../core/token.js";
+import { syncClientToken } from "../core/token-source.js";
+import { isClientElectedWriter } from "../sync/sync-election.js";
 import {
   ChangeBuffer,
   type CastChange,
@@ -15,9 +15,9 @@ import {
   type EquippedState,
   type ItemChangeType,
   type PendingChange,
-} from "./export/change-buffer.js";
-import { PushPayloadBuilder, type FetchedCharacter } from "./export/push-payload-builder.js";
-import { ConflictResolver } from "./export/conflict-resolver.js";
+} from "./change-buffer.js";
+import { PushPayloadBuilder, type FetchedCharacter } from "./push-payload-builder.js";
+import { ConflictResolver } from "./conflict-resolver.js";
 
 const MAX_RETRIES = 3;
 const INITIAL_BACKOFF_MS = 1000;
@@ -39,8 +39,8 @@ export type {
   ItemChangeType,
   PendingChange,
   PendingItemChange,
-} from "./export/change-buffer.js";
-export type { FetchedCharacter } from "./export/push-payload-builder.js";
+} from "./change-buffer.js";
+export type { FetchedCharacter } from "./push-payload-builder.js";
 
 export interface ExportResult {
   success: boolean;

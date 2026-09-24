@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { readConfiguredToken, syncClientToken } from "../../src/token-source.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { readConfiguredToken, syncClientToken } from "../../src/core/token-source.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 /** Minimal client stand-in that records the last token it was given. */
 function createClientSpy() {

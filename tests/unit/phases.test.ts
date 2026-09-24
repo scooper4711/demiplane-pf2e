@@ -12,7 +12,7 @@ import {
   ResolveGrantsPhase,
   SequentialItemsPhase,
 } from "../../src/import/phases.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const SCHOLAR = { _id: "bg-scholar", name: "Scholar", type: "background", system: { slug: "scholar" } };
 const PLAIN_BG = { _id: "bg-plain", name: "Plain", type: "background", system: { slug: "plain" } };

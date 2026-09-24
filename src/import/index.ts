@@ -1,2 +1,2 @@
 export { ImportOrchestrator } from "./orchestrator.js";
-export type { ImportOptions, ImportSummary, DemiplaneEngineEntry } from "./types.js";
+export type { ImportOptions, ImportSummary, DemiplaneEngineEntry } from "../core/types.js";

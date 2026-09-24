@@ -5,7 +5,7 @@
  */
 
 import { normalizeBearerToken, type DemiplaneClient } from "@scooper4711/demiplane-api";
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID } from "./types.js";
 
 /** The configured token, normalized (trim + strip `Bearer`) as the client stores it. */
 export function readConfiguredToken(): string {

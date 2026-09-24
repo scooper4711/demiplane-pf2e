@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applyEquipment, applyCurrency, resizeActorEquipment } from "../../src/import/equipment-importer.js";
 import { applyCraftingFormulas } from "../../src/import/crafting-formulas.js";
-import { clearPackDiscoveryCache } from "../../src/import/pack-discovery.js";
-import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/slug-mapping.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+import { clearPackDiscoveryCache } from "../../src/mapping/pack-discovery.js";
+import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/mapping/slug-mapping.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 // Pack discovery caches per item-type set; packs change between tests.
 beforeEach(() => {

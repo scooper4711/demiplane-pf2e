@@ -1,5 +1,5 @@
 import type { Choice, ChoiceSetContext } from "./choice-set-types.js";
-import type { ChoiceKey, ChoiceOverrides, UnresolvedChoice } from "./types.js";
+import type { ChoiceKey, ChoiceOverrides, UnresolvedChoice } from "../core/types.js";
 import { toChoiceSlug } from "./choice-slug.js";
 /**
  * User-specified ChoiceSet resolution (the last resort after automatic

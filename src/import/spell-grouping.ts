@@ -1,6 +1,6 @@
-import type { DemiplaneEngineEntry } from "./types.js";
+import type { DemiplaneEngineEntry } from "../core/types.js";
 import { findSpellEngines, isCurriculumSpell } from "./spell-engines.js";
-import { toFoundrySlug } from "./slug-utils.js";
+import { toFoundrySlug } from "../core/slug-utils.js";
 import {
   CLASS_SPELLCASTING,
   SUMMONER_SPELLCASTING,

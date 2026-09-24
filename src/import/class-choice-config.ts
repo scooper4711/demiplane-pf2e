@@ -1,5 +1,5 @@
-import type { DemiplaneEngineEntry } from "./types.js";
-import { toFoundrySlug } from "./slug-utils.js";
+import type { DemiplaneEngineEntry } from "../core/types.js";
+import { toFoundrySlug } from "../core/slug-utils.js";
 
 /**
  * Per-class ChoiceSet matching data. Classes with chained, gated, or

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
-import { registerDirectoryIcon } from "../../src/directory-icon.js";
-import { showDemiplaneInfoDialog } from "../../src/demiplane-info-button.js";
+import { registerDirectoryIcon } from "../../src/ui/directory-icon.js";
+import { showDemiplaneInfoDialog } from "../../src/ui/demiplane-info-button.js";
 
 // The click handler delegates to the shared info dialog; mock it so tests can
 // assert the delegation without exercising the real DialogV2 machinery.
-vi.mock("../../src/demiplane-info-button.js", () => ({
+vi.mock("../../src/ui/demiplane-info-button.js", () => ({
   showDemiplaneInfoDialog: vi.fn().mockResolvedValue(undefined),
 }));
 

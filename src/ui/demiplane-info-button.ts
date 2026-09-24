@@ -1,9 +1,9 @@
 import type { DialogV2Button } from "@client/applications/api/dialog.mjs";
-import { MODULE_ID, formatUnmapped } from "./import/types.js";
-import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "./import/types.js";
-import { isWritingEnabled } from "./write-level.js";
-import { isSyncActive } from "./sync-pause.js";
-import { localizeChoiceLabel } from "./import/choice-overrides.js";
+import { MODULE_ID, formatUnmapped } from "../core/types.js";
+import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "../core/types.js";
+import { isWritingEnabled } from "../sync/write-level.js";
+import { isSyncActive } from "../sync/sync-pause.js";
+import { localizeChoiceLabel } from "../import/choice-overrides.js";
 import {
   acknowledgeIssues,
   getChoiceOverrides,
@@ -14,9 +14,9 @@ import {
   removeChoiceOverride,
   setChoiceOverride,
   shouldShowIndicator,
-} from "./sync-issues.js";
-import { getDemiplaneMappingAppClass } from "./demiplane-mapping-app.js";
-import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "./config.js";
+} from "../sync/sync-issues.js";
+import { getDemiplaneMappingAppClass } from "../mapping/demiplane-mapping-app.js";
+import { DEMIPLANE_SHEET_BASE, KOFI_URL } from "../core/config.js";
 
 type ImportCharacterFn = (
   actor: Actor,

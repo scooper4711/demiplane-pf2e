@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { applySlotMaximums } from "../../src/import/spell-slots.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 const FEATURE = "bard-spellcasting-rm";
 

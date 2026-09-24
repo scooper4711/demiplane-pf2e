@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
 import { groupSpells } from "./spell-grouping.js";
 import type { SpellGroup } from "./spell-grouping.js";
 import type { FocusSelection } from "./spell-grouping.js";

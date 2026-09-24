@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
-import { buildUpdateFromDemiplaneOption, canOpenSyncDialog } from "../../src/actor-context-menu.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { buildUpdateFromDemiplaneOption, canOpenSyncDialog } from "../../src/ui/actor-context-menu.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const CHARACTER_ID = "char-123";
 const TOKEN = "token-abc";

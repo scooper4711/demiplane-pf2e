@@ -1,10 +1,10 @@
-import { PACKS, EXPECTED_TYPES } from "./types.js";
-import type { SlugKind } from "./types.js";
-import { toFoundrySlug, generateSlugCandidates } from "./slug-utils.js";
-import { SPELLS_PACK } from "../config.js";
-import { resolveMappedItem, recordResolvedMapping } from "../slug-mapping.js";
-import { getPackIndex } from "./pack-index.js";
-import { findPacksWithItemTypes } from "./pack-discovery.js";
+import { PACKS, EXPECTED_TYPES } from "../core/types.js";
+import type { SlugKind } from "../core/types.js";
+import { toFoundrySlug, generateSlugCandidates } from "../core/slug-utils.js";
+import { SPELLS_PACK } from "../core/config.js";
+import { resolveMappedItem, recordResolvedMapping } from "../mapping/slug-mapping.js";
+import { getPackIndex } from "../mapping/pack-index.js";
+import { findPacksWithItemTypes } from "../mapping/pack-discovery.js";
 
 function getPacks(): NonNullable<typeof game.packs> {
   if (!game.packs) throw new Error("game.packs unavailable — import called before ready");

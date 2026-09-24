@@ -1,10 +1,10 @@
-import { MODULE_ID } from "./import/types.js";
-import type { ImportSummary } from "./import/types.js";
-import { debugLog } from "./import/debug-log.js";
-import { deleteImportedItems } from "./import/reconcile.js";
-import type { ExportManager, ExportResult } from "./export-manager.js";
-import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "./hook-manager.js";
-import { characterSystem } from "./pf2e-types.js";
+import { MODULE_ID } from "../core/types.js";
+import type { ImportSummary } from "../core/types.js";
+import { debugLog } from "../core/debug-log.js";
+import { deleteImportedItems } from "../import/reconcile.js";
+import type { ExportManager, ExportResult } from "../export/export-manager.js";
+import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "../export/hook-manager.js";
+import { characterSystem } from "../core/pf2e-types.js";
 import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "./sync-pause.js";
 import {
   resetImportIssues,

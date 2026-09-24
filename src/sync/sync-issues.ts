@@ -1,6 +1,6 @@
-import { MODULE_ID } from "./import/types.js";
-import type { ChoiceKey, ChoiceOverrides, UnmappedSlug, UnresolvedChoice } from "./import/types.js";
-import { toUserFacingSyncError } from "./token.js";
+import { MODULE_ID } from "../core/types.js";
+import type { ChoiceKey, ChoiceOverrides, UnmappedSlug, UnresolvedChoice } from "../core/types.js";
+import { toUserFacingSyncError } from "../core/token.js";
 
 export const ISSUES_CHANGED_EVENT = "demiplaneSyncIssuesChanged";
 

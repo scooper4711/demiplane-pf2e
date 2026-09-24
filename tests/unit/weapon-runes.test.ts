@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { isRuneEngine, runeParentId, collectRunesByParent, toPropertyRuneSlug } from "../../src/import/weapon-runes.js";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 
 function runeEngine(slug: string, parentItemID: string): DemiplaneEngineEntry {
   return {

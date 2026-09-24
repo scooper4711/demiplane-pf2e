@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
 import { ChoiceSetHandler, formatChoiceSetFallback } from "../../src/import/choice-set-handler.js";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 
 function eng(overrides: Partial<DemiplaneEngineEntry>): DemiplaneEngineEntry {
   return {

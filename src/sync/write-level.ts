@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./import/types.js";
+import { MODULE_ID } from "../core/types.js";
 
 /**
  * How much of a linked character the module is allowed to write back to

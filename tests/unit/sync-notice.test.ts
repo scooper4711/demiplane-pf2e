@@ -3,17 +3,17 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // The notice's audience/edge logic is what's under test; its two collaborators
 // (remote-sync detection and writer eligibility) are mocked so each test can set
 // the scenario directly.
-vi.mock("../../src/sync-pause.js", () => ({
+vi.mock("../../src/sync/sync-pause.js", () => ({
   isRemoteSyncActive: vi.fn(),
 }));
-vi.mock("../../src/sync-election.js", () => ({
+vi.mock("../../src/sync/sync-election.js", () => ({
   isEligibleWriter: vi.fn(),
 }));
 
-import { registerSyncNotice } from "../../src/sync-notice.js";
-import { isRemoteSyncActive } from "../../src/sync-pause.js";
-import { isEligibleWriter } from "../../src/sync-election.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { registerSyncNotice } from "../../src/sync/sync-notice.js";
+import { isRemoteSyncActive } from "../../src/sync/sync-pause.js";
+import { isEligibleWriter } from "../../src/sync/sync-election.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const remoteActive = vi.mocked(isRemoteSyncActive);
 const eligible = vi.mocked(isEligibleWriter);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseCharacterLinkInput } from "../../src/character-link-input.js";
+import { parseCharacterLinkInput } from "../../src/ui/character-link-input.js";
 
 describe("parseCharacterLinkInput", () => {
   it.each([

@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
 import {
   fetchStreamEngineLines,
   parseEngineLines,

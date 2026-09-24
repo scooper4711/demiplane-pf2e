@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor } from "./foundry-mocks.js";
-import { ExportManager } from "../../src/export-manager.js";
+import { ExportManager } from "../../src/export/export-manager.js";
 import {
   exportLinkedCharacter,
   importLinkedCharacter,
@@ -9,9 +9,9 @@ import {
   notifyConflict,
   reimportActorOnConflict,
   handlePushConflict,
-} from "../../src/sync-flows.js";
-import { isSyncActive } from "../../src/sync-pause.js";
-import { MODULE_ID } from "../../src/import/types.js";
+} from "../../src/sync/sync-flows.js";
+import { isSyncActive } from "../../src/sync/sync-pause.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const CHARACTER_ID = "char-123";
 const TOKEN = "token-abc";

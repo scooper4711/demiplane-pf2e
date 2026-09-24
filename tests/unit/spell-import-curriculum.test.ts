@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { applySpells } from "../../src/import/spell-importer.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 describe("applySpells - curriculum separation", () => {
   beforeEach(() => {

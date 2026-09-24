@@ -1,6 +1,6 @@
-import { MODULE_ID } from "../import/types.js";
-import { debugLog } from "../import/debug-log.js";
-import { computeEngineSig } from "../engine-sig.js";
+import { MODULE_ID } from "../core/types.js";
+import { debugLog } from "../core/debug-log.js";
+import { computeEngineSig } from "../core/engine-sig.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
 
 type ConflictCheckResult = { status: "ok" } | { status: "conflict"; error: string };

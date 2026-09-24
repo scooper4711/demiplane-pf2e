@@ -1,8 +1,8 @@
-import { stampImported } from "./types.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "./types.js";
-import { DEITIES_PACK } from "../config.js";
-import { findPacksWithItemTypes } from "./pack-discovery.js";
-import { toPlainData } from "../pf2e-types.js";
+import { stampImported } from "../core/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
+import { DEITIES_PACK } from "../core/config.js";
+import { findPacksWithItemTypes } from "../mapping/pack-discovery.js";
+import { toPlainData } from "../core/pf2e-types.js";
 
 /**
  * Maps a Demiplane engine name to the Foundry actor path it populates.

@@ -1,6 +1,6 @@
-import { MODULE_ID } from "./import/types.js";
-import type { ImportCharacterFn } from "./sync-flows.js";
-import { isSyncActive } from "./sync-pause.js";
+import { MODULE_ID } from "../core/types.js";
+import type { ImportCharacterFn } from "../sync/sync-flows.js";
+import { isSyncActive } from "../sync/sync-pause.js";
 
 /**
  * The actor directory context-menu option ("Update from Demiplane"), extracted

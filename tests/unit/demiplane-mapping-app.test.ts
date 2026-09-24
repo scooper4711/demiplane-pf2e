@@ -15,9 +15,14 @@ import {
   registerDemiplaneMappingTemplates,
   registerMappingSyncHook,
   rowMatchesSearch,
-} from "../../src/demiplane-mapping-app.js";
-import { getAllMappings, registerSlugMappingSettings, setMapping, clearMapping } from "../../src/slug-mapping.js";
-import type { UnmappedSlug } from "../../src/import/types.js";
+} from "../../src/mapping/demiplane-mapping-app.js";
+import {
+  getAllMappings,
+  registerSlugMappingSettings,
+  setMapping,
+  clearMapping,
+} from "../../src/mapping/slug-mapping.js";
+import type { UnmappedSlug } from "../../src/core/types.js";
 
 const HALF_PLATE = "Compendium.pf2e.equipment-srd.Item.hp1";
 
