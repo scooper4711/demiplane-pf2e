@@ -37,6 +37,7 @@ This document records the key design decisions made in `demiplane-pf2e`, the rat
 - [Overview Subtitle Preservation](#29-overview-subtitle-preservation)
 - [Shared Slug Derivation for Slug-Less Engines](#30-shared-slug-derivation-for-slug-less-engines)
 - [User-Specified Choice Resolution](#31-user-specified-choice-resolution)
+- [Packaging: Cohesive Packages with Curated Barrels](#32-packaging-cohesive-packages-with-curated-barrels)
 
 ---
 
@@ -184,7 +185,7 @@ After the four sequential core items, feats and equipment are safe to batch beca
 
 **Fallback:** `choices[0]` if no strategy matches.
 
-**Module layout:** `ChoiceSetHandler` (`src/import/choice-set-handler.ts`) owns the monkey-patch lifecycle, the `preCreate` interception, and pre-setting selections on item data. The seven strategies are pure functions in `src/import/choice-matchers.ts`, composed in priority order by `findMatchInChoices`, so they can be understood and tested independently of the patching machinery.
+**Module layout:** `ChoiceSetHandler` (`src/import/choices/choice-set-handler.ts`) owns the monkey-patch lifecycle, the `preCreate` interception, and pre-setting selections on item data. The seven strategies are pure functions in `src/import/choices/choice-matchers.ts`, composed in priority order by `findMatchInChoices`, so they can be understood and tested independently of the patching machinery.
 
 **Why wrapping `preCreate` instead of alternatives:**
 
@@ -211,7 +212,7 @@ The wrap is only live during a user-initiated import, so a hard dependency is di
 
 **Defensive fallback restore:** On the manual path, `disable()` restores the original `preCreate` only when our patch is still the live method. If another module wrapped `preCreate` after us, we leave the newer wrapper in place rather than overwriting it — so we never silently delete another module's wrapper. libWrapper handles this ordering itself when it owns the wrap.
 
-**Module layout:** `src/libwrapper.ts` isolates the untyped libWrapper global behind `getLibWrapper()` / `registerWrapper()` / `unregisterWrapper()`. `ChoiceSetHandler` (`src/import/choice-set-handler.ts`) chooses the path in `enable()` and owns both the libWrapper registration and the defensive prototype restore.
+**Module layout:** `src/core/libwrapper.ts` isolates the untyped libWrapper global behind `getLibWrapper()` / `registerWrapper()` / `unregisterWrapper()`. `ChoiceSetHandler` (`src/import/choices/choice-set-handler.ts`) chooses the path in `enable()` and owns both the libWrapper registration and the defensive prototype restore.
 
 ---
 
@@ -409,7 +410,7 @@ After 4 total attempts (initial + 3 retries), the module notifies the user via `
 
 **Rationale:** On re-import (updating an existing character), the module must delete previously imported items to avoid duplicates. The flag distinguishes module-created items from items the user added manually (homebrew, GM-granted items, etc.). Only flagged items are deleted during reconciliation — manually added items are preserved.
 
-**Stamp utility:** `stampImported(itemData)` in `import/types.ts` adds the flag to item source data before `createEmbeddedDocuments` is called.
+**Stamp utility:** `stampImported(itemData)` in `core/types.ts` adds the flag to item source data before `createEmbeddedDocuments` is called.
 
 **Re-import flow:**
 
@@ -431,7 +432,7 @@ This means re-import is always a clean slate for module-managed items while pres
 
 The loop is broken by marking the character as "syncing" on the actor document itself. Actor flags replicate to all clients, so any client that observes the mark suppresses its own export-queueing until the sync ends.
 
-**Mechanism (`src/sync-pause.ts`):**
+**Mechanism (`src/sync/sync-pause.ts`):**
 
 - `beginSyncPause(actor)` / `endSyncPause(actor)` wrap an import or push. They add/remove a **token** to a `demiplane-pf2e.syncActiveTokens` array stored on the actor flag.
 - `isSyncActive(actor)` (used by `HookManager`) blocks hook-driven queueing on _every_ client — including the one that started the sync.
@@ -486,7 +487,7 @@ The loop is broken by marking the character as "syncing" on the actor document i
 
 **Rationale:** Two representations of the same event can drift, and a pre-rendered string can't drive a UI without being parsed back apart. The module is unreleased, so there is no persisted data to migrate — the cost of a correct model is the rework, not a migration, and that rework is bounded (the sync dialog, the titlebar dot, and their tests). Carrying a legacy string field forward would leave a second source of truth in the codebase permanently.
 
-**Mechanism:** `ImportSummary.unmapped` replaces the old `unresolved: string[]`; `sync-issues.ts` stores the records under an `unmappedSlugs` actor flag and the dialog renders `[...unmapped.map(formatUnmapped), ...importIssues]`, so the visible wording is unchanged. Non-slug failures (e.g. unknown languages) move to `summary.errors` rather than being forced into the shape.
+**Mechanism:** `ImportSummary.unmapped` replaces the old `unresolved: string[]`; `sync/sync-issues.ts` stores the records under an `unmappedSlugs` actor flag and the dialog renders `[...unmapped.map(formatUnmapped), ...importIssues]`, so the visible wording is unchanged. Non-slug failures (e.g. unknown languages) move to `summary.errors` rather than being forced into the shape.
 
 Full requirements and design: [REQUIREMENTS-slug-mapping.md](./REQUIREMENTS-slug-mapping.md), [DESIGN-slug-mapping.md](./DESIGN-slug-mapping.md).
 
@@ -538,7 +539,7 @@ A useful side effect: the store doubles as a resolution cache. Because a mapping
 
 **Mechanism:**
 
-- `recordResolvedMapping(kind, slug, mapping)` in `slug-mapping.ts` writes an entry only when none exists for that slug/kind. It is called on the compendium-fallback success path of both resolvers in `import/compendium-resolver.ts` (`resolveCompendiumItem` and the shared spell `findSpellDocument`), _after_ `resolveMappedItem` has already returned null — so recording never overwrites a deliberate GM override, and never re-records within a run.
+- `recordResolvedMapping(kind, slug, mapping)` in `slug-mapping.ts` writes an entry only when none exists for that slug/kind. It is called on the compendium-fallback success path of both resolvers in `import/shared/compendium-resolver.ts` (`resolveCompendiumItem` and the shared spell `findSpellDocument`), _after_ `resolveMappedItem` has already returned null — so recording never overwrites a deliberate GM override, and never re-records within a run.
 - The slug key is the raw Demiplane slug (the same key `resolveMappedItem` looks up), and the target is the compendium UUID that matched.
 - Self-healing is unchanged: a recorded mapping whose target later disappears resolves to null, so the import falls back to a fresh lookup and the row is flagged as missing in the editor.
 
@@ -579,11 +580,11 @@ A useful side effect: the store doubles as a resolution cache. Because a mapping
 
 What `@dfreds/foundry-types` deliberately does not provide is the PF2e _system_ data model (`Actor#system` / `Item#system` stay generic `object`, because only the PF2e system knows those shapes and it doesn't publish them), nor the Foundry runtime globals (`game`, `ui`, `CONFIG`). Reaching those still needs a type assertion. Left inline, those assertions multiply and drift, and `as unknown as` in particular hides real shape errors. So each cause is centralized behind a named boundary:
 
-| Seam                       | Covers                                                                                     | Public API                                                                                                                                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/pf2e-types.ts`        | PF2e `system` shapes, document internals, and PF2e runtime globals                         | `actorSystem`, `characterSystem`, `itemSystem`, `documentSystem`, `demiplaneItemFlags`, `toPlainData`, `sourceRules`, `itemSourceId`, `compendiumSource`, `pf2eLanguages`, `builtinRuleElement` (+ the `Pf2e*` shape interfaces) |
-| `src/import/pack-index.ts` | Typing a compendium index's `system` payload (which `CompendiumIndexData` leaves as `any`) | `getPackIndex(pack, fields)`, `PackIndex` / `PackIndexEntry`                                                                                                                                                                     |
-| `src/foundry-globals.d.ts` | Declaring the Foundry runtime globals `@dfreds/foundry-types` omits                        | ambient `game` / `ui` / `CONFIG` / `ActorSheet` shapes                                                                                                                                                                           |
+| Seam                        | Covers                                                                                     | Public API                                                                                                                                                                                                                       |
+| --------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/core/pf2e-types.ts`    | PF2e `system` shapes, document internals, and PF2e runtime globals                         | `actorSystem`, `characterSystem`, `itemSystem`, `documentSystem`, `demiplaneItemFlags`, `toPlainData`, `sourceRules`, `itemSourceId`, `compendiumSource`, `pf2eLanguages`, `builtinRuleElement` (+ the `Pf2e*` shape interfaces) |
+| `src/mapping/pack-index.ts` | Typing a compendium index's `system` payload (which `CompendiumIndexData` leaves as `any`) | `getPackIndex(pack, fields)`, `PackIndex` / `PackIndexEntry`                                                                                                                                                                     |
+| `src/foundry-globals.d.ts`  | Declaring the Foundry runtime globals `@dfreds/foundry-types` omits                        | ambient `game` / `ui` / `CONFIG` / `ActorSheet` shapes                                                                                                                                                                           |
 
 **Rule for new code:** touching `Actor#system` / `Item#system`, a PF2e-specific document field (`_source`, `sourceId`, `_stats`), a compendium index, or a PF2e runtime global goes through a seam accessor. If the accessor you need doesn't exist, add it to the relevant seam (usually `pf2e-types.ts`) rather than writing `as unknown as { … }` at the call site. That keeps every system-shape assertion in one file with its rationale, and keeps call sites reading as intent (`characterSystem(actor).skills`, `sourceRules(item)`, `toPlainData(doc)`).
 
@@ -591,7 +592,7 @@ What `@dfreds/foundry-types` deliberately does not provide is the PF2e _system_ 
 
 **What legitimately stays inline (not everything routes through a seam):**
 
-- **Genuinely untyped globals reached once**, each already wrapped in a single dedicated function: `libWrapper` (`src/libwrapper.ts` — a `globalThis` lookup for an optional module), and the module API assignment in `module.ts`. An `as unknown as` here is the correct tool: there is no published type for the surface, and it is touched in exactly one place.
+- **Genuinely untyped globals reached once**, each already wrapped in a single dedicated function: `libWrapper` (`src/core/libwrapper.ts` — a `globalThis` lookup for an optional module), and the module API assignment in `module.ts`. An `as unknown as` here is the correct tool: there is no published type for the surface, and it is touched in exactly one place.
 - **Parse-boundary narrowing** — `stream-engines.ts` narrowing a freshly-parsed JSON object to a discriminated-union member. This is data ingestion, not a Foundry-type gap.
 - **Single-consumer UI shapes** — the mapping app's `AppClass` constructor coercion and its Compendium Browser access, and `titlebar-dot.ts`'s window→`ActorSheet` narrowing. These are one-off, UI-layer, and self-descriptive.
 
@@ -605,13 +606,13 @@ The test is the same as elsewhere: centralize a cast when the same gap is hit fr
 
 **Decision:** `src/module.ts` (385 lines, 9.4% line coverage) is thin wiring only. Import/export flows, the sidebar import-button flow, the actor context-menu option, and the module API each live in a focused unit that `module.ts` composes; the flows take their collaborators as parameters instead of reading module globals.
 
-| Unit                         | Responsibility                                                                                                                                                                                                  |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/sync-flows.ts`          | `importLinkedCharacter`, `exportLinkedCharacter`, `pushCharacterEngines`, `reimportActorOnConflict`, `recoverStaleSyncPauses`, plus the shared `SyncFlowDeps` / `ImportCharacterFn` / `ExportCharacterFn` types |
-| `src/directory-import.ts`    | Sidebar import-button flow: `extractCharacterId`, prompt content, permission check, and the full click orchestration (`onImportButtonClick`)                                                                    |
-| `src/actor-context-menu.ts`  | "Update from Demiplane" option: `canOpenSyncDialog` visibility rule and the wipe-and-reimport click flow                                                                                                        |
-| `src/module-api.ts`          | `registerModuleApi`: the external `importCharacter` / `exportNow` surface with its unlinked-actor and missing-token guards                                                                                      |
-| `src/module.ts` (~165 lines) | `init`/`ready` wiring, singleton construction, hook registration, and binding the real collaborators into the flow functions                                                                                    |
+| Unit                           | Responsibility                                                                                                                                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/flows/sync-flows.ts`      | `importLinkedCharacter`, `exportLinkedCharacter`, `pushCharacterEngines`, `reimportActorOnConflict`, `recoverStaleSyncPauses`, plus the shared `SyncFlowDeps` / `ImportCharacterFn` / `ExportCharacterFn` types |
+| `src/ui/directory-import.ts`   | Sidebar import-button flow: `extractCharacterId`, prompt content, permission check, and the full click orchestration (`onImportButtonClick`)                                                                    |
+| `src/ui/actor-context-menu.ts` | "Update from Demiplane" option: `canOpenSyncDialog` visibility rule and the wipe-and-reimport click flow                                                                                                        |
+| `src/ui/module-api.ts`         | `registerModuleApi`: the external `importCharacter` / `exportNow` surface with its unlinked-actor and missing-token guards                                                                                      |
+| `src/module.ts` (~165 lines)   | `init`/`ready` wiring, singleton construction, hook registration, and binding the real collaborators into the flow functions                                                                                    |
 
 **Rationale:** The entrypoint mixed three things that want different test strategies: Foundry hook registration (needs hook invocation with globals mocked), user-flow branching (needs each branch driven with fakes), and pure helpers (direct unit tests). Co-located, the flows were reachable only through the module's private singletons, so they went untested — 9.4% coverage on the file that owns every sync flow. Separated, each unit is fully drivable: flows take a `SyncFlowDeps { exportManager, importOrchestrator }` (tests substitute a fake orchestrator and a real `ExportManager` over a stub client), while Foundry globals keep the codebase's existing global-mock pattern. Coverage is now 95%+ lines on `module.ts` and 100% on all four units.
 
@@ -678,5 +679,49 @@ The hook-callback `(...args: unknown[]) => void` boundary casts and the module-A
 - Resolution order per ChoiceSet is matchers → stored override → blind `choices[0]`. The override is consulted only when matching fails, so it can never win over a successful automatic match, and single-option ChoiceSets never consult it at all.
 - Overrides live in one `choiceOverrides` actor flag (`key -> option value`), keyed by owning-item slug plus the rule's selection flag; unresolved ChoiceSets are captured as structured records in a sibling flag, replaced wholesale each import exactly like `unmappedSlugs`.
 - The sync dialog renders every non-automatic choice two ways: guesses get dropdowns ("Choices needing your input", lighting the red dot); applied picks get a "Your picks in effect" list showing what is in force versus what would have been guessed, each with a trashcan delete. Deleting drops the override — the manual garbage collection — and the next import falls back to guessing and re-reports the ChoiceSet for a fresh pick. Stored picks for ChoiceSets that now auto-resolve simply never render.
-- The pure matching helpers live in `src/import/choice-overrides.ts` (no Foundry dependencies); the handler owns the override map's lifecycle. Matchers in `choice-matchers.ts` stay pure and untouched.
+- The pure matching helpers live in `src/import/choices/choice-overrides.ts` (no Foundry dependencies); the handler owns the override map's lifecycle. Matchers in `import/choices/choice-matchers.ts` stay pure and untouched.
 - Sanctification is one of these, not a special case: the old per-deity preference, affirmative default, and dialog selector are gone. The sanctification ChoiceSet resolves like any other (its rule even carries explicit `adjustName: false`, so no rename), and its labels/options render through the same i18n lookup as every other pick.
+
+---
+
+## 32. Packaging: Cohesive Packages with Curated Barrels
+
+**Decision:** `src/` is split into packages with high internal cohesion and
+low coupling — `core`, `sync`, `flows`, `export`, `mapping`, `ui`, and
+`import/` (driver plus `character`/`choices`/`equipment`/`shared`/`spells`
+sub-packages) — each exposing a curated `index.ts` barrel of exactly the
+symbols consumed across its boundary (191 names total, zero dead surface).
+Every cross-package import targets a barrel, never a deep file, and the
+module graph is acyclic. Both invariants are enforced by
+dependency-cruiser (`npm run check:deps`, wired into the pre-commit hook
+and CI). Each package records its responsibility, surface, and mechanics
+in a co-located `DESIGN.md`; the package layering is diagrammed in
+[ARCHITECTURE](./ARCHITECTURE.md#package-layout).
+
+**Rationale:** The codebase grew flat: ~30 files at `src/` root with
+foundational constants (`import/types.ts`) imported by everything and
+bridge logic (`sync-flows.ts`) tangled between directions. Splitting by
+measured cohesion (files that import each other live together) with a
+strict inward dependency direction makes the blast radius of a change
+obvious and new code land in the right place without tribal knowledge.
+
+**Tradeoffs considered:**
+
+| Approach                                                   | Pros                                                        | Cons                                                                                                   |
+| ---------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Curated barrels + dependency-cruiser **(chosen)**          | Surface is explicit and enforced; violations fail commit/CI | Barrel lists need updating when a boundary API is added (compiler + cruiser point at the fix)          |
+| `export *` barrels                                         | Zero maintenance                                            | Surface is "everything" — the measurement showed `import/spells` exposing ~50 symbols with 2 consumers |
+| ESLint `no-internal-modules` instead of dependency-cruiser | Same toolchain as other rules                               | Covers barrel discipline only, not layering direction or cycles; needs a new plugin                    |
+| TypeScript project references / subpath exports            | Hard module boundaries                                      | Heavy machinery for a single bundled module; fights the rollup build                                   |
+
+**Consequences discovered while implementing:**
+
+- Barrels _create_ module cycles when they re-export a module that depends
+  upward (`sync/index` → `sync-flows` → `export/index` →
+  `hook-manager` → `sync/index`). The fix was structural, not a rule
+  exception: the bridge moved to its own `flows/` package sitting above
+  `sync`/`import`/`export`, so every barrel is downward-closed. A barrel
+  must only re-export modules that don't depend on other barrels.
+- Tests deliberately import deep paths and are exempt from the cruiser
+  rules — which is what lets the production surface stay minimal while
+  tests still reach internals.
