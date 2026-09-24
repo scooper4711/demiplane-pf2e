@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { importFontSpells } from "../../src/import/divine-font.js";
+import { importFontSpells } from "../../src/import/spells/divine-font.js";
 
 const HEAL = { _id: "sp-heal", name: "Heal", type: "spell", system: { slug: "heal", level: { value: 1 } } };
 

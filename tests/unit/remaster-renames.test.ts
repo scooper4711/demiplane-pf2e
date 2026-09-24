@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseLanguageRenames } from "../../src/import/remaster-renames.js";
+import { parseLanguageRenames } from "../../src/import/character/remaster-renames.js";
 
 const PAGE_EXCERPT = `
 Removal of Spell Schools

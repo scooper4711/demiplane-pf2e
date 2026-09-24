@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks, createMockPack } from "./foundry-mocks.js";
-import { findMatchInChoices } from "../../src/import/choice-matchers.js";
-import { matchKineticElement } from "../../src/import/kineticist-matchers.js";
-import { registeredMatchers, matchPrePredicate } from "../../src/import/matcher-registry.js";
-import { choiceConfigForEngines } from "../../src/import/class-choice-config.js";
+import { findMatchInChoices } from "../../src/import/choices/choice-matchers.js";
+import { matchKineticElement } from "../../src/import/choices/kineticist-matchers.js";
+import { registeredMatchers, matchPrePredicate } from "../../src/import/choices/matcher-registry.js";
+import { choiceConfigForEngines } from "../../src/import/choices/class-choice-config.js";
 
 function skillEngine(slug) {
   return {

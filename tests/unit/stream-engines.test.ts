@@ -6,7 +6,7 @@ import {
   resolveFeatEngineIdsBySlug,
   resolveGrantBuilderSelections,
   resolveGrantedFeatsBySlug,
-} from "../../src/import/stream-engines.js";
+} from "../../src/import/shared/stream-engines.js";
 
 /** Builds an NDJSON engine line with a top-level engineName and modifier payload. */
 function engineLine(id: string, engineName: string, modifiers: unknown[]): string {

@@ -1,6 +1,6 @@
-import { debugLog } from "../core/debug-log.js";
-import { toFoundrySlug } from "../core/slug-utils.js";
-import { PF2E_ENGINE_SOURCE } from "../core/config.js";
+import { debugLog } from "../../core/debug-log.js";
+import { toFoundrySlug } from "../../core/slug-utils.js";
+import { PF2E_ENGINE_SOURCE } from "../../core/config.js";
 
 /** Demiplane stream-engines endpoint (NDJSON engine-definition fetch). */
 const STREAM_ENGINES_URL = "https://character.demiplane.com/stream-engines";

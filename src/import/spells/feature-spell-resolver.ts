@@ -1,8 +1,8 @@
 /* eslint-disable max-lines -- Feature-spell routing is inherently large; split would hurt cohesion */
-import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
-import { MODULE_ID, stampImported } from "../core/types.js";
-import { debugLog } from "../core/debug-log.js";
-import { toFoundrySlug } from "../core/slug-utils.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
+import { MODULE_ID, stampImported } from "../../core/types.js";
+import { debugLog } from "../../core/debug-log.js";
+import { toFoundrySlug } from "../../core/slug-utils.js";
 import {
   fetchStreamEngineLines,
   fetchDomainEngineData,
@@ -14,13 +14,13 @@ import {
   type EngineModifier,
   type DomainEngineData,
   type RawEngineLine,
-} from "./stream-engines.js";
-import { resolveSpellFromCompendium } from "./compendium-resolver.js";
+} from "../shared/stream-engines.js";
+import { resolveSpellFromCompendium } from "../shared/compendium-resolver.js";
 import { getCharacterLevel, applySlotMaximums } from "./spell-slots.js";
 import { deriveClassEntryName } from "./spell-importer.js";
 import { HEX_FOCUS_GROUP, APPARITION_SPELLCASTING, RUNES_SPELLCASTING_FEATURE } from "./spellcasting-features.js";
-import { itemSystem } from "../core/pf2e-types.js";
-import { PROFICIENCY_TRAINED } from "./pf2e-ranks.js";
+import { itemSystem } from "../../core/pf2e-types.js";
+import { PROFICIENCY_TRAINED } from "../shared/pf2e-ranks.js";
 
 /** A spell granted by a feature engine (class feature, heritage, feat). */
 export interface GrantedSpell {

@@ -3,7 +3,7 @@ import { MODULE_ID, formatUnmapped } from "../core/types.js";
 import type { ChoiceOverrides, ImportSummary, UnresolvedChoice } from "../core/types.js";
 import { isWritingEnabled } from "../sync/write-level.js";
 import { isSyncActive } from "../sync/sync-pause.js";
-import { localizeChoiceLabel } from "../import/choice-overrides.js";
+import { localizeChoiceLabel } from "../import/choices/choice-overrides.js";
 import {
   acknowledgeIssues,
   getChoiceOverrides,

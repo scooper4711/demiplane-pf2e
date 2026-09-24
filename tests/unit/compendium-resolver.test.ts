@@ -4,7 +4,7 @@ import {
   resolveCompendiumItem,
   resolveSlugToUuid,
   resolveSpellFromCompendium,
-} from "../../src/import/compendium-resolver.js";
+} from "../../src/import/shared/compendium-resolver.js";
 import { clearPackDiscoveryCache } from "../../src/mapping/pack-discovery.js";
 import { registerSlugMappingSettings, setMapping, getMapping } from "../../src/mapping/slug-mapping.js";
 

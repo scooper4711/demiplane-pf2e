@@ -4,8 +4,8 @@ import {
   resolveUserOverride,
   unresolvedChoiceRecord,
   localizeChoiceLabel,
-} from "../../src/import/choice-overrides.js";
-import type { ChoiceSetContext } from "../../src/import/choice-set-types.js";
+} from "../../src/import/choices/choice-overrides.js";
+import type { ChoiceSetContext } from "../../src/import/choices/choice-set-types.js";
 
 function context(overrides: Partial<ChoiceSetContext> = {}): ChoiceSetContext {
   return {

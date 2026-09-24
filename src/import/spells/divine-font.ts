@@ -1,5 +1,5 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
-import { toFoundrySlug } from "../core/slug-utils.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
+import { toFoundrySlug } from "../../core/slug-utils.js";
 import { createEntry, resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 
 const FONT_ENTRY_NAME = "Divine Font (Healing)";

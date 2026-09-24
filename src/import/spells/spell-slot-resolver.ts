@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
 import {
   fetchStreamEngineLines,
   parseEngineLines,
@@ -7,7 +7,7 @@ import {
   type DemiplaneSlotEntry,
   type RawEngineLine,
   type RepertoireCountEntry,
-} from "./stream-engines.js";
+} from "../shared/stream-engines.js";
 import { isArchetypeSpellcasting, featureSlugMatches } from "./spellcasting-features.js";
 
 export type { DemiplaneSlotEntry };

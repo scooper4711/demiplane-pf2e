@@ -1,5 +1,5 @@
-import { stampImported } from "../core/types.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../core/types.js";
+import { stampImported } from "../../core/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
 import {
   genericConsumableSlug,
   isFormulaEngine,
@@ -7,23 +7,23 @@ import {
   normalizeEquipmentSlug,
   parseRankedConsumable,
   rawEquipmentSlug,
-} from "../core/slug-utils.js";
+} from "../../core/slug-utils.js";
 import { isRuneEngine, collectRunesByParent, type WeaponRunes } from "./weapon-runes.js";
-import { resolveSpellSourceFromCompendium } from "./compendium-resolver.js";
-import { fetchStreamEngineLines } from "./stream-engines.js";
-import { debugLog } from "../core/debug-log.js";
-import { EQUIPMENT_PACK } from "../core/config.js";
+import { resolveSpellSourceFromCompendium } from "../shared/compendium-resolver.js";
+import { fetchStreamEngineLines } from "../shared/stream-engines.js";
+import { debugLog } from "../../core/debug-log.js";
+import { EQUIPMENT_PACK } from "../../core/config.js";
 import { loadEquipmentSources, findEquipmentEntry, type EquipmentSource } from "./equipment-sources.js";
-import { resolveMappedItem, recordResolvedMapping } from "../mapping/slug-mapping.js";
-import { shouldSkipZeroQuantityItems } from "../sync/write-level.js";
-import { getPackIndex } from "../mapping/pack-index.js";
+import { resolveMappedItem, recordResolvedMapping } from "../../mapping/slug-mapping.js";
+import { shouldSkipZeroQuantityItems } from "../../sync/write-level.js";
+import { getPackIndex } from "../../mapping/pack-index.js";
 import {
   actorNaturalSize,
   documentSystem,
   toPlainData,
   type Pf2eItemSystem,
   type Pf2eSize,
-} from "../core/pf2e-types.js";
+} from "../../core/pf2e-types.js";
 import { createContainersFirst } from "./container-placement.js";
 
 /** A fixed spell a scroll/wand carries, taken from its `add-special-item-spell` modifier. */

@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { resolveFeatureGrantedSpells, applyFeatureGrantedSpells } from "../../src/import/feature-spell-resolver.js";
+import {
+  resolveFeatureGrantedSpells,
+  applyFeatureGrantedSpells,
+} from "../../src/import/spells/feature-spell-resolver.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 function featureEngine(name: string, id = "feat-1"): DemiplaneEngineEntry {

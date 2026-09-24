@@ -1,8 +1,8 @@
-import { EQUIPMENT_PACK } from "../core/config.js";
-import { EXPECTED_TYPES } from "../core/types.js";
-import { findPacksWithItemTypes } from "../mapping/pack-discovery.js";
+import { EQUIPMENT_PACK } from "../../core/config.js";
+import { EXPECTED_TYPES } from "../../core/types.js";
+import { findPacksWithItemTypes } from "../../mapping/pack-discovery.js";
 import type CompendiumCollection from "@client/documents/collections/compendium-collection.mjs";
-import { getPackIndex, type PackIndex } from "../mapping/pack-index.js";
+import { getPackIndex, type PackIndex } from "../../mapping/pack-index.js";
 
 /** One searchable equipment source: the official pack first, third-party after. */
 export interface EquipmentSource {

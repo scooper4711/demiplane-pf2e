@@ -17,18 +17,22 @@ import {
   compendiumSource,
   toPlainData,
 } from "../core/pf2e-types.js";
-import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
+import { MAX_HERO_POINTS } from "./shared/pf2e-ranks.js";
 import { IMPORT_PLACEHOLDER_NAME } from "../core/config.js";
 import { debugLog } from "../core/debug-log.js";
 import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "../core/slug-utils.js";
-import { resolveCompendiumItem } from "./compendium-resolver.js";
-import { ChoiceSetHandler } from "./choice-set-handler.js";
-import { applyBiography } from "./biography-importer.js";
-import { applyEquipment, applyCurrency, resizeActorEquipment } from "./equipment-importer.js";
-import { applyCraftingFormulas } from "./crafting-formulas.js";
-import { applySpells } from "./spell-importer.js";
-import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
-import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
+import { resolveCompendiumItem } from "./shared/compendium-resolver.js";
+import { ChoiceSetHandler } from "./choices/choice-set-handler.js";
+import { applyBiography } from "./character/biography-importer.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment } from "./equipment/equipment-importer.js";
+import { applyCraftingFormulas } from "./equipment/crafting-formulas.js";
+import { applySpells } from "./spells/spell-importer.js";
+import { applyFeatureGrantedSpells } from "./spells/feature-spell-resolver.js";
+import {
+  applySkillProficiencies,
+  applyLanguages,
+  applyAttributeBoosts,
+} from "./character/attribute-language-importer.js";
 
 /** Shared state threaded through every phase of a single import. */
 export interface ImportContext {

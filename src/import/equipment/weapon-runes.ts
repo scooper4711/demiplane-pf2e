@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry } from "../core/types.js";
+import type { DemiplaneEngineEntry } from "../../core/types.js";
 
 /**
  * Fundamental and property runes affixed to a single weapon, in the shape the

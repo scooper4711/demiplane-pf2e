@@ -1,17 +1,17 @@
 /* eslint-disable max-lines -- ChoiceSet handler is inherently large; split would hurt cohesion */
-import type { DemiplaneEngineEntry } from "../core/types.js";
-import type { ChoiceOverrides, UnresolvedChoice } from "../core/types.js";
-import { toFoundrySlug, rawEquipmentSlug } from "../core/slug-utils.js";
-import { resolveSlugToUuid, resolveCompendiumItem } from "./compendium-resolver.js";
-import { debugLog } from "../core/debug-log.js";
+import type { DemiplaneEngineEntry } from "../../core/types.js";
+import type { ChoiceOverrides, UnresolvedChoice } from "../../core/types.js";
+import { toFoundrySlug, rawEquipmentSlug } from "../../core/slug-utils.js";
+import { resolveSlugToUuid, resolveCompendiumItem } from "../shared/compendium-resolver.js";
+import { debugLog } from "../../core/debug-log.js";
 import { toChoiceSlug } from "./choice-slug.js";
 import { findMatchInChoices } from "./choice-matchers.js";
 import { matchPrePredicate } from "./matcher-registry.js";
 import type { Choice, ChoiceSetContext, PreCreateParams } from "./choice-set-types.js";
 import { resolveUserOverride, unresolvedChoiceRecord, localizeChoiceLabel } from "./choice-overrides.js";
 import { IkonWeaponResolver, isWeaponIkon, type IkonItem, type WeaponItem } from "./ikon-weapon-resolver.js";
-import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../core/libwrapper.js";
-import { builtinRuleElement } from "../core/pf2e-types.js";
+import { getLibWrapper, registerWrapper, unregisterWrapper, type WrappedFn } from "../../core/libwrapper.js";
+import { builtinRuleElement } from "../../core/pf2e-types.js";
 
 /** libWrapper target path for the PF2e ChoiceSet's `preCreate`, resolved from `globalThis`. */
 const CHOICE_SET_TARGET = "game.pf2e.RuleElements.builtin.ChoiceSet.prototype.preCreate";

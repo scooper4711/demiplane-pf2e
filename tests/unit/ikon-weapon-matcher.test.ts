@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolveIkonWeapons, type IkonToAssign } from "../../src/import/ikon-weapon-matcher.js";
+import { resolveIkonWeapons, type IkonToAssign } from "../../src/import/choices/ikon-weapon-matcher.js";
 
 describe("resolveIkonWeapons", () => {
   const ikon = (ikonId: string, candidateWeaponIds: string[]): IkonToAssign => ({ ikonId, candidateWeaponIds });

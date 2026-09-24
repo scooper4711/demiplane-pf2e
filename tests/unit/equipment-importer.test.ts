@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { applyEquipment, applyCurrency, resizeActorEquipment } from "../../src/import/equipment-importer.js";
-import { applyCraftingFormulas } from "../../src/import/crafting-formulas.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment } from "../../src/import/equipment/equipment-importer.js";
+import { applyCraftingFormulas } from "../../src/import/equipment/crafting-formulas.js";
 import { clearPackDiscoveryCache } from "../../src/mapping/pack-discovery.js";
 import { getAllMappings, setMapping, registerSlugMappingSettings } from "../../src/mapping/slug-mapping.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";

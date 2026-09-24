@@ -20,14 +20,14 @@ import { normalizeBearerToken, type DemiplaneClient } from "@scooper4711/demipla
 import type { DemiplaneEngineEntry, ImportOptions, ImportSummary } from "../core/types.js";
 import { MODULE_ID } from "../core/types.js";
 import { debugLog } from "../core/debug-log.js";
-import { ChoiceSetHandler, formatChoiceSetFallback } from "./choice-set-handler.js";
+import { ChoiceSetHandler, formatChoiceSetFallback } from "./choices/choice-set-handler.js";
 import { getChoiceOverrides } from "../sync/sync-issues.js";
 import { findVariantMismatches, type FoundryVariantSettings } from "./variant-check.js";
 import { toUserFacingSyncError } from "../core/token.js";
 import { readConfiguredToken } from "../core/token-source.js";
 import { PF2E_ENGINE_SOURCE } from "../core/config.js";
 import { computeEngineSig } from "../core/engine-sig.js";
-import { resolveGrantedFeatsBySlug, resolveGrantBuilderSelections } from "./stream-engines.js";
+import { resolveGrantedFeatsBySlug, resolveGrantBuilderSelections } from "./shared/stream-engines.js";
 import {
   buildSelectionData,
   categorizeEngines,

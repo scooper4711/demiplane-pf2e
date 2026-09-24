@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry } from "../core/types.js";
+import type { DemiplaneEngineEntry } from "../../core/types.js";
 import type { Choice } from "./choice-set-types.js";
 
 /**

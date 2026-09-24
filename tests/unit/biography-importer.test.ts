@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
-import { applyBiography } from "../../src/import/biography-importer.js";
+import { applyBiography } from "../../src/import/character/biography-importer.js";
 import { clearPackDiscoveryCache } from "../../src/mapping/pack-discovery.js";
 import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 

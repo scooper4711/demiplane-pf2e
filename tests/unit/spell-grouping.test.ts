@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupSpells } from "../../src/import/spell-grouping.js";
+import { groupSpells } from "../../src/import/spells/spell-grouping.js";
 import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 
 function spell(slug: string, args: Record<string, unknown>): DemiplaneEngineEntry {
