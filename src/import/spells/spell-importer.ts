@@ -1,7 +1,7 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/index.js";
 import { groupSpells } from "./spell-grouping.js";
-import type { SpellGroup } from "./spell-grouping.js";
-import type { FocusSelection } from "./spell-grouping.js";
+import type { SpellGroup, FocusSelection } from "./spell-grouping.js";
+
 import { createEntry, addSpells, capitalize, resolveSpellItems, createSpellItems } from "./spellcasting-entry.js";
 import { placePreparedSpells, markSignatureSpells } from "./prepared-spells.js";
 import { importFontSpells } from "./divine-font.js";

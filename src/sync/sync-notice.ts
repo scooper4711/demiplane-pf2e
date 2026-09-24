@@ -1,4 +1,4 @@
-import { MODULE_ID } from "../core/types.js";
+import { MODULE_ID } from "../core/index.js";
 import { isRemoteSyncActive } from "./sync-pause.js";
 import { isEligibleWriter } from "./sync-election.js";
 

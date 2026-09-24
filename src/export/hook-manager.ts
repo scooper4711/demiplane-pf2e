@@ -1,10 +1,18 @@
 /* eslint-disable max-lines -- Hook reactions plus their manual-push re-queue helpers are cohesive; per-capability gating is inherently branchy and splitting would scatter one concern */
-import { MODULE_ID, INVENTORY_ITEM_TYPES } from "../core/types.js";
-import { debugLog } from "../core/debug-log.js";
+import {
+  MODULE_ID,
+  INVENTORY_ITEM_TYPES,
+  debugLog,
+  DEMIPLANE_ICON_SRC,
+  characterSystem,
+  itemSystem,
+  localizeLanguage,
+} from "../core/index.js";
+
 import type { ExportManager } from "./export-manager.js";
 import type { EquippedState } from "./change-buffer.js";
-import { isSyncActive } from "../sync/sync-pause.js";
 import {
+  isSyncActive,
   canWriteBiography,
   canWriteLanguages,
   canWriteOrganizedPlayId,
@@ -20,9 +28,8 @@ import {
   canSoftDeleteInventory,
   canDeleteInventory,
   isWritingEnabled,
-} from "../sync/write-level.js";
-import { DEMIPLANE_ICON_SRC } from "../core/config.js";
-import { characterSystem, itemSystem, localizeLanguage } from "../core/pf2e-types.js";
+} from "../sync/index.js";
+
 import { queueSpellcastingEntryChanges, queueSpellSlotResync } from "./spellcasting-entry-sync.js";
 
 /**

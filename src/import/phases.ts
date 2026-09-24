@@ -7,32 +7,32 @@
  * ordering and arguments of the original sequential implementation.
  */
 
-import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "../core/types.js";
-import { stampImported, INVENTORY_ITEM_TYPES } from "../core/types.js";
+import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "../core/index.js";
 import {
+  stampImported,
+  INVENTORY_ITEM_TYPES,
   characterSystem,
   itemSystem,
   sourceRules,
   itemSourceId,
   compendiumSource,
   toPlainData,
-} from "../core/pf2e-types.js";
-import { MAX_HERO_POINTS } from "./shared/pf2e-ranks.js";
-import { IMPORT_PLACEHOLDER_NAME } from "../core/config.js";
-import { debugLog } from "../core/debug-log.js";
-import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "../core/slug-utils.js";
-import { resolveCompendiumItem } from "./shared/compendium-resolver.js";
-import { ChoiceSetHandler } from "./choices/choice-set-handler.js";
-import { applyBiography } from "./character/biography-importer.js";
-import { applyEquipment, applyCurrency, resizeActorEquipment } from "./equipment/equipment-importer.js";
-import { applyCraftingFormulas } from "./equipment/crafting-formulas.js";
-import { applySpells } from "./spells/spell-importer.js";
-import { applyFeatureGrantedSpells } from "./spells/feature-spell-resolver.js";
-import {
-  applySkillProficiencies,
-  applyLanguages,
-  applyAttributeBoosts,
-} from "./character/attribute-language-importer.js";
+  IMPORT_PLACEHOLDER_NAME,
+  debugLog,
+  toFoundrySlug,
+  getSlug,
+  categorizeEngine,
+  parseFeatSlot,
+  describeFeatSlot,
+} from "../core/index.js";
+
+import { MAX_HERO_POINTS, resolveCompendiumItem } from "./shared/index.js";
+
+import { ChoiceSetHandler } from "./choices/index.js";
+import { applyBiography, applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./character/index.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment, applyCraftingFormulas } from "./equipment/index.js";
+
+import { applySpells, applyFeatureGrantedSpells } from "./spells/index.js";
 
 /** Shared state threaded through every phase of a single import. */
 export interface ImportContext {

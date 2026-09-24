@@ -1,7 +1,7 @@
-import { MODULE_ID } from "../core/types.js";
-import { DEMIPLANE_SHEET_BASE, IMPORT_PLACEHOLDER_NAME } from "../core/config.js";
-import { findActorLinkedTo } from "../sync/actor-link.js";
-import type { ImportCharacterFn } from "../sync/sync-flows.js";
+import { MODULE_ID, DEMIPLANE_SHEET_BASE, IMPORT_PLACEHOLDER_NAME } from "../core/index.js";
+
+import { findActorLinkedTo } from "../sync/index.js";
+import type { ImportCharacterFn } from "../flows/index.js";
 
 /**
  * The "Import Demiplane Character" sidebar button flow, extracted from the

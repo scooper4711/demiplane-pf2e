@@ -8,7 +8,7 @@
  * updates. Anything unparseable falls back to previous behavior (unmapped).
  */
 
-import { slugifyFreeText, stripHtmlTags } from "../../core/slug-utils.js";
+import { slugifyFreeText, stripHtmlTags } from "../../core/index.js";
 
 const JOURNALS_PACK = "pf2e.journals";
 const REMASTER_JOURNAL = "Remaster Changes";

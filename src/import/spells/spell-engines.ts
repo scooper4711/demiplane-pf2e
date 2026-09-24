@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry } from "../../core/types.js";
+import type { DemiplaneEngineEntry } from "../../core/index.js";
 
 /**
  * PF2e-specific engine args for spell entries.

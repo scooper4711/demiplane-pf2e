@@ -1,9 +1,7 @@
-import { stampImported } from "../../core/types.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
-import { toFoundrySlug } from "../../core/slug-utils.js";
-import { resolveSpellFromCompendium } from "../shared/compendium-resolver.js";
-import { documentSystem } from "../../core/pf2e-types.js";
-import { PROFICIENCY_TRAINED } from "../shared/pf2e-ranks.js";
+import { stampImported, toFoundrySlug, documentSystem } from "../../core/index.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/index.js";
+
+import { resolveSpellFromCompendium, PROFICIENCY_TRAINED } from "../shared/index.js";
 
 /** Optional per-spell overrides applied to `system.location` on a resolved spell item. */
 export interface SpellLocationExtras {

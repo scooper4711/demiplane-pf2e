@@ -1,6 +1,6 @@
-import { toFoundrySlug } from "../../core/slug-utils.js";
+import { toFoundrySlug, debugLog } from "../../core/index.js";
 import { toChoiceSlug } from "./choice-slug.js";
-import { debugLog } from "../../core/debug-log.js";
+
 import { registerChoiceMatcher, type MatcherContext } from "./matcher-registry.js";
 import type { Choice } from "./choice-set-types.js";
 

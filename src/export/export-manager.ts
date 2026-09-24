@@ -1,13 +1,8 @@
-import { MODULE_ID } from "../core/types.js";
-import { debugLog } from "../core/debug-log.js";
-import { addExportIssue } from "../sync/sync-issues.js";
+import { MODULE_ID, debugLog, computeEngineSig, toUserFacingSyncError, syncClientToken } from "../core/index.js";
+
+import { addExportIssue, isRemoteSyncActive, isWritingEnabled, isClientElectedWriter } from "../sync/index.js";
 import type { DemiplaneClient } from "@scooper4711/demiplane-api";
-import { computeEngineSig } from "../core/engine-sig.js";
-import { isRemoteSyncActive } from "../sync/sync-pause.js";
-import { isWritingEnabled } from "../sync/write-level.js";
-import { toUserFacingSyncError } from "../core/token.js";
-import { syncClientToken } from "../core/token-source.js";
-import { isClientElectedWriter } from "../sync/sync-election.js";
+
 import {
   ChangeBuffer,
   type CastChange,

@@ -1,8 +1,7 @@
-import { MODULE_ID } from "../core/types.js";
-import type { ImportSummary } from "../core/types.js";
+import { MODULE_ID, DEMIPLANE_ICON_SRC, DEMIPLANE_ERROR_ICON_SRC } from "../core/index.js";
+import type { ImportSummary } from "../core/index.js";
 import { showDemiplaneInfoDialog } from "./demiplane-info-button.js";
-import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "../sync/sync-issues.js";
-import { DEMIPLANE_ICON_SRC, DEMIPLANE_ERROR_ICON_SRC } from "../core/config.js";
+import { ISSUES_CHANGED_EVENT, shouldShowIndicator } from "../sync/index.js";
 
 // Foundry v14 fires `activate{Document}Directory` when a sidebar tab is
 // switched to. @dfreds/foundry-types only declares overloads for a fixed set

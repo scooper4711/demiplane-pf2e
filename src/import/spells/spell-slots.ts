@@ -1,6 +1,6 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
-import { MODULE_ID } from "../../core/types.js";
-import { debugLog } from "../../core/debug-log.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/index.js";
+import { MODULE_ID, debugLog } from "../../core/index.js";
+
 import { resolveSpellSlots } from "./spell-slot-resolver.js";
 
 /**

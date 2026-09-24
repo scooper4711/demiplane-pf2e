@@ -1,7 +1,7 @@
-import { MODULE_ID } from "../core/types.js";
+import { MODULE_ID, itemSystem, type Pf2eSpellSlotRank } from "../core/index.js";
 import type { ExportManager } from "./export-manager.js";
-import { itemSystem, type Pf2eSpellSlotRank } from "../core/pf2e-types.js";
-import { canWriteSpellSlots } from "../sync/write-level.js";
+
+import { canWriteSpellSlots } from "../sync/index.js";
 
 /**
  * Export sync for spellcasting-entry slot state. Two independent concerns share

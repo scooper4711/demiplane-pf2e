@@ -9,7 +9,7 @@ import {
   notifyConflict,
   reimportActorOnConflict,
   handlePushConflict,
-} from "../../src/sync/sync-flows.js";
+} from "../../src/flows/sync-flows.js";
 import { isSyncActive } from "../../src/sync/sync-pause.js";
 import { MODULE_ID } from "../../src/core/types.js";
 

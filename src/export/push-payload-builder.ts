@@ -1,5 +1,5 @@
-import { normalizeEquipmentSlug, rawEquipmentSlug } from "../core/slug-utils.js";
-import { debugLog } from "../core/debug-log.js";
+import { normalizeEquipmentSlug, rawEquipmentSlug, debugLog } from "../core/index.js";
+
 import type { CharacterData, CustomEngine, DemiplaneClient } from "@scooper4711/demiplane-api";
 import { findCustomEngineByName } from "@scooper4711/demiplane-api";
 import type { CastChange, ContainerChange, EquippedState, PendingChange, PendingItemChange } from "./change-buffer.js";

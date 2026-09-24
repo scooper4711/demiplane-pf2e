@@ -1,8 +1,8 @@
-import { MODULE_ID } from "../core/types.js";
-import type { SlugKind } from "../core/types.js";
-import { EXPECTED_TYPES } from "../core/types.js";
+import { MODULE_ID, EXPECTED_TYPES } from "../core/index.js";
+import type { SlugKind } from "../core/index.js";
+
 import { findPacksWithItemTypes, clearPackDiscoveryCache } from "./pack-discovery.js";
-import { getUnmappedSlugs } from "../sync/sync-issues.js";
+import { getUnmappedSlugs } from "../sync/index.js";
 import { getAllMappings, setMapping, clearMapping } from "./slug-mapping.js";
 import { exportAction, importAction } from "./mapping-share.js";
 

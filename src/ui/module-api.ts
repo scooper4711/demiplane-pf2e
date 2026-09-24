@@ -1,5 +1,5 @@
-import { MODULE_ID } from "../core/types.js";
-import type { ExportCharacterFn, ImportCharacterFn } from "../sync/sync-flows.js";
+import { MODULE_ID } from "../core/index.js";
+import type { ExportCharacterFn, ImportCharacterFn } from "../flows/index.js";
 
 /**
  * Exposes the module API for external access and testing. Extracted from the

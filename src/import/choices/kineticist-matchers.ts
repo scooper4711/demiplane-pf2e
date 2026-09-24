@@ -1,8 +1,8 @@
-import type { DemiplaneEngineEntry } from "../../core/types.js";
+import type { DemiplaneEngineEntry } from "../../core/index.js";
 import type { Choice } from "./choice-set-types.js";
 import { toChoiceSlug } from "./choice-slug.js";
-import { toFoundrySlug, stripTrailingWord } from "../../core/slug-utils.js";
-import { debugLog } from "../../core/debug-log.js";
+import { toFoundrySlug, stripTrailingWord, debugLog } from "../../core/index.js";
+
 import { registerChoiceMatcher, type MatcherContext } from "./matcher-registry.js";
 import { registerClassChoices } from "./class-choice-config.js";
 

@@ -1,11 +1,11 @@
-import { MODULE_ID } from "../core/types.js";
-import type { ImportSummary } from "../core/types.js";
-import { debugLog } from "../core/debug-log.js";
-import { deleteImportedItems } from "../import/reconcile.js";
-import type { ExportManager, ExportResult } from "../export/export-manager.js";
-import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "../export/hook-manager.js";
-import { characterSystem } from "../core/pf2e-types.js";
-import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "./sync-pause.js";
+import { MODULE_ID, debugLog, characterSystem } from "../core/index.js";
+import type { ImportSummary } from "../core/index.js";
+
+import { deleteImportedItems } from "../import/index.js";
+import type { ExportManager, ExportResult } from "../export/index.js";
+import { queueAllItemChanges, queueAllDetailChanges, queueCombatResourceChanges } from "../export/index.js";
+
+import { beginSyncPause, endSyncPause, clearSyncPause, isSyncActive } from "../sync/index.js";
 import {
   resetImportIssues,
   addImportIssues,
@@ -15,8 +15,8 @@ import {
   hasNotifiedConflict,
   markConflictNotified,
   clearConflictNotified,
-} from "./sync-issues.js";
-import { isWritingEnabled, canWriteSessionState } from "./write-level.js";
+} from "../sync/index.js";
+import { isWritingEnabled, canWriteSessionState } from "../sync/index.js";
 
 // Re-exported so wiring and tests share one definition.
 export type { ExportResult };

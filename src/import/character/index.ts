@@ -1,7 +1,6 @@
 /**
  * Actor-profile import package: biography, attributes, and languages.
- * Depends only on core, shared, and mapping.
+ * Depends only on core, shared, and mapping — always via their barrels.
  */
-export * from "./remaster-renames.js";
-export * from "./biography-importer.js";
-export * from "./attribute-language-importer.js";
+export { applyAttributeBoosts, applyLanguages, applySkillProficiencies } from "./attribute-language-importer.js";
+export { applyBiography } from "./biography-importer.js";

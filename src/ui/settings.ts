@@ -1,14 +1,13 @@
-import { MODULE_ID } from "../core/types.js";
+import { MODULE_ID, TOKEN_HELP_URL, toUserFacingSyncError } from "../core/index.js";
 import { DemiplaneClient, normalizeBearerToken } from "@scooper4711/demiplane-api";
-import { registerSlugMappingSettings } from "../mapping/slug-mapping.js";
-import { getDemiplaneMappingAppClass } from "../mapping/demiplane-mapping-app.js";
+import { registerSlugMappingSettings, getDemiplaneMappingAppClass } from "../mapping/index.js";
+
 import {
   WRITE_LEVEL_SETTING,
   WRITE_LEVEL_LABELS,
   WRITE_LEVEL_DESCRIPTIONS,
   DEFAULT_WRITE_LEVEL,
-} from "../sync/write-level.js";
-import { TOKEN_HELP_URL, toUserFacingSyncError } from "../core/token.js";
+} from "../sync/index.js";
 
 interface SettingsHtml extends HTMLElement {
   querySelector(selector: string): HTMLElement | null;

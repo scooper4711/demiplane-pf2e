@@ -1,5 +1,4 @@
-import { MODULE_ID } from "../core/types.js";
-import { debugLog } from "../core/debug-log.js";
+import { MODULE_ID, debugLog } from "../core/index.js";
 
 /**
  * Helpers for the actor↔Demiplane-character link stored in

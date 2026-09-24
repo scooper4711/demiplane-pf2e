@@ -1,7 +1,7 @@
-import type { DemiplaneEngineEntry, ImportSummary } from "../../core/types.js";
-import { characterSystem, pf2eLanguages } from "../../core/pf2e-types.js";
-import { PROFICIENCY_LEGENDARY } from "../shared/pf2e-ranks.js";
-import { slugifyFreeText } from "../../core/slug-utils.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../core/index.js";
+import { characterSystem, pf2eLanguages, slugifyFreeText } from "../../core/index.js";
+import { PROFICIENCY_LEGENDARY } from "../shared/index.js";
+
 import { resolveRemasterLanguage } from "./remaster-renames.js";
 
 /** Canonical PF2e ability abbreviations (the only valid attribute-boost targets). */
