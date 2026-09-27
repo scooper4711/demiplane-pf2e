@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createMockActor } from "./foundry-mocks.js";
-import { applySpells } from "../../src/import/spell-importer.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+import { applySpells } from "../../src/import/spells/spell-importer.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 describe("applySpells - unknown spellcasting source", () => {
   function makeSummary(): ImportSummary {

@@ -22,6 +22,8 @@ jobs:
         run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Check package dependencies
+        run: npm run check:deps
       - name: Run tests
         run: npx vitest --run
       # TEMPORARY: vitest 4 / coverage-v8 4 re-measures branch coverage lower

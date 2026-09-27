@@ -1,29 +1,30 @@
-import { MODULE_ID } from "./import/types.js";
-import { debugLog } from "./import/debug-log.js";
+import { MODULE_ID, debugLog, syncClientToken } from "./core/index.js";
+
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
-import { registerSettings } from "./settings.js";
+import {
+  registerSettings,
+  CharacterLinkDialog,
+  registerDemiplaneInfoButton,
+  registerTitlebarDot,
+  registerDirectoryIcon,
+  buildUpdateFromDemiplaneOption,
+  canImportCharacters,
+  onImportButtonClick,
+  registerModuleApi,
+} from "./ui/index.js";
 import { ImportOrchestrator } from "./import/index.js";
-import { ExportManager } from "./export-manager.js";
-import { HookManager } from "./hook-manager.js";
-import { CharacterLinkDialog } from "./character-link-dialog.js";
-import { registerDemiplaneInfoButton } from "./demiplane-info-button.js";
-import { registerTitlebarDot } from "./titlebar-dot.js";
-import { registerDirectoryIcon } from "./directory-icon.js";
-import { registerDemiplaneMappingTemplates, registerMappingSyncHook } from "./demiplane-mapping-app.js";
-import { reconcileDuplicateLink } from "./actor-link.js";
+import { ExportManager, HookManager } from "./export/index.js";
+
+import { registerDemiplaneMappingTemplates, registerMappingSyncHook } from "./mapping/index.js";
+import { reconcileDuplicateLink, registerSyncNotice, isWritingEnabled, WRITE_LEVEL_SETTING } from "./sync/index.js";
 import {
   exportLinkedCharacter,
   importLinkedCharacter,
   recoverStaleSyncPauses,
   handlePushConflict,
-} from "./sync-flows.js";
-import type { ExportCharacterFn, ImportCharacterFn, SyncFlowDeps } from "./sync-flows.js";
-import { buildUpdateFromDemiplaneOption } from "./actor-context-menu.js";
-import { canImportCharacters, onImportButtonClick } from "./directory-import.js";
-import { registerModuleApi } from "./module-api.js";
-import { registerSyncNotice } from "./sync-notice.js";
-import { isWritingEnabled, WRITE_LEVEL_SETTING } from "./write-level.js";
-import { syncClientToken } from "./token-source.js";
+} from "./flows/index.js";
+
+import type { ExportCharacterFn, ImportCharacterFn, SyncFlowDeps } from "./flows/index.js";
 
 let client: DemiplaneClient;
 let importOrchestrator: ImportOrchestrator;

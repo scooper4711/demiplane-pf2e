@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { groupSpells } from "../../src/import/spell-grouping.js";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
+import { groupSpells } from "../../src/import/spells/spell-grouping.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
 
 function spell(slug: string, args: Record<string, unknown>): DemiplaneEngineEntry {
   return { id: slug, name: `tabula/spell/${slug}.eng`, type: "DemiplaneEngine", args } as DemiplaneEngineEntry;

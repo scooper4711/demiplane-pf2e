@@ -1,4 +1,4 @@
-import { MODULE_ID } from "./types.js";
+import { MODULE_ID } from "../core/index.js";
 
 /**
  * Deletes every item on the actor that was created by a Demiplane import

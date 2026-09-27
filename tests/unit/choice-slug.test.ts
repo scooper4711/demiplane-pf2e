@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toChoiceSlug } from "../../src/import/choice-slug.js";
+import { toChoiceSlug } from "../../src/import/choices/choice-slug.js";
 
 describe("toChoiceSlug", () => {
   it("drops a leading namespace before the colon", () => {

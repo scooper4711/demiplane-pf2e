@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { showDemiplaneInfoDialog, registerDemiplaneInfoButton } from "../../src/demiplane-info-button.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { showDemiplaneInfoDialog, registerDemiplaneInfoButton } from "../../src/ui/demiplane-info-button.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const DEMI_UUID = "12345678-1234-1234-1234-123456789012";
 

@@ -8,7 +8,7 @@ import {
   baseSpellcastingSlug,
   featureSlugMatches,
   baseConfigForFeature,
-} from "../../src/import/spellcasting-features.js";
+} from "../../src/import/spells/spellcasting-features.js";
 
 describe("stripRemasterSuffix", () => {
   it("drops a trailing -rm", () => {

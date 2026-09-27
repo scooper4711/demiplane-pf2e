@@ -33,10 +33,10 @@ vi.stubGlobal("game", {
   },
 });
 
-import { ExportManager } from "../../src/export-manager.js";
-import { computeEngineSig } from "../../src/engine-sig.js";
-import { isSyncActive } from "../../src/sync-pause.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { ExportManager } from "../../src/export/export-manager.js";
+import { computeEngineSig } from "../../src/core/engine-sig.js";
+import { isSyncActive } from "../../src/sync/sync-pause.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 function createMockActor(characterId = "char-123", lastUpdated?: string) {
   return {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stampImported, formatUnmapped } from "../../src/import/types.js";
+import { stampImported, formatUnmapped } from "../../src/core/types.js";
 
 describe("formatUnmapped", () => {
   it("formats a plain unmapped record", () => {
@@ -35,11 +35,7 @@ describe("stampImported", () => {
     expect((result.flags as Record<string, unknown>).pf2e).toEqual({
       rulesSelections: {},
     });
-    expect(
-      (result.flags as Record<string, Record<string, unknown>>)[
-        "demiplane-pf2e"
-      ].imported,
-    ).toBe(true);
+    expect((result.flags as Record<string, Record<string, unknown>>)["demiplane-pf2e"].imported).toBe(true);
   });
 
   it("preserves existing module flags", () => {
@@ -50,9 +46,7 @@ describe("stampImported", () => {
       flags: { "demiplane-pf2e": { other: "value" } },
     };
     const result = stampImported(item);
-    const moduleFlags = (
-      result.flags as Record<string, Record<string, unknown>>
-    )["demiplane-pf2e"];
+    const moduleFlags = (result.flags as Record<string, Record<string, unknown>>)["demiplane-pf2e"];
     expect(moduleFlags.imported).toBe(true);
     expect(moduleFlags.other).toBe("value");
   });

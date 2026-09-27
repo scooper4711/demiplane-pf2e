@@ -29,7 +29,7 @@ vi.stubGlobal("game", {
   },
 });
 
-import { ExportManager } from "../../src/export-manager.js";
+import { ExportManager } from "../../src/export/export-manager.js";
 
 function createMockActor(characterId = "char-123") {
   return {

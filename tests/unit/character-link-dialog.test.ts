@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { CharacterLinkDialog } from "../../src/character-link-dialog.js";
+import { CharacterLinkDialog } from "../../src/ui/character-link-dialog.js";
 
 const DEMI_UUID = "12345678-1234-1234-1234-123456789012";
 

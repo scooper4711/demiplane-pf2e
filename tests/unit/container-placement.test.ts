@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { createContainersFirst, type PlaceablePendingItem } from "../../src/import/container-placement.js";
+import { createContainersFirst, type PlaceablePendingItem } from "../../src/import/equipment/container-placement.js";
 
 /** A minimal actor whose createEmbeddedDocuments assigns sequential ids. */
 function mockActor() {

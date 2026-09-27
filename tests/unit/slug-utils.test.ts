@@ -14,7 +14,7 @@ import {
   trimNonAlphanumeric,
   slugifyFreeText,
   stripHtmlTags,
-} from "../../src/import/slug-utils.js";
+} from "../../src/core/slug-utils.js";
 
 describe("toFoundrySlug", () => {
   it("strips -rm suffix", () => {

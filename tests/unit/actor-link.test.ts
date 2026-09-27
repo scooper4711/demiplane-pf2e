@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { getLinkedCharacterId, findActorLinkedTo, reconcileDuplicateLink } from "../../src/actor-link.js";
+import { getLinkedCharacterId, findActorLinkedTo, reconcileDuplicateLink } from "../../src/sync/actor-link.js";
 
 const MODULE_ID = "demiplane-pf2e";
 

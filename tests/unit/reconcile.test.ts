@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { deleteImportedItems } from "../../src/import/reconcile.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { MODULE_ID } from "../../src/core/types.js";
 import { createMockActor } from "./foundry-mocks.js";
 
 /** Creates a mock item with optional Demiplane flags */

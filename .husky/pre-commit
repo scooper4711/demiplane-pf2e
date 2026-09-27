@@ -9,4 +9,5 @@ if git diff --cached --name-only --diff-filter=ACMR -- 'docs/*.md' | grep -q .; 
   npm run validate:mermaid
 fi
 npm run lint
+npm run check:deps
 npm test

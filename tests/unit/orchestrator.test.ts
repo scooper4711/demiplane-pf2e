@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { ImportOrchestrator } from "../../src/import/orchestrator.js";
-import { ChoiceSetHandler } from "../../src/import/choice-set-handler.js";
+import { ChoiceSetHandler } from "../../src/import/choices/choice-set-handler.js";
 import { collectLoreNames } from "../../src/import/phases.js";
 
 /** The engine selection blob the default happy-path character read returns. */

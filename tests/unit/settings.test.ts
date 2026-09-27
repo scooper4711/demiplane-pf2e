@@ -24,8 +24,8 @@ vi.mock("@scooper4711/demiplane-api", () => ({
   normalizeBearerToken: hoisted.normalizeBearerToken,
 }));
 
-import { registerSettings } from "../../src/settings.js";
-import { TOKEN_HELP_URL } from "../../src/token.js";
+import { registerSettings } from "../../src/ui/settings.js";
+import { TOKEN_HELP_URL } from "../../src/core/token.js";
 
 describe("settings", () => {
   let register: ReturnType<typeof vi.fn>;

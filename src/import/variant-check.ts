@@ -1,4 +1,4 @@
-import type { DemiplaneEngineEntry } from "./types.js";
+import type { DemiplaneEngineEntry } from "../core/index.js";
 
 /** The Foundry-side state of the variant rules an imported character may depend on. */
 export interface FoundryVariantSettings {

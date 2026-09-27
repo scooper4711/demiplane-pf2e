@@ -7,12 +7,10 @@ This document describes the internal architecture of `demiplane-pf2e`: component
 ## Table of Contents
 
 - [Component Overview](#component-overview)
-- [Class Diagram](#class-diagram)
 - [Module Initialization](#module-initialization)
 - [Import Data Flow](#import-data-flow)
 - [Export Data Flow](#export-data-flow)
-- [Conflict Detection Flow](#conflict-detection-flow)
-- [File Structure](#file-structure)
+- [Package Layout](#package-layout)
 - [Import Subsystem Detail](#import-subsystem-detail)
 - [Hook Lifecycle](#hook-lifecycle)
 - [Compendium Resolution](#compendium-resolution)
@@ -23,350 +21,94 @@ This document describes the internal architecture of `demiplane-pf2e`: component
 
 ## Component Overview
 
+## Component Overview
+
+Runtime data flow at package level — solid edges are calls, dotted edges
+are reads and writes against `sync/` actor-flag state. Class-level detail
+lives in each package's `DESIGN.md` (linked from
+[Package Layout](#package-layout)).
+
 ```mermaid
 graph TD
-    subgraph "Foundry VTT Browser"
-        Module["module.ts<br/>Bootstrap + Hook Registration"]
-        Settings["settings.ts<br/>Module Settings"]
-        ST["titlebar-dot.ts<br/>Sync Issue Indicator"]
-        SI["sync-issues.ts<br/>Import/Export Issue Sets"]
-        IBTN["demiplane-info-button.ts<br/>Demiplane Dialog"]
-        CLD["CharacterLinkDialog<br/>UUID Linking"]
-        HM["HookManager<br/>Actor Change Detection"]
-        IO["ImportOrchestrator<br/>Import Pipeline Driver"]
-        EM["ExportManager<br/>Push Orchestration"]
-        CB["ChangeBuffer<br/>Queue + Debounce + Rate Limit"]
-        PB["PushPayloadBuilder<br/>Build Payload"]
-        CR["ConflictResolver<br/>Optimistic Concurrency"]
-    end
-
-    subgraph "Import Subsystem"
-        CSH["ChoiceSetHandler<br/>Auto-Select Choices"]
-        CompRes["compendium-resolver<br/>Slug → UUID"]
-        SlugUtils["slug-utils<br/>Slug Transformation"]
-        SpellImp["spell-importer<br/>Spellcasting Entries"]
-        SpellSlot["spell-slot-resolver<br/>Slot Progression"]
-        SpellFeat["spellcasting-features<br/>Feature Registry + Slug Helpers"]
-        StreamEng["stream-engines<br/>NDJSON Fetch/Parse + Feat Expansion"]
-        FeatSpell["feature-spell-resolver<br/>Granted Focus/Innate/Hex/Apparition Spells"]
-        EquipImp["equipment-importer<br/>Items + Containers + Carried Spells"]
-        AttrImp["attribute-language-importer<br/>Boosts + Skills + Languages"]
-        BioImp["biography-importer<br/>Bio Fields + Deity"]
-        Phases["phases.ts<br/>ImportPhase Pipeline"]
-    end
-
-    subgraph "@scooper4711/demiplane-api"
-        DC[DemiplaneClient]
-        EU[Engine Utilities]
-    end
-
-    subgraph "External APIs"
-        GQL["Demiplane GraphQL<br/>apiv4.demiplane.com"]
-        SE["Stream-Engines<br/>character.demiplane.com"]
-    end
-
-    subgraph "Foundry Core"
+    subgraph "Foundry VTT"
+        HOOKS[Hook System]
         ACTOR[Actor Document]
         COMP[Compendium Packs]
-        HOOKS[Foundry Hook System]
+    end
+    subgraph "demiplane-pf2e"
+        UI["ui/<br/>dialogs + buttons + settings"]
+        FLOWS["flows/<br/>guarded import + export"]
+        IMPORT["import/<br/>phases + domains"]
+        EXPORT["export/<br/>hooks + push pipeline"]
+        MAPPING["mapping/<br/>slug store + editor"]
+        SYNC[("sync/<br/>pause + issues + gates")]
+        CORE["core/<br/>types + utils + seams"]
+    end
+    subgraph "Demiplane"
+        GQL[GraphQL API]
+        SE[Stream-Engines API]
     end
 
-    Module --> Settings
-    Module --> HM
-    Module --> IO
-    Module --> EM
-    Module --> ST
-    Module --> CLD
-
-    HM --> EM
-    EM --> CB
-    EM --> PB
-    EM --> CR
-    EM --> DC
-    DC --> GQL
-
-    IO --> CSH
-    IO --> CompRes
-    IO --> SlugUtils
-    IO --> SpellImp
-    IO --> EquipImp
-    IO --> AttrImp
-    IO --> BioImp
-    IO --> ACTOR
-
-    SpellImp --> SpellSlot
-    SpellImp --> SpellFeat
-    SpellImp --> CompRes
-    SpellSlot --> SpellFeat
-    SpellSlot --> StreamEng
-    FeatSpell --> StreamEng
-    FeatSpell --> SpellFeat
-    FeatSpell --> CompRes
-    StreamEng --> SE
-    CompRes --> SlugUtils
-    CompRes --> COMP
-
-    IO --> FeatSpell
-    IO --> Phases
-    Phases --> CSH
-    Phases --> CompRes
-    Phases --> SpellImp
-    Phases --> EquipImp
-    Phases --> AttrImp
-    Phases --> BioImp
-
-    ST --> ACTOR
-    CLD --> ACTOR
-    HOOKS --> HM
-    HOOKS --> Module
+    HOOKS --> EXPORT
+    UI --> FLOWS
+    FLOWS --> IMPORT
+    FLOWS --> EXPORT
+    IMPORT --> ACTOR
+    IMPORT --> COMP
+    IMPORT --> GQL
+    IMPORT --> SE
+    EXPORT --> GQL
+    EXPORT --> ACTOR
+    MAPPING --> COMP
+    UI --> ACTOR
+    IMPORT -.-> SYNC
+    EXPORT -.-> SYNC
+    FLOWS -.-> SYNC
+    UI -.-> SYNC
 ```
 
 ---
 
-## Class Diagram
+## Classes by Package
 
-```mermaid
-classDiagram
-    class DemiplaneClient {
-        -graphqlToken: string|null
-        +setToken(token: string): void
-        +isAuthenticated(): boolean
-        +validateToken(): Promise~void~
-        +fetchCharacterData(id: string): Promise~CharacterData~
-        +fetchCharacterVersion(id: string): Promise~CharacterVersion~
-        +fetchAttributeMapping(nexusId: number): Promise~AttributeMapping~
-        +updateCharacter(options: UpdateCharacterOptions): Promise~boolean~
-    }
+Class-level interaction diagrams live with the code they describe — one
+focused diagram per package, showing its classes plus their edges outside
+the package:
 
-    class ImportOrchestrator {
-        -choiceSetHandler: ChoiceSetHandler
-        -client: DemiplaneClient
-        +importCharacter(actor, characterId, options): Promise~ImportSummary~
-        -fetchCharacterEngines(characterId, token, summary): Promise~(engines, updated)|null~
-        -importJournals(actor, characterId): Promise~void~
-        -buildPipeline(): ImportPhase[]
-    }
-
-    class ImportPhase {
-        <<interface>>
-        +run(actor, ctx: ImportContext): Promise~void~
-    }
-
-    class ImportContext {
-        +engines: DemiplaneEngineEntry[]
-        +summary: ImportSummary
-        +choiceSetHandler: ChoiceSetHandler
-        +categorized: CategorizedEngines
-        +selectionData: (grantedFeatSlugs, selectedFeats)
-        +grantResolvedSlugs: Set~string~
-    }
-
-    class LoreItemsPhase {
-        +run(actor, ctx): Promise~void~
-    }
-    class SequentialItemsPhase {
-        +run(actor, ctx): Promise~void~
-    }
-    class ResolveGrantsPhase {
-        +run(actor, ctx): Promise~void~
-    }
-    class BatchItemsPhase {
-        +run(actor, ctx): Promise~void~
-    }
-    class PostProcessingPhase {
-        +run(actor, ctx): Promise~void~
-    }
-    class RemoveDuplicatesPhase {
-        +run(actor, ctx): Promise~void~
-    }
-
-    ImportOrchestrator --> ImportPhase : drives in order
-    ImportPhase <|.. LoreItemsPhase
-    ImportPhase <|.. SequentialItemsPhase
-    ImportPhase <|.. ResolveGrantsPhase
-    ImportPhase <|.. BatchItemsPhase
-    ImportPhase <|.. PostProcessingPhase
-    ImportPhase <|.. RemoveDuplicatesPhase
-    ImportContext ..> ImportPhase : passed to run()
-
-    class ExportManager {
-        -client: DemiplaneClient
-        -changeBuffer: ChangeBuffer
-        -payloadBuilder: PushPayloadBuilder
-        -conflictResolver: ConflictResolver
-        +setOnConflictHandler(handler): void
-        +queueChange(actor, field, value): void
-        +queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType?, edited?): void
-        +queueItemDelete(actor, slot): void
-        +exportCampaignNotes(actor, notes): Promise~void~
-        +flush(actor): Promise~ExportResult~
-        +suspend(characterId): void
-        +resume(characterId): void
-        +getPendingChanges(characterId): PendingChange[]
-        +hasPendingChanges(characterId): boolean
-    }
-
-    class ChangeBuffer {
-        -pendingChanges: Map~string, Map~string, PendingChange~~
-        -pendingItemChanges: Map~string, Map~string, PendingItemChange~~
-        -debounceTimers: Map~string, number~
-        -apiCallTimestamps: Map~string, number[]~
-        -suspendCounts: Map~string, number~
-        +queueChange(actor, field, value): void
-        +queueItemChange(actor, itemSlug, demiplaneSlug, changeType, value, itemType?, edited?): void
-        +queueItemDelete(actor, slot): void
-        +suspend(characterId): void
-        +resume(characterId): void
-        +peek(characterId): PendingMaps
-        +clear(characterId): void
-        +isWithinRateLimit(characterId): boolean
-        +recordApiCall(characterId): void
-        +getPendingChanges(characterId): PendingChange[]
-        +hasPendingChanges(characterId): boolean
-    }
-
-    class PushPayloadBuilder {
-        -client: DemiplaneClient
-        +buildUpdatedCharacterData(characterId, actor, changes, itemChanges): Promise~FetchedCharacter|null~
-        -applyFieldChanges(engines, changes): CustomEngine[]
-        -createOverrideEngine(name, value): CustomEngine
-        -resolveItemChanges(fetched, itemChanges): ResolvedItemChange[]
-        -applyItemChangeEngines(engines, resolved, actor): CustomEngine[]
-        -applyItemDelete(engines, itemChange, demiplaneId): CustomEngine[]
-        -applyEquippedEngine(engines, itemChange, demiplaneId): CustomEngine[]
-        -applyHandSlotAssignment(engines, resolved): CustomEngine[]
-    }
-
-    class ConflictResolver {
-        -client: DemiplaneClient
-        +checkConflict(characterId, actor): Promise~ConflictCheckResult~
-        -isRemoteContentChanged(characterId, actor): Promise~boolean~
-    }
-
-    class HookManager {
-        -exportManager: ExportManager
-        +register(): void
-        -onActorUpdate(actor, changes): void
-        -onItemUpdate(item, changes): void
-        -onItemCreate(item): void
-        -onItemDelete(item): void
-        -mapFieldToStoreName(path): string|undefined
-    }
-
-    class TitlebarDot {
-        +register(importCharacter, exportCharacter): void
-        -applyDot(dot, actor): void
-        -getOpenSheetsFor(actor): ActorSheet[]
-    }
-
-    class SyncIssues {
-        +getImportIssues(actor): Set
-        +getExportIssues(actor): Set
-        +hasActiveIssues(actor): boolean
-        +resetImportIssues(actor): void
-        +clearExportIssues(actor): void
-        +clearAllIssues(actor): void
-        +addImportIssue(actor, msg): void
-        +addExportIssue(actor, msg): void
-    }
-
-    class DemiplaneInfoDialog {
-        +showDemiplaneInfoDialog(actor, id, import, export): Promise
-        -buildIssuesSection(importIssues, exportIssues): string
-        -buildManualItemsSection(items): string
-        -performUpdate(actor, id, import): Promise
-    }
-
-    class CharacterLinkDialog {
-        -client: DemiplaneClient
-        +show(actor): void
-        -linkCharacter(actor, input): Promise~void~
-        -unlinkCharacter(actor): Promise~void~
-    }
-
-    class ChoiceSetHandler {
-        -engines: DemiplaneEngineEntry[]
-        +setEngines(engines): void
-        +presetChoiceSelections(itemData): void
-        +enable(): void
-        +disable(): void
-        -handlePreCreate(context, params): Promise~void~
-        -findChoiceSelection(parentSlug, rule): Promise~string|null~
-        -resolveChildSlug(rawSlug, rule, eng?): Promise~string|null~
-    }
-
-    class ChoiceMatchers {
-        <<module>>
-        +findMatchInChoices(choices, engines, itemName?): Choice|null
-    }
-
-    class SpellSlotResolver {
-        +resolveSpellSlots(options: ResolveSpellSlotsOptions): Promise~SpellSlotProgression~
-        +slotTypeToRank(slotType: string): number|null
-    }
-
-    class FeatureSpellResolver {
-        +applyFeatureGrantedSpells(actor, engines, summary, cacheEngineIds): Promise~void~
-    }
-
-    ImportOrchestrator --> DemiplaneClient : fetches data
-    ImportOrchestrator --> ChoiceSetHandler : auto-resolves choices
-    ChoiceSetHandler --> ChoiceMatchers : delegates strategy matching
-    ImportOrchestrator --> SpellSlotResolver : spell slots
-    ImportOrchestrator --> FeatureSpellResolver : granted focus/innate/hex
-
-    ExportManager --> ChangeBuffer : buffers changes
-    ExportManager --> PushPayloadBuilder : builds payload
-    ExportManager --> ConflictResolver : conflict check
-    ExportManager --> DemiplaneClient : pushes changes
-    HookManager --> ExportManager : queues changes
-
-    SyncIssues ..> ExportManager : export issues
-    SyncIssues ..> ImportOrchestrator : import issues
-    DemiplaneInfoDialog --> SyncIssues : lists/acknowledges
-    TitlebarDot --> SyncIssues : reads unacknowledged state
-    TitlebarDot --> DemiplaneInfoDialog : opens on click
-    CharacterLinkDialog --> DemiplaneClient : validates UUID
-```
+- Push pipeline: [`src/export/DESIGN.md`](../src/export/DESIGN.md)
+- Import driver and domains: [`src/import/DESIGN.md`](../src/import/DESIGN.md),
+  [`choices/`](../src/import/choices/DESIGN.md),
+  [`spells/`](../src/import/spells/DESIGN.md)
+- Sync store and gates: [`src/sync/DESIGN.md`](../src/sync/DESIGN.md)
+- Flows bridge: [`src/flows/DESIGN.md`](../src/flows/DESIGN.md)
+- Mapping editor and store: [`src/mapping/DESIGN.md`](../src/mapping/DESIGN.md)
+- Dialogs and wiring: [`src/ui/DESIGN.md`](../src/ui/DESIGN.md)
 
 ---
 
 ## Module Initialization
 
+## Module Lifecycle
+
 ```mermaid
 sequenceDiagram
     participant Foundry
     participant Module as module.ts
-    participant Settings as settings.ts
+    participant UI as ui/
+    participant Flows as flows/
+    participant Export as export/
+    participant Import as import/
+    participant Mapping as mapping/
 
     Foundry->>Module: Hooks.once("init")
-    Module->>Settings: registerSettings()
-    Note over Settings: Registers: syncWriteLevel, demiplaneToken, debugImport
-
+    Module->>UI: registerSettings()
     Foundry->>Module: Hooks.once("ready")
-    Module->>Module: Create DemiplaneClient
-    Module->>Module: Read token from settings
-    Module->>Module: client.setToken(token) if configured
-
-    Module->>Module: Create ImportOrchestrator(client)
-    Module->>Module: Create ExportManager(client)
-    Module->>Module: Create HookManager(exportManager)
-    Module->>Module: Create CharacterLinkDialog(client)
-
-    Module->>Module: hookManager.register()
-    Note over Module: Registers updateActor, updateItem, createItem, deleteItem hooks
-
-    Module->>Module: registerDemiplaneInfoButton(import, export)
-    Module->>Module: registerTitlebarDot(import, export)
-    Note over Module: Renders the sync-issue dot on linked sheet titlebars. Click to open the Demiplane dialog
-
-    Module->>Module: Expose module API on game.modules
-
-    Foundry->>Module: Hooks.on("renderActorDirectory")
-    Module->>Module: Add "Import Demiplane Character" button
-
-    Foundry->>Module: Hooks.on("getActorContextOptions")
-    Module->>Module: Add "Update from Demiplane" context menu
+    Module->>Module: Create DemiplaneClient, orchestrator, managers
+    Module->>Export: new HookManager(manager) + register()
+    Module->>UI: register buttons, dialogs, icons, API
+    Module->>Mapping: register templates + sync hook
+    Module->>Flows: bind importFn + exportFn closures
+    Note over Module,Flows: Flow functions read singletons at call time,<br/>after ready has assigned them
 ```
 
 **Module API** (exposed on `game.modules.get("demiplane-pf2e").api`):
@@ -380,195 +122,138 @@ sequenceDiagram
 
 ## Import Data Flow
 
+## Import Data Flow
+
 ```mermaid
 sequenceDiagram
     participant User
-    participant Module as module.ts
-    participant IO as ImportOrchestrator
-    participant CSH as ChoiceSetHandler
-    participant GQL as Demiplane GraphQL
-    participant SE as Stream-Engines API
-    participant Comp as Compendium Packs
-    participant Act as Actor Document
+    participant UI as ui/
+    participant Flows as flows/
+    participant Driver as import/ driver
+    participant Domains as import/ domains
+    participant Demiplane
+    participant Foundry
 
-    User->>Module: Click "Import Demiplane Character"
-    Module->>IO: importCharacter(actor, characterId, options)
-
-    IO->>GQL: fetchCharacterData(characterId)
-    GQL-->>IO: { engines: DemiplaneEngineEntry[] }
-
-    IO->>CSH: setEngines(engines)
-    IO->>CSH: enable()
-    Note over CSH: Monkey-patches ChoiceSet.preCreate
-
-    IO->>IO: categorizeEngines(engines)
-    Note over IO: → ancestry, heritage, background, class, feats[], equipment[]
-
-    IO->>IO: buildSelectionData(engines)
-    Note over IO: Identifies feat grants via ChoiceSet to avoid duplication
-
-    rect rgb(235, 245, 255)
-        Note over IO,Act: LoreItemsPhase (before sequential — feats may reference lore)
-        IO->>Comp: resolve background lore + collectLoreNames
-        IO->>Act: createEmbeddedDocuments([lore items])
-    end
-
-    rect rgb(230, 245, 255)
-        Note over IO,Act: SequentialItemsPhase (Grant Chain)
-        IO->>Comp: resolveCompendiumItem(ancestrySlug)
-        Comp-->>IO: Item data
-        IO->>Act: createEmbeddedDocuments([ancestry])
-
-        IO->>Comp: resolveCompendiumItem(heritageSlug)
-        Comp-->>IO: Item data
-        IO->>Act: createEmbeddedDocuments([heritage])
-
-        IO->>Comp: resolveCompendiumItem(backgroundSlug)
-        Comp-->>IO: Item data
-        IO->>Act: createEmbeddedDocuments([background])
-
-        IO->>Comp: resolveCompendiumItem(classSlug)
-        Comp-->>IO: Item data
-        IO->>Act: createEmbeddedDocuments([class])
-    end
-
-    IO->>IO: ResolveGrantsPhase → resolvePendingGrants(actor, engines)
-    Note over IO: Adds resolved slugs to selectionData.grantedFeatSlugs
-
-    rect rgb(255, 245, 230)
-        Note over IO,Act: BatchItemsPhase
-        IO->>Comp: resolve all feat + equipment slugs (skip granted)
-        IO->>Act: createEmbeddedDocuments(allFeatsAndEquipment)
-    end
-
-    rect rgb(240, 255, 240)
-        Note over IO,Act: PostProcessingPhase
-        IO->>Act: setActorIdentity (name, level, avatar)
-        IO->>Act: applyAttributeBoosts
-        IO->>Act: applyLanguages
-        IO->>Act: applyBiography
-        IO->>Act: applySkillProficiencies
-        IO->>Act: applyEquipment + applyCurrency
-        IO->>SE: applySpells (fetches slot data)
-        IO->>SE: applyFeatureGrantedSpells
-        IO->>Act: syncSessionState (HP, hero points)
-    end
-
-    IO->>IO: RemoveDuplicatesPhase → removeDuplicateItems(actor)
-
-    IO->>CSH: disable()
-    IO->>Act: setFlag("lastUpdated", updated)
-    IO->>Act: setFlag("engineSig", computeEngineSig(engines))
-    IO->>Act: setFlag("lastImportTimestamp", now)
-    IO-->>Module: ImportSummary
+    User->>UI: Import character
+    UI->>Flows: importLinkedCharacter
+    Flows->>Flows: pause, election, write-level guards
+    Flows->>Driver: orchestrator.importCharacter
+    Driver->>Demiplane: fetch engines
+    Driver->>Domains: lore, equipment, ABC, grants, batch, post, dedupe
+    Domains->>Foundry: create items + write profile
+    Driver-->>Flows: ImportSummary
+    Flows-->>UI: toasts + issues
 ```
+
+The phase-by-phase sequence lives in
+[`src/import/DESIGN.md`](../src/import/DESIGN.md#import-data-flow-detail).
 
 ---
 
 ## Export Data Flow
 
+## Export Data Flow
+
 ```mermaid
 sequenceDiagram
-    participant Foundry as Foundry Core
-    participant HM as HookManager
-    participant EM as ExportManager
-    participant DC as DemiplaneClient
-    participant API as Demiplane GraphQL
+    participant Foundry
+    participant Hooks as export/ hooks
+    participant Manager as export/ manager
+    participant Demiplane
 
-    Foundry->>HM: Hook: updateActor(actor, changes)
-    HM->>HM: Check: is linked character?
-    HM->>HM: Map Foundry path → store name
-
-    alt Mapped engine field changed
-        HM->>EM: queueChange(actor, storeName, value)
-        EM->>EM: Store in pendingChanges map
-        EM->>EM: Reset 2s debounce timer
-    else Campaign Notes changed
-        HM->>EM: exportCampaignNotes(actor, notes)
-        Note over EM: No actor pause here, or hook queueing stalls and drops edits. A local lock serializes our own writes. Skips if a remote client is mid-sync
-        EM->>DC: fetchCharacterJournals(characterId)
-        DC-->>EM: Existing journals
-        EM->>DC: create or update the Campaign journal
-        DC->>API: slsCreateCharacterJournal or slsUpdateCharacterJournal
-    end
-
-    Note over EM: 2 seconds of inactivity...
-
-    EM->>EM: Debounce timer fires
-    EM->>EM: Check rate limit (30/60s window)
-
-    alt Rate limit OK
-        EM->>DC: fetchCharacterData(characterId)
-        DC-->>EM: Current engines array
-
-        EM->>EM: Apply pending changes via updateCustomEngineValue
-        EM->>DC: updateCharacter({ id, data })
-        DC->>API: updateCharacterV2 mutation
-
-        alt Success
-            API-->>DC: { success: true }
-            EM->>EM: Clear pending changes
-            EM->>Foundry: actor.setFlag("lastSyncTimestamp", now)
-        else Transient failure
-            EM->>EM: Retry with backoff (1s, 2s, 4s)
-        end
-    else Rate limit exceeded
-        EM->>EM: Retain changes, try on next trigger
-    end
+    Foundry->>Hooks: updateActor + item hooks
+    Hooks->>Hooks: link, pause, election, write-level gates
+    Hooks->>Manager: queueChange + queueItemChange
+    Manager->>Manager: debounce 2s + rate limit
+    Manager->>Demiplane: conflict check + push
+    Demiplane-->>Manager: ok or conflict
+    Manager->>Manager: re-baseline or retry, conflict recovers via flows
 ```
+
+The hook-by-hook sequence lives in
+[`src/export/DESIGN.md`](../src/export/DESIGN.md#export-data-flow-detail).
 
 ---
 
-## File Structure
+## Package Layout
+
+`src/` is split into cohesive packages with a strict dependency direction
+(`core` ← `sync`/`export`/`mapping` ← `import` ← `ui`, plus `flows` as the
+single bridge above `sync`/`import`/`export`, and `module.ts` wiring it
+all). Each package exposes a curated `index.ts` barrel — the complete
+public surface — and every cross-package import targets a barrel, never a
+deep file. Both invariants are enforced by dependency-cruiser
+(`npm run check:deps`, wired into the pre-commit hook and CI). Each
+package documents its responsibility, surface, and mechanics in a
+co-located `DESIGN.md`:
+
+- [`src/core/DESIGN.md`](../src/core/DESIGN.md) — foundation
+- [`src/sync/DESIGN.md`](../src/sync/DESIGN.md) — coordination primitives
+- [`src/flows/DESIGN.md`](../src/flows/DESIGN.md) — cross-direction orchestration
+- [`src/export/DESIGN.md`](../src/export/DESIGN.md) — push pipeline
+- [`src/mapping/DESIGN.md`](../src/mapping/DESIGN.md) — slug store + discovery + editor
+- [`src/ui/DESIGN.md`](../src/ui/DESIGN.md) — presentation shell
+- [`src/import/DESIGN.md`](../src/import/DESIGN.md) — import driver
+- [`src/import/shared/DESIGN.md`](../src/import/shared/DESIGN.md),
+  [`character/`](../src/import/character/DESIGN.md),
+  [`choices/`](../src/import/choices/DESIGN.md),
+  [`equipment/`](../src/import/equipment/DESIGN.md),
+  [`spells/`](../src/import/spells/DESIGN.md) — import domains
+
+```mermaid
+graph TD
+    MOD["module.ts<br/>composition root"]
+    UI["ui/<br/>presentation + wiring"]
+    FLOWS["flows/<br/>cross-direction orchestration"]
+    IMPORT["import/<br/>driver + 5 domain sub-packages"]
+    EXPORT["export/<br/>push pipeline"]
+    MAPPING["mapping/<br/>slug store + discovery + editor"]
+    SYNC["sync/<br/>coordination primitives"]
+    CORE["core/<br/>foundation"]
+
+    MOD --> UI
+    MOD --> FLOWS
+    MOD --> IMPORT
+    MOD --> EXPORT
+    MOD --> MAPPING
+    MOD --> SYNC
+    MOD --> CORE
+    UI --> FLOWS
+    UI --> IMPORT
+    UI --> MAPPING
+    UI --> SYNC
+    UI --> CORE
+    FLOWS --> IMPORT
+    FLOWS --> EXPORT
+    FLOWS --> SYNC
+    FLOWS --> CORE
+    IMPORT --> MAPPING
+    IMPORT --> SYNC
+    IMPORT --> CORE
+    EXPORT --> SYNC
+    EXPORT --> CORE
+    MAPPING --> SYNC
+    MAPPING --> CORE
+    SYNC --> CORE
+```
 
 ```
 src/
-├── module.ts                      Entry point: hook registration, service wiring, API exposure
-├── settings.ts                    Foundry module settings (token, syncWriteLevel, debugImport)
-├── hook-manager.ts                Listens to actor/item hooks, maps fields, queues exports
-├── export-manager.ts              Push orchestration: flush flow, retry/backoff, wires collaborators
-├── export/
-│   ├── change-buffer.ts           Per-character pending change buffer: queue, debounce, rate limit, suspend
-│   ├── push-payload-builder.ts    Builds the Demiplane character payload from buffered changes
-│   └── conflict-resolver.ts       Optimistic-concurrency check (fetchCharacterUpdated + engineSig)
-├── libwrapper.ts                  Optional libWrapper adapter (detect + register/unregister)
-├── sync-pause.ts                  Cross-client sync coordination (pauses pushes during import/push)
-├── sync-issues.ts                Import/export issue sets + unmapped slugs, with an acknowledged flag driving the indicator
-├── titlebar-dot.ts               Red indicator on actor sheet titlebars for unacknowledged sync issues
-├── demiplane-info-button.ts      Header button + Demiplane dialog (Sync issues vs Unmapped items; dismiss acknowledges)
-├── character-link-dialog.ts       Dialog for linking/unlinking UUID to actor
-├── character-link-input.ts        Parses UUID or Demiplane URL
-│
-├── import/
-│   ├── index.ts                   Barrel re-export
-│   ├── types.ts                   Core types: DemiplaneEngineEntry, ImportSummary, etc.
-│   ├── orchestrator.ts            Thin import driver; builds + runs the phase pipeline
-│   ├── phases.ts                  ImportPhase interface, ImportContext, and phase implementations
-│   ├── slug-utils.ts              Slug transformation and categorization
-│   ├── compendium-resolver.ts     Slug → compendium UUID resolution
-│   ├── choice-set-handler.ts      ChoiceSet wrap lifecycle (libWrapper or fallback patch) + preset selections
-│   ├── choice-matchers.ts         The 7 ChoiceSet match strategies (pure functions)
-│   ├── choice-set-types.ts        ChoiceSet context/param interfaces
-│   ├── choice-slug.ts             Shared label → slug normalization
-│   ├── debug-log.ts               Conditional debug logging
-│   │
-│   ├── spell-importer.ts          Class spellcasting orchestration (grouping → entries → placement → hexes)
-│   ├── spell-grouping.ts          Sorts spell engines into main/innate/hexes/font/ritual groups; resolves group config
-│   ├── spellcasting-features.ts   Registry: class config table, special feature slugs, eidolon traditions, slug helpers
-│   ├── spellcasting-entry.ts      Entry creation + shared resolve-and-stamp spell-item helper
-│   ├── prepared-spells.ts         Prepared-slot placement + signature spell marking
-│   ├── divine-font.ts             Cleric Divine Font spellcasting entry
-│   ├── spell-slots.ts             Writes slot maximums; reports whether ranked slots exist; character level lookup
-│   ├── spell-engines.ts           Spell engine identification helpers
-│   ├── spell-slot-resolver.ts     Computes slot/cantrip progression from stream-engines defs + per-character overrides
-│   ├── stream-engines.ts          NDJSON fetch/parse; modifier types; feat-grant expansion (shared by both resolvers)
-│   ├── feature-spell-resolver.ts  Granted focus/innate/hex/apparition/repertoire spells from features & feats
-│   │
-│   ├── equipment-importer.ts      Equipment + containers + carry state + carried spells
-│   ├── attribute-language-importer.ts  Boosts, skills, languages
-│   └── biography-importer.ts      Biography fields, deity, organized play
-│
-└── pf2e-foundry-config.d.ts       Type augmentations for Foundry/PF2e
+├── module.ts        Composition root: singletons, hook registration, binds flows (imports barrels only)
+├── foundry.d.ts / foundry-globals.d.ts  Ambient Foundry type shims (no runtime imports)
+├── core/            Foundation — types, config, slug-utils, engine-sig, pf2e-types, libwrapper, token(-source), debug-log
+├── sync/            Coordination — actor-link, sync-pause/election/notice/issues, write-level
+├── flows/           Bridge — sync-flows (guarded import, manual export, conflict recovery)
+├── export/          Push pipeline — export-manager, hook-manager + change-buffer, push-payload-builder, conflict-resolver, spellcasting-entry-sync
+├── mapping/         Slug store + share, pack-discovery, pack-index, mapping editor app
+├── ui/              Shell — settings, module-api, info-button/dialog, link dialog+input, directory icon/import, context menu, titlebar dot
+└── import/
+    ├── orchestrator.ts / phases.ts / reconcile.ts / variant-check.ts  Driver + phase pipeline
+    ├── shared/      compendium-resolver, stream-engines, pf2e-ranks
+    ├── character/   biography, attribute-language, remaster-renames
+    ├── choices/     choice-set-handler + registry, matchers, class configs, overrides, ikon resolver
+    ├── equipment/   equipment-importer/sources, weapon-runes, container-placement, crafting-formulas
+    └── spells/      spell-importer/grouping/engines, slots + resolver, casting-entry/features, prepared-spells, divine-font, feature-spell-resolver
 ```
 
 ---
@@ -577,59 +262,29 @@ src/
 
 The import subsystem is the most complex part of the module. Here is how its components interact:
 
-```mermaid
-graph TD
-    IO[ImportOrchestrator] --> |"fetch + flags"| SU[slug-utils]
-    IO --> |"build pipeline"| PH[phases.ts]
-    IO --> |"install/uninstall"| CSH[ChoiceSetHandler]
-
-    PH --> |"categorize"| SU
-    PH --> |"resolve items"| CR[compendium-resolver]
-    CR --> SU
-    CR --> |"search packs"| COMP[Compendium Packs]
-
-    PH --> |"4a. spells"| SI[spell-importer]
-    SI --> |"group engines"| SG[spell-grouping]
-    SG --> |"feature config + slug helpers"| SCF[spellcasting-features]
-    SI --> |"create entries + items"| SCE[spellcasting-entry]
-    SI --> |"prepared + signature"| PS[prepared-spells]
-    SI --> |"divine font"| DF[divine-font]
-    SI --> |"slot maximums"| SL[spell-slots]
-    SL --> |"slot progression"| SSR[spell-slot-resolver]
-    SSR --> |"slug helpers"| SCF
-    SSR --> |"fetch + expand feats"| STE[stream-engines]
-    SCE --> CR
-    STE --> |"POST"| SE[Stream-Engines API]
-
-    PH --> |"4b. feature spells"| FSR[feature-spell-resolver]
-    FSR --> |"fetch + expand feats"| STE
-    FSR --> |"feature slugs"| SCF
-    FSR --> CR
-
-    PH --> |"4c. equipment (+ carried spells)"| EI[equipment-importer]
-    EI --> CR
-
-    PH --> |"4d. attributes"| ALI[attribute-language-importer]
-    PH --> |"4e. biography"| BI[biography-importer]
-```
+The driver-to-domain interaction graph lives in
+[`src/import/DESIGN.md`](../src/import/DESIGN.md#driver-to-domain-interactions).
 
 ### Import Phase Order
 
-| Phase | Component               | What It Does                                                                                         |
-| ----- | ----------------------- | ---------------------------------------------------------------------------------------------------- |
-| 1     | `ImportOrchestrator`    | Fetch engines, stamp `lastUpdated`/`engineSig` flags                                                 |
-| 2     | `ChoiceSetHandler`      | Install monkey-patch for auto-selection                                                              |
-| 3     | `LoreItemsPhase`        | Create lore items (must precede ancestry/class)                                                      |
-| 4     | `SequentialItemsPhase`  | Sequential: ancestry → heritage → background → class                                                 |
-| 5     | `ResolveGrantsPhase`    | Resolve pending native grants; exclude from batch                                                    |
-| 6     | `BatchItemsPhase`       | Batch: all feats + equipment                                                                         |
-| 7     | `PostProcessingPhase`   | Identity, boosts, skills, languages, bio, equipment, currency, spells, feature spells, session state |
-| 8     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                    |
-| 9     | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                               |
-| 10    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                     |
-| 11    | `ImportOrchestrator`    | Import "Campaign" journal → `biography.campaignNotes` (needs no monkey-patch; runs after uninstall)  |
+### Import Phase Order
 
-The `ImportPhase` pipeline steps (3–8) are implemented in `src/import/phases.ts`
+| Phase | Component               | What It Does                                                                                                   |
+| ----- | ----------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1     | `ImportOrchestrator`    | Fetch engines, stamp `lastUpdated`/`engineSig` flags                                                           |
+| 2     | `ChoiceSetHandler`      | Install monkey-patch for auto-selection                                                                        |
+| 3     | `LoreItemsPhase`        | Create lore items (must precede ancestry/class)                                                                |
+| 4     | `EquipmentPhase`        | Create equipment early so owned items exist before the class grant chain; resized after ancestry size is known |
+| 5     | `SequentialItemsPhase`  | Sequential: ancestry → heritage → background → class                                                           |
+| 6     | `ResolveGrantsPhase`    | Resolve pending native grants; exclude from batch                                                              |
+| 7     | `BatchItemsPhase`       | Batch: all feats                                                                                               |
+| 8     | `PostProcessingPhase`   | Identity, boosts, skills, languages, bio, formulas, currency, spells, feature spells, session state            |
+| 9     | `RemoveDuplicatesPhase` | Remove import-stamped duplicates of native grants                                                              |
+| 10    | `ChoiceSetHandler`      | Uninstall monkey-patch                                                                                         |
+| 11    | `ImportOrchestrator`    | Stamp `lastImportTimestamp` flag                                                                               |
+| 12    | `ImportOrchestrator`    | Import "Campaign" journal → `biography.campaignNotes` (needs no monkey-patch; runs after uninstall)            |
+
+The `ImportPhase` pipeline steps (3–9) are implemented in `src/import/phases.ts`
 and driven in order by `ImportOrchestrator.importCharacter` inside its
 `try/finally`. Each phase receives an `ImportContext` carrying the fetched
 `engines`, the `ImportSummary`, the `ChoiceSetHandler`, the categorized engines,
@@ -648,7 +303,7 @@ the selection data, and the resolved-grant slugs.
 | `createItem`  | Item added to linked actor     | Logs creation (skipped while syncing)                                         |
 | `deleteItem`  | Item removed from linked actor | Queues deletion (skipped while syncing)                                       |
 
-All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e.characterId` flag set. **While any client has an in-flight import or push for the character** (the `demiplane-pf2e.syncActiveTokens` actor flag is non-empty), the hooks suppress queueing so a sync's replicated actor updates don't echo back to Demiplane. See `sync-pause.ts` and DESIGN §16.
+All hooks filter for: `actor.type === "character"` AND actor has `demiplane-pf2e.characterId` flag set. **While any client has an in-flight import or push for the character** (the `demiplane-pf2e.syncActiveTokens` actor flag is non-empty), the hooks suppress queueing so a sync's replicated actor updates don't echo back to Demiplane. See `sync/sync-pause.ts` and DESIGN §16.
 
 ### Actor Field → Store Name Mapping
 
@@ -729,7 +384,7 @@ The resolver accepts a target pack parameter to search a specific pack, or searc
 
 When items are added to a PF2e actor, the system's `ChoiceSetRuleElement` normally presents an interactive dialog for player choices (e.g., "choose a skill to increase"). During automated import, these must be resolved without user interaction.
 
-The `ChoiceSetHandler` wraps `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. When the community **libWrapper** module is active the wrap is registered through it (`src/libwrapper.ts`); otherwise the handler falls back to a direct prototype patch whose `disable()` restores the original only if our patch is still the live method (so a wrapper another module installed later is never clobbered). See [DESIGN §7](./DESIGN.md#7-choiceset-wrapping-libwrapper-when-available). The strategies live in `choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
+The `ChoiceSetHandler` wraps `ChoiceSet.preCreate` to intercept choice prompts and auto-select the correct option. When the community **libWrapper** module is active the wrap is registered through it (`src/core/libwrapper.ts`); otherwise the handler falls back to a direct prototype patch whose `disable()` restores the original only if our patch is still the live method (so a wrapper another module installed later is never clobbered). See [DESIGN §7](./DESIGN.md#7-choiceset-wrapping-libwrapper-when-available). The strategies live in `import/choices/choice-matchers.ts` as pure functions and are composed by `findMatchInChoices` in priority order (7 strategies):
 
 | Priority | Strategy                | Matches Against                                                          |
 | -------- | ----------------------- | ------------------------------------------------------------------------ |
@@ -767,16 +422,8 @@ If class features aren't present when ancestry is evaluated, or if the class isn
 
 ### Ordering Constraint
 
-```mermaid
-graph LR
-    A[Ancestry] --> B[Heritage]
-    B --> C[Background]
-    C --> D[Class]
-    D --> E[Pending Grant Resolution]
-    E --> F[Lore Items]
-    F --> G[Feats - Batch]
-    G --> H[Post-Import Phases]
-```
+The grant-chain ordering diagram lives in
+[`src/import/DESIGN.md`](../src/import/DESIGN.md#grant-chain-ordering).
 
 **Sequential (one at a time, await each):** Ancestry → Heritage → Background → Class
 

@@ -7,28 +7,32 @@
  * ordering and arguments of the original sequential implementation.
  */
 
-import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "./types.js";
-import { stampImported, INVENTORY_ITEM_TYPES } from "./types.js";
+import type { DemiplaneEngineEntry, ImportSummary, ItemCategory } from "../core/index.js";
 import {
+  stampImported,
+  INVENTORY_ITEM_TYPES,
   characterSystem,
   itemSystem,
   sourceRules,
   itemSourceId,
   compendiumSource,
   toPlainData,
-} from "../pf2e-types.js";
-import { MAX_HERO_POINTS } from "./pf2e-ranks.js";
-import { IMPORT_PLACEHOLDER_NAME } from "../config.js";
-import { debugLog } from "./debug-log.js";
-import { toFoundrySlug, getSlug, categorizeEngine, parseFeatSlot, describeFeatSlot } from "./slug-utils.js";
-import { resolveCompendiumItem } from "./compendium-resolver.js";
-import { ChoiceSetHandler } from "./choice-set-handler.js";
-import { applyBiography } from "./biography-importer.js";
-import { applyEquipment, applyCurrency, resizeActorEquipment } from "./equipment-importer.js";
-import { applyCraftingFormulas } from "./crafting-formulas.js";
-import { applySpells } from "./spell-importer.js";
-import { applyFeatureGrantedSpells } from "./feature-spell-resolver.js";
-import { applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./attribute-language-importer.js";
+  IMPORT_PLACEHOLDER_NAME,
+  debugLog,
+  toFoundrySlug,
+  getSlug,
+  categorizeEngine,
+  parseFeatSlot,
+  describeFeatSlot,
+} from "../core/index.js";
+
+import { MAX_HERO_POINTS, resolveCompendiumItem } from "./shared/index.js";
+
+import { ChoiceSetHandler } from "./choices/index.js";
+import { applyBiography, applySkillProficiencies, applyLanguages, applyAttributeBoosts } from "./character/index.js";
+import { applyEquipment, applyCurrency, resizeActorEquipment, applyCraftingFormulas } from "./equipment/index.js";
+
+import { applySpells, applyFeatureGrantedSpells } from "./spells/index.js";
 
 /** Shared state threaded through every phase of a single import. */
 export interface ImportContext {

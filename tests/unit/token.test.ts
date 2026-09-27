@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toUserFacingTokenError, toUserFacingSyncError, TOKEN_HELP_URL } from "../../src/token.js";
+import { toUserFacingTokenError, toUserFacingSyncError, TOKEN_HELP_URL } from "../../src/core/token.js";
 
 describe("toUserFacingTokenError", () => {
   it("translates the observed expired-JWT failure", () => {

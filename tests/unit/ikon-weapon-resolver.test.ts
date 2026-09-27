@@ -4,7 +4,7 @@ import {
   isWeaponIkon,
   type IkonItem,
   type WeaponItem,
-} from "../../src/import/ikon-weapon-resolver.js";
+} from "../../src/import/choices/ikon-weapon-resolver.js";
 
 /**
  * A minimal stand-in for PF2e's Predicate supporting the statement forms the

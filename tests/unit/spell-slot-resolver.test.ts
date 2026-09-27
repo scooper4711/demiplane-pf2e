@@ -6,11 +6,11 @@ import {
   parseSlotEntriesFromNdjson,
   resolveSpellSlots,
   slotTypeToRank,
-} from "../../src/import/spell-slot-resolver.js";
-import type { ImportSummary } from "../../src/import/types.js";
-import type { RawEngineLine } from "../../src/import/stream-engines.js";
-import type { DemiplaneEngineEntry } from "../../src/import/types.js";
-import type { DemiplaneSlotEntry } from "../../src/import/spell-slot-resolver.js";
+} from "../../src/import/spells/spell-slot-resolver.js";
+import type { ImportSummary } from "../../src/core/types.js";
+import type { RawEngineLine } from "../../src/import/shared/stream-engines.js";
+import type { DemiplaneEngineEntry } from "../../src/core/types.js";
+import type { DemiplaneSlotEntry } from "../../src/import/spells/spell-slot-resolver.js";
 
 describe("computeSlotProgression", () => {
   const wizardSlots: DemiplaneSlotEntry[] = [

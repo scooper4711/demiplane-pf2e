@@ -5,9 +5,9 @@ import {
   canImportCharacters,
   extractCharacterId,
   onImportButtonClick,
-} from "../../src/directory-import.js";
-import { DEMIPLANE_SHEET_BASE } from "../../src/config.js";
-import { MODULE_ID } from "../../src/import/types.js";
+} from "../../src/ui/directory-import.js";
+import { DEMIPLANE_SHEET_BASE } from "../../src/core/config.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 const UUID = "123e4567-e89b-12d3-a456-426614174000";
 const TOKEN = "token-abc";

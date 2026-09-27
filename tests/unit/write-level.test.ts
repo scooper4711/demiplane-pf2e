@@ -21,7 +21,7 @@ import {
   shouldSkipZeroQuantityItems,
   DEFAULT_WRITE_LEVEL,
   CAPABILITY_MIN_LEVEL,
-} from "../../src/write-level.js";
+} from "../../src/sync/write-level.js";
 
 let settingValue: unknown;
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { installFoundryMocks } from "./foundry-mocks.js";
-import { registerTitlebarDot, SYNC_ISSUES_CLASS } from "../../src/titlebar-dot.js";
-import { ISSUES_CHANGED_EVENT } from "../../src/sync-issues.js";
+import { registerTitlebarDot, SYNC_ISSUES_CLASS } from "../../src/ui/titlebar-dot.js";
+import { ISSUES_CHANGED_EVENT } from "../../src/sync/sync-issues.js";
 
 function hookCallback(event: string): ((...args: unknown[]) => void) | undefined {
   const calls = (globalThis as unknown as { Hooks: { on: ReturnType<typeof vi.fn> } }).Hooks.on.mock.calls as Array<

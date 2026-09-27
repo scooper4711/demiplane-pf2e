@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { installFoundryMocks, createMockActor, createMockPack } from "./foundry-mocks.js";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import { ImportOrchestrator } from "../../src/import/orchestrator.js";
-import { ExportManager } from "../../src/export-manager.js";
-import { syncClientToken } from "../../src/token-source.js";
-import { MODULE_ID } from "../../src/import/types.js";
+import { ExportManager } from "../../src/export/export-manager.js";
+import { syncClientToken } from "../../src/core/token-source.js";
+import { MODULE_ID } from "../../src/core/types.js";
 
 /**
  * Integration coverage for bearer-token (mis)management across the seam this

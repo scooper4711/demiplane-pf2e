@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { isClientElectedWriter } from "../../src/sync-election.js";
+import { isClientElectedWriter } from "../../src/sync/sync-election.js";
 
 interface TestUser {
   id: string;

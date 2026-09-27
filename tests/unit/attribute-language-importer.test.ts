@@ -6,8 +6,8 @@ import {
   applyAttributeBoosts,
   isAttributeSlug,
   isSkillSlug,
-} from "../../src/import/attribute-language-importer.js";
-import type { DemiplaneEngineEntry, ImportSummary } from "../../src/import/types.js";
+} from "../../src/import/character/attribute-language-importer.js";
+import type { DemiplaneEngineEntry, ImportSummary } from "../../src/core/types.js";
 
 describe("applySkillProficiencies", () => {
   beforeEach(() => {
