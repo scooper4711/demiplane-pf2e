@@ -48,3 +48,32 @@ file round-trip) is used only by the editor app.
 - Depends only on `core` and `sync`. It must never import `import/`,
   `export/`, or `ui/` — the discovery seams moved _into_ this package
   precisely to keep that edge one-directional (`import/` → `mapping/`).
+
+## Interactions
+
+The store serves two masters — import resolution and the GM editor —
+while the editor reads live state from `sync/`:
+
+```mermaid
+graph TD
+    subgraph "mapping/"
+        STORE["slug-mapping<br/>per-kind settings store"]
+        DISC["pack-discovery<br/>pack scan"]
+        IDX["pack-index<br/>typed index seam"]
+        APP["demiplane-mapping-app<br/>GM editor"]
+        SHARE["mapping-share<br/>file round-trip"]
+    end
+    RESOLVERS["import/<br/>resolvers + importers"]
+    UI["ui/<br/>settings + info dialog"]
+    SYNC["sync/<br/>issue store"]
+    RESOLVERS --> STORE
+    RESOLVERS --> DISC
+    RESOLVERS --> IDX
+    APP --> STORE
+    APP --> DISC
+    APP --> IDX
+    APP --> SYNC
+    SHARE --> STORE
+    UI --> APP
+    UI --> STORE
+```

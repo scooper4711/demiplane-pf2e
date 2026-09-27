@@ -48,3 +48,35 @@ by tests.
   singletons. `module.ts` binds the real collaborators through
   `importFn`/`exportFn` closures evaluated at call time, because hook
   registration happens before `ready` assigns the singletons.
+
+## Interactions
+
+The bridge fans into both directions; `module.ts` and `ui/` call it with
+injected collaborators:
+
+```mermaid
+graph TD
+    subgraph "flows/"
+        IMP["importLinkedCharacter"]
+        EXP["exportLinkedCharacter"]
+        CONF["handlePushConflict"]
+        STALE["recoverStaleSyncPauses"]
+    end
+    MOD["module.ts"]
+    UI["ui/"]
+    IO["import/<br/>orchestrator + reconcile"]
+    EM["export/<br/>ExportManager"]
+    SYNC["sync/<br/>guards + issues"]
+    MOD --> IMP
+    MOD --> EXP
+    MOD --> CONF
+    MOD --> STALE
+    UI --> IMP
+    UI --> EXP
+    IMP --> IO
+    IMP --> SYNC
+    EXP --> EM
+    EXP --> SYNC
+    CONF --> IO
+    CONF --> SYNC
+```

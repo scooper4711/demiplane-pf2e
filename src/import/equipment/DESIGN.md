@@ -46,3 +46,33 @@ derivation/validation), `container-placement.ts` (stow resolution).
 - May additionally use `mapping` (resolution) and `sync` (write gating)
   — the only domain sub-package with both edges. No imports from sibling
   sub-packages, the driver, `export/`, or `ui/`.
+
+## Interactions
+
+The importer fans into sources, runes, and placement; formulas share the
+sources; resolution and gating come from outside:
+
+```mermaid
+graph TD
+    subgraph "import/equipment/"
+        EI["equipment-importer"]
+        SRC["equipment-sources"]
+        RUNE["weapon-runes"]
+        CONT["container-placement"]
+        FORM["crafting-formulas"]
+    end
+    PH["import/ driver<br/>phases"]
+    SH["shared/<br/>compendium + streams"]
+    MAPP["mapping/<br/>store + packs"]
+    GATE["sync/<br/>write-level"]
+    PH --> EI
+    PH --> FORM
+    EI --> SRC
+    EI --> RUNE
+    EI --> CONT
+    EI --> SH
+    EI --> MAPP
+    EI --> GATE
+    FORM --> SRC
+    FORM --> MAPP
+```

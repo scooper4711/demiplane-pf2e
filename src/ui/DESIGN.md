@@ -53,3 +53,47 @@ surface, all taking their flow collaborators as parameters:
   imported from `flows/`; two dialogs redeclare narrow local structural
   equivalents where they only need a subset — do not widen those without
   reason.
+
+## Interactions
+
+`module.ts` fans out to one registration per surface; surfaces read
+`sync/` + `mapping/` and invoke injected `flows/` functions:
+
+```mermaid
+graph TD
+    subgraph "ui/"
+        SET["settings"]
+        API["module-api"]
+        INFO["demiplane-info-button"]
+        LINK["character-link-dialog"]
+        DIMP["directory-import"]
+        DICO["directory-icon"]
+        CTX["actor-context-menu"]
+        DOT["titlebar-dot"]
+    end
+    MOD["module.ts"]
+    FLOWS["flows/<br/>injected flow functions"]
+    SYNC["sync/<br/>link + issues + gates"]
+    MAPP["mapping/<br/>store + editor"]
+    MOD --> SET
+    MOD --> API
+    MOD --> INFO
+    MOD --> LINK
+    MOD --> DIMP
+    MOD --> DICO
+    MOD --> CTX
+    MOD --> DOT
+    CTX --> FLOWS
+    DIMP --> FLOWS
+    API --> FLOWS
+    LINK --> SYNC
+    DIMP --> SYNC
+    INFO --> SYNC
+    DICO --> SYNC
+    DOT --> SYNC
+    CTX --> SYNC
+    SET --> SYNC
+    INFO --> MAPP
+    SET --> MAPP
+    DICO --> INFO
+```

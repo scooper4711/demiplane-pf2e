@@ -41,3 +41,34 @@ can't drift between spells, equipment, and choices. See
 - Lowest layer in `import/`: may not import sibling sub-packages, the
   driver, `sync`, `export`, or `ui`. Needs from higher layers are a sign
   the code belongs higher.
+
+## Interactions
+
+Two seams with distinct consumer sets — resolution serves choices,
+spells, equipment, and the driver; streams serve spells, equipment, and
+the driver:
+
+```mermaid
+graph TD
+    subgraph "import/shared/"
+        CR["compendium-resolver"]
+        STE["stream-engines"]
+        RANKS["pf2e-ranks"]
+    end
+    CHO["choices/"]
+    SPELL["spells/"]
+    EQUIP["equipment/"]
+    CHAR["character/"]
+    PH["import/ driver"]
+    MAPP["mapping/<br/>store + packs"]
+    CHO --> CR
+    SPELL --> CR
+    SPELL --> STE
+    SPELL --> RANKS
+    EQUIP --> CR
+    EQUIP --> STE
+    CHAR --> RANKS
+    PH --> CR
+    CHAR --> MAPP
+    CR --> MAPP
+```

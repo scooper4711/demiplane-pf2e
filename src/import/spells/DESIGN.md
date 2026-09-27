@@ -51,3 +51,38 @@ per-character overrides).
   pack reads, no duplicated slug logic.
 - Depends only on `core` and `shared`. Needs from siblings or the driver
   belong in `shared/` or in the phase pipeline, not here.
+
+## Interactions
+
+Two apply-steps fan into shared grouping, entry, slot, and feature
+machinery — all compendium and stream access via `shared/`:
+
+```mermaid
+graph TD
+    subgraph "import/spells/"
+        SI["spell-importer"]
+        FSR["feature-spell-resolver"]
+        SG["spell-grouping"]
+        SCE["spellcasting-entry"]
+        SS["spell-slots + resolver"]
+        PREP["prepared-spells"]
+        DF["divine-font"]
+        FEAT["spellcasting-features"]
+    end
+    PH["import/ driver<br/>PostProcessingPhase"]
+    SH["shared/<br/>streams + compendium + ranks"]
+    PH --> SI
+    PH --> FSR
+    SI --> SG
+    SI --> SCE
+    SI --> SS
+    SI --> PREP
+    SI --> DF
+    SI --> FEAT
+    SG --> FEAT
+    SS --> FEAT
+    SS --> SH
+    SCE --> SH
+    FSR --> SH
+    FSR --> SI
+```

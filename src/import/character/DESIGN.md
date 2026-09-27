@@ -41,3 +41,28 @@ normalization, used only by the attribute/language importer).
 - No sibling, driver, `sync`, `export/`, or `ui/` imports. Profile writes
   that need write-gating should ask `sync/` — if that need arises, this
   constraint documents the edge to add deliberately, not accidentally.
+
+## Interactions
+
+Two apply-steps share the rename helper and read profile data through
+core seams and mapping discovery:
+
+```mermaid
+graph TD
+    subgraph "import/character/"
+        BIO["biography-importer"]
+        ATTR["attribute-language-importer"]
+        REN["remaster-renames"]
+    end
+    PH["import/ driver<br/>PostProcessingPhase"]
+    SEAM["core/<br/>pf2e-types seams"]
+    MAPP["mapping/<br/>pack-discovery"]
+    SHARED["shared/<br/>pf2e-ranks"]
+    PH --> BIO
+    PH --> ATTR
+    ATTR --> REN
+    BIO --> SEAM
+    ATTR --> SEAM
+    BIO --> MAPP
+    ATTR --> SHARED
+```

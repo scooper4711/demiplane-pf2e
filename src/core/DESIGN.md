@@ -52,3 +52,28 @@ independent leaves by design. The two files with behavior worth noting:
   lowest package that covers its consumers.
 - Pure where possible: `slug-utils.ts`, `engine-sig.ts`, and `token.ts`
   have no Foundry dependencies and are unit-tested without mocks.
+
+## Interactions
+
+`core` exposes no classes — only constants, pure functions, types, and
+two thin stateful seams (`token-source`, `libwrapper`). Every package
+imports it; nothing in it imports back:
+
+```mermaid
+graph TD
+    CORE["core/<br/>types + utils + seams"]
+    SYNC["sync/"]
+    FLOWS["flows/"]
+    EXPORT["export/"]
+    MAPPING["mapping/"]
+    IMPORT["import/"]
+    UI["ui/"]
+    MOD["module.ts"]
+    SYNC --> CORE
+    FLOWS --> CORE
+    EXPORT --> CORE
+    MAPPING --> CORE
+    IMPORT --> CORE
+    UI --> CORE
+    MOD --> CORE
+```

@@ -56,3 +56,35 @@ configs), `ikon-weapon-matcher.ts` (pure solver) +
   `choice-set-handler.ts` and `ikon-weapon-resolver.ts`.
 - Overrides are consulted only after matching fails, so user picks can
   never beat an automatic match.
+
+## Interactions
+
+The handler owns the patch lifecycle; strategies and configs plug into
+the registry; the driver installs it and the dialog consumes overrides:
+
+```mermaid
+graph TD
+    subgraph "import/choices/"
+        H["choice-set-handler"]
+        REG["matcher-registry"]
+        M["choice-matchers"]
+        GB["grant-builder-matchers"]
+        KIN["kineticist-matchers"]
+        IKON["ikon-weapon-resolver"]
+        OV["choice-overrides"]
+    end
+    DRV["import/ driver<br/>orchestrator + phases"]
+    CR["shared/<br/>compendium-resolver"]
+    ISSUES["sync/<br/>override store"]
+    UIDLG["ui/<br/>sync dialog"]
+    DRV --> H
+    DRV --> ISSUES
+    H --> REG
+    H --> M
+    H --> GB
+    H --> KIN
+    H --> IKON
+    H --> OV
+    H --> CR
+    UIDLG --> OV
+```

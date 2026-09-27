@@ -51,3 +51,40 @@ the barrel.
   belongs in `flows/` or `ui/`, not here.
 - `sync-election.ts` stays pure (no Foundry I/O) so election logic is
   unit-testable without mocks.
+
+## Interactions
+
+Coordination primitives with their consumers — `flows/` and `export/`
+drive syncs, `ui/` surfaces state, `import/equipment` asks the write gate:
+
+```mermaid
+graph TD
+    subgraph "sync/"
+        PAUSE["sync-pause<br/>token array"]
+        ELECT["sync-election<br/>writer election"]
+        WRITE["write-level<br/>capability gates"]
+        ISSUES["sync-issues<br/>diagnostics store"]
+        LINK["actor-link<br/>link integrity"]
+        NOTICE["sync-notice<br/>edge toasts"]
+    end
+    MOD["module.ts"]
+    FLOWS["flows/"]
+    EXPORT["export/"]
+    UI["ui/"]
+    EQUIP["import/equipment"]
+    MOD --> NOTICE
+    FLOWS --> PAUSE
+    FLOWS --> WRITE
+    FLOWS --> ISSUES
+    EXPORT --> PAUSE
+    EXPORT --> ELECT
+    EXPORT --> WRITE
+    EXPORT --> ISSUES
+    UI --> ISSUES
+    UI --> PAUSE
+    UI --> WRITE
+    UI --> LINK
+    EQUIP --> WRITE
+    NOTICE --> PAUSE
+    NOTICE --> ELECT
+```

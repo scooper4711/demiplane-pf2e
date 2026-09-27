@@ -57,3 +57,114 @@ slot bookkeeping).
   `import/`, `mapping/`, or `ui/`.
 - `hook-manager.ts` lives here — not in `sync/` — because ingress and
   pipeline are one cohesive unit: the hooks exist only to feed this buffer.
+
+## Interactions
+
+Pipeline classes plus their edges outside the package — hooks and the
+manager gate through `sync/`, the bridge flushes through the manager:
+
+```mermaid
+classDiagram
+    class ExportManager {
+        +queueChange(actor, field, value)
+        +queueItemChange(actor, change)
+        +queueItemDelete(actor, slot)
+        +exportCampaignNotes(actor, notes)
+        +flush(actor) ExportResult
+        +suspend(characterId)
+        +resume(characterId)
+        +setOnConflictHandler(handler)
+    }
+    class HookManager {
+        +register()
+    }
+    class ChangeBuffer {
+        +queueChange / queueItemChange / queueItemDelete
+        +suspend / resume / peek / clear
+        +isWithinRateLimit / recordApiCall
+    }
+    class PushPayloadBuilder {
+        +buildUpdatedCharacterData(...) FetchedCharacter
+    }
+    class ConflictResolver {
+        +checkConflict(...) ConflictCheckResult
+    }
+    class FlowsBridge {
+        <<external>>
+        +exportLinkedCharacter
+        +handlePushConflict
+    }
+    class SyncGates {
+        <<external>>
+        +isSyncActive / isRemoteSyncActive
+        +isClientElectedWriter
+        +canWriteBiography / canWriteSpellSlots / ...
+    }
+    class DemiplaneClient {
+        <<external>>
+        +fetchCharacterData / updateCharacter
+    }
+    HookManager --> ExportManager : queues via
+    ExportManager --> ChangeBuffer : buffers in
+    ExportManager --> PushPayloadBuilder : builds with
+    ExportManager --> ConflictResolver : checks with
+    ExportManager --> SyncGates : gates via
+    ExportManager --> DemiplaneClient : pushes via
+    HookManager --> SyncGates : gates via
+    FlowsBridge --> ExportManager : flushes
+```
+
+### Export data flow detail
+
+Hook-by-hook sequence behind the package-level flow in
+[ARCHITECTURE](../../../docs/ARCHITECTURE.md#export-data-flow):
+
+```mermaid
+sequenceDiagram
+    participant Foundry as Foundry Core
+    participant HM as HookManager
+    participant EM as ExportManager
+    participant DC as DemiplaneClient
+    participant API as Demiplane GraphQL
+
+    Foundry->>HM: Hook: updateActor(actor, changes)
+    HM->>HM: Check: is linked character?
+    HM->>HM: Map Foundry path → store name
+
+    alt Mapped engine field changed
+        HM->>EM: queueChange(actor, storeName, value)
+        EM->>EM: Store in pendingChanges map
+        EM->>EM: Reset 2s debounce timer
+    else Campaign Notes changed
+        HM->>EM: exportCampaignNotes(actor, notes)
+        Note over EM: No actor pause here, or hook queueing stalls and drops edits. A local lock serializes our own writes. Skips if a remote client is mid-sync
+        EM->>DC: fetchCharacterJournals(characterId)
+        DC-->>EM: Existing journals
+        EM->>DC: create or update the Campaign journal
+        DC->>API: slsCreateCharacterJournal or slsUpdateCharacterJournal
+    end
+
+    Note over EM: 2 seconds of inactivity...
+
+    EM->>EM: Debounce timer fires
+    EM->>EM: Check rate limit (30/60s window)
+
+    alt Rate limit OK
+        EM->>DC: fetchCharacterData(characterId)
+        DC-->>EM: Current engines array
+
+        EM->>EM: Apply pending changes via updateCustomEngineValue
+        EM->>DC: updateCharacter({ id, data })
+        DC->>API: updateCharacterV2 mutation
+
+        alt Success
+            API-->>DC: { success: true }
+            EM->>EM: Clear pending changes
+            EM->>Foundry: actor.setFlag("lastSyncTimestamp", now)
+        else Transient failure
+            EM->>EM: Retry with backoff (1s, 2s, 4s)
+        end
+    else Rate limit exceeded
+        EM->>EM: Retain changes, try on next trigger
+    end
+```
