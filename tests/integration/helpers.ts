@@ -167,7 +167,27 @@ export async function dismissOverlays(page: Page): Promise<void> {
   }
 }
 
+/**
+ * Logs in as Gamemaster with Foundry's scene canvas disabled. Headless
+ * Chromium renders the WebGL scene in software, which keeps the main thread
+ * so busy that every action is slow; importing never touches the canvas.
+ */
 export async function loginAsGamemaster(page: Page): Promise<void> {
+  // Client-scoped settings are read from localStorage as JSON.
+  await page.addInitScript(() => window.localStorage.setItem("core.noCanvas", "true"));
+  await loginToWorld(page);
+}
+
+/**
+ * Logs in as Gamemaster with the scene canvas running, for specs that drive
+ * PF2e's own UI: parts of it (e.g. actor sheet and directory handlers) read
+ * `canvas.tokens` and throw without a canvas.
+ */
+export async function loginAsGamemasterWithCanvas(page: Page): Promise<void> {
+  await loginToWorld(page);
+}
+
+async function loginToWorld(page: Page): Promise<void> {
   await startCoverage(page);
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
 

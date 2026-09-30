@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
-  loginAsGamemaster,
+  loginAsGamemasterWithCanvas,
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
@@ -44,7 +44,8 @@ test.describe("Module UI interactions", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    await loginAsGamemaster(page);
+    // PF2e's sheet and directory UI needs the scene canvas (see helper).
+    await loginAsGamemasterWithCanvas(page);
     await deleteAllActors(page);
     await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
     await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
