@@ -19,6 +19,9 @@ export default defineConfig({
     // Foundry warns and degrades below 1366x768; headless defaults to 1280x720.
     viewport: { width: 1600, height: 900 },
   },
+  // One project per game system; each needs a world of that system running
+  // (scripts/foundry.sh picks the project from the world it starts).
+  projects: [{ name: "pf2e" }],
   // Global setup only runs if FOUNDRY_SETUP=true (opt-in for license/system/world setup).
   // Teardown always runs but no-ops unless setup spawned a server.
   ...(process.env.FOUNDRY_SETUP === "true" ? { globalSetup: "./tests/integration/global-setup.ts" } : {}),

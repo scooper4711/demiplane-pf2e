@@ -12,6 +12,13 @@ set -euo pipefail
 #   ./scripts/foundry.sh test stop
 #   ./scripts/foundry.sh test status
 #   ./scripts/foundry.sh test run [--version VER|--version URL] [...] [--keep] [--clean]
+#   ./scripts/foundry.sh test run --all-worlds [...]
+#
+# `run` tests the world's game system: it runs the Playwright project named
+# after the world's system (e.g. pf2e). --all-worlds runs each world in
+# FOUNDRY_TEST_WORLDS in turn (default "integration-test:pf2e"; id:system
+# pairs, the system is used when seeding a missing world), switching the
+# server between them and starting from fresh e2e coverage.
 #
 # Flags: --port PORT, --world ID, --world-title TITLE, --version VER,
 #   --keep (leave the server up after `run`), --clean (delete the world
@@ -34,7 +41,7 @@ set -euo pipefail
 #
 # Env (all optional): FOUNDRY_VERSION, FOUNDRY_PORT, FOUNDRY_WORLD,
 # FOUNDRY_WORLD_TITLE, FOUNDRY_LICENSE_KEY, FOUNDRY_ADMIN_PASSWORD,
-# FOUNDRY_PATH, FOUNDRY_DATA_PATH.
+# FOUNDRY_PATH, FOUNDRY_DATA_PATH, FOUNDRY_TEST_WORLDS.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -66,9 +73,10 @@ WORLD_TITLE=""
 KEEP=0
 CLEAN=0
 HEADED=0
+ALL_WORLDS=0
 
 usage() {
-  grep '^#' "$0" | sed 's/^# \?//' | head -n 30
+  grep '^#' "$0" | sed -E 's/^# ?//' | head -n 45
   exit "${1:-0}"
 }
 
@@ -95,6 +103,7 @@ while [ $# -gt 0 ]; do
     --keep) KEEP=1; shift ;;
     --clean) CLEAN=1; shift ;;
     --headed) HEADED=1; shift ;;
+    --all-worlds) ALL_WORLDS=1; shift ;;
     http://*|https://*) URL="$1"; shift ;;
     *)
       if [ -n "$VERSION" ]; then
@@ -335,6 +344,59 @@ seed_if_needed() {
     npx playwright test scripts/setup-foundry.spec.ts --config=scripts/playwright-setup.config.ts
 }
 
+# World the running server was started with (4th line of the pid file).
+running_world() {
+  if [ -f "$PID_FILE" ]; then sed -n 4p "$PID_FILE"; fi
+}
+
+# Game system of the selected world: from its world.json once it exists,
+# otherwise the system it will be seeded with.
+world_system() {
+  local world_json="$DATA_DIR/Data/worlds/$WORLD_DIR_NAME/world.json"
+  if [ -f "$world_json" ]; then
+    node -p 'require(process.argv[1]).system' "$world_json"
+  else
+    echo "${FOUNDRY_WORLD_SYSTEM:-pf2e}"
+  fi
+}
+
+# Runs the Playwright project for the selected world's game system,
+# starting the server (or switching it to this world) first.
+run_world_suite() {
+  if pid_alive "$(read_pidfile)"; then
+    if [ "$CLEAN" -eq 1 ] || [ "$(running_world)" != "$WORLD_ID" ]; then
+      # A live server pins its world: stop it so we can switch worlds or
+      # let --clean wipe it, then start fresh below.
+      echo "Stopping the running $MODE server for world $WORLD_ID..."
+      do_stop
+    else
+      echo "Reusing already-running $MODE server."
+    fi
+  fi
+  if ! pid_alive "$(read_pidfile)"; then
+    do_start
+    STARTED_BY_ME=1
+  fi
+  seed_if_needed
+  local system result_json status
+  system="$(world_system)"
+  result_json="/tmp/foundry-$MODE-$VERSION-$WORLD_ID-results.json"
+  rm -f "$result_json"
+  echo "Running $system integration tests against world $WORLD_ID..."
+  set +e
+  FOUNDRY_TEST_PORT="$PORT" \
+  FOUNDRY_DATA_PATH="$DATA_DIR" \
+  FOUNDRY_WORLD="$WORLD_ID" \
+  PLAYWRIGHT_JSON_OUTPUT_NAME="$result_json" \
+    npx playwright test --project="$system" --reporter=json,line
+  status=$?
+  set -e
+  if [ -f "$SCRIPT_DIR/summarize-results.mjs" ]; then
+    node "$SCRIPT_DIR/summarize-results.mjs" "$result_json" || true
+  fi
+  return "$status"
+}
+
 case "$ACTION" in
   status) do_status ;;
   stop) do_stop ;;
@@ -344,20 +406,6 @@ case "$ACTION" in
     ;;
   run)
     STARTED_BY_ME=0
-    if pid_alive "$(read_pidfile)"; then
-      if [ "$CLEAN" -eq 1 ]; then
-        # A live server pins its world on disk: stop first so --clean can
-        # actually wipe it, then fall through to a fresh start below.
-        echo "--clean requested: stopping the running $MODE server first..."
-        do_stop
-      else
-        echo "Reusing already-running $MODE server."
-      fi
-    fi
-    if ! pid_alive "$(read_pidfile)"; then
-      do_start
-      STARTED_BY_ME=1
-    fi
     # Always clean up what we started, even if tests or summary fail.
     cleanup_on_exit() {
       if [ "$STARTED_BY_ME" -eq 1 ]; then
@@ -369,19 +417,20 @@ case "$ACTION" in
       fi
     }
     trap cleanup_on_exit EXIT INT TERM
-    seed_if_needed
-    echo "Running integration tests..."
-    RESULT_JSON="/tmp/foundry-$MODE-$VERSION-results.json"
-    rm -f "$RESULT_JSON"
-    set +e
-    FOUNDRY_TEST_PORT="$PORT" \
-    FOUNDRY_DATA_PATH="$DATA_DIR" \
-    FOUNDRY_WORLD="$WORLD_ID" \
-    PLAYWRIGHT_JSON_OUTPUT_NAME="$RESULT_JSON" \
-      npx playwright test --reporter=json,line
-    TEST_EXIT=$?
-    set -e
-    node "$SCRIPT_DIR/summarize-results.mjs" "$RESULT_JSON" || true
+    TEST_EXIT=0
+    if [ "$ALL_WORLDS" -eq 1 ]; then
+      # A full run reports coverage for this run only.
+      rm -rf "$PROJECT_ROOT/coverage/e2e-raw"
+      for entry in ${FOUNDRY_TEST_WORLDS:-integration-test:pf2e}; do
+        WORLD_ID="${entry%%:*}"
+        WORLD_DIR_NAME="$WORLD_ID"
+        WORLD_TITLE="$WORLD_ID"
+        export FOUNDRY_WORLD_SYSTEM="${entry##*:}"
+        run_world_suite || TEST_EXIT=1
+      done
+    else
+      run_world_suite || TEST_EXIT=$?
+    fi
     trap - EXIT INT TERM
     cleanup_on_exit
     exit "$TEST_EXIT"
