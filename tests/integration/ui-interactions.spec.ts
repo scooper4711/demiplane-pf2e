@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
+  demiplaneActor,
   loginAsGamemasterWithCanvas,
   deleteActorsForCharacter,
   deleteAllActors,
@@ -55,10 +56,8 @@ test.describe("Module UI interactions", () => {
     await waitForSyncRelease(page, VALEROS_UUID);
     // The import renames the actor to the Demiplane name, so re-resolve by the
     // characterId flag rather than the created name.
-    actorId = await page.evaluate(
-      ({ characterId, moduleId }) => {
-        // @ts-expect-error Foundry global
-        const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+    actorId = await demiplaneActor(page, VALEROS_UUID).evaluate(
+      (actor) => {
         return actor.id as string;
       },
       { characterId: VALEROS_UUID, moduleId: MODULE_ID }

@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import {
+  demiplaneActor,
   loginAsGamemaster,
   deleteActorsForCharacter,
   deleteAllActors,
@@ -82,13 +83,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
       // Discover mutation targets from the live actor (no hardcoded items).
       // Looked up by characterId flag: the import renames the actor to the
       // Demiplane character name, so the created name is already stale.
-      const items = await page.evaluate(
-        ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find(
-            // @ts-expect-error Foundry global
-            (a) => a.getFlag(moduleId, "characterId") === characterId
-          );
+      const items = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor, { moduleId }) => {
           return [...actor.items].map(
             (i: {
               id: string;
@@ -154,13 +150,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
 
       // Mutate every pushable field, then read back the actor state as the
       // expectations ( guards against Foundry clamping anything we sent).
-      const expected = await page.evaluate(
-        async ({ characterId, moduleId, currencyId, qtyItemId, equipItemId, deleteItemId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find(
-            // @ts-expect-error Foundry global
-            (a) => a.getFlag(moduleId, "characterId") === characterId
-          );
+      const expected = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { currencyId, qtyItemId, equipItemId, deleteItemId }) => {
           const T = (v: string) => `MUT-${v}`;
           const heroNow = actor.system.resources?.heroPoints?.value as number;
           const heroPoints = heroNow === 2 ? 1 : 2;
@@ -250,8 +241,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
           qtyItemId: qtyItem.id,
           equipItemId: equipItem.id,
           deleteItemId: deleteItem.id,
-        },
-        { timeout: 120_000 }
+        }
       );
 
       // Deleting at the deletion tier always asks for confirmation — accept
@@ -261,18 +251,12 @@ test.describe("Kyra Mutation Round-Trip", () => {
       await confirmDelete.waitFor({ state: "visible", timeout: 15_000 });
       await confirmDelete.click();
 
-      const pushResult = await page.evaluate(
-        async ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find(
-            // @ts-expect-error Foundry global
-            (a) => a.getFlag(moduleId, "characterId") === characterId
-          );
+      const pushResult = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId }) => {
           // @ts-expect-error Foundry global
           return await game.modules.get(moduleId).api.exportNow(actor);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID }
       );
       expect(pushResult.success).toBe(true);
 
@@ -300,13 +284,8 @@ test.describe("Kyra Mutation Round-Trip", () => {
       );
       expect(remote["character_appearance_gender"], "remote gender persisted").toBe(expected.gender);
 
-      const actual = await page.evaluate(
-        async ({ characterId, moduleId, token, qtyItemName, equipItemName, currencySlug }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find(
-            // @ts-expect-error Foundry global
-            (a) => a.getFlag(moduleId, "characterId") === characterId
-          );
+      const actual = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId, token, qtyItemName, equipItemName, currencySlug }) => {
           // @ts-expect-error Foundry global
           const summary = await game.modules.get(moduleId).api.importCharacter(actor, { token, wipe: true });
           const read = (path: string) =>
@@ -353,8 +332,7 @@ test.describe("Kyra Mutation Round-Trip", () => {
           qtyItemName: expected.qtyItemName,
           equipItemName: expected.equipItemName,
           currencySlug: expected.currencySlug,
-        },
-        { timeout: 180_000 }
+        }
       );
       await stopCoverage(page, "kyra-mutation");
 
