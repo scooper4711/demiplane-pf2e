@@ -1,0 +1,13 @@
+{
+  "moduleId": "demiplane-pf2e",
+  "foundryVersion": "14.367",
+  "testWorlds": [{ "id": "integration-test", "system": "pf2e", "title": "Integration Test" }],
+  "devWorld": { "id": "demiplane-test", "system": "pf2e", "title": "Demiplane Test" },
+  "seed": {
+    "settings": [
+      { "key": "demiplaneToken", "fromEnv": "DEMIPLANE_TOKEN" },
+      { "key": "debugImport", "value": true }
+    ]
+  },
+  "coverage": { "bundle": "dist/module.js" }
+}

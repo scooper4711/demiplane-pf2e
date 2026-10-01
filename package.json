@@ -17,12 +17,11 @@
     "test:integration": "npx playwright test",
     "link:api": "node scripts/link-api.mjs link",
     "unlink:api": "node scripts/link-api.mjs unlink",
-    "coverage:e2e": "node scripts/e2e-coverage.mjs",
-    "start:foundry": "source .env && node \"${FOUNDRY_PATH:-./playwright/versions/14.367/FoundryVTT-Node-14.367}/main.mjs\" --dataPath=\"${FOUNDRY_DATA_PATH:-./playwright/Data}\" --port=\"${FOUNDRY_PORT:-30000}\" --adminPassword=\"${FOUNDRY_ADMIN_PASSWORD:-test-admin}\" --noupdate",
-    "smoke": "./scripts/smoke-foundry.sh",
-    "dev": "npm run build && npm run start:foundry",
-    "foundry": "./scripts/foundry.sh",
-    "integration": "./scripts/foundry.sh test run",
+    "coverage:e2e": "foundry-test-coverage",
+    "start:foundry": "foundry-test dev start",
+    "dev": "npm run build && foundry-test dev start",
+    "foundry": "foundry-test",
+    "integration": "foundry-test test run --all-worlds",
     "check:duplication": "node scripts-build/check-duplication.cjs",
     "check:deps": "depcruise src --config .dependency-cruiser.cjs",
     "check:quality": "npm run lint && npm run check:duplication && npm run check:deps",
@@ -53,9 +52,9 @@
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.0",
+    "@scooper4711/foundry-test-kit": "^0.2.1",
     "@types/node": "^26.4.1",
     "@vitest/coverage-v8": "^4.1.11",
-    "convert-source-map": "^2.0.0",
     "dependency-cruiser": "^18.4.0",
     "dotenv": "^17.4.2",
     "eslint": "^10.9.1",
@@ -63,15 +62,16 @@
     "husky": "^9.1.7",
     "jscpd": "^5.1.2",
     "lint-staged": "^17.4.1",
-    "nyc": "^18.0.0",
     "prettier": "^3.5.0",
     "rollup": "^4.40.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0",
-    "v8-to-istanbul": "^9.3.0",
     "vitest": "^4.1.11"
   },
   "engines": {
     "node": ">=20"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,json,md,yml,yaml}": "prettier --write"
   }
 }
