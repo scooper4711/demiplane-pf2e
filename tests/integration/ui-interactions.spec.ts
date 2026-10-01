@@ -150,8 +150,8 @@ test.describe("Module UI interactions", () => {
     await expect(validateButton).toBeVisible();
     await expect(validateButton).toContainText("Validate token");
 
-    // The seeded world stores the real Demiplane token (see
-    // scripts/setup-foundry.spec.ts), so validating hits the live API and
+    // The seeded world stores the real Demiplane token (see seed.settings in
+    // foundry-test.config.json), so validating hits the live API and
     // exercises the success path plus the result dialog.
     await validateButton.click();
 
