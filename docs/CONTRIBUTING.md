@@ -38,7 +38,7 @@ Thank you for your interest in improving the Demiplane-Foundry PF2e sync module.
 4. Start the dev server (seeds license, PF2e, and the `demiplane-test` world on first run):
 
    ```bash
-   ./scripts/foundry.sh dev start
+   npx foundry-test dev start
    ```
 
    The module is symlinked into the data dir automatically, so `npm run

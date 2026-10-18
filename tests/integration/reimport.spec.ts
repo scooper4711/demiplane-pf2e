@@ -74,8 +74,7 @@ test.describe("Kyra Reimport", () => {
         const items = [...actor.items].map((i: { name: string; type: string }) => `${i.type}:${i.name}`).sort();
         return { summary, items };
       },
-      { actorId: first.actorId, token: DEMIPLANE_TOKEN, moduleId: "demiplane-pf2e" },
-      { timeout: 120_000 }
+      { actorId: first.actorId, token: DEMIPLANE_TOKEN, moduleId: "demiplane-pf2e" }
     );
     await stopCoverage(page, "reimport");
 

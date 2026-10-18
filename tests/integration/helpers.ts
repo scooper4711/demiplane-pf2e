@@ -1,28 +1,22 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { mkdirSync, writeFileSync } from "fs";
-import { resolve } from "path";
+import {
+  actorOn,
+  deleteDocuments,
+  disableSceneCanvas,
+  ensureModuleActive as activateModule,
+  joinAsGamemaster,
+  setSetting,
+  startCoverage,
+  testBaseUrl,
+  waitForSetting,
+  type PageActor,
+} from "@scooper4711/foundry-test-kit";
 
-const PORT = process.env.FOUNDRY_TEST_PORT ?? "30001";
-const BASE_URL = `http://localhost:${PORT}`;
-const ADMIN_PASSWORD = process.env.FOUNDRY_ADMIN_PASSWORD ?? "test-admin";
+// Generic Foundry session, overlay, and coverage helpers come from the kit.
+export { stopCoverage } from "@scooper4711/foundry-test-kit";
+
 const MODULE_ID = "demiplane-pf2e";
-/** Our bundled module script, the only URL coverage is collected for. */
-const MODULE_BUNDLE_MARKER = "demiplane-pf2e/dist/module.js";
-// Playwright always runs from the repo root.
-const COVERAGE_RAW_DIR = resolve("coverage/e2e-raw");
-
-/** Button labels that unambiguously dismiss (never accept) a popup. */
-const DISMISS_BUTTON_NAMES = [
-  "Close Window",
-  "Close",
-  "Dismiss",
-  "Decline",
-  "No",
-  "End Tour",
-  "Got it",
-  "Don't Show Again",
-];
 
 /**
  * Skips the slow mutation/write round-trip specs when SKIP_MUTATION_TESTS=1,
@@ -41,10 +35,7 @@ export function skipMutationTestsIfFlagged(): void {
  * backing setting the menu flips, without driving the settings UI.
  */
 export async function setFreeArchetype(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate((value: boolean) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "freeArchetypeVariant", value);
-  }, enabled);
+  await setSetting(page, "pf2e", "freeArchetypeVariant", enabled);
 }
 
 /**
@@ -52,10 +43,7 @@ export async function setFreeArchetype(page: Page, enabled: boolean): Promise<vo
  * setting API, mirroring {@link setFreeArchetype}.
  */
 export async function setGradualBoosts(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate((value: boolean) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "gradualBoostsVariant", value);
-  }, enabled);
+  await setSetting(page, "pf2e", "gradualBoostsVariant", enabled);
 }
 
 /**
@@ -64,281 +52,48 @@ export async function setGradualBoosts(page: Page, enabled: boolean): Promise<vo
  * {@link setFreeArchetype}.
  */
 export async function setMythicRules(page: Page, value: string): Promise<void> {
-  await page.evaluate((mode: string) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "mythic", mode);
-  }, value);
+  await setSetting(page, "pf2e", "mythic", value);
 }
 
 /**
- * Dismisses tour popups only: exits the active tour through Foundry's own
- * API (`foundry.nue.Tour.activeTour.exit()` — exactly what the Escape key
- * invokes), then the tooltip X (`<a data-action="exit">`, which has no
- * accessible name), plus overlay removal. Never touches generic buttons, so
- * it is safe to call while an installer dialog is open — a broad "Close"
- * click would kill the dialog itself.
- *
- * There is intentionally no focus juggling: the API call needs none, unlike
- * a synthetic Escape keypress.
+ * Logs in as Gamemaster with Foundry's scene canvas disabled. Headless
+ * Chromium renders the WebGL scene in software, which keeps the main thread
+ * so busy that every action is slow; importing never touches the canvas.
  */
-export async function dismissTours(page: Page): Promise<void> {
-  // Any of these visible means a tour is up (tooltip, centered step, or dim
-  // overlay). Checked separately because the tooltip container varies.
-  const TOUR_SELECTORS = [".tour", ".tour-center-step", ".tour-overlay", "#tooltip.tour"];
-  const deadline = Date.now() + 10_000;
-  for (;;) {
-    const apiResult = await page
-      .evaluate(() => {
-        const Ns = (globalThis as unknown as { foundry?: { nue?: { Tour?: unknown } } }).foundry?.nue?.Tour as
-          { tourInProgress: boolean; activeTour?: { exit: () => void } | null } | undefined;
-        if (!Ns) return "no-api";
-        if (Ns.tourInProgress) {
-          Ns.activeTour?.exit();
-          return "exited";
-        }
-        return "none-active";
-      })
-      .catch((e) => `error:${String(e).slice(0, 80)}`);
-    await page
-      .evaluate(() => {
-        document.querySelectorAll(".tour-overlay, .tour-center-step").forEach((el) => el.remove());
-      })
-      .catch(() => {});
-    let matched = "";
-    for (const sel of TOUR_SELECTORS) {
-      if (
-        await page
-          .locator(sel)
-          .first()
-          .isVisible({ timeout: 250 })
-          .catch(() => false)
-      ) {
-        matched = sel;
-        break;
-      }
-    }
-    if (!matched && apiResult !== "exited") return;
-    const tourExit = page.locator('.tour [data-action="exit"], .tour-center-step [data-action="exit"]');
-    if (await tourExit.isVisible({ timeout: 500 }).catch(() => false)) {
-      await tourExit
-        .first()
-        .click()
-        .catch(() => {});
-      await page.waitForFunction(() => !document.querySelector(".tour"), { timeout: 1000 }).catch(() => {});
-    }
-    if (Date.now() > deadline) {
-      return;
-    }
-    await page.waitForTimeout(100);
-  }
-}
-
-/**
- * Clears first-run popups (NUE tours, welcome/what's-new dialogs, usage-data
- * prompts). These appear on a clean data dir but never on the second run,
- * which is the classic clean-checkout flake source. Only ever *dismisses* —
- * never clicks OK/Accept/Join — and is only used during login/setup, never
- * while a test dialog of our own might be open.
- */
-export async function dismissOverlays(page: Page): Promise<void> {
-  // Tours first: Escape reliably ends them, while DOM removal alone can
-  // leave a live tour blocking behind an invisible tooltip.
-  await dismissTours(page);
-  const deadline = Date.now() + 15_000;
-  for (;;) {
-    await page
-      .evaluate(() => {
-        document.querySelectorAll("#notifications li").forEach((el) => el.remove());
-      })
-      .catch(() => {});
-
-    let clicked = false;
-    for (const name of DISMISS_BUTTON_NAMES) {
-      const button = page.getByRole("button", { name, exact: true });
-      if (await button.isVisible({ timeout: 500 }).catch(() => false)) {
-        await button.click().catch(() => {});
-        clicked = true;
-        break;
-      }
-    }
-    if (!clicked) return;
-    if (Date.now() > deadline) return;
-    await page.waitForTimeout(100);
-  }
-}
-
 export async function loginAsGamemaster(page: Page): Promise<void> {
-  await startCoverage(page);
-  await page.goto(BASE_URL, { waitUntil: "domcontentloaded", timeout: 30_000 });
-
-  // The test instance boots straight into the world (--world flag), so the
-  // common case is landing on /join with first-run popups on top.
-  await dismissOverlays(page);
-
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const url = page.url();
-
-    if (url.includes("/game")) {
-      await page.waitForFunction(() => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true, {
-        timeout: 90_000,
-      });
-      await dismissOverlays(page);
-      // Enabling needs a reload (handled inside); after one, or when the
-      // registry briefly disagrees right after ready, loop back and verify
-      // rather than trusting a single read.
-      await ensureModuleActive(page);
-      if (await isModuleActive(page)) return;
-      continue;
-    }
-
-    if (url.includes("/auth")) {
-      await page.getByRole("textbox", { name: "Administrator Password" }).fill(ADMIN_PASSWORD);
-      await page.getByRole("button", { name: "Log In" }).click();
-      await page.waitForURL(/\/(setup|join|game)/, { timeout: 30_000 }).catch(() => {});
-      continue;
-    }
-
-    if (url.includes("/join")) {
-      await joinAsGamemaster(page);
-      return;
-    }
-
-    await page
-      .waitForFunction(() => ["/game", "/auth", "/join"].some((s) => location.href.includes(s)), { timeout: 2000 })
-      .catch(() => {});
-  }
-
-  throw new Error(`Failed to reach /game. Current URL: ${page.url()}`);
+  await disableSceneCanvas(page);
+  await loginToWorld(page);
 }
 
 /**
- * Joins the current world as Gamemaster. Assumes the page is already on
- * /join. Shared with the setup script so both use the same robust flow.
+ * Logs in as Gamemaster with the scene canvas running, for specs that drive
+ * PF2e's own UI: parts of it (e.g. actor sheet and directory handlers) read
+ * `canvas.tokens` and throw without a canvas.
  */
-export async function joinAsGamemaster(page: Page): Promise<void> {
-  // Select Gamemaster from the autocomplete dropdown. The option is an
-  // <li> inside #autocomplete (NOT the wrapping <menu>, whose text also
-  // matches) — clicking the wrapper selects nothing and Join silently
-  // does nothing.
-  const userSelect = page.getByRole("textbox", { name: "Select User" });
-  // waitFor (not isVisible): the form renders async after page load, and
-  // isVisible() does not wait — gating on it skips user selection entirely.
-  await userSelect.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {});
-  if (await userSelect.isVisible().catch(() => false)) {
-    await userSelect.click().catch(() => {});
-    await userSelect.fill("Gamemaster");
-    // click() auto-waits for the suggestion; isVisible() would not.
-    const selected = await page
-      .locator("#autocomplete li", { hasText: /^Gamemaster$/ })
-      .click({ timeout: 10_000 })
-      .then(() => true)
-      .catch(() => false);
-    if (!selected) {
-      // Fallback: keyboard-select the highlighted suggestion.
-      await userSelect.press("ArrowDown").catch(() => {});
-      await userSelect.press("Enter").catch(() => {});
-    }
-  }
-
-  // Click Join (waits for the button to actually enable)
-  const joinButton = page.getByRole("button", { name: "Join Game Session" });
-  await joinButton.waitFor({ state: "visible", timeout: 15_000 });
-  await Promise.all([page.waitForURL(/\/game/, { timeout: 90_000, waitUntil: "commit" }), joinButton.click()]);
-  // A passwordless Gamemaster is prompted to set one on first join, which
-  // blocks game load — save through it empty, then wait for ready. Poll
-  // because the prompt can appear at any point during load.
-  const readyDeadline = Date.now() + 90_000;
-  for (;;) {
-    const saveContinue = page.getByRole("button", { name: "Save and Continue" });
-    if (await saveContinue.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await saveContinue.click().catch(() => {});
-      await saveContinue.waitFor({ state: "hidden", timeout: 2000 }).catch(() => {});
-    }
-    const ready = await page
-      .waitForFunction(() => (globalThis as unknown as { game: { ready: boolean } }).game?.ready === true, {
-        timeout: 3000,
-      })
-      .then(() => true)
-      .catch(() => false);
-    if (ready) break;
-    if (Date.now() > readyDeadline) {
-      throw new Error("game never became ready after joining");
-    }
-  }
-  await dismissOverlays(page);
+export async function loginAsGamemasterWithCanvas(page: Page): Promise<void> {
+  await loginToWorld(page);
 }
 
 /**
- * Activates our module if the world doesn't have it enabled (always the case
- * on a clean data dir). Enabling requires a client reload; the login loop
- * re-joins afterwards. Idempotent — safe to call when already active.
+ * Joins the seeded world as its Gamemaster (the kit's seeder already enabled
+ * the module) and confirms the module is active, enabling it if a world was
+ * seeded without it.
+ */
+async function loginToWorld(page: Page): Promise<void> {
+  await startCoverage(page);
+  await page.goto(`${testBaseUrl()}/join`, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  await joinAsGamemaster(page);
+  await ensureModuleActive(page);
+}
+
+/**
+ * Activates our module if the world doesn't have it enabled. Enabling
+ * requires a client reload, which the kit handles. Idempotent.
  */
 export async function ensureModuleActive(page: Page): Promise<void> {
-  const status = await page.evaluate(async (moduleId: string) => {
-    const g = globalThis as unknown as {
-      game: {
-        modules: { get: (id: string) => { active?: boolean } | undefined };
-        settings: {
-          get: (m: string, k: string) => Record<string, boolean>;
-          set: (m: string, k: string, v: unknown) => Promise<unknown>;
-        };
-      };
-    };
-    const mod = g.game.modules.get(moduleId);
-    if (!mod) return "not_found";
-    if (mod.active) return "already_active";
-    const config = g.game.settings.get("core", "moduleConfiguration");
-    config[moduleId] = true;
-    await g.game.settings.set("core", "moduleConfiguration", config);
-    return "activated";
-  }, MODULE_ID);
-
-  if (status === "not_found") {
-    throw new Error(
-      `Module ${MODULE_ID} not found. Is it linked into Data/modules? (global-setup does this automatically.)`
-    );
+  if ((await activateModule(page, MODULE_ID)) === "not_found") {
+    throw new Error(`Module ${MODULE_ID} not found. Is it linked into Data/modules? (foundry-test does this.)`);
   }
-  if (status === "activated") {
-    await page.reload();
-  }
-}
-
-/** Reads back whether our module is actually active right now. */
-export async function isModuleActive(page: Page): Promise<boolean> {
-  return page
-    .evaluate(() => {
-      const g = globalThis as unknown as {
-        game?: { modules?: { get: (id: string) => { active?: boolean } | undefined } };
-      };
-      return g.game?.modules?.get("demiplane-pf2e")?.active === true;
-    })
-    .catch(() => false);
-}
-
-/**
- * Begins Chromium JS coverage on the page. Must run before navigation so
- * module init is captured; `resetOnNavigation: false` keeps counting across
- * the /join → /game hop. No-op outside Chromium.
- */
-export async function startCoverage(page: Page): Promise<void> {
-  await page.coverage?.startJSCoverage({ resetOnNavigation: false }).catch(() => {});
-}
-
-/**
- * Stops coverage and writes this page's raw V8 ranges for our bundle to
- * `coverage/e2e-raw/<name>.json` for `scripts/e2e-coverage.mjs` to convert.
- * Call once per spec after the import; the cleanup page needs none.
- */
-export async function stopCoverage(page: Page, name: string): Promise<void> {
-  const entries = await page.coverage?.stopJSCoverage().catch(() => undefined);
-  if (!entries) return;
-  const ours = entries.filter((entry) => entry.url.includes(MODULE_BUNDLE_MARKER));
-  if (ours.length === 0) return;
-  mkdirSync(COVERAGE_RAW_DIR, { recursive: true });
-  writeFileSync(
-    `${COVERAGE_RAW_DIR}/${name}.json`,
-    JSON.stringify(ours.map(({ url, functions }) => ({ url, functions })))
-  );
 }
 
 /**
@@ -373,30 +128,18 @@ export async function withApiRetry<T>(label: string, fn: () => Promise<T>): Prom
  * safest tier (`read-only`).
  */
 export async function setWriteLevel(page: Page, level: string): Promise<{ level: string | undefined }> {
-  const result = await page.evaluate(
-    async ({ moduleId, level }) => {
-      // @ts-expect-error Foundry global
-      const prevLevel = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
-      // @ts-expect-error Foundry global
-      await game.settings.set(moduleId, "syncWriteLevel", level);
-      return { level: prevLevel };
-    },
-    { moduleId: MODULE_ID, level }
+  const previous = await page.evaluate(
+    (moduleId) =>
+      (globalThis as unknown as { game: { settings: { get(scope: string, key: string): unknown } } }).game.settings.get(
+        moduleId,
+        "syncWriteLevel"
+      ) as string | undefined,
+    MODULE_ID
   );
-  await page
-    .waitForFunction(
-      ({ moduleId, level }) => {
-        // @ts-expect-error Foundry global
-        return (
-          (
-            globalThis as unknown as { game: { settings: { get: (m: string, k: string) => unknown } } }
-          ).game.settings.get(moduleId, "syncWriteLevel") === level
-        );
-      },
-      { moduleId: MODULE_ID, level },
-      { timeout: 2000 }
-    )
-    .catch(() => {});
+  await setSetting(page, MODULE_ID, "syncWriteLevel", level);
+  await waitForSetting(page, { scope: MODULE_ID, key: "syncWriteLevel", value: level }, { timeout: 2000 }).catch(
+    () => {}
+  );
   await page
     .evaluate(async () => {
       // @ts-expect-error Foundry global
@@ -406,7 +149,7 @@ export async function setWriteLevel(page: Page, level: string): Promise<{ level:
       }
     })
     .catch(() => {});
-  return result;
+  return { level: previous };
 }
 
 /**
@@ -419,33 +162,22 @@ export async function setWriteLevel(page: Page, level: string): Promise<{ level:
  * fixed duration.
  */
 export async function waitForSyncRelease(page: Page, characterId: string): Promise<void> {
-  await page.waitForFunction(
-    ({ characterId, moduleId }) => {
-      // @ts-expect-error Foundry global
-      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
-      if (!actor) return false;
-      // @ts-expect-error Foundry global
-      const tokens = actor.getFlag(moduleId, "syncActiveTokens");
-      return !Array.isArray(tokens) || tokens.length === 0;
-    },
-    { characterId, moduleId: MODULE_ID },
-    { timeout: 30_000 }
-  );
+  await demiplaneActor(page, characterId).waitFor((actor, moduleId) => {
+    const tokens = actor.getFlag(moduleId, "syncActiveTokens");
+    return !Array.isArray(tokens) || tokens.length === 0;
+  }, MODULE_ID);
+}
+
+/** The actor imported from a Demiplane character, found by its characterId flag. */
+export function demiplaneActor(page: Page, characterId: string): PageActor {
+  return actorOn(page, { flag: { scope: MODULE_ID, key: "characterId", value: characterId } });
 }
 
 /**
  * Restores a write level previously saved by setWriteLevel. Best-effort by
  * design: cleanup must never throw.
  */ export async function restoreWriteLevel(page: Page, saved: { level: string | undefined }): Promise<void> {
-  await page
-    .evaluate(
-      async ({ moduleId, saved }) => {
-        // @ts-expect-error Foundry global
-        await game.settings.set(moduleId, "syncWriteLevel", saved.level ?? "read-only");
-      },
-      { moduleId: MODULE_ID, saved }
-    )
-    .catch(() => {});
+  await setSetting(page, MODULE_ID, "syncWriteLevel", saved.level ?? "read-only").catch(() => {});
 }
 
 /**
@@ -461,10 +193,8 @@ export async function storeGuessedPicks(
   characterId: string,
   records: Array<{ key: string; options: Array<{ value: string }> }>
 ): Promise<void> {
-  await page.evaluate(
-    async ({ characterId, moduleId, records }) => {
-      // @ts-expect-error Foundry global
-      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+  await demiplaneActor(page, characterId).evaluate(
+    async (actor, { moduleId, records }) => {
       // @ts-expect-error Foundry global
       const current = (actor.getFlag(moduleId, "choiceOverrides") ?? {}) as Record<string, string>;
       const picks: Record<string, string> = { ...current };
@@ -524,28 +254,18 @@ export async function deleteActorsForCharacter(page: Page, characterId: string, 
 
 /**
  * Deletes EVERY actor in the test world. Call at the start of each spec's
- * setup: the world is disposable (reseedable via `foundry.sh test run
+ * setup: the world is disposable (reseedable via `foundry-test test run
  * --clean`), and any leftover — a renamed import, a stale link-holder the
  * targeted cleanup missed — poisons subsequent runs through the
  * duplicate-link guard. Targeted per-character cleanup stays in afterAll.
  */
 export async function deleteAllActors(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // @ts-expect-error Foundry global
-    const ids = game.actors.contents.map((actor) => actor.id);
-    for (const id of ids) {
-      // @ts-expect-error Foundry global
-      await game.actors.get(id)?.delete();
-    }
-  });
-}
-
-interface SnapshotEntry {
-  name: string;
-  prepared: string;
-  tradition: string;
-  spells: string[];
-  slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
+  const ids = await page.evaluate(() =>
+    (globalThis as unknown as { game: { actors: { contents: Array<{ id: string }> } } }).game.actors.contents.map(
+      (actor) => actor.id
+    )
+  );
+  await deleteDocuments(page, "Actor", ids);
 }
 
 export interface ImportResult {
@@ -843,8 +563,7 @@ export async function createAndImportCharacter(
         })(),
       };
     },
-    { actorName, characterId, token, moduleId: MODULE_ID },
-    { timeout: 120_000 }
+    { actorName, characterId, token, moduleId: MODULE_ID }
   );
 }
 

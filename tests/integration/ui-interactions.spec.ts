@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import {
-  loginAsGamemaster,
+  demiplaneActor,
+  loginAsGamemasterWithCanvas,
   deleteActorsForCharacter,
   deleteAllActors,
   createAndImportCharacter,
@@ -44,7 +45,8 @@ test.describe("Module UI interactions", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
-    await loginAsGamemaster(page);
+    // PF2e's sheet and directory UI needs the scene canvas (see helper).
+    await loginAsGamemasterWithCanvas(page);
     await deleteAllActors(page);
     await deleteActorsForCharacter(page, VALEROS_UUID, ACTOR_NAME);
     await createAndImportCharacter(page, ACTOR_NAME, VALEROS_UUID, DEMIPLANE_TOKEN);
@@ -54,10 +56,8 @@ test.describe("Module UI interactions", () => {
     await waitForSyncRelease(page, VALEROS_UUID);
     // The import renames the actor to the Demiplane name, so re-resolve by the
     // characterId flag rather than the created name.
-    actorId = await page.evaluate(
-      ({ characterId, moduleId }) => {
-        // @ts-expect-error Foundry global
-        const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+    actorId = await demiplaneActor(page, VALEROS_UUID).evaluate(
+      (actor) => {
         return actor.id as string;
       },
       { characterId: VALEROS_UUID, moduleId: MODULE_ID }
@@ -149,8 +149,8 @@ test.describe("Module UI interactions", () => {
     await expect(validateButton).toBeVisible();
     await expect(validateButton).toContainText("Validate token");
 
-    // The seeded world stores the real Demiplane token (see
-    // scripts/setup-foundry.spec.ts), so validating hits the live API and
+    // The seeded world stores the real Demiplane token (see seed.settings in
+    // foundry-test.config.json), so validating hits the live API and
     // exercises the success path plus the result dialog.
     await validateButton.click();
 

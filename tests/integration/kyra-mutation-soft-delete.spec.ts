@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import {
+  demiplaneActor,
   loginAsGamemaster,
   deleteActorsForCharacter,
   deleteAllActors,
@@ -60,10 +61,8 @@ test.describe("Kyra Soft Delete", () => {
 
       savedSettings = await setWriteLevel(page, "session");
 
-      const targets = await page.evaluate(
-        ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const targets = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor) => {
           return [...actor.items].map(
             (i: {
               id: string;
@@ -91,17 +90,14 @@ test.describe("Kyra Soft Delete", () => {
       if (!deleteItem) throw new Error("Missing soft-delete target with a unique name");
       console.log(`Soft-delete target: ${deleteItem.name} (${deleteItem.slug})`);
 
-      await page.evaluate(
-        async ({ characterId, moduleId, deleteName }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { deleteName }) => {
           await actor.update({ "system.attributes.hp.value": 3 });
           const target = [...actor.items].find((i: { name: string }) => i.name === deleteName);
           if (!target) throw new Error(`delete target gone before delete: ${deleteName}`);
           await target.delete();
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name }
       );
 
       // Session soft-delete is reversible, so it deliberately prompts nothing:
@@ -110,15 +106,12 @@ test.describe("Kyra Soft Delete", () => {
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
 
-      const pushResult = await page.evaluate(
-        async ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const pushResult = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId }) => {
           // @ts-expect-error Foundry global
           return await game.modules.get(moduleId).api.exportNow(actor);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID }
       );
       expect(pushResult.success).toBe(true);
 
@@ -132,16 +125,13 @@ test.describe("Kyra Soft Delete", () => {
       expect(qty?.value).toBe(0);
 
       // A wipe re-import at session skips the zero-quantity item: it stays gone.
-      const names = await page.evaluate(
-        async ({ characterId, moduleId, token }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const names = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId, token }) => {
           // @ts-expect-error Foundry global
           await game.modules.get(moduleId).api.importCharacter(actor, { token, wipe: true });
           return [...actor.items].map((i: { name: string }) => i.name);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN },
-        { timeout: 180_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN }
       );
       expect(names).not.toContain(deleteItem.name);
       await stopCoverage(page, "kyra-soft-delete");
@@ -216,10 +206,8 @@ test.describe("Kyra Soft Delete", () => {
       // First, prove full-sync deletion prompts and removes the engine.
       savedSettings = await setWriteLevel(page, "full");
 
-      const targets = await page.evaluate(
-        ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const targets = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor) => {
           return [...actor.items].map(
             (i: { id: string; name: string; type: string; system: { slug?: string; quantity?: number } }) => ({
               id: i.id,
@@ -239,24 +227,18 @@ test.describe("Kyra Soft Delete", () => {
 
       // Set quantity to 0 via item update and push — at full sync this is a
       // real quantity 0, not a soft-delete marker.
-      await page.evaluate(
-        async ({ characterId, moduleId, qtyId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { qtyId }) => {
           await actor.items.get(qtyId).update({ "system.quantity": 0 });
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, qtyId: qtyItem.id },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, qtyId: qtyItem.id }
       );
-      const pushResult = await page.evaluate(
-        async ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const pushResult = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId }) => {
           // @ts-expect-error Foundry global
           return await game.modules.get(moduleId).api.exportNow(actor);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID }
       );
       expect(pushResult.success).toBe(true);
       const after = await withApiRetry("fetch engines", () => client.fetchCharacterData(CHARACTER_UUID));
@@ -267,16 +249,13 @@ test.describe("Kyra Soft Delete", () => {
 
       // Wipe re-import at full sync should NOT skip: quantity 0 is a real
       // quantity there, so the item stays.
-      const names = await page.evaluate(
-        async ({ characterId, moduleId, token }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const names = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId, token }) => {
           // @ts-expect-error Foundry global
           await game.modules.get(moduleId).api.importCharacter(actor, { token, wipe: true });
           return [...actor.items].map((i: { name: string }) => i.name);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN },
-        { timeout: 180_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN }
       );
       expect(names).toContain(qtyItem.name);
     } finally {
