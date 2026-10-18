@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { DemiplaneClient } from "@scooper4711/demiplane-api";
 import {
+  demiplaneActor,
   loginAsGamemaster,
   deleteActorsForCharacter,
   deleteAllActors,
@@ -70,38 +71,30 @@ test.describe("Kyra Write Levels", () => {
         update: Record<string, unknown>,
         itemUpdates?: Array<{ id: string; update: Record<string, unknown> }>
       ) =>
-        page!.evaluate(
-          async ({ characterId, moduleId, update, itemUpdates }) => {
-            // @ts-expect-error Foundry global
-            const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+        demiplaneActor(page!, CHARACTER_UUID).evaluate(
+          async (actor, { update, itemUpdates }) => {
             await actor.update(update);
             for (const { id, update: u } of itemUpdates ?? []) {
               await actor.items.get(id).update(u);
             }
           },
-          { characterId: CHARACTER_UUID, moduleId: MODULE_ID, update, itemUpdates: itemUpdates ?? [] },
-          { timeout: 120_000 }
+          { characterId: CHARACTER_UUID, moduleId: MODULE_ID, update, itemUpdates: itemUpdates ?? [] }
         );
 
       const push = () =>
-        page!.evaluate(
-          async ({ characterId, moduleId }) => {
-            // @ts-expect-error Foundry global
-            const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+        demiplaneActor(page!, CHARACTER_UUID).evaluate(
+          async (actor, { moduleId }) => {
             // @ts-expect-error Foundry global
             return await game.modules.get(moduleId).api.exportNow(actor);
           },
-          { characterId: CHARACTER_UUID, moduleId: MODULE_ID },
-          { timeout: 120_000 }
+          { characterId: CHARACTER_UUID, moduleId: MODULE_ID }
         );
 
       const remoteSig = async () =>
         sig((await withApiRetry("fetch engines", () => client.fetchCharacterData(CHARACTER_UUID))).engines);
 
-      const itemTargets = await page.evaluate(
-        ({ characterId, moduleId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const itemTargets = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor) => {
           return [...actor.items].map(
             (i: {
               id: string;
@@ -146,10 +139,8 @@ test.describe("Kyra Write Levels", () => {
       if (!gold || !qtyItem || !equipItem || !deleteItem) {
         throw new Error("Missing mutation target for levels matrix");
       }
-      const equipHeldNow = await page.evaluate(
-        ({ characterId, moduleId, equipId }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const equipHeldNow = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor, { equipId }) => {
           return actor.items.get(equipId).system.equipped.carryType === "held";
         },
         { characterId: CHARACTER_UUID, moduleId: MODULE_ID, equipId: equipItem.id }
@@ -213,10 +204,8 @@ test.describe("Kyra Write Levels", () => {
       expect(sessionResult.success).toBe(true);
       // Prove it from the Demiplane side: wipe and re-import, then read the
       // actor (gender from story persists too).
-      const reimported = await page.evaluate(
-        async ({ characterId, moduleId, token, qtyName, equipName }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const reimported = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId, token, qtyName, equipName }) => {
           // @ts-expect-error Foundry global
           await game.modules.get(moduleId).api.importCharacter(actor, { token, wipe: true });
           const qty = [...actor.items].find((i: { name: string }) => i.name === qtyName);
@@ -239,8 +228,7 @@ test.describe("Kyra Write Levels", () => {
           token: DEMIPLANE_TOKEN,
           qtyName: qtyItem.name,
           equipName: equipItem.name,
-        },
-        { timeout: 180_000 }
+        }
       );
       expect(reimported.qty).toBe(backpackWant);
       expect(reimported.carry).toBe(equipCarry);
@@ -256,23 +244,18 @@ test.describe("Kyra Write Levels", () => {
       // We drop back to story to prove the gate: a session delete would
       // soft-delete (quantity 0) and stay gone, but a story delete stays local.
       await setWriteLevel(page, "story");
-      await page.evaluate(
-        async ({ characterId, moduleId, deleteName }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { deleteName }) => {
           const target = [...actor.items].find((i: { name: string }) => i.name === deleteName);
           if (!target) throw new Error(`delete target gone before delete phase: ${deleteName}`);
           await target.delete();
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name },
-        { timeout: 120_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name }
       );
       await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
       await expect(page.getByRole("button", { name: "Delete on Demiplane" })).toHaveCount(0);
-      const stillThere = await page.evaluate(
-        ({ characterId, moduleId, deleteName }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const stillThere = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        (actor, { deleteName }) => {
           return [...actor.items].some((i: { name: string }) => i.name === deleteName);
         },
         { characterId: CHARACTER_UUID, moduleId: MODULE_ID, deleteName: deleteItem.name }
@@ -287,16 +270,13 @@ test.describe("Kyra Write Levels", () => {
         (e) => e.name.startsWith("tabula/item/") && slugOf(e.name) === deleteItem.slug
       );
       expect(basePresent).toBe(true);
-      const resurrected = await page.evaluate(
-        async ({ characterId, moduleId, token, deleteName }) => {
-          // @ts-expect-error Foundry global
-          const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+      const resurrected = await demiplaneActor(page, CHARACTER_UUID).evaluate(
+        async (actor, { moduleId, token, deleteName }) => {
           // @ts-expect-error Foundry global
           await game.modules.get(moduleId).api.importCharacter(actor, { token, wipe: true });
           return [...actor.items].some((i: { name: string }) => i.name === deleteName);
         },
-        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN, deleteName: deleteItem.name },
-        { timeout: 180_000 }
+        { characterId: CHARACTER_UUID, moduleId: MODULE_ID, token: DEMIPLANE_TOKEN, deleteName: deleteItem.name }
       );
       expect(resurrected).toBe(true);
       await stopCoverage(page, "kyra-levels");

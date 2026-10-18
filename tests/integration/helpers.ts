@@ -1,11 +1,16 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import {
+  actorOn,
+  deleteDocuments,
   disableSceneCanvas,
   ensureModuleActive as activateModule,
   joinAsGamemaster,
+  setSetting,
   startCoverage,
   testBaseUrl,
+  waitForSetting,
+  type PageActor,
 } from "@scooper4711/foundry-test-kit";
 
 // Generic Foundry session, overlay, and coverage helpers come from the kit.
@@ -30,10 +35,7 @@ export function skipMutationTestsIfFlagged(): void {
  * backing setting the menu flips, without driving the settings UI.
  */
 export async function setFreeArchetype(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate((value: boolean) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "freeArchetypeVariant", value);
-  }, enabled);
+  await setSetting(page, "pf2e", "freeArchetypeVariant", enabled);
 }
 
 /**
@@ -41,10 +43,7 @@ export async function setFreeArchetype(page: Page, enabled: boolean): Promise<vo
  * setting API, mirroring {@link setFreeArchetype}.
  */
 export async function setGradualBoosts(page: Page, enabled: boolean): Promise<void> {
-  await page.evaluate((value: boolean) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "gradualBoostsVariant", value);
-  }, enabled);
+  await setSetting(page, "pf2e", "gradualBoostsVariant", enabled);
 }
 
 /**
@@ -53,10 +52,7 @@ export async function setGradualBoosts(page: Page, enabled: boolean): Promise<vo
  * {@link setFreeArchetype}.
  */
 export async function setMythicRules(page: Page, value: string): Promise<void> {
-  await page.evaluate((mode: string) => {
-    // @ts-expect-error Foundry global
-    return game.settings.set("pf2e", "mythic", mode);
-  }, value);
+  await setSetting(page, "pf2e", "mythic", value);
 }
 
 /**
@@ -132,30 +128,18 @@ export async function withApiRetry<T>(label: string, fn: () => Promise<T>): Prom
  * safest tier (`read-only`).
  */
 export async function setWriteLevel(page: Page, level: string): Promise<{ level: string | undefined }> {
-  const result = await page.evaluate(
-    async ({ moduleId, level }) => {
-      // @ts-expect-error Foundry global
-      const prevLevel = game.settings.get(moduleId, "syncWriteLevel") as string | undefined;
-      // @ts-expect-error Foundry global
-      await game.settings.set(moduleId, "syncWriteLevel", level);
-      return { level: prevLevel };
-    },
-    { moduleId: MODULE_ID, level }
+  const previous = await page.evaluate(
+    (moduleId) =>
+      (globalThis as unknown as { game: { settings: { get(scope: string, key: string): unknown } } }).game.settings.get(
+        moduleId,
+        "syncWriteLevel"
+      ) as string | undefined,
+    MODULE_ID
   );
-  await page
-    .waitForFunction(
-      ({ moduleId, level }) => {
-        // @ts-expect-error Foundry global
-        return (
-          (
-            globalThis as unknown as { game: { settings: { get: (m: string, k: string) => unknown } } }
-          ).game.settings.get(moduleId, "syncWriteLevel") === level
-        );
-      },
-      { moduleId: MODULE_ID, level },
-      { timeout: 2000 }
-    )
-    .catch(() => {});
+  await setSetting(page, MODULE_ID, "syncWriteLevel", level);
+  await waitForSetting(page, { scope: MODULE_ID, key: "syncWriteLevel", value: level }, { timeout: 2000 }).catch(
+    () => {}
+  );
   await page
     .evaluate(async () => {
       // @ts-expect-error Foundry global
@@ -165,7 +149,7 @@ export async function setWriteLevel(page: Page, level: string): Promise<{ level:
       }
     })
     .catch(() => {});
-  return result;
+  return { level: previous };
 }
 
 /**
@@ -178,33 +162,22 @@ export async function setWriteLevel(page: Page, level: string): Promise<{ level:
  * fixed duration.
  */
 export async function waitForSyncRelease(page: Page, characterId: string): Promise<void> {
-  await page.waitForFunction(
-    ({ characterId, moduleId }) => {
-      // @ts-expect-error Foundry global
-      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
-      if (!actor) return false;
-      // @ts-expect-error Foundry global
-      const tokens = actor.getFlag(moduleId, "syncActiveTokens");
-      return !Array.isArray(tokens) || tokens.length === 0;
-    },
-    { characterId, moduleId: MODULE_ID },
-    { timeout: 30_000 }
-  );
+  await demiplaneActor(page, characterId).waitFor((actor, moduleId) => {
+    const tokens = actor.getFlag(moduleId, "syncActiveTokens");
+    return !Array.isArray(tokens) || tokens.length === 0;
+  }, MODULE_ID);
+}
+
+/** The actor imported from a Demiplane character, found by its characterId flag. */
+export function demiplaneActor(page: Page, characterId: string): PageActor {
+  return actorOn(page, { flag: { scope: MODULE_ID, key: "characterId", value: characterId } });
 }
 
 /**
  * Restores a write level previously saved by setWriteLevel. Best-effort by
  * design: cleanup must never throw.
  */ export async function restoreWriteLevel(page: Page, saved: { level: string | undefined }): Promise<void> {
-  await page
-    .evaluate(
-      async ({ moduleId, saved }) => {
-        // @ts-expect-error Foundry global
-        await game.settings.set(moduleId, "syncWriteLevel", saved.level ?? "read-only");
-      },
-      { moduleId: MODULE_ID, saved }
-    )
-    .catch(() => {});
+  await setSetting(page, MODULE_ID, "syncWriteLevel", saved.level ?? "read-only").catch(() => {});
 }
 
 /**
@@ -220,10 +193,8 @@ export async function storeGuessedPicks(
   characterId: string,
   records: Array<{ key: string; options: Array<{ value: string }> }>
 ): Promise<void> {
-  await page.evaluate(
-    async ({ characterId, moduleId, records }) => {
-      // @ts-expect-error Foundry global
-      const actor = game.actors.contents.find((a) => a.getFlag(moduleId, "characterId") === characterId);
+  await demiplaneActor(page, characterId).evaluate(
+    async (actor, { moduleId, records }) => {
       // @ts-expect-error Foundry global
       const current = (actor.getFlag(moduleId, "choiceOverrides") ?? {}) as Record<string, string>;
       const picks: Record<string, string> = { ...current };
@@ -283,28 +254,18 @@ export async function deleteActorsForCharacter(page: Page, characterId: string, 
 
 /**
  * Deletes EVERY actor in the test world. Call at the start of each spec's
- * setup: the world is disposable (reseedable via `foundry.sh test run
+ * setup: the world is disposable (reseedable via `foundry-test test run
  * --clean`), and any leftover — a renamed import, a stale link-holder the
  * targeted cleanup missed — poisons subsequent runs through the
  * duplicate-link guard. Targeted per-character cleanup stays in afterAll.
  */
 export async function deleteAllActors(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    // @ts-expect-error Foundry global
-    const ids = game.actors.contents.map((actor) => actor.id);
-    for (const id of ids) {
-      // @ts-expect-error Foundry global
-      await game.actors.get(id)?.delete();
-    }
-  });
-}
-
-interface SnapshotEntry {
-  name: string;
-  prepared: string;
-  tradition: string;
-  spells: string[];
-  slots: Record<string, { max: number; value: number; prepared: Array<{ spell: string; expended: boolean }> }>;
+  const ids = await page.evaluate(() =>
+    (globalThis as unknown as { game: { actors: { contents: Array<{ id: string }> } } }).game.actors.contents.map(
+      (actor) => actor.id
+    )
+  );
+  await deleteDocuments(page, "Actor", ids);
 }
 
 export interface ImportResult {
@@ -602,8 +563,7 @@ export async function createAndImportCharacter(
         })(),
       };
     },
-    { actorName, characterId, token, moduleId: MODULE_ID },
-    { timeout: 120_000 }
+    { actorName, characterId, token, moduleId: MODULE_ID }
   );
 }
 

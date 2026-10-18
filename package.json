@@ -52,7 +52,7 @@
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.0",
-    "@scooper4711/foundry-test-kit": "^0.2.1",
+    "@scooper4711/foundry-test-kit": "^0.3.0",
     "@types/node": "^26.4.1",
     "@vitest/coverage-v8": "^4.1.11",
     "dependency-cruiser": "^18.4.0",
