@@ -39,6 +39,11 @@ updates:
           - major
         patterns:
           - "*"
+      # Security updates aren't taken by the version-update groups above; group them too.
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -49,5 +54,10 @@ updates:
         update-types:
           - minor
           - patch
+        patterns:
+          - "*"
+      # Security updates aren't taken by the version-update groups above; group them too.
+      security:
+        applies-to: security-updates
         patterns:
           - "*"
